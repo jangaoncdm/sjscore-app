@@ -1,0 +1,15 @@
+{
+  "name": "SJ-SCORE Field — Swachh Jangaon Task Force",
+  "short_name": "SJ-SCORE",
+  "description": "Monthly sanitation evaluation of Gram Panchayats — Mandal Sanitation Task Force, Jangaon District. Rc.No.788/DPO/26/34",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F0F5F1",
+  "theme_color": "#14532D",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
