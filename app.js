@@ -158,6 +158,23 @@ const wkAvg = r => { const ws=r.workers.filter(w=>w.name.trim()||Object.keys(w.s
   return ws.length ? Math.round(ws.reduce((s,w)=>s+wkTotal(w),0)/ws.length) : 0; };
 const pendingCount = () => Object.values(DB.records).filter(r=>r.sync!=='synced').length;
 
+/* ---------------- platform ---------------- */
+const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const STANDALONE = window.navigator.standalone === true ||
+                   window.matchMedia('(display-mode: standalone)').matches;
+
+/* iOS moves fixed elements when the keyboard opens — park them while typing */
+let kbTimer = null;
+function setKb(on){ clearTimeout(kbTimer); kbTimer = setTimeout(()=>document.body.classList.toggle('kb', on), on ? 0 : 90); }
+document.addEventListener('focusin', e => { if(e.target.matches('input,textarea,select')) setKb(true); });
+document.addEventListener('focusout', () => setKb(false));
+if(window.visualViewport){
+  const vv = window.visualViewport;
+  const onVV = () => { if(window.innerHeight - vv.height > 120) setKb(true); };
+  vv.addEventListener('resize', onVV);
+}
+
 /* ---------------- chrome ---------------- */
 function toast(msg, ms){ const t=$('#toast'); t.textContent=msg; t.classList.add('on');
   clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'), ms||2400); }
@@ -205,7 +222,15 @@ function gate(){
   $('#app').hidden = !signed;
   if(!signed){ if(!SERVER_URL && !DB.url) $('#urlField').hidden = false; $('#lUrl').value = DB.url || ''; return; }
   go('home'); updateDot();
+  if(IOS && !STANDALONE && !DB.iosTipSeen){
+    setTimeout(()=>{ $('#iosTip').classList.add('on'); }, 1400);
+  }
 }
+$('#iosTip').addEventListener('click', e => {
+  if(e.target.classList.contains('scrim') || e.target.id === 'iosTipClose'){
+    $('#iosTip').classList.remove('on'); DB.iosTipSeen = true; save();
+  }
+});
 $('#btnSignin').addEventListener('click', signIn);
 $('#lPin').addEventListener('keydown', e => { if(e.key==='Enter') signIn(); });
 async function signIn(){
@@ -262,8 +287,16 @@ function renderRing(rec){
 }
 
 /* ---------------- HOME ---------------- */
+let lastPull = 0;
 function renderHome(){
   const u=user(); if(!u) return;
+  if(u.role!=='PS' && navigator.onLine && Date.now()-lastPull > 5*60*1000){
+    lastPull = Date.now();
+    get({op:'list', ym:ymNow()}).then(r=>{
+      if(r && r.ok){ DB.cache=r.rows; DB.cacheAt=new Date().toISOString(); save();
+        if(TAB==='home') renderHome(); }
+    }).catch(()=>{});
+  }
   const h=new Date().getHours();
   $('#homeHi').textContent = (h<12?'Good morning':h<17?'Good afternoon':'Good evening');
   $('#homeSub').textContent = u.name + ' · ' + roleName(u.role);
@@ -273,6 +306,11 @@ function renderHome(){
 
   const pend=pendingCount();
   if(pend) h2 += `<div class="banner warn">${pend} record${pend>1?'s':''} waiting to sync. Open Records and press Sync when you have signal.</div>`;
+  if(IOS && !STANDALONE && pend)
+    h2 += `<div class="banner warn">You are running in the browser, not the installed app. On iPhone, records held in a browser tab can be cleared by the phone. Add SJ-SCORE to the Home Screen, or sync today.</div>`;
+  const stale = Object.values(DB.records).filter(r => r.sync!=='synced' && r.updatedAt &&
+    (Date.now() - new Date(r.updatedAt).getTime()) > 5*24*3600*1000).length;
+  if(stale) h2 += `<div class="banner warn">${stale} record${stale>1?'s have':' has'} been unsynced for more than five days. Sync as soon as you have signal — unsynced work is held only on this phone.</div>`;
 
   if(u.role==='PS'){
     const gps=myGps();
@@ -313,18 +351,36 @@ function sixMonth(gp){
 }
 function districtHome(u, ym){
   const rows=(DB.cache||[]).filter(r=>r.ym===ym);
-  const scope = isDistrict(u.role) ? 'district' : u.mandal;
+  const scope = isDistrict(u.role) ? 'the district' : u.mandal;
   const grades={A:0,B:0,C:0,D:0}; rows.forEach(r=>grades[r.grade]=(grades[r.grade]||0)+1);
   const avg = rows.length ? Math.round(rows.reduce((s,r)=>s+(+r.score||0),0)/rows.length) : null;
   const rf = rows.filter(r=>String(r.rf||'').trim());
+  const totalGps = (DB.master||[]).length;
   let h='';
   h += `<div class="kpis">
-    <div class="kpi"><div class="n">${rows.length}</div><div class="l">Gram Panchayats reported<br>${esc(monthName(ym))}</div></div>
+    <div class="kpi"><div class="n">${rows.length}${totalGps?`<span style="font-size:16px;color:var(--ink3)"> / ${totalGps}</span>`:''}</div><div class="l">Gram Panchayats reported<br>${esc(monthName(ym))}</div></div>
     <div class="kpi"><div class="n" style="color:var(--gold)">${avg==null?'—':avg}</div><div class="l">Average SJ-SCORE<br>across ${esc(scope)}</div></div>
     <div class="kpi"><div class="n" style="color:var(--ok)">${grades.A||0}</div><div class="l">Grade A</div></div>
     <div class="kpi"><div class="n" style="color:var(--danger)">${grades.D||0}</div><div class="l">Grade D, incl. red-flag caps</div></div></div>`;
   h += `<div class="group"><button class="btn quiet" data-refresh="1">Refresh from district</button>
-        <p style="font-size:12px;color:var(--ink3);text-align:center;padding-top:8px">${DB.cacheAt?('Updated '+new Date(DB.cacheAt).toLocaleString('en-IN')):'Not yet loaded'}</p></div>`;
+        <p style="font-size:12px;color:var(--ink3);text-align:center;padding-top:8px">${DB.cacheAt?('Updated '+new Date(DB.cacheAt).toLocaleString('en-IN')):'Not loaded yet — tap Refresh'}</p></div>`;
+
+  /* mandal-wise, for district officers only */
+  if(isDistrict(u.role) && rows.length){
+    const byM={};
+    rows.forEach(r=>{ const m=r.mandal||'Unassigned'; (byM[m]=byM[m]||[]).push(r); });
+    const mandals=Object.keys(byM).sort();
+    h += `<div class="group"><div class="hdr">Mandal by mandal</div><div class="card">` +
+      mandals.map(m=>{
+        const list=byM[m];
+        const a=Math.round(list.reduce((s,r)=>s+(+r.score||0),0)/list.length);
+        const g={A:0,B:0,C:0,D:0}; list.forEach(r=>g[r.grade]=(g[r.grade]||0)+1);
+        const gr=a>=85?'A':a>=70?'B':a>=55?'C':'D';
+        return `<div class="row"><span class="lbl"><b>${esc(m)}</b>
+          <span>${list.length} reported · A ${g.A||0} · B ${g.B||0} · C ${g.C||0} · D ${g.D||0}</span></span>
+          <span class="grade g${gr}" style="font-size:13px;padding:2px 9px">${a}</span></div>`;
+      }).join('') + `</div></div>`;
+  }
   if(rf.length){
     h += `<div class="group"><div class="hdr">Red flags this month</div><div class="card">` +
       rf.map(r=>`<div class="row"><span class="ico" style="background:var(--danger)">${ICON.flag}</span>
@@ -341,15 +397,22 @@ function districtHome(u, ym){
         <span class="grade g${esc(r.grade)}" style="font-size:13px;padding:2px 9px">${esc(r.score)}</span></div>`).join('') +
       `</div></div>`;
   } else {
-    h += emptyState('No reports yet', 'Inspections appear here as officers sync them from the field.');
+    h += emptyState('Nothing reported yet this month',
+      DB.cacheAt
+        ? 'No inspection has been synced for ' + monthName(ym) + ' so far. Villages appear here the moment an officer presses Sync in the field.'
+        : 'Tap Refresh from district above to load. If it still shows nothing, no inspection has been synced yet this month.');
   }
   return h;
 }
 async function refreshDistrict(){
   toast('Loading district data…');
-  try{ const r = await get({op:'list', ym:ymNow()});
-    if(r.ok){ DB.cache=r.rows; DB.cacheAt=new Date().toISOString(); save(); renderHome(); toast('Updated'); }
-    else toast(r.error||'Could not load');
+  try{
+    const r = await get({op:'list', ym:ymNow()});
+    if(!r.ok){ toast(r.error||'Could not load'); return; }
+    DB.cache=r.rows; DB.cacheAt=new Date().toISOString();
+    if(!(DB.master||[]).length){ try{ const g=await get({op:'gps'}); if(g.ok) DB.master=g.gps; }catch(e){} }
+    lastPull = Date.now(); save(); renderHome();
+    toast(r.rows.length ? (r.rows.length + ' village' + (r.rows.length>1?'s':'') + ' reported') : 'Nothing synced yet this month');
   }catch(e){ toast(e.message); }
 }
 const roleName = r => ({PS:'Panchayat Secretary', MPDO:'MPDO', MSO:'Mandal Special Officer', MPO:'MPO',
@@ -752,6 +815,10 @@ function renderMore(){
     <div class="row"><span class="lbl"><b>Session</b></span><span class="val">30 days</span></div>
   </div></div>
 
+  ${(IOS && !STANDALONE) ? `<div class="group"><div class="hdr">Install</div><div class="card">
+    <div class="row tap" id="mIos"><span class="ico" style="background:var(--gold)">${ICON.down}</span>
+      <span class="lbl"><b>Add to Home Screen</b><span>Run full screen and keep records safely</span></span><span class="chev"></span></div>
+  </div></div>` : ''}
   <div class="group"><div class="hdr">Data</div><div class="card">
     <div class="row tap" id="mPull"><span class="ico" style="background:var(--pB)">${ICON.down}</span>
       <span class="lbl"><b>Refresh village list</b><span>${(DB.master||[]).length} loaded</span></span><span class="chev"></span></div>
@@ -769,6 +836,8 @@ function renderMore(){
   <p style="font-size:12.5px;color:var(--ink3);text-align:center;padding:20px 24px 30px;line-height:1.55">
     SJ-SCORE Field · version 4.0<br>Collectorate, Jangaon · Rc.No.788/DPO/26/34</p>`;
 
+  const iosRow = $('#mIos');
+  if(iosRow) iosRow.addEventListener('click', ()=> $('#iosTip').classList.add('on'));
   $('#mPull').addEventListener('click', async ()=>{
     toast('Refreshing…');
     try{ const g=await get({op:'gps'}); if(g.ok){ DB.master=g.gps; save(); renderMore(); toast(g.gps.length + ' villages loaded'); } else toast(g.error||'Failed'); }
