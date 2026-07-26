@@ -13,7 +13,7 @@
      own, not one common album at the end.
    ============================================================ */
 const SERVER_URL = 'https://script.google.com/macros/s/AKfycbz8Ye9LqGB3bLWkTWcdw6JvU__U9K4VRaG-IFFpwc67G__1vdpMryV6NEfz5FJrnezS/exec';
-const APP_VERSION = '5.6';
+const APP_VERSION = '5.7';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -429,8 +429,6 @@ function gate(){
   $('#signin').style.display = signed ? 'none' : 'flex';
   if(!signed){
     $('#attend').classList.remove('on'); $('#app').hidden = true;
-    if(!SERVER_URL && !DB.url) $('#urlField').hidden = false;
-    $('#lUrl').value = DB.url || '';
     return;
   }
   /* Attendance stands between sign-in and the rest of the app, for everyone. */
@@ -449,11 +447,11 @@ $('#iosTip').addEventListener('click', e => {
 $('#btnSignin').addEventListener('click', signIn);
 $('#lPin').addEventListener('keydown', e => { if(e.key==='Enter') signIn(); });
 async function signIn(){
-  const url = (SERVER_URL || $('#lUrl').value.trim() || DB.url || '').trim();
+  const url = (SERVER_URL || DB.url || '').trim();
   const phone = $('#lPhone').value.replace(/\D/g,'');
   const pin = $('#lPin').value;
   const m = $('#lMsg');
-  if(!url){ m.className='msg'; m.textContent='Enter the server address given by the DPO office.'; return; }
+  if(!url){ m.className='msg'; m.textContent='This copy of the app has no district server set. Please reinstall from the address circulated by the DPO office.'; return; }
   if(phone.length!==10){ m.className='msg'; m.textContent='Enter your 10-digit mobile number.'; return; }
   if(!pin){ m.className='msg'; m.textContent='Enter your PIN.'; return; }
   const btn = $('#btnSignin'); btn.disabled=true; btn.innerHTML='<span class="spin"></span>Signing in';
