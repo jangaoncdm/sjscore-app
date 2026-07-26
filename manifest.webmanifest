@@ -1,7 +1,7 @@
 {
-  "name": "SJ-SCORE Field — Swachh Jangaon",
-  "short_name": "SJ-SCORE",
-  "description": "Field application of the Mandal Sanitation Task Force, Jangaon District: geo-stamped attendance, the monthly 100-mark evaluation of Gram Panchayats, clause-wise evidence, and offline working.",
+  "name": "SJGP — Swachh Jangaon Gram Panchayat",
+  "short_name": "SJGP",
+  "description": "Official field application of the Jangaon District administration. Attendance, the monthly 100-mark sanitation evaluation of Gram Panchayats, clause evidence and leave, for the Mandal Sanitation Task Force.",
   "id": "in.jangaon.sjscore",
   "start_url": "./index.html",
   "scope": "./",
