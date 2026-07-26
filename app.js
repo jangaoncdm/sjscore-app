@@ -13,7 +13,7 @@
      own, not one common album at the end.
    ============================================================ */
 const SERVER_URL = 'https://script.google.com/macros/s/AKfycbz8Ye9LqGB3bLWkTWcdw6JvU__U9K4VRaG-IFFpwc67G__1vdpMryV6NEfz5FJrnezS/exec';
-const APP_VERSION = '5.5';
+const APP_VERSION = '5.6';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -651,8 +651,10 @@ function renderHome(){
     if(!isViewer(u.role)) get({op:'attendance'}).then(r=>{ if(r&&r.ok){ DB.attToday=r.rows; if(TAB==='home') renderHome(); } }).catch(()=>{});
   }
   const h=new Date().getHours();
-  $('#homeHi').textContent = (h<12?'Good morning':h<17?'Good afternoon':'Good evening');
-  $('#homeSub').textContent = u.name + ' · ' + roleName(u.role);
+  const greet = (h<12?'Good morning':h<17?'Good afternoon':'Good evening');
+  const first = String(u.name||'').replace(/,.*$/,'').split(' ').slice(0,2).join(' ');
+  $('#homeHi').textContent = greet + (first ? ', ' + first : '');
+  $('#homeSub').textContent = roleName(u.role) + (u.mandal ? ' · ' + u.mandal + ' mandal' : ' · Jangaon District');
   const ym=ymNow(), body=$('#homeBody');
   let h2 = attendanceStrip();
 
@@ -2129,7 +2131,22 @@ function openLeaveOne(id){
   const ok = $('#lvOk'), no = $('#lvNo'), wd = $('#lvWithdraw');
   if(ok) ok.addEventListener('click', () => decideLeave(l.id, 'APPROVED', ($('#lvRem').value || '').trim()));
   if(no) no.addEventListener('click', () => decideLeave(l.id, 'REJECTED', ($('#lvRem').value || '').trim()));
-  if(wd) wd.addEventListener('click', () => decideLeave(l.id, 'CANCELLED', ''));
+  if(wd) wd.addEventListener('click', () => withdrawLeave(l.id));
+}
+
+async function withdrawLeave(id){
+  const l = (DB.leave || []).find(x => x.id === id); if(!l) return;
+  confirmSheet('Withdraw this application?',
+    leaveName(l.type) + ' · ' + lvSpan(l) + '. The days come back to your account at once.', true, async () => {
+    try{
+      if(l.sync === 'synced'){
+        const r = await post({kind:'leaveWithdraw', token: DB.session.token, id});
+        if(!r || !r.ok){ toast((r && r.error) || 'Could not withdraw'); return; }
+      }
+      l.status = 'CANCELLED'; l.decidedBy = ''; l.decidedAt = new Date().toISOString();
+      saveNow(); hideSheet(); renderLeave(); toast('Withdrawn — the days are back in your account');
+    }catch(e){ toast('No signal — try again when the phone is online'); }
+  });
 }
 
 async function decideLeave(id, status, remarks){
