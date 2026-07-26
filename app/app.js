@@ -13,7 +13,7 @@
      own, not one common album at the end.
    ============================================================ */
 const SERVER_URL = 'https://script.google.com/macros/s/AKfycbz8Ye9LqGB3bLWkTWcdw6JvU__U9K4VRaG-IFFpwc67G__1vdpMryV6NEfz5FJrnezS/exec';
-const APP_VERSION = '5.1';
+const APP_VERSION = '5.2';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -426,7 +426,7 @@ function gate(){
     return;
   }
   /* Attendance stands between sign-in and the rest of the app, for everyone. */
-  if(!DB.att[todayStr()]){ $('#app').hidden = true; openAttendance(); return; }
+  if(!attExempt(user().role) && !DB.att[todayStr()]){ $('#app').hidden = true; openAttendance(); return; }
   $('#attend').classList.remove('on');
   $('#app').hidden = false;
   buildTabs(); go(canEdit() ? TAB : (TAB === 'inspect' ? 'home' : TAB)); updateDot();
@@ -555,6 +555,10 @@ function drawAttendance(){
       <button class="btn quiet" id="attRetake">Take it again</button>`;
     $('#attRetake').addEventListener('click', () => { ATT.b64=null; ATT.photoId=null; $('#attShot').hidden=true; drawAttendance(); });
     $('#attMark').addEventListener('click', markAttendance);
+  }
+  if(attExempt((user()||{}).role)){
+    box.insertAdjacentHTML('beforeend', `<button class="btn quiet" id="attSkip" style="margin-top:9px">Not now</button>`);
+    $('#attSkip').addEventListener('click', () => { ATT = null; $('#attend').classList.remove('on'); $('#app').hidden = false; buildTabs(); go(TAB); });
   }
 }
 $('#camAtt').addEventListener('change', async ev => {
@@ -765,27 +769,6 @@ function districtHome(u, ym){
     <div class="kpi"><div class="n num" style="color:var(--ok)">${grades.A||0}</div><div class="l">Grade A</div></div>
     <div class="kpi"><div class="n num" style="color:var(--flag)">${grades.D||0}</div><div class="l">Grade D, including red-flag caps</div></div></div>`;
 
-  if(isDistrict(u.role)) h += startBtn;
-  const att = DB.attToday || null;
-  if(att){
-    const unver = att.filter(a => String(a.verified) === 'false' || a.verified === false).length;
-    h += `<div class="group"><div class="hdr">Attendance today</div><div class="card">
-      <div class="row tap" data-attlist="1"><span class="ico" style="background:var(--seal)">${ICON.user}</span>
-        <span class="lbl"><b>${att.length} officer${att.length===1?'':'s'} marked present</b>
-        <span>${unver?unver+' without a location fix · ':''}${esc(dayName(todayStr()))}</span></span>
-        <span class="chev"></span></div></div></div>`;
-  }
-
-  if(canApproveLeave(u.role)){
-    const pend = pendingLeave().length;
-    h += `<div class="group"><div class="hdr">Leave</div><div class="card">
-      <div class="row tap" data-leave="1"><span class="ico" style="background:${pend?'var(--warn)':'var(--ink-4)'}">${ICON.cal}</span>
-        <span class="lbl"><b>${pend ? pend + (pend===1?' application waiting':' applications waiting') : 'No application waiting'}</b>
-        <span>Sanctioned or refused by you alone</span></span><span class="chev"></span></div></div></div>`;
-  }
-  h += `<div class="group"><button class="btn quiet" data-refresh="1">Refresh from district</button>
-        <p style="font-size:12px;color:var(--ink-3);text-align:center;padding-top:9px">${DB.cacheAt?('Updated '+new Date(DB.cacheAt).toLocaleString('en-IN')):'Not loaded yet — tap Refresh'}</p></div>`;
-
   if(isDistrict(u.role) && rows.length){
     const byM={};
     rows.forEach(r=>{ const m=r.mandal||'Unassigned'; (byM[m]=byM[m]||[]).push(r); });
@@ -820,6 +803,29 @@ function districtHome(u, ym){
       DB.cacheAt ? 'No inspection has been synced for ' + monthName(ym) + ' so far. Villages appear here the moment an officer presses Sync in the field.'
                  : 'Tap Refresh from district above to load. If it still shows nothing, no inspection has been synced yet this month.');
   }
+
+  /* the operational rows sit under the district picture, not on top of it */
+  const att = DB.attToday || null;
+  if(att){
+    const unver = att.filter(a => String(a.verified) === 'false' || a.verified === false).length;
+    h += `<div class="group"><div class="hdr">Attendance today</div><div class="card">
+      <div class="row tap" data-attlist="1"><span class="ico" style="background:var(--seal)">${ICON.user}</span>
+        <span class="lbl"><b>${att.length} officer${att.length===1?'':'s'} marked present</b>
+        <span>${unver?unver+' without a location fix · ':''}${esc(dayName(todayStr()))}</span></span>
+        <span class="chev"></span></div></div></div>`;
+  }
+
+  if(canApproveLeave(u.role)){
+    const pend = pendingLeave().length;
+    h += `<div class="group"><div class="hdr">Leave</div><div class="card">
+      <div class="row tap" data-leave="1"><span class="ico" style="background:${pend?'var(--warn)':'var(--ink-4)'}">${ICON.cal}</span>
+        <span class="lbl"><b>${pend ? pend + (pend===1?' application waiting':' applications waiting') : 'No application waiting'}</b>
+        <span>Sanctioned or refused by you alone</span></span><span class="chev"></span></div></div></div>`;
+  }
+  h += `<div class="group"><button class="btn quiet" data-refresh="1">Refresh from district</button>
+        <p style="font-size:12px;color:var(--ink-3);text-align:center;padding-top:9px">${DB.cacheAt?('Updated '+new Date(DB.cacheAt).toLocaleString('en-IN')):'Not loaded yet — tap Refresh'}</p></div>`;
+
+  if(isDistrict(u.role)) h += startBtn;
   return h;
 }
 function showAttendanceList(){
@@ -1397,7 +1403,8 @@ function live(){
 /* ---- readiness, then filing ---- */
 function readiness(r){
   const blockers=[], advice=[];
-  if(!DB.att[todayStr()]) blockers.push(['Attendance for today', 'Mark attendance before filing.']);
+  if(!attExempt(user().role) && !DB.att[todayStr()])
+    blockers.push(['Attendance for today', 'Mark attendance before filing.']);
   if(!r.gpsFix) blockers.push(['Location of the village', 'Open Visit and tap Capture.']);
   const n=['mso','dpo','mpdo'].filter(k=>r.present[k]).length;
   if(!r.present.mpdo) blockers.push(['MPDO present', 'The MPDO must be present at every inspection.']);
@@ -1666,8 +1673,12 @@ async function renderMore(){
 
   <div class="group"><div class="hdr">Attendance</div><div class="card">
     <div class="row"><span class="ico" style="background:${a?(a.verified?'var(--ok)':'var(--warn)'):'var(--ink-4)'}">${ICON.tickC}</span>
-      <span class="lbl"><b>${a?'Marked today':'Not marked today'}</b>
-      <span>${a?esc(new Date(a.ts).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true})+' · '+(a.verified?'location recorded':'no location fix')+' · '+(a.sync==='synced'?'sent to the district':'on this phone')):'Attendance is asked for once a day, when the app opens.'}</span></span></div>
+      <span class="lbl"><b>${a?'Marked today':(attExempt(u.role)?'Not required for your office':'Not marked today')}</b>
+      <span>${a?esc(new Date(a.ts).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true})+' · '+(a.verified?'location recorded':'no location fix')+' · '+(a.sync==='synced'?'sent to the district':'on this phone'))
+        :(attExempt(u.role)?'The Collector is not asked to mark in. A day may still be marked below, which is useful as proof of a field visit.'
+                           :'Attendance is asked for once a day, when the app opens.')}</span></span></div>
+    ${(attExempt(u.role) && !a) ? `<div class="row tap" id="mAttNow"><span class="ico" style="background:var(--seal-2)">${ICON.cam}</span>
+      <span class="lbl"><b>Mark today anyway</b><span>Photograph and location, the same as any officer</span></span><span class="chev"></span></div>` : ''}
     <div class="row"><span class="lbl"><b>Days marked on this phone</b></span><span class="val num">${marked}</span></div>
   </div></div>
 
@@ -1725,6 +1736,7 @@ async function renderMore(){
 
   const iosRow=$('#mIos'); if(iosRow) iosRow.addEventListener('click', ()=>$('#iosTip').classList.add('on'));
   const lvRow=$('#mLeave'); if(lvRow) lvRow.addEventListener('click', openLeave);
+  const attNow=$('#mAttNow'); if(attNow) attNow.addEventListener('click', () => { $('#app').hidden = true; openAttendance(); });
   const syncRow=$('#mSync'); if(syncRow) syncRow.addEventListener('click', syncAll);
   $('#mPull').addEventListener('click', async ()=>{
     toast('Refreshing…');
@@ -1816,6 +1828,10 @@ const LEAVE_TYPES = [
 ];
 const leaveName    = t => (LEAVE_TYPES.find(x => x[0] === t) || [t, t])[1];
 const canApplyLeave   = r => ['MPO','PS','MPDO'].includes(r);
+/* The Collector is not asked to mark in. The office is not one that reports
+   its own presence to itself — though it may still mark a day voluntarily
+   from More, which is useful as proof of a field visit. */
+const attExempt = r => r === 'COLLECTOR';
 const canApproveLeave = r => r === 'COLLECTOR';
 const leaveVisible    = r => canApplyLeave(r) || canApproveLeave(r);
 
