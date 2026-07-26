@@ -13,7 +13,7 @@
      own, not one common album at the end.
    ============================================================ */
 const SERVER_URL = 'https://script.google.com/macros/s/AKfycbz8Ye9LqGB3bLWkTWcdw6JvU__U9K4VRaG-IFFpwc67G__1vdpMryV6NEfz5FJrnezS/exec';
-const APP_VERSION = '5.4';
+const APP_VERSION = '5.5';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -1855,13 +1855,35 @@ const ICON={
    own token, so the app cannot be talked into approving anything.
    ============================================================ */
 const LEAVE_TYPES = [
-  ['CL',  'Casual Leave'],            ['EL',   'Earned Leave'],
-  ['HPL', 'Half Pay Leave'],          ['COM',  'Commuted Leave'],
-  ['ML',  'Medical Leave'],           ['MAT',  'Maternity Leave'],
-  ['PAT', 'Paternity Leave'],         ['SCL',  'Special Casual Leave'],
-  ['COMP','Compensatory Off'],        ['OH',   'Optional Holiday']
+  ['CL', 'Casual Leave',                     {year:15, counts:true }],
+  ['EL', 'Earned Leave',                     {year:30, counts:true }],
+  ['HQ', 'Permission to leave Headquarters', {year:0,  counts:false}],
+  ['ML', 'Medical Leave',                    {year:0,  counts:false, cert:true}]
 ];
-const leaveName    = t => (LEAVE_TYPES.find(x => x[0] === t) || [t, t])[1];
+const leaveMeta = t => (LEAVE_TYPES.find(x => x[0] === t) || [t, t, {year:0, counts:false}])[2];
+const leaveName = t => (LEAVE_TYPES.find(x => x[0] === t) || [t, t])[1];
+
+/* The register opens in August 2026, so the calendar year has five months left
+   in it, not twelve. Casual leave for 2026 is therefore 15 x 5/12 = 6.25, taken
+   as 6. From 2027 the full 15 applies by itself — change nothing.
+   Earned leave is not pro-rated: it is credited for the year. */
+const LEAVE_OPENING_YEAR = 2026;
+const CL_OPENING_BALANCE = 6;
+
+function entitlement(type, year){
+  if(type === 'CL' && Number(year) === LEAVE_OPENING_YEAR) return CL_OPENING_BALANCE;
+  return leaveMeta(type).year || 0;
+}
+/* Sanctioned leave is spent; an application awaiting orders is committed and
+   cannot be spent twice. Both come off what is left. */
+function leaveBalance(type, year){
+  const y = Number(year) || new Date().getFullYear();
+  const ent = entitlement(type, y);
+  const mine = (DB.leave || []).filter(l => l.type === type && String(l.from || '').slice(0,4) === String(y));
+  const used = mine.filter(l => l.status === 'APPROVED').reduce((s,l) => s + (Number(l.days) || 0), 0);
+  const held = mine.filter(l => l.status === 'PENDING').reduce((s,l) => s + (Number(l.days) || 0), 0);
+  return {ent, used, held, left: Math.max(0, ent - used - held)};
+}
 const canApplyLeave   = r => ['MPO','PS','MPDO'].includes(r);
 /* The Collector is not asked to mark in. The office is not one that reports
    its own presence to itself — though it may still mark a day voluntarily
@@ -1925,6 +1947,19 @@ function renderLeave(){
       <button data-lvf="ALL"      aria-pressed="${LVFILTER==='ALL'}">All</button></div>`;
   }
   if(mine){
+    const yr = new Date().getFullYear();
+    h += `<div class="group" style="margin-top:14px"><div class="hdr">Leave account · ${yr}</div><div class="card">` +
+      LEAVE_TYPES.filter(([,,m]) => m.counts).map(([k,n]) => {
+        const b = leaveBalance(k, yr);
+        return `<div class="row"><span class="tag" style="width:44px;flex:none;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--seal);background:var(--seal-tint);border-radius:8px;min-height:34px;display:grid;place-items:center">${k}</span>
+          <span class="lbl"><b>${esc(n)}</b><span>${b.ent} for the year · ${b.used} taken${b.held?' · '+b.held+' awaiting orders':''}</span></span>
+          <span class="lvdays" style="color:${b.left?'var(--ok)':'var(--flag)'}">${b.left}<small>left</small></span></div>`;
+      }).join('') +
+      `<div class="row"><span class="lbl"><b>Medical Leave</b><span>On a certificate from a Government doctor or hospital. Not counted against a yearly figure.</span></span></div>
+       <div class="row"><span class="lbl"><b>Permission to leave Headquarters</b><span>A permission, not leave. Nothing is deducted.</span></span></div>
+      </div></div>`;
+    if(yr === LEAVE_OPENING_YEAR)
+      h += `<p class="lvnote">Casual leave for ${yr} is ${CL_OPENING_BALANCE} days, being the five months from August. The full 15 applies from January ${yr+1}.</p>`;
     h += `<div class="group" style="margin-top:14px"><button class="btn" id="lvNew">${ICON.plus}Apply for leave</button></div>`;
     const lv = approvedLeaveToday();
     if(lv) h += `<div class="group"><div class="card"><div class="row">
@@ -1973,9 +2008,12 @@ function openLeaveForm(){
         <div><label for="lvTo">To</label><input type="date" id="lvTo" value="${t}"></div></div>
       <div class="field"><label for="lvReason">Reason</label>
         <textarea id="lvReason" rows="3" placeholder="Briefly, in your own words"></textarea></div>
+      <div class="field" id="lvCertBox" hidden><label for="lvCert">Medical certificate</label>
+        <input type="text" id="lvCert" placeholder="Government doctor or hospital, and the date of the certificate">
+        <p style="font-size:12px;color:var(--ink-3);margin-top:5px;line-height:1.45">Medical leave is sanctioned only on a certificate from a Government doctor or a Government hospital. Carry the original for the office record.</p></div>
       <div class="field"><label for="lvAddr">Address during leave</label>
         <input type="text" id="lvAddr" placeholder="Where you can be reached"></div>
-      <div class="row"><span class="lbl"><b>Permission to leave headquarters</b>
+      <div class="row" id="lvHqRow"><span class="lbl"><b>Permission to leave headquarters</b>
         <span>Tick if you will be away from the mandal headquarters</span></span>
         <span class="sw g" role="switch" tabindex="0" aria-checked="false" id="lvHq" aria-label="Permission to leave headquarters"></span></div>
     </div></div>
@@ -1985,8 +2023,23 @@ function openLeaveForm(){
 
   const count = () => {
     const d = leaveDays($('#lvFrom').value, $('#lvTo').value);
-    $('#lvCount').textContent = d ? d + (d === 1 ? ' day' : ' days') : 'The last day cannot fall before the first.';
+    const k = $('#lvType').value, meta = leaveMeta(k);
+    $('#lvCertBox').hidden = !meta.cert;
+    $('#lvHqRow').hidden = (k === 'HQ');            // the whole application is that permission
+    const box = $('#lvCount');
+    if(!d){ box.textContent = 'The last day cannot fall before the first.'; box.style.color=''; return; }
+    const word = d + (d === 1 ? ' day' : ' days');
+    if(!meta.counts){ box.textContent = word; box.style.color=''; return; }
+    const b = leaveBalance(k, Number(String($('#lvFrom').value).slice(0,4)) || new Date().getFullYear());
+    if(d > b.left){
+      box.innerHTML = `<b>${word} — more than you have.</b> ${esc(leaveName(k))}: ${b.left} left of ${b.ent}${b.held?', '+b.held+' already awaiting orders':''}.`;
+      box.style.color = 'var(--flag)';
+    } else {
+      box.textContent = `${word} · ${b.left - d} of ${b.ent} would be left`;
+      box.style.color = '';
+    }
   };
+  $('#lvType').addEventListener('change', count);
   $('#lvFrom').addEventListener('change', () => {
     if($('#lvTo').value < $('#lvFrom').value) $('#lvTo').value = $('#lvFrom').value;
     count();
@@ -2006,16 +2059,29 @@ async function submitLeave(){
   const from = $('#lvFrom').value, to = $('#lvTo').value;
   const days = leaveDays(from, to);
   const reason = $('#lvReason').value.trim();
+  const type = $('#lvType').value, meta = leaveMeta(type);
+  const cert = ($('#lvCert').value || '').trim();
   if(!days){ toast('Check the dates — the last day falls before the first.'); return; }
   if(!reason){ toast('A reason is needed.'); $('#lvReason').focus(); return; }
+  if(meta.cert && !cert){
+    toast('Medical leave needs the certificate of a Government doctor or hospital.', 5000);
+    $('#lvCert').focus(); return;
+  }
+  if(meta.counts){
+    const b = leaveBalance(type, Number(String(from).slice(0,4)) || new Date().getFullYear());
+    if(days > b.left){
+      toast(`Only ${b.left} day${b.left===1?'':'s'} of ${leaveName(type)} left${b.held?' ('+b.held+' awaiting orders)':''}.`, 5500);
+      return;
+    }
+  }
   const btn = $('#lvSend'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Sending';
   const l = {
     id: 'LV' + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
     appliedAt: new Date().toISOString(),
     phone: u.phone, name: u.name, role: u.role, mandal: u.mandal || '',
-    type: $('#lvType').value, from, to, days, reason,
+    type, from, to, days, reason, cert,
     address: $('#lvAddr').value.trim(),
-    hq: $('#lvHq').getAttribute('aria-checked') === 'true',
+    hq: type === 'HQ' || $('#lvHq').getAttribute('aria-checked') === 'true',
     status: 'PENDING', decidedBy: '', decidedAt: '', remarks: '', sync: 'local'
   };
   DB.leave = DB.leave || []; DB.leave.unshift(l); saveNow();
@@ -2037,7 +2103,11 @@ function openLeaveOne(id){
       <div class="row"><span class="lbl"><b>Applied</b></span><span class="val">${esc(niceDate(String(l.appliedAt||'').slice(0,10)))}</span></div>
       <div class="row"><span class="lbl"><b>Reason</b><span>${esc(l.reason||'—')}</span></span></div>
       ${l.address?`<div class="row"><span class="lbl"><b>Address during leave</b><span>${esc(l.address)}</span></span></div>`:''}
+      ${l.cert?`<div class="row"><span class="lbl"><b>Medical certificate</b><span>${esc(l.cert)}</span></span></div>`:''}
       <div class="row"><span class="lbl"><b>Leaving headquarters</b></span><span class="val">${l.hq?'Yes':'No'}</span></div>
+      ${leaveMeta(l.type).counts ? (()=>{ const b=leaveBalance(l.type, Number(String(l.from).slice(0,4)));
+        return `<div class="row"><span class="lbl"><b>${esc(leaveName(l.type))} account</b>
+          <span>${b.ent} for the year · ${b.used} taken · ${b.left} left</span></span></div>`; })() : ''}
       <div class="row"><span class="lbl"><b>Status</b></span>${lvPill(l.status)}</div>
       ${l.decidedBy?`<div class="row"><span class="lbl"><b>Orders by</b><span>${esc(l.decidedBy)}${l.decidedAt?' · '+esc(niceDate(String(l.decidedAt).slice(0,10))):''}</span></span></div>`:''}
       ${l.remarks?`<div class="row"><span class="lbl"><b>Remarks</b><span>${esc(l.remarks)}</span></span></div>`:''}
@@ -2082,7 +2152,7 @@ async function syncLeave(){
     try{
       const r = await post({kind:'leave', token: DB.session.token, leave:{
         id:l.id, appliedAt:l.appliedAt, type:l.type, from:l.from, to:l.to, days:l.days,
-        reason:l.reason, address:l.address, hq:l.hq, status:l.status
+        reason:l.reason, address:l.address, hq:l.hq, cert:l.cert||'', status:l.status
       }});
       if(r && r.ok){ l.sync = 'synced'; done++; saveNow(); }
       else break;

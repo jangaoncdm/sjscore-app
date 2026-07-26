@@ -5,7 +5,7 @@
    5.0 drops the Chart.js CDN. It was loaded on every start and never used,
    which cost bandwidth on a weak signal and put a third-party origin in a
    government app for no reason. */
-const CACHE = 'sjf-v5-4';
+const CACHE = 'sjf-v5-5';
 const SHELL = [
   './', './index.html', './app.js', './manifest.webmanifest', './privacy.html',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',
