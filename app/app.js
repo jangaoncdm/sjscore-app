@@ -1,6 +1,7 @@
 'use strict';
 /* ============================================================
-   SJ-SCORE Field 5.0 — Collectorate, Jangaon · Rc.No.788/DPO/26/34
+   SJGP — Swachh Jangaon Gram Panchayat 5.1
+   Collectorate, Jangaon · Rc.No.788/DPO/26/34
    Paste the Apps Script /exec URL below before publishing.
 
    New in 5.0
@@ -12,7 +13,7 @@
      own, not one common album at the end.
    ============================================================ */
 const SERVER_URL = 'https://script.google.com/macros/s/AKfycbz8Ye9LqGB3bLWkTWcdw6JvU__U9K4VRaG-IFFpwc67G__1vdpMryV6NEfz5FJrnezS/exec';
-const APP_VERSION = '5.0';
+const APP_VERSION = '5.1';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -145,10 +146,10 @@ function load(){
     let old = null;
     try{ old = JSON.parse(localStorage.getItem('sjf4') || 'null'); }catch(e){}
     DB = {url:(old&&old.url)||'', session:(old&&old.session)||null, master:(old&&old.master)||[],
-          records:{}, cache:[], cacheAt:'', att:{}, prefs:{sun:0,big:0}, iosTipSeen:!!(old&&old.iosTipSeen)};
+          records:{}, cache:[], cacheAt:'', att:{}, leave:[], prefs:{sun:0,big:0}, iosTipSeen:!!(old&&old.iosTipSeen)};
   }
   DB.att = DB.att || {}; DB.prefs = DB.prefs || {sun:0,big:0};
-  DB.records = DB.records || {}; DB.cache = DB.cache || []; DB.master = DB.master || [];
+  DB.records = DB.records || {}; DB.cache = DB.cache || []; DB.master = DB.master || []; DB.leave = DB.leave || [];
 }
 let st;
 function save(){ clearTimeout(st); st = setTimeout(saveNow, 200); }
@@ -467,6 +468,16 @@ async function signIn(){
 let ATT = null;     /* work in progress for today */
 let attTries = 0;
 
+/* the two steps, held as a template so the sanctioned-leave panel can take their place */
+const ATT_STEPS = `
+  <div class="step" id="stepGeo">
+    <span class="n" id="geoN">1</span>
+    <span class="t"><b>Location</b><span id="geoTxt">Starting&hellip;</span></span>
+  </div>
+  <div class="step" id="stepCam">
+    <span class="n" id="camN">2</span>
+    <span class="t"><b>Photograph</b><span id="camTxt">Take one photograph of yourself at the place of duty. The date, time and coordinates are printed onto the picture.</span></span>
+  </div>`;
 function openAttendance(){
   const u = user(); if(!u) return;
   ATT = {id:uid(), date:todayStr(), fix:null, photoId:null, b64:null, geoFailed:false};
@@ -475,8 +486,30 @@ function openAttendance(){
   $('#attWho').innerHTML = `${esc(u.name)} · ${esc(roleName(u.role))}${u.mandal?' · '+esc(u.mandal)+' mandal':''}`;
   $('#attMsg').textContent = ''; $('#attShot').hidden = true;
   $('#attend').classList.add('on');
+
+  /* Sanctioned leave is not absence. Nobody is asked for a photograph and a
+     location on a day the Collector has already granted them. */
+  const lv = approvedLeaveToday();
+  if(lv){
+    $('#attSteps').innerHTML = `<div class="step done"><span class="n">${ICON.tick}</span>
+      <span class="t"><b>On sanctioned leave today</b>
+      <span>${esc(leaveName(lv.type))} · ${esc(lvSpan(lv))}${lv.decidedBy?' · ordered by '+esc(lv.decidedBy):''}</span></span></div>`;
+    $('#attActions').innerHTML = `<button class="btn" id="attLeave">Record the day and continue</button>`;
+    $('#attLeave').addEventListener('click', markLeaveDay);
+    return;
+  }
+  $('#attSteps').innerHTML = ATT_STEPS;
+  wireAttSteps();
   drawAttendance();
   startAttFix();
+
+  /* the orders may have been passed since this phone last spoke to the district,
+     so ask once — and if leave has been sanctioned, put the gate up again as leave */
+  if(canApplyLeave(u.role) && navigator.onLine){
+    refreshLeave().then(() => {
+      if(approvedLeaveToday() && !DB.att[todayStr()] && $('#attend').classList.contains('on')) openAttendance();
+    }).catch(()=>{});
+  }
 }
 async function startAttFix(){
   const step = $('#stepGeo');
@@ -495,7 +528,9 @@ async function startAttFix(){
   }
   drawAttendance();
 }
-$('#stepGeo').addEventListener('click', () => { if(!ATT) return; startAttFix(); });
+function wireAttSteps(){
+  const g = $('#stepGeo'); if(g) g.addEventListener('click', () => { if(!ATT) return; startAttFix(); });
+}
 
 function drawAttendance(){
   const box = $('#attActions');
@@ -528,7 +563,7 @@ $('#camAtt').addEventListener('change', async ev => {
   $('#attMsg').className = 'msg info'; $('#attMsg').textContent = 'Preparing the photograph…';
   try{
     const b64 = await grabPhoto(f, {max:900, quality:0.62, lines:[
-      'SJ-SCORE ATTENDANCE · JANGAON',
+      'SJGP ATTENDANCE · JANGAON',
       (u.name || '') + ' · ' + roleName(u.role),
       stampTime(ts),
       ATT.fix ? `${ATT.fix.lat.toFixed(5)}, ${ATT.fix.lng.toFixed(5)}  \u00b1${Math.round(ATT.fix.acc)} m`
@@ -552,7 +587,7 @@ async function markAttendance(){
     id: ATT.id, date: key, ts: ATT.ts || new Date().toISOString(),
     lat: ATT.fix ? ATT.fix.lat : null, lng: ATT.fix ? ATT.fix.lng : null,
     acc: ATT.fix ? ATT.fix.acc : null, verified: !!ATT.fix,
-    photoId: pid, phone: u.phone, name: u.name, role: u.role, mandal: u.mandal || '',
+    photoId: pid, status: 'PRESENT', phone: u.phone, name: u.name, role: u.role, mandal: u.mandal || '',
     tz: Intl.DateTimeFormat().resolvedOptions().timeZone || '', sync: 'local'
   };
   saveNow();
@@ -574,7 +609,8 @@ async function syncAttendance(){
     try{
       const b64 = await BLOBS.get(a.photoId);
       const r = await post({kind:'attendance', token:DB.session.token, att:{
-        id:a.id, date:a.date, ts:a.ts, lat:a.lat, lng:a.lng, acc:a.acc, verified:a.verified, tz:a.tz
+        id:a.id, date:a.date, ts:a.ts, lat:a.lat, lng:a.lng, acc:a.acc, verified:a.verified, tz:a.tz,
+        status:a.status || 'PRESENT', leaveId:a.leaveId || '', leaveType:a.leaveType || ''
       }, photo: b64 ? {name:`ATT_${a.phone}_${a.date}.jpg`, b64} : null});
       if(r && r.ok){ a.sync='synced'; a.url=r.url||''; if(a.photoId) BLOBS.del(a.photoId); done++; saveNow(); }
     }catch(e){ break; }
@@ -612,7 +648,7 @@ function renderHome(){
     const pend=pendingCount();
     if(pend) h2 += banner('warn', ICON.cloud, `${pend} record${pend>1?'s':''} waiting to sync. Open Records and press Sync all when you have signal.`);
     if(IOS && !STANDALONE && pend)
-      h2 += banner('warn', ICON.warn, 'You are running in the browser, not the installed app. On iPhone, records held in a browser tab can be cleared by the phone. Add SJ-SCORE to the Home Screen, or sync today.');
+      h2 += banner('warn', ICON.warn, 'You are running in the browser, not the installed app. On iPhone, records held in a browser tab can be cleared by the phone. Add SJGP to the Home Screen, or sync today.');
     const stale = Object.values(DB.records).filter(r => r.sync!=='synced' && r.updatedAt &&
       (Date.now() - new Date(r.updatedAt).getTime()) > 5*24*3600*1000).length;
     if(stale) h2 += banner('bad', ICON.warn, `${stale} record${stale>1?'s have':' has'} been unsynced for more than five days. Unsynced work is held only on this phone.`);
@@ -626,6 +662,7 @@ function renderHome(){
   body.querySelectorAll('[data-view]').forEach(el=>el.addEventListener('click',()=>openView(el.dataset.view)));
   body.querySelectorAll('[data-refresh]').forEach(el=>el.addEventListener('click', refreshDistrict));
   body.querySelectorAll('[data-attlist]').forEach(el=>el.addEventListener('click', showAttendanceList));
+  body.querySelectorAll('[data-leave]').forEach(el=>el.addEventListener('click', openLeave));
 }
 function banner(kind, icon, text){
   return `<div class="banner ${kind}">${icon}<span>${esc(text)}</span></div>`;
@@ -739,6 +776,13 @@ function districtHome(u, ym){
         <span class="chev"></span></div></div></div>`;
   }
 
+  if(canApproveLeave(u.role)){
+    const pend = pendingLeave().length;
+    h += `<div class="group"><div class="hdr">Leave</div><div class="card">
+      <div class="row tap" data-leave="1"><span class="ico" style="background:${pend?'var(--warn)':'var(--ink-4)'}">${ICON.cal}</span>
+        <span class="lbl"><b>${pend ? pend + (pend===1?' application waiting':' applications waiting') : 'No application waiting'}</b>
+        <span>Sanctioned or refused by you alone</span></span><span class="chev"></span></div></div></div>`;
+  }
   h += `<div class="group"><button class="btn quiet" data-refresh="1">Refresh from district</button>
         <p style="font-size:12px;color:var(--ink-3);text-align:center;padding-top:9px">${DB.cacheAt?('Updated '+new Date(DB.cacheAt).toLocaleString('en-IN')):'Not loaded yet — tap Refresh'}</p></div>`;
 
@@ -1597,6 +1641,8 @@ async function syncAll(){
 async function autoSync(){
   if(!navigator.onLine || !DB.session || SYNCING) return;
   try{ await syncAttendance(); }catch(e){}
+  try{ await syncLeave(); }catch(e){}
+  try{ if(leaveVisible((user()||{}).role)) await refreshLeave(); }catch(e){}
   updateDot();
 }
 
@@ -1624,6 +1670,16 @@ async function renderMore(){
       <span>${a?esc(new Date(a.ts).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true})+' · '+(a.verified?'location recorded':'no location fix')+' · '+(a.sync==='synced'?'sent to the district':'on this phone')):'Attendance is asked for once a day, when the app opens.'}</span></span></div>
     <div class="row"><span class="lbl"><b>Days marked on this phone</b></span><span class="val num">${marked}</span></div>
   </div></div>
+
+  ${leaveVisible(u.role) ? `<div class="group"><div class="hdr">Leave</div><div class="card">
+    <div class="row tap" id="mLeave"><span class="ico" style="background:var(--seal-2)">${ICON.cal}</span>
+      <span class="lbl"><b>${canApproveLeave(u.role)?'Leave applications':'Apply for leave'}</b>
+      <span>${canApproveLeave(u.role)
+        ? 'Applications from the MPO, the Panchayat Secretary and the MPDO'
+        : 'Applications go to the Collector for orders'}</span></span>
+      ${canApproveLeave(u.role) && pendingLeave().length ? `<span class="pill p-warn">${pendingLeave().length} waiting</span>` : ''}
+      <span class="chev"></span></div>
+  </div></div>` : ''}
 
   <div class="group"><div class="hdr">Reading the screen</div><div class="card">
     <div class="row"><span class="ico" style="background:var(--gold)">${ICON.sun}</span>
@@ -1657,7 +1713,7 @@ async function renderMore(){
   </div></div>
 
   <p style="font-size:12.5px;color:var(--ink-3);text-align:center;padding:22px 24px 34px;line-height:1.6">
-    SJ-SCORE Field · version ${APP_VERSION}<br>Collectorate, Jangaon · Rc.No.788/DPO/26/34<br>
+    SJGP · version ${APP_VERSION}<br>Collectorate, Jangaon · Rc.No.788/DPO/26/34<br>
     <a href="privacy.html">How this app handles your data</a></p>`;
 
   const sun=$('#prefSun'), big=$('#prefBig');
@@ -1668,6 +1724,7 @@ async function renderMore(){
   [sun,big].forEach(el=>el.addEventListener('keydown',e=>{ if(e.key===' '||e.key==='Enter'){e.preventDefault(); el.click();} }));
 
   const iosRow=$('#mIos'); if(iosRow) iosRow.addEventListener('click', ()=>$('#iosTip').classList.add('on'));
+  const lvRow=$('#mLeave'); if(lvRow) lvRow.addEventListener('click', openLeave);
   const syncRow=$('#mSync'); if(syncRow) syncRow.addEventListener('click', syncAll);
   $('#mPull').addEventListener('click', async ()=>{
     toast('Refreshing…');
@@ -1678,7 +1735,7 @@ async function renderMore(){
     const copy=JSON.parse(JSON.stringify(DB)); delete copy.session;
     const a2=document.createElement('a');
     a2.href=URL.createObjectURL(new Blob([JSON.stringify(copy,null,1)],{type:'application/json'}));
-    a2.download='SJSCORE_backup_'+todayStr()+'.json'; a2.click(); toast('Backup saved to the phone');
+    a2.download='SJGP_backup_'+todayStr()+'.json'; a2.click(); toast('Backup saved to the phone');
   });
   $('#mPin').addEventListener('click', changePin);
   $('#mOut').addEventListener('click', ()=>{
@@ -1709,6 +1766,7 @@ function changePin(){
 
 /* ---------------- icons ---------------- */
 const ICON={
+  cal:'<svg viewBox="0 0 24 24"><path d="M7 2v2H5.5A2.5 2.5 0 0 0 3 6.5v13A2.5 2.5 0 0 0 5.5 22h13a2.5 2.5 0 0 0 2.5-2.5v-13A2.5 2.5 0 0 0 18.5 4H17V2h-2v2H9V2H7Zm12 8v9.5a.5.5 0 0 1-.5.5h-13a.5.5 0 0 1-.5-.5V10h14Zm-9.3 2.3-3 3 1.4 1.4 1.6-1.6V18h2v-5.7h-2Zm5.6 0h-3v1.9h1.6l-1.8 3.8h2.2l1.9-4.1v-1.6h-.9Z"/></svg>',
   check:'<svg viewBox="0 0 24 24"><path d="M9.6 16.2 5.4 12l-1.4 1.4 5.6 5.6 12-12-1.4-1.4z"/></svg>',
   tick:'<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor"><path d="M9.6 16.2 5.4 12l-1.4 1.4 5.6 5.6 12-12-1.4-1.4z"/></svg>',
   tickC:'<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m-1.3 14.6-4-4L8.1 11l2.6 2.6L15.9 8.4l1.4 1.4z"/></svg>',
@@ -1741,3 +1799,274 @@ gate();
 window.addEventListener('pagehide', saveNow);
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveNow(); });
 setInterval(()=>{ if(DB.session && navigator.onLine) autoSync(); }, 5*60*1000);
+
+/* ============================================================
+   LEAVE
+   Applied for by the MPO, the Panchayat Secretary and the MPDO.
+   Sanctioned or refused by the Collector, and by nobody else —
+   the decision is written on the server against the Collector's
+   own token, so the app cannot be talked into approving anything.
+   ============================================================ */
+const LEAVE_TYPES = [
+  ['CL',  'Casual Leave'],            ['EL',   'Earned Leave'],
+  ['HPL', 'Half Pay Leave'],          ['COM',  'Commuted Leave'],
+  ['ML',  'Medical Leave'],           ['MAT',  'Maternity Leave'],
+  ['PAT', 'Paternity Leave'],         ['SCL',  'Special Casual Leave'],
+  ['COMP','Compensatory Off'],        ['OH',   'Optional Holiday']
+];
+const leaveName    = t => (LEAVE_TYPES.find(x => x[0] === t) || [t, t])[1];
+const canApplyLeave   = r => ['MPO','PS','MPDO'].includes(r);
+const canApproveLeave = r => r === 'COLLECTOR';
+const leaveVisible    = r => canApplyLeave(r) || canApproveLeave(r);
+
+function leaveDays(from, to){
+  const a = new Date(from + 'T00:00:00'), b = new Date(to + 'T00:00:00');
+  if(isNaN(a) || isNaN(b) || b < a) return 0;
+  return Math.round((b - a) / 86400000) + 1;
+}
+function approvedLeaveToday(){
+  const t = todayStr();
+  return (DB.leave || []).find(l => l.status === 'APPROVED' && l.from <= t && l.to >= t) || null;
+}
+function pendingLeave(){ return (DB.leave || []).filter(l => l.status === 'PENDING'); }
+const LV_PILL = {PENDING:['p-warn','Pending'], APPROVED:['p-ok','Sanctioned'],
+                 REJECTED:['p-bad','Refused'], CANCELLED:['p-mut','Withdrawn']};
+function lvPill(st){ const [c,l] = LV_PILL[st] || ['p-mut', st]; return `<span class="pill ${c}">${esc(l)}</span>`; }
+function lvSpan(l){
+  return l.from === l.to ? niceDate(l.from) : niceDate(l.from) + ' to ' + niceDate(l.to);
+}
+
+/* ---------------- the screen ---------------- */
+let LVFILTER = 'PENDING';
+function openLeave(){
+  showScreen('leave');
+  renderLeave();
+  refreshLeave().catch(()=>{});
+}
+$('#lvBack').innerHTML = '<button id="lvBackBtn">Back</button>';
+$('#lvBack').addEventListener('click', e => { if(e.target.closest('#lvBackBtn')) go('more'); });
+
+function renderLeave(){
+  const u = user(); if(!u) return;
+  const mine = canApplyLeave(u.role), boss = canApproveLeave(u.role);
+  let list = (DB.leave || []).slice();
+
+  if(boss){
+    $('#lvBig').textContent = 'Leave applications';
+    const pend = pendingLeave().length;
+    $('#lvSub').textContent = pend ? pend + (pend === 1 ? ' waiting on you' : ' waiting on you') : 'Nothing waiting on you';
+    $('#lvRight').innerHTML = '';
+    if(LVFILTER !== 'ALL') list = list.filter(l => l.status === LVFILTER);
+    list.sort((a,b) => String(b.appliedAt||'').localeCompare(String(a.appliedAt||'')));
+  } else {
+    $('#lvBig').textContent = 'Leave';
+    $('#lvSub').textContent = u.name;
+    $('#lvRight').innerHTML = '';
+    list.sort((a,b) => String(b.appliedAt||'').localeCompare(String(a.appliedAt||'')));
+  }
+
+  let h = '';
+  if(boss){
+    h += `<div class="lvhead">
+      <button data-lvf="PENDING"  aria-pressed="${LVFILTER==='PENDING'}">Waiting</button>
+      <button data-lvf="APPROVED" aria-pressed="${LVFILTER==='APPROVED'}">Sanctioned</button>
+      <button data-lvf="REJECTED" aria-pressed="${LVFILTER==='REJECTED'}">Refused</button>
+      <button data-lvf="ALL"      aria-pressed="${LVFILTER==='ALL'}">All</button></div>`;
+  }
+  if(mine){
+    h += `<div class="group" style="margin-top:14px"><button class="btn" id="lvNew">${ICON.plus}Apply for leave</button></div>`;
+    const lv = approvedLeaveToday();
+    if(lv) h += `<div class="group"><div class="card"><div class="row">
+      <span class="ico" style="background:var(--ok)">${ICON.tickC}</span>
+      <span class="lbl"><b>You are on sanctioned leave today</b><span>${esc(leaveName(lv.type))} · ${esc(lvSpan(lv))}</span></span></div></div></div>`;
+  }
+
+  if(!list.length){
+    h += emptyState(boss ? 'Nothing here' : 'No application yet',
+      boss ? 'Applications from the MPO, the Panchayat Secretary and the MPDO appear here for your orders.'
+           : 'Leave is applied for here and goes to the Collector for orders. Apply before you leave station wherever it is possible to do so.');
+  } else {
+    h += `<div class="group" style="margin-top:14px"><div class="card">` + list.map(l => {
+      const who = boss ? `<em>${esc(String(l.name||''))}</em> · ${esc(roleName(l.role))}${l.mandal?' · '+esc(l.mandal):''}<br>` : '';
+      return `<button class="lvrow" data-lv="${esc(l.id)}">
+        <span class="tag">${esc(l.type)}</span>
+        <span class="mid"><b>${esc(leaveName(l.type))}</b>
+          <span>${who}${esc(lvSpan(l))}${l.sync!=='synced'?' · on this phone':''}</span></span>
+        <span class="lvdays">${l.days}<small>${l.days===1?'day':'days'}</small></span>
+        </button>`;
+    }).join('') + `</div></div>`;
+    h += `<div class="group"><div class="card">` + list.map(l =>
+      `<div class="row" style="padding-top:6px;padding-bottom:6px"><span class="lbl"><b style="font-size:13px">${esc(leaveName(l.type))} · ${esc(lvSpan(l))}</b></span>${lvPill(l.status)}</div>`
+    ).join('') + `</div></div>`;
+  }
+  $('#lvBody').innerHTML = h;
+  wireLeave();
+}
+
+function wireLeave(){
+  const nb = $('#lvNew'); if(nb) nb.addEventListener('click', openLeaveForm);
+  $$('#lvBody [data-lvf]').forEach(b => b.addEventListener('click', () => { LVFILTER = b.dataset.lvf; renderLeave(); }));
+  $$('#lvBody [data-lv]').forEach(b => b.addEventListener('click', () => openLeaveOne(b.dataset.lv)));
+}
+
+/* ---------------- applying ---------------- */
+function openLeaveForm(){
+  const t = todayStr();
+  showSheet(`<div style="padding:6px 20px 4px"><h2>Apply for leave</h2>
+    <p style="font-size:13.5px;color:var(--ink-2);margin-top:4px">The application goes to the Collector. You will see the orders here.</p></div>
+    <div class="group" style="margin-top:8px"><div class="card">
+      <div class="field"><label for="lvType">Kind of leave</label>
+        <select id="lvType">${LEAVE_TYPES.map(([k,n]) => `<option value="${k}">${esc(n)}</option>`).join('')}</select></div>
+      <div class="field split">
+        <div><label for="lvFrom">From</label><input type="date" id="lvFrom" value="${t}"></div>
+        <div><label for="lvTo">To</label><input type="date" id="lvTo" value="${t}"></div></div>
+      <div class="field"><label for="lvReason">Reason</label>
+        <textarea id="lvReason" rows="3" placeholder="Briefly, in your own words"></textarea></div>
+      <div class="field"><label for="lvAddr">Address during leave</label>
+        <input type="text" id="lvAddr" placeholder="Where you can be reached"></div>
+      <div class="row"><span class="lbl"><b>Permission to leave headquarters</b>
+        <span>Tick if you will be away from the mandal headquarters</span></span>
+        <span class="sw g" role="switch" tabindex="0" aria-checked="false" id="lvHq" aria-label="Permission to leave headquarters"></span></div>
+    </div></div>
+    <p class="lvnote" id="lvCount">1 day</p>
+    <div class="group" style="margin-top:14px"><button class="btn" id="lvSend">Send to the Collector</button>
+      <button class="btn quiet" id="lvCancelForm" style="margin-top:9px">Not now</button></div>`);
+
+  const count = () => {
+    const d = leaveDays($('#lvFrom').value, $('#lvTo').value);
+    $('#lvCount').textContent = d ? d + (d === 1 ? ' day' : ' days') : 'The last day cannot fall before the first.';
+  };
+  $('#lvFrom').addEventListener('change', () => {
+    if($('#lvTo').value < $('#lvFrom').value) $('#lvTo').value = $('#lvFrom').value;
+    count();
+  });
+  $('#lvTo').addEventListener('change', count);
+  const hq = $('#lvHq');
+  const flip = () => hq.setAttribute('aria-checked', hq.getAttribute('aria-checked') === 'true' ? 'false' : 'true');
+  hq.addEventListener('click', flip);
+  hq.addEventListener('keydown', e => { if(e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); flip(); } });
+  $('#lvCancelForm').addEventListener('click', hideSheet);
+  $('#lvSend').addEventListener('click', submitLeave);
+  count();
+}
+
+async function submitLeave(){
+  const u = user();
+  const from = $('#lvFrom').value, to = $('#lvTo').value;
+  const days = leaveDays(from, to);
+  const reason = $('#lvReason').value.trim();
+  if(!days){ toast('Check the dates — the last day falls before the first.'); return; }
+  if(!reason){ toast('A reason is needed.'); $('#lvReason').focus(); return; }
+  const btn = $('#lvSend'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Sending';
+  const l = {
+    id: 'LV' + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    appliedAt: new Date().toISOString(),
+    phone: u.phone, name: u.name, role: u.role, mandal: u.mandal || '',
+    type: $('#lvType').value, from, to, days, reason,
+    address: $('#lvAddr').value.trim(),
+    hq: $('#lvHq').getAttribute('aria-checked') === 'true',
+    status: 'PENDING', decidedBy: '', decidedAt: '', remarks: '', sync: 'local'
+  };
+  DB.leave = DB.leave || []; DB.leave.unshift(l); saveNow();
+  hideSheet(); renderLeave();
+  const sent = await syncLeave();
+  toast(sent ? 'Sent to the Collector' : 'Saved on this phone — it goes when there is signal');
+  renderLeave();
+}
+
+/* ---------------- one application ---------------- */
+function openLeaveOne(id){
+  const l = (DB.leave || []).find(x => x.id === id); if(!l) return;
+  const u = user(), boss = canApproveLeave(u.role);
+  const mine = l.phone === u.phone;
+  showSheet(`<div style="padding:6px 20px 4px"><h2>${esc(leaveName(l.type))}</h2>
+    <p style="font-size:13.5px;color:var(--ink-2);margin-top:4px">${esc(lvSpan(l))} · ${l.days} ${l.days===1?'day':'days'}</p></div>
+    <div class="group" style="margin-top:8px"><div class="card">
+      <div class="row"><span class="lbl"><b>Applicant</b><span>${esc(l.name)} · ${esc(roleName(l.role))}${l.mandal?' · '+esc(l.mandal):''}</span></span></div>
+      <div class="row"><span class="lbl"><b>Applied</b></span><span class="val">${esc(niceDate(String(l.appliedAt||'').slice(0,10)))}</span></div>
+      <div class="row"><span class="lbl"><b>Reason</b><span>${esc(l.reason||'—')}</span></span></div>
+      ${l.address?`<div class="row"><span class="lbl"><b>Address during leave</b><span>${esc(l.address)}</span></span></div>`:''}
+      <div class="row"><span class="lbl"><b>Leaving headquarters</b></span><span class="val">${l.hq?'Yes':'No'}</span></div>
+      <div class="row"><span class="lbl"><b>Status</b></span>${lvPill(l.status)}</div>
+      ${l.decidedBy?`<div class="row"><span class="lbl"><b>Orders by</b><span>${esc(l.decidedBy)}${l.decidedAt?' · '+esc(niceDate(String(l.decidedAt).slice(0,10))):''}</span></span></div>`:''}
+      ${l.remarks?`<div class="row"><span class="lbl"><b>Remarks</b><span>${esc(l.remarks)}</span></span></div>`:''}
+    </div></div>
+    ${boss && l.status === 'PENDING' ? `
+      <div class="group"><div class="card"><div class="field">
+        <label for="lvRem">Remarks (optional)</label>
+        <textarea id="lvRem" rows="2" placeholder="Anything to record with the orders"></textarea></div></div></div>
+      <div class="group" style="margin-top:12px">
+        <button class="btn" id="lvOk">Sanction</button>
+        <button class="btn danger" id="lvNo" style="margin-top:9px">Refuse</button>
+        <button class="btn quiet" id="lvShut" style="margin-top:9px">Close</button></div>` : `
+      ${mine && l.status === 'PENDING' ? `<div class="group" style="margin-top:12px">
+        <button class="btn danger" id="lvWithdraw">Withdraw the application</button>
+        <button class="btn quiet" id="lvShut" style="margin-top:9px">Close</button></div>`
+      : `<div class="group" style="margin-top:12px"><button class="btn quiet" id="lvShut">Close</button></div>`}`}`);
+
+  const shut = $('#lvShut'); if(shut) shut.addEventListener('click', hideSheet);
+  const ok = $('#lvOk'), no = $('#lvNo'), wd = $('#lvWithdraw');
+  if(ok) ok.addEventListener('click', () => decideLeave(l.id, 'APPROVED', ($('#lvRem').value || '').trim()));
+  if(no) no.addEventListener('click', () => decideLeave(l.id, 'REJECTED', ($('#lvRem').value || '').trim()));
+  if(wd) wd.addEventListener('click', () => decideLeave(l.id, 'CANCELLED', ''));
+}
+
+async function decideLeave(id, status, remarks){
+  const l = (DB.leave || []).find(x => x.id === id); if(!l) return;
+  const word = status === 'APPROVED' ? 'Sanctioned' : status === 'REJECTED' ? 'Refused' : 'Withdrawn';
+  try{
+    const r = await post({kind:'leaveDecision', token: DB.session.token, id, status, remarks: remarks || ''});
+    if(!r || !r.ok){ toast((r && r.error) || 'Could not send the orders'); return; }
+    l.status = status; l.remarks = remarks || ''; l.decidedBy = r.decidedBy || user().name; l.decidedAt = r.decidedAt || new Date().toISOString();
+    saveNow(); hideSheet(); renderLeave(); renderHome(); toast(word);
+  }catch(e){ toast('No signal — orders are passed when the phone is back online'); }
+}
+
+/* ---------------- moving it about ---------------- */
+async function syncLeave(){
+  const list = (DB.leave || []).filter(l => l.sync !== 'synced');
+  if(!list.length || !navigator.onLine) return 0;
+  let done = 0;
+  for(const l of list){
+    try{
+      const r = await post({kind:'leave', token: DB.session.token, leave:{
+        id:l.id, appliedAt:l.appliedAt, type:l.type, from:l.from, to:l.to, days:l.days,
+        reason:l.reason, address:l.address, hq:l.hq, status:l.status
+      }});
+      if(r && r.ok){ l.sync = 'synced'; done++; saveNow(); }
+      else break;
+    }catch(e){ break; }
+  }
+  return done;
+}
+async function refreshLeave(){
+  const u = user(); if(!u || !leaveVisible(u.role) || !navigator.onLine) return;
+  const r = await get({op:'leave'});
+  if(!r || !r.ok) return;
+  const keep = (DB.leave || []).filter(l => l.sync !== 'synced');           // not yet on the server
+  const rows = (r.rows || []).map(x => ({...x, sync:'synced'}));
+  const seen = new Set(rows.map(x => x.id));
+  DB.leave = rows.concat(keep.filter(l => !seen.has(l.id)));
+  saveNow();
+  /* whatever the officer happens to be looking at should now be right */
+  if($('#app').hidden) return;
+  if($('#s-leave').classList.contains('on')) renderLeave();
+  else if($('#s-home').classList.contains('on')) renderHome();
+  else if($('#s-more').classList.contains('on')) renderMore();
+}
+
+/* ---------------- the day itself ---------------- */
+function markLeaveDay(){
+  const lv = approvedLeaveToday(); if(!lv) return;
+  const u = user(), key = todayStr();
+  DB.att[key] = {
+    id: 'ATT' + Date.now().toString(36), date: key, ts: new Date().toISOString(),
+    lat:null, lng:null, acc:null, verified:false, photoId:'',
+    status:'LEAVE', leaveId: lv.id, leaveType: lv.type,
+    phone:u.phone, name:u.name, role:u.role, mandal:u.mandal || '',
+    tz: Intl.DateTimeFormat().resolvedOptions().timeZone || '', sync:'local'
+  };
+  saveNow(); gate();
+  toast('Recorded as sanctioned leave');
+  syncAttendance().catch(()=>{});
+}

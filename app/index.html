@@ -6,11 +6,11 @@
 <meta name="theme-color" content="#14532D">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="SJ-SCORE">
+<meta name="apple-mobile-web-app-title" content="SJGP">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="format-detection" content="telephone=no">
 <meta name="referrer" content="no-referrer">
-<title>SJ-SCORE Field</title>
+<title>SJGP — Swachh Jangaon Gram Panchayat</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png">
@@ -19,7 +19,7 @@
 <link rel="apple-touch-icon" sizes="120x120" href="icons/apple-touch-icon-120.png">
 <style>
 /* ==========================================================================
-   SJ-SCORE Field 5.0 — design tokens
+   SJGP 5.1 — design tokens
    Collectorate, Jangaon · Rc.No.788/DPO/26/34
 
    Two rules govern every choice below.
@@ -366,6 +366,24 @@ main{flex:1;padding-bottom:calc(var(--tabh) + 10px)}
 .p-ok{background:var(--ok-tint);color:var(--ok)} .p-warn{background:var(--warn-tint);color:var(--warn)}
 .p-mut{background:var(--surface-3);color:var(--ink-2)} .p-bad{background:var(--flag-tint);color:var(--flag)}
 .p-info{background:var(--info-tint);color:var(--info)}
+/* ---- leave ---- */
+.lvrow{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;background:var(--surface);position:relative;width:100%;text-align:left;border:0;font:inherit;color:inherit}
+.lvrow+.lvrow::before{content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hair-3)}
+.lvrow .tag{width:44px;flex:none;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--seal);
+  background:var(--seal-tint);border-radius:8px;min-height:34px;display:grid;place-items:center;letter-spacing:.02em}
+.lvrow .mid{flex:1;min-width:0}
+.lvrow .mid b{display:block;font-size:15px;font-weight:650;letter-spacing:-.01em;line-height:1.3}
+.lvrow .mid span{display:block;font-size:12.5px;color:var(--ink-3);margin-top:2px;line-height:1.4}
+.lvrow .mid em{font-style:normal;color:var(--ink-2)}
+.lvdays{font-family:var(--serif);font-weight:700;font-size:17px;color:var(--ink);flex:none;text-align:right;line-height:1.1}
+.lvdays small{display:block;font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink-3);margin-top:1px}
+.lvhead{display:flex;gap:8px;flex-wrap:wrap;padding:0 var(--pad) 2px}
+.lvhead button{flex:1 1 90px;min-height:38px;border-radius:var(--r-pill);border:1px solid var(--hair);
+  background:var(--surface);font-size:13px;font-weight:650;color:var(--ink-2);cursor:pointer}
+.lvhead button[aria-pressed="true"]{background:var(--seal);border-color:var(--seal);color:#fff}
+.lvnote{margin:8px 16px 0;padding:10px 12px;border-left:3px solid var(--seal-line);background:var(--seal-tint);
+  border-radius:0 8px 8px 0;font-size:13px;color:var(--ink-2);line-height:1.5}
 .rfchip{display:inline-block;font-size:11px;font-weight:700;color:var(--flag);background:var(--flag-tint);
   border-radius:6px;padding:3px 7px;margin:2px 3px 0 0}
 .trend{display:flex;align-items:flex-end;gap:9px;height:88px}
@@ -431,8 +449,8 @@ body.kb .tabs,body.kb .strip{transform:translateY(160%);pointer-events:none}
 <!-- ============ SIGN IN ============ -->
 <div id="signin">
   <img class="mark" src="icons/icon-192.png" alt="">
-  <h1>SJ-SCORE Field</h1>
-  <p class="sub">Monthly sanitation evaluation of Gram Panchayats — Collectorate, Jangaon.</p>
+  <h1>SJGP</h1>
+  <p class="sub">Swachh Jangaon Gram Panchayat<br>Collectorate, Jangaon · Rc.No.788/DPO/26/34</p>
 
   <div class="card" id="siCard">
     <div class="field" id="urlField" hidden>
@@ -461,14 +479,7 @@ body.kb .tabs,body.kb .strip{transform:translateY(160%);pointer-events:none}
     <p class="who" id="attWho"></p>
 
     <div class="attcard">
-      <div class="step" id="stepGeo">
-        <span class="n" id="geoN">1</span>
-        <span class="t"><b>Location</b><span id="geoTxt">Starting&hellip;</span></span>
-      </div>
-      <div class="step" id="stepCam">
-        <span class="n" id="camN">2</span>
-        <span class="t"><b>Photograph</b><span id="camTxt">Take one photograph of yourself at the place of duty. The date, time and coordinates are printed onto the picture.</span></span>
-      </div>
+      <div id="attSteps"></div>
       <div class="shot" id="attShot" hidden><img id="attImg" alt="Attendance photograph just taken"></div>
     </div>
 
@@ -512,6 +523,12 @@ body.kb .tabs,body.kb .strip{transform:translateY(160%);pointer-events:none}
     <div id="moreBody"></div>
   </section>
 
+  <section class="screen" id="s-leave">
+    <div class="nav"><span class="side" id="lvBack"></span><h1>Leave</h1><span class="side r" id="lvRight"></span></div>
+    <div class="bigtitle"><h2 id="lvBig">Leave</h2><p id="lvSub"></p></div>
+    <div id="lvBody"></div>
+  </section>
+
 </main>
 
 <nav class="tabs" id="tabs" role="tablist"></nav>
@@ -521,7 +538,7 @@ body.kb .tabs,body.kb .strip{transform:translateY(160%);pointer-events:none}
   <div class="scrim"></div>
   <div class="panel"><div class="grab"></div>
     <div style="padding:6px 20px 18px">
-      <h2 style="font-family:var(--serif);color:var(--seal)">Add SJ-SCORE to your Home Screen</h2>
+      <h2 style="font-family:var(--serif);color:var(--seal)">Add SJGP to your Home Screen</h2>
       <p style="font-size:15px;color:var(--ink-2);margin-top:9px;line-height:1.5">On iPhone this must be done from <b>Safari</b>. It takes two taps, and the app then opens full screen and works offline.</p>
       <ol style="margin:16px 0 0 20px;font-size:15.5px;line-height:1.8">
         <li>Tap <b>Share</b> — the square with an arrow, at the bottom of Safari.</li>
