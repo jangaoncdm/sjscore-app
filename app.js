@@ -13,7 +13,7 @@
      own, not one common album at the end.
    ============================================================ */
 const SERVER_URL = 'https://script.google.com/macros/s/AKfycbz8Ye9LqGB3bLWkTWcdw6JvU__U9K4VRaG-IFFpwc67G__1vdpMryV6NEfz5FJrnezS/exec';
-const APP_VERSION = '5.8';
+const APP_VERSION = '5.9';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -1197,9 +1197,13 @@ function setMarkAt(r, id, store, v){
 /* ---- wiring ---- */
 let PENDING = null;   /* which camera tap we are waiting on */
 function wireInspect(){
-  const r=CUR, body=$('#inspBody');
-  $('#ipClose').addEventListener('click', ()=>{ saveNow(); CUR=null; go('home'); });
-  $('#ipFile').addEventListener('click', openFileSheet);
+  /* #inspBody and the nav buttons outlive every re-render, so their handlers
+     are ASSIGNED, never added: a second render must replace the wiring, not
+     stack a second copy of it. Stacked copies made every tap fire twice —
+     set the mark, then toggle it straight back to nought. */
+  const body=$('#inspBody');
+  $('#ipClose').onclick = ()=>{ saveNow(); CUR=null; go('home'); };
+  $('#ipFile').onclick = openFileSheet;
   $('#inspStrip').querySelectorAll('[data-goto]').forEach(el => el.addEventListener('click', () => {
     const t=document.getElementById(el.dataset.goto); if(!t) return;
     if(t.tagName==='DETAILS') t.open=true;
@@ -1207,7 +1211,8 @@ function wireInspect(){
   }));
   quorum();
 
-  body.addEventListener('click', e=>{
+  body.onclick = e=>{
+    const r=CUR; if(!r) return;
     const mk=e.target.closest('[data-mark]');
     if(mk){
       const id=mk.dataset.clause, store=mk.dataset.store, v=+mk.dataset.mark;
@@ -1275,17 +1280,19 @@ function wireInspect(){
     if(e.target.closest('#gpsRow')) return captureFix();
     if(e.target.closest('#btnDone')){ saveNow(); CUR=null; go('home'); toast('Saved on this phone'); return; }
     if(e.target.closest('#btnFile')){ openFileSheet(); return; }
-  });
+  };
 
-  body.addEventListener('keydown', e=>{
+  body.onkeydown = e=>{
+    if(!CUR) return;
     if((e.key===' '||e.key==='Enter') && e.target.matches('[data-rf],[data-fchk]')){
       e.preventDefault();
       if(e.target.hasAttribute('data-rf')) toggleRf(e.target);
-      else { const on=e.target.getAttribute('aria-checked')!=='true'; e.target.setAttribute('aria-checked',on); r[e.target.dataset.fchk]=on; touch(); }
+      else { const on=e.target.getAttribute('aria-checked')!=='true'; e.target.setAttribute('aria-checked',on); CUR[e.target.dataset.fchk]=on; touch(); }
     }
-  });
+  };
 
-  body.addEventListener('input', e=>{
+  body.oninput = e=>{
+    const r=CUR; if(!r) return;
     const t=e.target;
     if(t.dataset.evnote!==undefined){ r.ev[t.dataset.evnote]=t.value; touch(); return; }
     if(t.dataset.f){ r[t.dataset.f] = t.type==='number' ? (+t.value||0) : t.value; live(); return; }
@@ -1294,8 +1301,8 @@ function wireInspect(){
     if(t.dataset.wname!==undefined && t.dataset.wname!==''){ r.workers[t.dataset.wname].name=t.value; touch(); return; }
     if(t.dataset.dcb){ r.bc.dcb[t.dataset.dcb]=+t.value||0; live(); return; }
     if(t.dataset.def!==undefined && t.dataset.def!==''){ r.defs[t.dataset.def]=t.value; touch(); return; }
-  });
-  body.addEventListener('change', e=>{ if(e.target.dataset.evnote!==undefined) refreshRail(CUR, e.target.dataset.evnote); });
+  };
+  body.onchange = e=>{ if(CUR && e.target.dataset.evnote!==undefined) refreshRail(CUR, e.target.dataset.evnote); };
 }
 function toggleRf(sw){
   const r=CUR, n=+sw.dataset.rf, on=sw.getAttribute('aria-checked')!=='true';
