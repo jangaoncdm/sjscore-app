@@ -270,6 +270,10 @@ function analyse(j){
   if(oldPend.length) iss.push({p:2, t:oldPend.length+' leave application'+(oldPend.length>1?'s':'')+' waiting beyond 48 hours',
     d:oldPend.slice(0,3).map(l=>l.name+' ('+l.type+' '+l.days+'d)').join(', ')+'.',
     a:'Pass orders today — days held against balances block fresh applications.'});
+  const dups=j.today.present.filter(r=>(r.marks||1)>1);
+  if(dups.length) iss.push({p:2, t:dups.length+' officer'+(dups.length>1?'s':'')+' marked attendance more than once today',
+    d:dups.slice(0,4).map(r=>r.name+' ('+r.marks+'×)').join(', ')+(dups.length>4?'…':'')+'. One row stands per officer; the count is on record.',
+    a:'Usually a second device or a re-login. A pattern on the same names each day warrants a word.'});
   const noFix=j.today.present.filter(r=>!r.verified);
   if(noFix.length) iss.push({p:3, t:noFix.length+' attendance mark'+(noFix.length>1?'s':'')+' without a location fix today',
     d:noFix.slice(0,4).map(r=>r.name).join(', ')+'.',
@@ -400,7 +404,7 @@ function render(j){
     `<div class="twrap"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th><th>Time</th><th>Location</th><th>Status</th></tr></thead><tbody>`+
     (attRows.length?attRows.map(r=>`<tr><td>${esc(r.name)}</td><td class="mut">${esc(r.role)}</td><td class="mut">${esc(r.mandal)}</td>`+
       `<td class="num">${r._s==='P'?esc(hm(r.at)):'—'}</td>`+
-      `<td>${r._s==='P'?(r.verified?'<span class="pill ok">verified</span>':'<span class="pill warn">no fix</span>'):'—'}</td>`+
+      `<td>${r._s==='P'?(r.verified?'<span class="pill ok">verified</span>':'<span class="pill warn">no fix</span>')+((r.marks||1)>1?' <span class="pill bad">'+r.marks+'×</span>':''):'—'}</td>`+
       `<td>${r._s==='P'?'<span class="pill ok">present</span>':r._s==='L'?'<span class="pill warn">'+esc(r.leaveType||'leave')+'</span>':'<span class="pill bad">not marked</span>'}</td></tr>`).join('')
       :'<tr><td colspan="6" class="empty">No officer yet today.</td></tr>')+`</tbody></table></div>`);
 

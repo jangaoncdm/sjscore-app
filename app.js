@@ -13,7 +13,7 @@
      own, not one common album at the end.
    ============================================================ */
 const SERVER_URL = 'https://script.google.com/macros/s/AKfycbz8Ye9LqGB3bLWkTWcdw6JvU__U9K4VRaG-IFFpwc67G__1vdpMryV6NEfz5FJrnezS/exec';
-const APP_VERSION = '6.1';
+const APP_VERSION = '6.2';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -611,7 +611,13 @@ $('#attSignOut').addEventListener('click', () => {
     DB.session = null; saveNow(); gate();
   });
 });
-async function syncAttendance(){
+let ATT_SYNCING = null;
+function syncAttendance(){
+  if(ATT_SYNCING) return ATT_SYNCING;                 /* the race, closed at the source */
+  ATT_SYNCING = _syncAttendance().finally(()=>{ ATT_SYNCING = null; });
+  return ATT_SYNCING;
+}
+async function _syncAttendance(){
   const list = Object.values(DB.att).filter(a => a.sync !== 'synced');
   if(!list.length || !navigator.onLine) return 0;
   let done = 0;
@@ -622,7 +628,15 @@ async function syncAttendance(){
         id:a.id, date:a.date, ts:a.ts, lat:a.lat, lng:a.lng, acc:a.acc, verified:a.verified, tz:a.tz,
         status:a.status || 'PRESENT', leaveId:a.leaveId || '', leaveType:a.leaveType || ''
       }, photo: b64 ? {name:`ATT_${a.phone}_${a.date}.jpg`, b64} : null});
-      if(r && r.ok){ a.sync='synced'; a.url=r.url||''; if(a.photoId) BLOBS.del(a.photoId); done++; saveNow(); }
+      if(r && r.ok){
+        a.sync='synced'; a.url=r.url||''; if(a.photoId) BLOBS.del(a.photoId); done++;
+        if(r.duplicate){
+          a.dup = {n:r.marks||2, firstAt:r.firstAt||''};
+          if(a.date===todayStr() && document.visibilityState==='visible')
+            toast('The district already holds your attendance for today'+(r.firstAt?' — first marked at '+new Date(r.firstAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'')+'. Repeated marking is recorded.', 6000);
+        }
+        saveNow();
+      }
     }catch(e){ break; }
   }
   return done;
@@ -688,7 +702,9 @@ function attendanceStrip(){
   const bits = ['Attendance marked at ' + t];
   if(a.verified) bits.push('location recorded'); else bits.push('no location fix — filed as unverified');
   if(a.sync !== 'synced') bits.push('on this phone');
-  return `<div class="banner ${a.verified ? 'ok' : 'warn'}">${a.verified?ICON.tickC:ICON.warn}<span>${esc(bits.join(' · '))}</span></div>`;
+  let h = `<div class="banner ${a.verified ? 'ok' : 'warn'}">${a.verified?ICON.tickC:ICON.warn}<span>${esc(bits.join(' · '))}</span></div>`;
+  if(a.dup) h += `<div class="banner warn">${ICON.warn}<span>${esc('Attendance was marked '+a.dup.n+' times today'+(a.dup.firstAt?' — the first at '+new Date(a.dup.firstAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'')+'. One mark a day is enough; repeated marking is on the district record.')}</span></div>`;
+  return h;
 }
 
 /* ---- the Secretary's home: what was filed against this village ---- */
