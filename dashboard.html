@@ -5,144 +5,155 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>SJGP · District Operations Center</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 /* ============================================================
-   SJGP DISTRICT OPERATIONS CENTER — Collectorate, Jangaon
-   The NOC idiom in daylight: white panels on cool grey, one
-   composite health score with its parts shown, and an issues
-   feed where every line carries a suggested action.
-   Self-contained: no fonts, no libraries, no CDNs.
+   SJGP DISTRICT OPERATIONS CENTER · Collectorate, Jangaon
+   White rail · KPI deltas · list-beside-live-map · one big
+   area chart · donuts · dense numbers. Leaflet + OSM for the
+   map: the console is online-only by definition, so real tiles
+   are honest here (the field app stays dependency-free).
    ============================================================ */
 :root{
-  --bg:#EEF1F4; --panel:#FFFFFF; --line:#D9DFE4; --line-2:#EAEEF1;
-  --tx:#1B2733; --tx-2:#5B6770; --tx-3:#8A94A0;
-  --blue:#1B67C1; --blue-2:#E8F0FA;
-  --green:#2E8540; --green-2:#E7F3EA;
-  --amber:#B25E09; --amber-2:#FCF0DF;
-  --red:#C23934; --red-2:#FAE8E7;
-  --seal:#14532D; --gold:#B8860B;
+  --bg:#F2F5F9; --panel:#FFFFFF; --line:#E3E8EF; --line-2:#EEF2F6;
+  --tx:#17233B; --tx-2:#5B6B84; --tx-3:#8B99AF;
+  --blue:#2563EB; --blue-2:#EAF1FE; --seal:#14532D;
+  --green:#16A34A; --green-2:#E9F7EE; --amber:#D97706; --amber-2:#FBF1E2;
+  --red:#DC2626; --red-2:#FCE9E9; --gold:#B8860B;
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
-  --sh:0 1px 2px rgba(27,39,51,.06);
+  --sh:0 1px 3px rgba(23,35,59,.07); --r:14px;
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{background:var(--bg);color:var(--tx);font:14px/1.45 var(--sans);-webkit-font-smoothing:antialiased}
 a{color:var(--blue);text-decoration:none}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 
-/* ---------- top bar ---------- */
-.top{position:sticky;top:0;z-index:9;display:flex;align-items:center;gap:13px;
-  padding:9px 18px;background:#fff;border-bottom:1px solid var(--line)}
-.top .seal{width:30px;height:30px;border-radius:7px}
-.top b{font-size:15px}
-.top .crumb{color:var(--tx-3);font-size:12.5px}
+/* ---------- shell ---------- */
+.shell{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
+.rail{background:#fff;border-right:1px solid var(--line);padding:20px 14px;position:sticky;top:0;height:100vh}
+.rail .brand{display:flex;align-items:center;gap:11px;padding:2px 8px 18px;border-bottom:1px solid var(--line-2);margin-bottom:14px}
+.rail .brand img{width:38px;height:38px;border-radius:10px}
+.rail .brand b{font-size:16px;letter-spacing:-.01em}
+.rail .brand span{display:block;font-size:10.5px;color:var(--tx-3)}
+.nav button{display:flex;align-items:center;gap:11px;width:100%;padding:10px 12px;border-radius:10px;
+  font-size:13.5px;font-weight:600;color:var(--tx-2);margin-bottom:2px}
+.nav button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nav button[aria-current]{background:var(--blue-2);color:var(--blue)}
+.nav button:hover:not([aria-current]){background:var(--line-2)}
+.railfoot{position:absolute;left:14px;right:14px;bottom:16px;font-size:11px;color:var(--tx-3);line-height:1.6}
+
+/* ---------- top ---------- */
+.main{min-width:0;padding:0 26px 44px}
+.top{display:flex;align-items:center;gap:14px;padding:18px 0 14px;position:sticky;top:0;background:var(--bg);z-index:8}
+.top h1{font-size:21px;letter-spacing:-.015em}
+.top .sub{font-size:12.5px;color:var(--tx-3)}
 .top .sp{flex:1}
 .live{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11.5px;color:var(--tx-2)}
 .live i{width:8px;height:8px;border-radius:50%;background:var(--green)}
 .live.stale i{background:var(--amber)} .live.down i{background:var(--red)}
-.rsel,.tbtn{background:#fff;border:1px solid var(--line);border-radius:6px;padding:5px 10px;
-  font-size:12.5px;color:var(--tx-2)}
-.rsel{font-family:var(--mono);font-size:12px}
-.rsel:hover,.tbtn:hover{border-color:#B9C2CB;color:var(--tx)}
+.rsel,.tbtn{background:#fff;border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:12.5px;color:var(--tx-2)}
+.tbtn.pri{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:650}
+.rsel:hover,.tbtn:hover{border-color:#C6D0DE;color:var(--tx)} .tbtn.pri:hover{color:#fff;background:#1D4ED8}
 
 /* ---------- grid & panels ---------- */
-.wrap{max-width:1560px;margin:0 auto;padding:14px 18px 44px}
-#g.dim{opacity:.55;filter:grayscale(.4)}
-.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--sh);min-width:0}
-.panel .hd{display:flex;align-items:center;gap:8px;padding:10px 14px 7px;
-  font-size:11px;font-weight:750;letter-spacing:.07em;text-transform:uppercase;color:var(--tx-2)}
-.panel .hd .r{margin-left:auto;font-family:var(--mono);font-weight:400;text-transform:none;letter-spacing:0;color:var(--tx-3);font-size:11px}
-.panel .bd{padding:4px 14px 14px}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);min-width:0}
+.panel .hd{display:flex;align-items:center;gap:9px;padding:13px 16px 4px;font-size:13.5px;font-weight:700}
+.panel .hd .r{margin-left:auto;font-size:11.5px;font-weight:500;color:var(--tx-3);font-family:var(--mono)}
+.panel .bd{padding:8px 16px 15px}
 
-/* stats with deltas */
-.stat .bd{padding:2px 14px 14px}
-.stat .v{font-family:var(--mono);font-size:32px;font-weight:700;line-height:1.05;color:var(--tx)}
-.stat .s{font-size:11.5px;color:var(--tx-3);margin-top:3px}
-.delta{font-family:var(--mono);font-size:11.5px;font-weight:700;margin-left:8px;vertical-align:6px}
-.up{color:var(--green)} .dn{color:var(--red)} .fl{color:var(--tx-3)}
-.g{color:var(--green)} .a{color:var(--amber)} .rd{color:var(--red)} .bl{color:var(--blue)}
+/* KPI cards */
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:15px 17px;position:relative}
+.kpi .hd{font-size:12.5px;font-weight:650;color:var(--tx-2);display:flex;align-items:center;gap:8px}
+.kpi .ic{margin-left:auto;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--blue-2)}
+.kpi .ic svg{width:16px;height:16px;fill:none;stroke:var(--blue);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.kpi .v{font-family:var(--mono);font-size:29px;font-weight:750;margin-top:7px;letter-spacing:-.01em}
+.kpi .foot{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:11.5px;color:var(--tx-3)}
+.delta{font-family:var(--mono);font-size:11.5px;font-weight:750;padding:1px 7px;border-radius:8px}
+.delta.up{color:var(--green);background:var(--green-2)} .delta.dn{color:var(--red);background:var(--red-2)}
+.delta.fl{color:var(--tx-3);background:var(--line-2)}
 
-/* health */
-.healthwrap{display:flex;gap:16px;align-items:center}
-.hcomp{flex:1;min-width:0}
-.hrow{display:flex;align-items:center;gap:9px;margin:7px 0;font-size:12px;color:var(--tx-2)}
-.hrow b{width:118px;font-weight:600;color:var(--tx)}
-.hbar{flex:1;height:8px;border-radius:5px;background:var(--line-2);overflow:hidden}
-.hbar i{display:block;height:100%}
-.hrow .n{font-family:var(--mono);width:34px;text-align:right;color:var(--tx)}
-
-/* issues feed */
-.iss{display:flex;gap:11px;padding:10px 0;border-bottom:1px solid var(--line-2)}
-.iss:last-child{border-bottom:0}
-.sev{flex:none;font-family:var(--mono);font-size:10.5px;font-weight:800;border-radius:5px;
-  padding:2px 7px;height:fit-content;margin-top:2px}
-.sev.p1{background:var(--red-2);color:var(--red);border:1px solid #EFC7C5}
-.sev.p2{background:var(--amber-2);color:var(--amber);border:1px solid #F0D9B8}
-.sev.p3{background:var(--blue-2);color:var(--blue);border:1px solid #C9DCF4}
-.iss .t{min-width:0}
-.iss .t b{display:block;font-size:13.5px;font-weight:650}
-.iss .t span{display:block;font-size:12.5px;color:var(--tx-2);margin-top:2px;line-height:1.5}
-.iss .t .act{color:var(--seal);font-weight:600;margin-top:3px}
-.iss .t .act::before{content:"→ ";color:var(--gold)}
-.allclear{padding:26px 12px;text-align:center;color:var(--green);font-weight:650}
+/* list beside map */
+.marks{max-height:372px;overflow:auto;padding-right:3px}
+.mk{display:flex;gap:11px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:9px;cursor:pointer;background:#fff}
+.mk:hover{border-color:#C6D0DE;background:#FBFCFE}
+.mk .av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:750;font-size:13px;flex:none;
+  background:var(--green-2);color:var(--green)}
+.mk.nofix .av{background:var(--amber-2);color:var(--amber)}
+.mk b{display:block;font-size:13px}
+.mk span{display:block;font-size:11.5px;color:var(--tx-3)}
+.mk .t{margin-left:auto;text-align:right;font-family:var(--mono);font-size:12px;color:var(--tx-2);flex:none}
+#map{height:372px;border-radius:12px;border:1px solid var(--line)}
+#map2{height:calc(100vh - 210px);min-height:430px;border-radius:12px;border:1px solid var(--line)}
+.leaflet-container{font:11px var(--sans)}
 
 /* charts */
 svg{display:block;width:100%}
-.axis{font-family:var(--mono);font-size:10px;fill:var(--tx-3)}
+.axis{font-family:var(--mono);font-size:10.5px;fill:var(--tx-3)}
 .gridln{stroke:var(--line-2);stroke-width:1}
+.mtabs{display:flex;gap:20px;padding:2px 0 8px;border-bottom:1px solid var(--line-2);margin-bottom:8px}
+.mtab{padding:3px 1px 9px;font-size:12.5px;color:var(--tx-3);border-bottom:2px solid transparent;margin-bottom:-9px}
+.mtab b{display:block;font-family:var(--mono);font-size:19px;color:var(--tx);font-weight:750}
+.mtab[aria-selected=true]{border-color:var(--blue)} .mtab[aria-selected=true] b{color:var(--blue)}
 
 /* tables */
 table{width:100%;border-collapse:collapse;font-size:12.5px}
 th{font-size:10.5px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--tx-3);
-  text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel)}
-td{padding:7px 10px;border-bottom:1px solid var(--line-2);white-space:nowrap}
+  text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:1}
+td{padding:7.5px 10px;border-bottom:1px solid var(--line-2);white-space:nowrap}
 td.mut{color:var(--tx-2)} td.num{font-family:var(--mono);text-align:right}
-tr:hover td{background:#F6F8FA}
-.twrap{overflow:auto;max-height:330px}
+tr[data-di]{cursor:pointer} tr:hover td{background:#F8FAFC}
+.twrap{overflow:auto;max-height:352px}
 .pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:1.5px 8px;border-radius:9px}
-.pill.ok{color:var(--green);background:var(--green-2)}
-.pill.warn{color:var(--amber);background:var(--amber-2)}
-.pill.bad{color:var(--red);background:var(--red-2)}
-.pill.mut{color:var(--tx-3);background:var(--line-2)}
-.bar{height:7px;border-radius:4px;background:var(--line-2);overflow:hidden;min-width:90px}
+.pill.ok{color:var(--green);background:var(--green-2)} .pill.warn{color:var(--amber);background:var(--amber-2)}
+.pill.bad{color:var(--red);background:var(--red-2)} .pill.mut{color:var(--tx-3);background:var(--line-2)}
+.bar{height:7px;border-radius:4px;background:var(--line-2);overflow:hidden;min-width:80px}
 .bar i{display:block;height:100%}
-.gr{font-family:var(--mono);font-weight:700}
-.grA{color:var(--green)} .grB{color:#5E9732} .grC{color:var(--amber)} .grD{color:var(--red)}
+.gr{font-family:var(--mono);font-weight:750}
+.grA{color:var(--green)} .grB{color:#65A30D} .grC{color:var(--amber)} .grD{color:var(--red)}
 .empty{padding:22px 12px;color:var(--tx-3);font-size:13px;text-align:center}
+.find{width:100%;max-width:260px;border:1px solid var(--line);border-radius:9px;padding:7px 11px;font:12.5px var(--sans);color:var(--tx)}
 
-.c2{grid-column:span 2}.c3{grid-column:span 3}.c4{grid-column:span 4}
-.c5{grid-column:span 5}.c6{grid-column:span 6}.c7{grid-column:span 7}
-.c8{grid-column:span 8}.c12{grid-column:span 12}
-@media(max-width:1150px){.c2,.c3{grid-column:span 4}.c4,.c5{grid-column:span 6}.c6,.c7,.c8{grid-column:span 12}}
-@media(max-width:680px){.c2,.c3,.c4,.c5{grid-column:span 6}.wrap{padding:10px 10px 30px}}
+/* issues */
+.iss{display:flex;gap:11px;padding:10px 2px;border-bottom:1px solid var(--line-2);cursor:pointer}
+.iss:last-child{border-bottom:0}
+.sev{flex:none;font-family:var(--mono);font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 7px;height:fit-content;margin-top:2px}
+.sev.p1{background:var(--red-2);color:var(--red)} .sev.p2{background:var(--amber-2);color:var(--amber)} .sev.p3{background:var(--blue-2);color:var(--blue)}
+.iss b{display:block;font-size:13px;font-weight:650}
+.iss span{display:block;font-size:12px;color:var(--tx-2);margin-top:2px;line-height:1.5}
+.iss .act{color:var(--seal);font-weight:600} .iss .act::before{content:"→ ";color:var(--gold)}
+.allclear{padding:20px;text-align:center;color:var(--green);font-weight:650}
 
 /* drawer */
-#drawer{position:fixed;inset:0;z-index:30}
-#drawer .scrim{position:absolute;inset:0;background:rgba(27,39,51,.34)}
+#drawer{position:fixed;inset:0;z-index:60}
+#drawer .scrim{position:absolute;inset:0;background:rgba(23,35,59,.38)}
 #drawer .sheet{position:absolute;right:0;top:0;bottom:0;width:min(430px,100%);background:#fff;
-  border-left:1px solid var(--line);padding:22px 22px 26px;overflow:auto;box-shadow:-8px 0 24px rgba(27,39,51,.12)}
-#drawer h2{font-size:17px;margin-bottom:3px}
-#drawer .sub{color:var(--tx-3);font-size:12.5px;margin-bottom:13px}
+  padding:22px;overflow:auto;box-shadow:-10px 0 28px rgba(23,35,59,.16)}
+#drawer h2{font-size:17px;margin-bottom:3px} #drawer .sub{color:var(--tx-3);font-size:12.5px;margin-bottom:13px}
 #drawer dl{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:13px}
 #drawer dt{color:var(--tx-3)} #drawer dd{font-weight:600;word-break:break-word}
 #drawer .x{position:absolute;right:12px;top:10px;font-size:22px;color:var(--tx-3);padding:4px 8px}
-#drawer ul{margin:8px 0 0 18px;font-size:13px;line-height:1.7}
-#drawer .mapsbtn{display:inline-block;margin-top:14px;border:1px solid var(--line);border-radius:7px;padding:7px 12px;font-size:13px}
-.iss.tap,.tr-tap{cursor:pointer}
-tr[data-di]{cursor:pointer}
-.geodot{cursor:pointer}
+#drawer ul{margin:8px 0 0 18px;font-size:13px;line-height:1.75}
+#drawer .mapsbtn{display:inline-block;margin-top:14px;border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:13px}
+
+.c3{grid-column:span 3}.c4{grid-column:span 4}.c5{grid-column:span 5}.c6{grid-column:span 6}
+.c7{grid-column:span 7}.c8{grid-column:span 8}.c9{grid-column:span 9}.c12{grid-column:span 12}
+.kpirow{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;grid-column:span 12}
+@media(max-width:1180px){.kpirow{grid-template-columns:repeat(3,1fr)}.c3,.c4,.c5{grid-column:span 6}.c6,.c7,.c8,.c9{grid-column:span 12}}
+@media(max-width:760px){.shell{grid-template-columns:1fr}.rail{position:static;height:auto}.kpirow{grid-template-columns:repeat(2,1fr)}.c3,.c4,.c5,.c6{grid-column:span 12}}
+#g.dim{opacity:.55;filter:grayscale(.4)}
+#err{position:fixed;left:0;right:0;bottom:0;z-index:50;background:#FCE9E9;border-top:2px solid var(--red);
+  color:var(--red);font-size:13px;padding:9px 18px;font-family:var(--mono);display:none}
+
 /* gate */
 .gate{min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--bg)}
-.gate .card{max-width:440px;text-align:center;border:1px solid var(--line);border-radius:10px;
-  background:#fff;padding:34px 30px;box-shadow:var(--sh)}
+.gate .card{max-width:440px;text-align:center;border:1px solid var(--line);border-radius:14px;background:#fff;padding:34px 30px;box-shadow:var(--sh)}
 .gate img{width:64px;height:64px;border-radius:14px;margin-bottom:16px}
 .gate h1{font-size:19px;margin-bottom:8px}
 .gate p{color:var(--tx-2);font-size:13.5px;line-height:1.6}
 .gate .rd{color:var(--red)}
 .gate a.tbtn{display:inline-block;margin-top:18px}
-#err{position:fixed;left:0;right:0;bottom:0;background:#FDF3F3;border-top:1px solid #EFC7C5;
-  color:var(--red);font-size:13px;padding:9px 18px;font-family:var(--mono);display:none}
 </style>
 </head>
 <body>
@@ -153,58 +164,70 @@ tr[data-di]{cursor:pointer}
   <p id="gateMsg">Checking your sign-in&hellip;</p>
 </div></div>
 
-<div id="app" hidden>
-  <div class="top">
-    <img class="seal" src="icons/icon-192.png" alt="">
-    <b>District Operations Center</b><span class="crumb">SJGP · Jangaon · <span id="who"></span></span>
-    <span class="sp"></span>
-    <span class="live" id="live"><i></i><span id="liveTx">connecting</span></span>
-    <select class="rsel" id="every">
-      <option value="30000">30s</option>
-      <option value="60000" selected>1m</option>
-      <option value="300000">5m</option>
-    </select>
-    <button class="tbtn" id="now">Refresh</button>
-    <a class="tbtn" href="./">Open the app</a>
+<div id="app" hidden><div class="shell">
+  <aside class="rail">
+    <div class="brand"><img src="icons/icon-192.png" alt=""><div><b>SJGP</b><span>Jangaon Collectorate</span></div></div>
+    <nav class="nav" id="nav">
+      <button data-v="overview" aria-current="page"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Overview</button>
+      <button data-v="attendance"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M4.5 20c1.2-3.6 4-5.4 7.5-5.4s6.3 1.8 7.5 5.4"/></svg>Attendance</button>
+      <button data-v="villages"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V9l7-5 7 5v12M9.5 21v-6h5v6"/></svg>Villages</button>
+      <button data-v="leave"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>Leave</button>
+      <button data-v="map"><svg viewBox="0 0 24 24"><path d="M9 4 3.8 6v14L9 18l6 2 5.2-2V4L15 6 9 4zM9 4v14M15 6v14"/></svg>Map</button>
+    </nav>
+    <div class="railfoot">District Operations Center<br>Rc.No.788/DPO/26/34<br><a href="./">Open the field app</a></div>
+  </aside>
+  <div class="main">
+    <div class="top">
+      <div><h1 id="hi">Welcome back</h1><div class="sub" id="hisub"></div></div>
+      <span class="sp"></span>
+      <span class="live" id="live"><i></i><span id="liveTx">connecting</span></span>
+      <select class="rsel" id="every"><option value="30000">30s</option><option value="60000" selected>1m</option><option value="300000">5m</option></select>
+      <button class="tbtn" id="now">Refresh</button>
+      <a class="tbtn pri" href="./">Open the app</a>
+    </div>
+    <div class="grid" id="g"></div>
   </div>
-  <div class="wrap"><div class="grid" id="g"></div></div>
-</div>
-<div id="err"></div>
+</div></div>
+
 <div id="drawer" hidden>
   <div class="scrim" data-close></div>
-  <div class="sheet"><button class="x" data-close aria-label="Close">\u00d7</button>
+  <div class="sheet"><button class="x" data-close aria-label="Close">×</button>
     <h2 id="dTitle"></h2><div class="sub" id="dSub"></div><div id="dBody"></div></div>
 </div>
+<div id="err"></div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 'use strict';
 const $=s=>document.querySelector(s);
-let ST=null, TIMER=null, LASTOK=0, EVERY=60000, NEXT=0, INFLIGHT=false, DOWN=false, DATA=null;
+let ST=null,TIMER=null,LASTOK=0,EVERY=60000,NEXT=0,INFLIGHT=false,DOWN=false,DATA=null,VIEW='overview',MET='present';
+let MAP=null,MLAYER=null,MAP2=null,M2LAYER=null,GEO=[];
 
+/* ---------------- session ---------------- */
 function boot(){
   let d=null; try{ d=JSON.parse(localStorage.getItem('sjf5')||'null'); }catch(e){}
-  if(!d || !d.session || !d.session.token || !d.url){
-    gate('Sign in once in the SJGP app on this device, then open this page again. The console uses that sign-in.', true); return; }
-  if((d.session.user||{}).role!=='COLLECTOR'){
-    gate('<span class="rd">The monitoring console is available to the Collector alone.</span> This device is signed in as '+esc((d.session.user||{}).name||'another officer')+'.', true); return; }
-  ST={url:d.url, token:d.session.token, user:d.session.user};
-  $('#who').textContent=ST.user.name;
-  pull(); TIMER=setInterval(tick, 1000);
-  $('#every').onchange=()=>{ EVERY=+$('#every').value; NEXT=Date.now()+EVERY; };
+  if(!d||!d.session||!d.session.token||!d.url){ gate('Sign in once in the SJGP app on this device, then open this page again. The console uses that sign-in.',true); return; }
+  if((d.session.user||{}).role!=='COLLECTOR'){ gate('<span class="rd">The monitoring console is available to the Collector alone.</span> This device is signed in as '+esc((d.session.user||{}).name||'another officer')+'.',true); return; }
+  ST={url:d.url,token:d.session.token,user:d.session.user};
+  const h=new Date().getHours();
+  $('#hi').textContent=(h<12?'Good morning':h<17?'Good afternoon':'Good evening')+', '+String(ST.user.name||'').replace(/,.*$/,'').split(' ').slice(0,2).join(' ');
+  pull(); TIMER=setInterval(tick,1000);
+  $('#every').onchange=()=>{EVERY=+$('#every').value;NEXT=Date.now()+EVERY;};
   $('#now').onclick=()=>pull();
+  $('#nav').addEventListener('click',e=>{const b=e.target.closest('[data-v]'); if(!b) return;
+    VIEW=b.dataset.v; document.querySelectorAll('#nav [data-v]').forEach(x=>x.toggleAttribute('aria-current',x===b));
+    if(DATA) render(DATA);});
 }
-function gate(msg, link){ $('#gateMsg').innerHTML=msg+(link?'<br><a class="tbtn" href="./">Open the SJGP app</a>':''); }
+function gate(m,l){ $('#gateMsg').innerHTML=m+(l?'<br><a class="tbtn" href="./">Open the SJGP app</a>':''); }
 
+/* ---------------- polling: the dot never lies ---------------- */
 function tick(){
-  if(Date.now()>=NEXT && !INFLIGHT){ pull(); return; }
-  if(DOWN){  /* a dead link is never repainted green by the clock */
-    const age=LASTOK?Math.round((Date.now()-LASTOK)/1000)+'s ago':'never';
+  if(Date.now()>=NEXT&&!INFLIGHT){ pull(); return; }
+  if(DOWN){ const age=LASTOK?Math.round((Date.now()-LASTOK)/1000)+'s ago':'never';
     $('#live').className='live down'; $('#liveTx').textContent='LINK LOST · showing '+age; return; }
-  if(LASTOK){
-    const age=Math.round((Date.now()-LASTOK)/1000);
+  if(LASTOK){ const age=Math.round((Date.now()-LASTOK)/1000);
     $('#liveTx').textContent='updated '+(age<5?'now':age+'s ago')+' · next in '+Math.max(0,Math.ceil((NEXT-Date.now())/1000))+'s';
-    $('#live').className='live'+(age>EVERY/500?' stale':'');
-  }
+    $('#live').className='live'+(age>EVERY/500?' stale':''); }
 }
 async function pull(){
   if(!ST||INFLIGHT) return; INFLIGHT=true;
@@ -213,365 +236,402 @@ async function pull(){
     const j=await res.json();
     if(!j.ok) throw new Error(j.error||'refused');
     LASTOK=Date.now(); NEXT=Date.now()+EVERY; DOWN=false; DATA=j;
-    $('#err').style.display='none'; document.getElementById('g').classList.remove('dim');
+    $('#err').style.display='none'; $('#g').classList.remove('dim');
     if($('#app').hidden){ $('#gate').style.display='none'; $('#app').hidden=false; }
+    $('#hisub').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' · Jangaon District';
     render(j);
   }catch(e){
-    if(/alone/i.test(e.message)){ $('#app').hidden=true; $('#gate').style.display='grid'; gate('<span class="rd">'+esc(e.message)+'</span>', true); clearInterval(TIMER); }
-    else{
-      NEXT=Date.now()+Math.min(EVERY,30000);
+    if(/alone/i.test(e.message)){ $('#app').hidden=true; $('#gate').style.display='grid'; gate('<span class="rd">'+esc(e.message)+'</span>',true); clearInterval(TIMER); }
+    else{ DOWN=true; NEXT=Date.now()+Math.min(EVERY,30000);
       $('#err').textContent='Could not reach the district ('+esc(e.message)+') — showing the last picture; retrying.';
-      $('#err').style.display='block';
-      DOWN=true; document.getElementById('g').classList.add('dim');
-      $('#live').className='live down'; $('#liveTx').textContent='LINK LOST';
-    }
+      $('#err').style.display='block'; $('#g').classList.add('dim');
+      $('#live').className='live down'; $('#liveTx').textContent='LINK LOST'; }
   }finally{ INFLIGHT=false; }
 }
 
 /* ---------------- helpers ---------------- */
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const hm=iso=>{ const d=new Date(iso); return isNaN(d)?'':d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}); };
-const dm=s=>{ const d=new Date(String(s).length>10?s:s+'T00:00:00'); return isNaN(d)?String(s||''):d.toLocaleDateString('en-IN',{day:'numeric',month:'short'}); };
+const hm=iso=>{const d=new Date(iso);return isNaN(d)?'':d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});};
+const dm=s=>{const d=new Date(String(s).length>10?s:s+'T00:00:00');return isNaN(d)?String(s||''):d.toLocaleDateString('en-IN',{day:'numeric',month:'short'});};
 const pct=(a,b)=>b?Math.round(a*100/b):0;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-function daysLeftInMonth(){ const d=new Date(); const last=new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); return Math.max(1, last-d.getDate()+1); }
-function delta(now, prev, goodUp){
-  if(prev==null||now==null) return '';
-  const d=now-prev; if(!d) return '<span class="delta fl">·0</span>';
+const inits=n=>String(n||'').split(/\s+/).slice(0,2).map(x=>x[0]||'').join('').toUpperCase();
+function delta(now,prev,goodUp,suffix){
+  if(prev==null||now==null||isNaN(prev)) return '';
+  const d=now-prev; if(!d) return '<span class="delta fl">= 0'+(suffix||'')+'</span>';
   const up=d>0, good=goodUp?up:!up;
-  return `<span class="delta ${good?'up':'dn'}">${up?'▲':'▼'}${Math.abs(d)}</span>`;
+  return `<span class="delta ${good?'up':'dn'}">${up?'▲':'▼'} ${Math.abs(d)}${suffix||''}</span>`;
 }
 
-const A_SUNDAY=()=>new Date().getDay()===0;
-/* ---------------- the analytics ---------------- */
+/* ---------------- analytics (honest math kept) ---------------- */
 function analyse(j){
-  const officersDue=j.totals.officers-1;                               /* the Collector is not counted */
-  const present=j.today.present.length, onLeave=j.today.onLeave.length, absent=j.today.absent.length;
-  const accounted=present+onLeave;
-  const attPct=pct(accounted, Math.max(1,officersDue));
+  const officersDue=j.totals.officers-1;
+  const present=j.today.present.length,onLeave=j.today.onLeave.length,absent=j.today.absent.length;
+  const accounted=present+onLeave, attPct=pct(accounted,Math.max(1,officersDue));
   const cov=j.coverage.reduce((s,c)=>({t:s.t+c.total,d:s.d+c.done}),{t:0,d:0});
-  const covPct=pct(cov.d, cov.t);
-  const dLeft=daysLeftInMonth();
-  const needPerDay=Math.ceil(Math.max(0, cov.t-cov.d)/dLeft);
-  const avg=j.month.avg;
-  const prevAvg=j.trend.length>1 ? j.trend[j.trend.length-2].avg : null;
-  const att7=j.att14.slice(-7).reduce((s,r)=>s+r.present+r.leave,0)/7;
-
-  /* the composite: five parts, each 0–100, weighted and shown */
-  /* Sound rules, kept from the independent review: a measure with no data is
-     n/a (never 0, never 100) and the weights renormalise; flags are the SHARE
-     of filings flagged; Sundays do not count attendance; the first three days
-     of the month carry coverage grace; the leave desk is judged on the oldest
-     wait, not the count. */
-  const now=new Date(); const sunday=now.getDay()===0;
-  const filed=j.month.rows.length;
-  const wdGone=(()=>{let n=0;for(let d=1;d<=now.getDate();d++){const t=new Date(now.getFullYear(),now.getMonth(),d);if(t.getDay()!==0)n++;}return n;})();
-  const wdAll=(()=>{let n=0;const last=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();for(let d=1;d<=last;d++){const t=new Date(now.getFullYear(),now.getMonth(),d);if(t.getDay()!==0)n++;}return n;})();
+  const now=new Date(), sunday=now.getDay()===0, filed=j.month.rows.length;
+  const wd=(a,b)=>{let n=0;for(let d=a;d<=b;d++){if(new Date(now.getFullYear(),now.getMonth(),d).getDay()!==0)n++;}return n;};
+  const last=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  const wdGone=wd(1,now.getDate()), wdAll=wd(1,last), wdLeft=Math.max(1,wdAll-wdGone+1);
   const expected=Math.max(0,Math.round(cov.t*Math.max(0,wdGone-3)/Math.max(1,wdAll)));
+  const needPerDay=Math.ceil(Math.max(0,cov.t-cov.d)/wdLeft);
+  const avg=j.month.avg;
+  const prevAvg=(()=>{const t=j.trend||[];if(!t.length)return null;const c=t[t.length-1];
+    return (c&&c.ym===j.ym)?(t.length>1?t[t.length-2].avg:null):c.avg;})();
   const oldestH=j.leave.pending.length?Math.max(...j.leave.pending.map(l=>(Date.now()-new Date(l.appliedAt).getTime())/36e5)):0;
+  const y=j.att14[j.att14.length-2]||{present:0,leave:0};
+  const attY=y.present+y.leave;
+  const by10=j.today.present.filter(r=>new Date(r.at).getHours()<10).length;
   const parts=[
-    {k:'Attendance', w:25, v:sunday?null:attPct, why:sunday?'Sunday — not counted':accounted+' of '+officersDue+' accounted'},
-    {k:'Coverage',   w:25, v:expected===0?null:clamp(Math.round(cov.d*100/Math.max(1,expected)),0,100),
-                     why:expected===0?'month opening — grace':cov.d+' filed against '+expected+' expected by now'},
-    {k:'Scores',     w:30, v:avg==null?null:avg, why:avg==null?'nothing filed yet':'district average '+avg},
-    {k:'Red flags',  w:20, v:filed?clamp(Math.round(100-(j.month.rfCount*100/filed)*2),0,100):null,
-                     why:filed?j.month.rfCount+' of '+filed+' filings flagged':'nothing filed yet'},
-    {k:'Leave desk', w:10, v:clamp(Math.round(100-Math.max(0,oldestH-24)*2),0,100),
-                     why:j.leave.pending.length?('oldest waiting '+Math.round(oldestH)+' h'):'nothing waiting'}
-  ];
+    {k:'Attendance',w:25,v:sunday?null:attPct,why:sunday?'Sunday — not counted':accounted+' of '+officersDue+' accounted'},
+    {k:'Coverage',w:25,v:expected===0?null:clamp(Math.round(cov.d*100/Math.max(1,expected)),0,100),
+      why:expected===0?'month opening — grace':cov.d+' filed against '+expected+' expected by now'},
+    {k:'Scores',w:30,v:avg==null?null:avg,why:avg==null?'nothing filed yet':'district average '+avg},
+    {k:'Red flags',w:20,v:filed?clamp(Math.round(100-(j.month.rfCount*100/filed)*2),0,100):null,
+      why:filed?j.month.rfCount+' of '+filed+' filings flagged':'nothing filed yet'},
+    {k:'Leave desk',w:10,v:clamp(Math.round(100-Math.max(0,oldestH-24)*2),0,100),
+      why:j.leave.pending.length?'oldest waiting '+Math.round(oldestH)+' h':'nothing waiting'}];
   const wSum=parts.reduce((s,p)=>s+(p.v==null?0:p.w),0);
   const health=wSum<45?null:Math.round(parts.reduce((s,p)=>s+(p.v==null?0:p.v*p.w),0)/wSum);
 
-  /* the issues feed: severity, what, where, and what to do about it */
   const iss=[];
-  const hourNow=new Date().getHours();
-  if(absent>0 && !A_SUNDAY() && hourNow>=11){
-    const byM={}; j.today.absent.forEach(o=>{ byM[o.mandal||'—']=(byM[o.mandal||'—']||0)+1; });
+  if(absent>0&&!sunday&&now.getHours()>=11){
+    const byM={}; j.today.absent.forEach(o=>byM[o.mandal||'—']=(byM[o.mandal||'—']||0)+1);
     const worst=Object.entries(byM).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([m,n])=>m+' ('+n+')').join(', ');
-    iss.push({p:1, t:absent+' officer'+(absent>1?'s':'')+' not marked by '+hm(new Date().toISOString()),
-      d:'Heaviest: '+worst+'.', a:'Have the MPDOs account for each by phone; unexplained absence goes on record.',
-      list:j.today.absent.map(o=>o.name+' \u00b7 '+o.role+' \u00b7 '+(o.mandal||'\u2014'))});
+    iss.push({p:1,t:absent+' officer'+(absent>1?'s':'')+' not marked as of '+hm(new Date().toISOString()),
+      d:'Heaviest: '+worst+'.',a:'Have the MPDOs account for each by phone; unexplained absence goes on record.',
+      list:j.today.absent.map(o=>o.name+' · '+o.role+' · '+(o.mandal||'—'))});
   }
-  j.month.rows.filter(r=>String(r.rf||'').trim()).forEach(r=>{
-    iss.push({p:1, t:r.gp+' carries red flag '+r.rf+' — grade capped at D',
-      d:'Score '+r.score+', filed by '+String(r.officer||'').replace(/\s*\(\d+\)$/,'')+' on '+dm(r.date)+'.',
-      a:'Call for the photographic evidence and order rectification with a dated compliance report.'});
-  });
-  const dNoFlag=j.month.rows.filter(r=>r.grade==='D' && !String(r.rf||'').trim());
-  if(dNoFlag.length) iss.push({p:2, t:dNoFlag.length+' village'+(dNoFlag.length>1?'s':'')+' at grade D without a red flag',
-    d:dNoFlag.slice(0,4).map(r=>r.gp+' ('+r.score+')').join(', ')+(dNoFlag.length>4?'…':'')+'.',
-    a:'Direct the mandal officers to a fortnightly re-visit; deficiencies to be carried into next month\u2019s G1.'});
-  if(cov.d<cov.t && needPerDay>0){
-    const sev=needPerDay>3?2:3;
-    iss.push({p:sev, t:(cov.t-cov.d)+' villages still to evaluate · '+dLeft+' day'+(dLeft>1?'s':'')+' left',
-      d:'The month closes at the present pace only if '+needPerDay+' evaluation'+(needPerDay>1?'s are':' is')+' filed each day.',
-      a:'Set a per-mandal daily quota in the evening review; the coverage table below shows who is behind.'});
-  }
-  const oldPend=j.leave.pending.filter(l=>Date.now()-new Date(l.appliedAt).getTime()>48*3600e3);
-  if(oldPend.length) iss.push({p:2, t:oldPend.length+' leave application'+(oldPend.length>1?'s':'')+' waiting beyond 48 hours',
-    d:oldPend.slice(0,3).map(l=>l.name+' ('+l.type+' '+l.days+'d)').join(', ')+'.',
-    a:'Pass orders today — days held against balances block fresh applications.'});
+  const flagged=j.month.rows.filter(r=>String(r.rf||'').trim());
+  if(flagged.length) iss.push({p:1,t:flagged.length+' village'+(flagged.length>1?'s carry':' carries')+' a red flag — grade capped at D',
+    d:flagged.slice(0,4).map(r=>r.gp+' (RF '+r.rf+')').join(', ')+(flagged.length>4?'…':'')+'.',
+    a:'Call for the photographic evidence and order rectification with a dated compliance report.',
+    list:flagged.map(r=>r.gp+' · RF '+r.rf+' · '+r.score+'/100 · '+String(r.officer||'').replace(/\s*\(\d+\)$/,''))});
   const dups=j.today.present.filter(r=>(r.marks||1)>1);
-  if(dups.length) iss.push({p:2, t:dups.length+' officer'+(dups.length>1?'s':'')+' marked attendance more than once today',
-    d:dups.slice(0,4).map(r=>r.name+' ('+r.marks+'\u00d7)').join(', ')+(dups.length>4?'\u2026':'')+'.',
-    a:'Usually a second device or a re-login; a pattern on the same names warrants a word.',
-    list:dups.map(r=>r.name+' \u00b7 '+r.marks+'\u00d7 \u00b7 '+(r.mandal||'\u2014'))});
+  if(dups.length) iss.push({p:2,t:dups.length+' officer'+(dups.length>1?'s':'')+' marked attendance more than once today',
+    d:'One row stands per officer; the count is on record.',a:'Usually a second device or a re-login; a pattern on the same names warrants a word.',
+    list:dups.map(r=>r.name+' · '+r.marks+'× · '+(r.mandal||'—'))});
+  const dNoFlag=j.month.rows.filter(r=>r.grade==='D'&&!String(r.rf||'').trim());
+  if(dNoFlag.length) iss.push({p:2,t:dNoFlag.length+' village'+(dNoFlag.length>1?'s':'')+' at grade D without a red flag',
+    d:dNoFlag.slice(0,4).map(r=>r.gp+' ('+r.score+')').join(', ')+(dNoFlag.length>4?'…':'')+'.',
+    a:'Direct a fortnightly re-visit; deficiencies carry into next month\u2019s G1.',
+    list:dNoFlag.map(r=>r.gp+' · '+r.score+'/100 · '+r.mandal)});
+  if(cov.d<cov.t&&needPerDay>0) iss.push({p:needPerDay>3?2:3,
+    t:(cov.t-cov.d)+' villages still to evaluate · '+wdLeft+' working day'+(wdLeft>1?'s':'')+' left',
+    d:'The month closes at the present pace only if '+needPerDay+' evaluation'+(needPerDay>1?'s are':' is')+' filed each day.',
+    a:'Set a per-mandal daily quota in the evening review; the league below shows who is behind.'});
+  const oldPend=j.leave.pending.filter(l=>Date.now()-new Date(l.appliedAt).getTime()>48*3600e3);
+  if(oldPend.length) iss.push({p:2,t:oldPend.length+' leave application'+(oldPend.length>1?'s':'')+' waiting beyond 48 hours',
+    d:'The oldest has waited '+Math.round(oldestH)+' hours.',a:'Pass orders today — held days block fresh applications.',
+    list:oldPend.map(l=>l.name+' · '+l.type+' '+l.days+'d from '+dm(l.from))});
   const noFix=j.today.present.filter(r=>!r.verified);
-  if(noFix.length) iss.push({p:3, t:noFix.length+' attendance mark'+(noFix.length>1?'s':'')+' without a location fix today',
-    d:noFix.slice(0,4).map(r=>r.name).join(', ')+'.',
-    a:'A pattern on the same names warrants a word; a one-off is usually weak signal.'});
-  if(prevAvg!=null && avg!=null && avg<prevAvg-3)
-    iss.push({p:3, t:'District average has slipped: '+prevAvg+' → '+avg,
-      d:'Against last month, on '+j.month.rows.length+' filings so far.',
-      a:'Read the bottom-five list before the next review; the slippage usually lives in two or three villages.'});
+  if(noFix.length) iss.push({p:3,t:noFix.length+' attendance mark'+(noFix.length>1?'s':'')+' without a location fix today',
+    d:'A one-off is weak signal; a pattern on the same names is not.',a:'Check the fortnight before raising it.',
+    list:noFix.map(r=>r.name+' · '+(r.mandal||'—'))});
+  if(prevAvg!=null&&avg!=null&&avg<prevAvg-3) iss.push({p:3,t:'District average has slipped: '+prevAvg+' → '+avg,
+    d:'Against last month, on '+filed+' filings so far.',a:'Read the bottom five before the next review.'});
   iss.sort((a,b)=>a.p-b.p);
-  return {health, parts, attPct, covPct, cov, dLeft, needPerDay, avg, prevAvg, att7, iss, accounted, officersDue, absent, present, onLeave};
+  return {health,parts,wSum,attPct,cov,needPerDay,wdLeft,avg,prevAvg,iss,accounted,officersDue,absent,present,onLeave,filed,by10,attY,sunday};
 }
 
-/* ---------------- drawing ---------------- */
-function gauge(v){
-  const col=v>=80?'var(--green)':v>=60?'var(--amber)':'var(--red)';
-  const C=2*Math.PI*54, f=C*clamp(v,0,100)/100;
-  return `<svg viewBox="0 0 150 150" style="max-width:150px">
-    <circle cx="75" cy="75" r="54" fill="none" stroke="var(--line-2)" stroke-width="13"/>
-    <circle cx="75" cy="75" r="54" fill="none" stroke="${col}" stroke-width="13"
-      stroke-dasharray="${f} ${C-f}" stroke-linecap="round" transform="rotate(-90 75 75)"/>
-    <text x="75" y="72" text-anchor="middle" font-family="var(--mono)" font-size="34" font-weight="700" fill="var(--tx)">${v}</text>
-    <text x="75" y="94" text-anchor="middle" class="axis" font-size="10">DISTRICT HEALTH</text></svg>`;
-}
-function bars14(rows){
-  const W=560,H=150,P=26,n=rows.length,bw=Math.floor((W-P-8)/n)-4;
-  const mx=Math.max(1,...rows.map(r=>r.present+r.leave));
-  let g='';
-  [0,.5,1].forEach(f=>{const y=H-18-(H-34)*f;
-    g+=`<line class="gridln" x1="${P}" x2="${W-4}" y1="${y}" y2="${y}"/><text class="axis" x="${P-5}" y="${y+3}" text-anchor="end">${Math.round(mx*f)}</text>`;});
-  rows.forEach((r,i)=>{const x=P+6+i*(bw+4);
-    const hp=(H-34)*r.present/mx, hl=(H-34)*r.leave/mx;
-    g+=`<rect x="${x}" y="${H-18-hp}" width="${bw}" height="${hp}" fill="#2E8540" rx="1.5" opacity=".85"/>`;
-    if(r.leave) g+=`<rect x="${x}" y="${H-18-hp-hl}" width="${bw}" height="${hl}" fill="#E0A93F" rx="1.5"/>`;
-    if(i%2===0) g+=`<text class="axis" x="${x+bw/2}" y="${H-5}" text-anchor="middle">${r.date.slice(8)}</text>`;});
+/* ---------------- charts ---------------- */
+function smooth(pts){ if(pts.length<3) return pts.map((p,i)=>(i?'L':'M')+p[0]+' '+p[1]).join(' ');
+  let d='M'+pts[0][0]+' '+pts[0][1];
+  for(let i=0;i<pts.length-1;i++){ const p0=pts[Math.max(0,i-1)],p1=pts[i],p2=pts[i+1],p3=pts[Math.min(pts.length-1,i+2)];
+    d+=' C'+(p1[0]+(p2[0]-p0[0])/6)+' '+(p1[1]+(p2[1]-p0[1])/6)+' '+(p2[0]-(p3[0]-p1[0])/6)+' '+(p2[1]-(p3[1]-p1[1])/6)+' '+p2[0]+' '+p2[1];}
+  return d;}
+function areaChart(rows,key,color){
+  const W=980,H=250,P=38;
+  const val=r=> key==='present'?r.present : key==='leave'?r.leave : key==='absent'?Math.max(0,(DATA.totals.officers-1)-r.present-r.leave) : (r.filedN||0);
+  const mx=Math.max(4,...rows.map(val));
+  let g=''; [0,.25,.5,.75,1].forEach(f=>{const y=H-26-(H-48)*f;
+    g+=`<line class="gridln" x1="${P}" x2="${W-8}" y1="${y}" y2="${y}"/><text class="axis" x="${P-7}" y="${y+3.5}" text-anchor="end">${Math.round(mx*f)}</text>`;});
+  const step=(W-P-22)/Math.max(1,rows.length-1);
+  const pts=rows.map((r,i)=>[P+10+i*step, H-26-(H-48)*val(r)/mx]);
+  const line=smooth(pts);
+  g+=`<path d="${line} L ${pts[pts.length-1][0]} ${H-26} L ${pts[0][0]} ${H-26} Z" fill="${color}" opacity=".14"/>`;
+  g+=`<path d="${line}" fill="none" stroke="${color}" stroke-width="2.4"/>`;
+  pts.forEach((p,i)=>{ g+=`<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="${color}"/>`;
+    if(i%2===0||i===pts.length-1) g+=`<text class="axis" x="${p[0]}" y="${H-8}" text-anchor="middle">${rows[i].date.slice(8)}</text>`;});
   return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
 }
-function line6(rows){
-  const W=560,H=150,P=26;
-  if(!rows.length) return '<div class="empty">No months on record yet.</div>';
-  let g=''; [0,50,100].forEach(v=>{const y=H-18-(H-34)*v/100;
-    g+=`<line class="gridln" x1="${P}" x2="${W-4}" y1="${y}" y2="${y}"/><text class="axis" x="${P-5}" y="${y+3}" text-anchor="end">${v}</text>`;});
-  const step=(W-P-16)/Math.max(1,rows.length-1);
-  const pt=rows.map((r,i)=>[P+8+i*step, H-18-(H-34)*Math.min(100,r.avg)/100]);
-  if(pt.length>1) g+=`<polyline fill="none" stroke="#1B67C1" stroke-width="2.2" points="${pt.map(p=>p.join(',')).join(' ')}"/>`;
-  pt.forEach((p,i)=>{g+=`<circle cx="${p[0]}" cy="${p[1]}" r="3.6" fill="#1B67C1"/>
-    <text class="axis" x="${p[0]}" y="${p[1]-8}" text-anchor="middle" fill="var(--tx)">${rows[i].avg}</text>
-    <text class="axis" x="${p[0]}" y="${H-5}" text-anchor="middle">${rows[i].ym.slice(5)}/${rows[i].ym.slice(2,4)}</text>`;});
-  return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
-}
-function donutG(g){
-  const total=g.A+g.B+g.C+g.D;
-  if(!total) return '<div class="empty">Nothing graded yet this month.</div>';
-  const C=['#2E8540','#5E9732','#E0A93F','#C23934'],K=['A','B','C','D'];
-  let a0=-90,seg='';
-  K.forEach((k,i)=>{const f=g[k]/total; if(!f) return;
-    const a1=a0+f*360,big=f>.5?1:0;
-    const p=a=>[70+52*Math.cos(a*Math.PI/180),78+52*Math.sin(a*Math.PI/180)];
-    const [x0,y0]=p(a0),[x1,y1]=p(a1);
-    seg+= f===1?`<circle cx="70" cy="78" r="52" fill="none" stroke="${C[i]}" stroke-width="16"/>`
-      :`<path d="M ${x0} ${y0} A 52 52 0 ${big} 1 ${x1} ${y1}" fill="none" stroke="${C[i]}" stroke-width="16"/>`;
-    a0=a1;});
-  const leg=K.map((k,i)=>`<tspan x="150" dy="${i?18:0}" fill="${C[i]}">●</tspan><tspan dx="6" fill="var(--tx)">${k}</tspan><tspan dx="8" fill="var(--tx-2)">${g[k]}</tspan>`).join('');
-  return `<svg viewBox="0 0 300 150"><g>${seg}</g>
-    <text x="70" y="83" text-anchor="middle" font-family="var(--mono)" font-size="19" font-weight="700" fill="var(--tx)">${total}</text>
-    <text class="axis" y="55" font-size="12">${leg}</text></svg>`;
-}
-
-function lineAtt(rows,total){
-  const W=560,H=150,P=30;
-  let g=''; [0,50,100].forEach(v=>{const y=H-18-(H-34)*v/100;
-    g+=`<line class="gridln" x1="${P}" x2="${W-4}" y1="${y}" y2="${y}"/><text class="axis" x="${P-5}" y="${y+3}" text-anchor="end">${v}%</text>`;});
-  const step=(W-P-16)/Math.max(1,rows.length-1);
-  const pt=rows.map((r,i)=>[P+8+i*step, H-18-(H-34)*Math.min(100,pct(r.present+r.leave,Math.max(1,total)))/100]);
-  if(pt.length>1) g+=`<polyline fill="none" stroke="var(--seal)" stroke-width="2.2" points="${pt.map(p=>p.join(',')).join(' ')}"/>`;
-  pt.forEach((p,i)=>{ if(i%2===0||i===pt.length-1) g+=`<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="var(--seal)"/><text class="axis" x="${p[0]}" y="${H-5}" text-anchor="middle">${rows[i].date.slice(8)}</text>`;});
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Attendance percentage, last fourteen days">${g}</svg>`;
+function donut(segs,center,sub){
+  const total=segs.reduce((s,x)=>s+x.v,0);
+  if(!total) return '<div class="empty">Nothing yet.</div>';
+  const C=2*Math.PI*56; let off=0, g='';
+  segs.forEach(x=>{const f=x.v/total, len=C*f;
+    g+=`<circle cx="86" cy="86" r="56" fill="none" stroke="${x.c}" stroke-width="19"
+      stroke-dasharray="${len-2} ${C-len+2}" stroke-dashoffset="${-off}" transform="rotate(-90 86 86)"/>`; off+=len;});
+  const leg=segs.map(x=>`<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin:5px 0">
+    <i style="width:10px;height:10px;border-radius:3px;background:${x.c}"></i>${esc(x.k)}
+    <b style="margin-left:auto;font-family:var(--mono)">${x.v}</b>
+    <span style="color:var(--tx-3);font-family:var(--mono);width:38px;text-align:right">${pct(x.v,total)}%</span></div>`).join('');
+  return `<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">
+    <svg viewBox="0 0 172 172" style="max-width:172px">${g}
+      <text x="86" y="82" text-anchor="middle" font-family="var(--mono)" font-size="27" font-weight="750" fill="var(--tx)">${center}</text>
+      <text x="86" y="101" text-anchor="middle" class="axis">${esc(sub)}</text></svg>
+    <div style="flex:1;min-width:170px">${leg}</div></div>`;
 }
 function histMarkIn(rows){
-  const W=560,H=150,P=30, buckets=Array(13).fill(0);           /* 06:00 → 18:00, hourly */
-  rows.forEach(r=>{ const h2=new Date(r.at).getHours(); if(h2>=6&&h2<=18) buckets[h2-6]++; });
+  const W=460,H=210,P=30,buckets=Array(13).fill(0);
+  rows.forEach(r=>{const h2=new Date(r.at).getHours(); if(h2>=6&&h2<=18) buckets[h2-6]++;});
   const mx=Math.max(1,...buckets);
-  let g=''; [0,.5,1].forEach(f=>{const y=H-18-(H-34)*f;
-    g+=`<line class="gridln" x1="${P}" x2="${W-4}" y1="${y}" y2="${y}"/><text class="axis" x="${P-5}" y="${y+3}" text-anchor="end">${Math.round(mx*f)}</text>`;});
-  const bw=Math.floor((W-P-10)/13)-4;
-  buckets.forEach((v,i)=>{const x=P+6+i*(bw+4),hh=(H-34)*v/mx;
-    g+=`<rect x="${x}" y="${H-18-hh}" width="${bw}" height="${hh}" fill="${i+6<10?'var(--green)':i+6<12?'#5E9732':'var(--amber)'}" opacity=".8" rx="1.5"/>
-        <text class="axis" x="${x+bw/2}" y="${H-5}" text-anchor="middle">${i+6}</text>`;});
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Mark-in time of day">${g}</svg>`;
-}
-/* today's marks plotted on their own coordinates, scaled to the district's
-   bounding box. Not a basemap — no tiles are shipped — but every dot is the
-   real latitude and longitude, and clicking one opens the officer with a
-   link that drops the pin in Google Maps. */
-function geoMap(pres){
-  const pts=pres.filter(r=>r.lat&&r.lng);
-  if(!pts.length) return '<div class="empty">No location fixes yet today.</div>';
-  const la=pts.map(p=>p.lat), lo=pts.map(p=>p.lng);
-  let la0=Math.min(...la), la1=Math.max(...la), lo0=Math.min(...lo), lo1=Math.max(...lo);
-  const padLa=(la1-la0)*0.12+0.005, padLo=(lo1-lo0)*0.12+0.005;
-  la0-=padLa; la1+=padLa; lo0-=padLo; lo1+=padLo;
-  const W=560,H=330;
-  const X=v=>((v-lo0)/(lo1-lo0))*(W-20)+10;
-  const Y=v=>H-(((v-la0)/(la1-la0))*(H-20)+10);
-  /* mandal labels at the mean of their own dots */
-  const byM={}; pts.forEach(p=>{ byM[p.mandal]=byM[p.mandal]||{x:0,y:0,n:0}; byM[p.mandal].x+=X(p.lng); byM[p.mandal].y+=Y(p.lat); byM[p.mandal].n++; });
-  let g=`<rect x="0" y="0" width="${W}" height="${H}" fill="#F3F6F3" rx="8"/>`;
-  for(let i=1;i<6;i++){ g+=`<line class="gridln" x1="${i*W/6}" x2="${i*W/6}" y1="0" y2="${H}"/><line class="gridln" y1="${i*H/6}" y2="${i*H/6}" x1="0" x2="${W}"/>`; }
-  Object.keys(byM).forEach(m=>{const c=byM[m];
-    g+=`<text x="${c.x/c.n}" y="${c.y/c.n-12}" text-anchor="middle" class="axis" font-size="11" font-weight="700" fill="var(--tx-2)">${esc(m)}</text>`;});
-  pts.forEach((p,i)=>{ g+=`<circle class="geodot" data-gi="${i}" cx="${X(p.lng)}" cy="${Y(p.lat)}" r="${(p.marks||1)>1?7:5.5}"
-      fill="${p.verified?'var(--green)':'var(--amber)'}" stroke="#fff" stroke-width="1.6" tabindex="0" role="button"
-      aria-label="${esc(p.name)}, ${esc(p.mandal)}"><title>${esc(p.name)} \u00b7 ${esc(hm(p.at))}</title></circle>`;});
-  g+=`<text x="10" y="${H-8}" class="axis">${lo0.toFixed(3)}\u00b0E</text><text x="${W-10}" y="${H-8}" text-anchor="end" class="axis">${lo1.toFixed(3)}\u00b0E</text>`;
-  GEO=pts;
+  let g='';[0,.5,1].forEach(f=>{const y=H-24-(H-44)*f;
+    g+=`<line class="gridln" x1="${P}" x2="${W-6}" y1="${y}" y2="${y}"/><text class="axis" x="${P-6}" y="${y+3.5}" text-anchor="end">${Math.round(mx*f)}</text>`;});
+  const bw=Math.floor((W-P-12)/13)-5;
+  buckets.forEach((v,i)=>{const x=P+7+i*(bw+5),hh=(H-44)*v/mx;
+    g+=`<rect x="${x}" y="${H-24-hh}" width="${bw}" height="${hh}" rx="3" fill="${i+6<10?'var(--green)':i+6<12?'#65A30D':'var(--amber)'}" opacity=".85"/>
+        <text class="axis" x="${x+bw/2}" y="${H-7}" text-anchor="middle">${i+6}</text>`;});
   return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
 }
-let GEO=[];
-function stat(span,title,val,cls,sub,dlt){
-  return `<div class="panel stat ${span}"><div class="hd">${title}</div>
-    <div class="bd"><div class="v ${cls||''}">${val}${dlt||''}</div><div class="s">${sub||''}</div></div></div>`;
-}
-function panel(span,title,right,body){
-  return `<div class="panel ${span}"><div class="hd">${title}<span class="r">${right||''}</span></div><div class="bd">${body}</div></div>`;
+function trendLine(rows){
+  const W=460,H=210,P=30;
+  if(!rows.length) return '<div class="empty">No months on record yet.</div>';
+  let g='';[0,50,100].forEach(v=>{const y=H-24-(H-44)*v/100;
+    g+=`<line class="gridln" x1="${P}" x2="${W-6}" y1="${y}" y2="${y}"/><text class="axis" x="${P-6}" y="${y+3.5}" text-anchor="end">${v}</text>`;});
+  const step=(W-P-18)/Math.max(1,rows.length-1);
+  const pts=rows.map((r,i)=>[P+9+i*step,H-24-(H-44)*Math.min(100,r.avg)/100]);
+  g+=`<path d="${smooth(pts)}" fill="none" stroke="var(--blue)" stroke-width="2.4"/>`;
+  pts.forEach((p,i)=>{g+=`<circle cx="${p[0]}" cy="${p[1]}" r="3.4" fill="var(--blue)"/>
+    <text class="axis" x="${p[0]}" y="${p[1]-9}" text-anchor="middle" fill="var(--tx)">${rows[i].avg}</text>
+    <text class="axis" x="${p[0]}" y="${H-7}" text-anchor="middle">${rows[i].ym.slice(5)}/${rows[i].ym.slice(2,4)}</text>`;});
+  return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
 }
 
-function render(j){
-  const A=analyse(j);
-  let h='';
+/* ---------------- building blocks ---------------- */
+const IC={u:'<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M4.5 20c1.2-3.6 4-5.4 7.5-5.4s6.3 1.8 7.5 5.4"/></svg>',
+  h:'<svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V9l7-5 7 5v12M9.5 21v-6h5v6"/></svg>',
+  s:'<svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.4 5.9.8-4.3 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8L3.5 9.2l5.9-.8z"/></svg>',
+  f:'<svg viewBox="0 0 24 24"><path d="M6 21V4m0 1h11l-2.5 3.5L17 12H6"/></svg>',
+  c:'<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>'};
+function kpi(title,ic,val,dlt,foot){
+  return `<div class="kpi"><div class="hd">${title}<span class="ic">${ic}</span></div>
+    <div class="v">${val}</div><div class="foot">${dlt||''}<span>${foot||''}</span></div></div>`;}
+function panel(span,title,right,body,k){
+  return `<div class="panel ${span}"><div class="hd">${title}<span class="r">${right||''}</span></div><div class="bd"${k?' data-k="'+k+'"':''}>${body}</div></div>`;}
 
-  /* row 1: health · issues · pace */
-  h+=panel('c4','District health · '+j.ym,'weighted of five parts',
-    `<div class="healthwrap">${A.health==null?'<div class="empty" style="max-width:150px">Too little measured yet to publish a score.</div>':gauge(A.health)}<div class="hcomp">`+
+/* ---------------- maps ---------------- */
+function marker(p){ const col=p.verified?'#16A34A':'#D97706';
+  return L.circleMarker([p.lat,p.lng],{radius:(p.marks||1)>1?9:7,color:'#fff',weight:2,fillColor:col,fillOpacity:.95})
+    .bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.role)} · ${esc(p.mandal||'—')}<br>${esc(hm(p.at))} · ${p.verified?'verified':'no fix'}${(p.marks||1)>1?' · <span style="color:#DC2626">'+p.marks+'×</span>':''}<br><a target="_blank" rel="noopener" href="https://maps.google.com/?q=${p.lat},${p.lng}">Open in Google Maps</a>`);}
+function drawMap(id,which){
+  GEO=(DATA.today.present||[]).filter(r=>r.lat&&r.lng);
+  const el=document.getElementById(id); if(!el) return null;
+  let map=which==='main'?MAP:MAP2, layer=which==='main'?MLAYER:M2LAYER;
+  if(!map||map._container!==el){
+    map=L.map(id,{zoomControl:true,attributionControl:true});
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(map);
+    layer=L.layerGroup().addTo(map);
+    if(which==='main'){MAP=map;MLAYER=layer;}else{MAP2=map;M2LAYER=layer;}
+  }
+  layer.clearLayers();
+  if(GEO.length){ GEO.forEach(p=>layer.addLayer(marker(p)));
+    map.fitBounds(L.latLngBounds(GEO.map(p=>[p.lat,p.lng])).pad(0.25)); }
+  else map.setView([17.72,79.15],10);   /* Jangaon, when nothing is marked yet */
+  setTimeout(()=>map.invalidateSize(),60);
+  return map;
+}
+
+/* ---------------- views ---------------- */
+function vOverview(j,A){
+  let h='<div class="kpirow">';
+  h+=kpi('Attendance today',IC.u,A.accounted,delta(A.accounted,A.attY,true),'of '+A.officersDue+' · vs yesterday');
+  h+=kpi('Not marked',IC.u,A.absent,'',A.sunday?'Sunday':'as of now');
+  h+=kpi('Villages evaluated',IC.h,A.filed,'','of '+A.cov.t+' · '+j.ym);
+  h+=kpi('District average',IC.s,A.avg==null?'—':A.avg,delta(A.avg,A.prevAvg,true),'vs last month');
+  h+=kpi('Red flags',IC.f,j.month.rfCount,'',A.filed?pct(j.month.rfCount,A.filed)+'% of filings':'nothing filed');
+  h+='</div>';
+
+  const mkList=j.today.present.slice().sort((a,b)=>String(b.at).localeCompare(String(a.at)));
+  h+=panel('c5','Today\u2019s marks',A.present+' present · '+A.onLeave+' leave',
+    `<div class="marks">`+(mkList.length?mkList.map((r,i)=>
+      `<div class="mk${r.verified?'':' nofix'}" data-mi="${i}"><span class="av">${inits(r.name)}</span>
+        <div><b>${esc(r.name)}${(r.marks||1)>1?' <span class="pill bad">'+r.marks+'×</span>':''}</b>
+        <span>${esc(r.role)} · ${esc(r.mandal||'—')}</span></div>
+        <span class="t">${esc(hm(r.at))}<br><span class="pill ${r.verified?'ok':'warn'}">${r.verified?'verified':'no fix'}</span></span></div>`).join('')
+      :'<div class="empty">No officer yet today.</div>')+`</div>`,'marks');
+  h+=panel('c7','Live attendance map','tap a marker · drag to move','<div id="map"></div>');
+
+  h+=panel('c8','District activity · last 14 days','tap a measure',
+    `<div class="mtabs" id="mtabs">`+
+    [['present','Present',A.present],['leave','On leave',A.onLeave],['absent','Not marked',A.absent],['filed','Villages filed',A.filed]]
+      .map(([k,n,v])=>`<button class="mtab" data-met="${k}" aria-selected="${MET===k}"><b>${v}</b>${n}</button>`).join('')+
+    `</div><div id="area">${areaChart(j.att14x, MET, MET==='absent'?'var(--red)':MET==='leave'?'var(--amber)':MET==='filed'?'var(--blue)':'var(--seal)')}</div>`);
+  h+=panel('c4','Evaluation outcomes',j.ym,
+    donut([{k:'Grade A',v:j.month.grades.A,c:'#16A34A'},{k:'Grade B',v:j.month.grades.B,c:'#65A30D'},
+           {k:'Grade C',v:j.month.grades.C,c:'#D97706'},{k:'Grade D',v:j.month.grades.D,c:'#DC2626'}],A.filed,'filed'));
+
+  h+=panel('c6','District health · '+j.ym,(A.wSum<100?A.wSum+'% of the index in play':'weighted of five parts'),
+    `<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+     ${A.health==null?'<div class="empty" style="max-width:150px">Too little measured to publish a score.</div>':donutHealth(A.health)}
+     <div style="flex:1;min-width:230px">`+
     A.parts.map(p=>{const na=p.v==null;const col=na?'var(--line)':p.v>=80?'var(--green)':p.v>=60?'var(--amber)':'var(--red)';
-      return `<div class="hrow"><b>${p.k} <span style="color:var(--tx-3);font-weight:400">·${p.w}%</span></b>
-        <div class="hbar"><i style="width:${na?0:clamp(p.v,0,100)}%;background:${col}"></i></div>
-        <span class="n">${na?'n/a':p.v}</span></div>
-        <div style="font-size:11px;color:var(--tx-3);margin:-4px 0 4px 127px">${esc(p.why)}</div>`;}).join('')+
+      return `<div style="display:flex;align-items:center;gap:9px;margin:7px 0;font-size:12px;color:var(--tx-2)">
+        <b style="width:96px;color:var(--tx)">${p.k}</b>
+        <div class="bar" style="flex:1"><i style="width:${na?0:clamp(p.v,0,100)}%;background:${col}"></i></div>
+        <span style="font-family:var(--mono);width:34px;text-align:right;color:var(--tx)">${na?'n/a':p.v}</span></div>
+        <div style="font-size:11px;color:var(--tx-3);margin:-4px 0 5px 105px">${esc(p.why)}</div>`;}).join('')+
     `</div></div>`);
-
-  h+=panel('c5','Needs your attention', A.iss.length+' item'+(A.iss.length===1?'':'s'),
-    A.iss.length ? `<div style="max-height:262px;overflow:auto">`+A.iss.map(x=>
-      `<div class="iss tap" data-ii="${A.iss.indexOf(x)}"><span class="sev p${x.p}">P${x.p}</span><div class="t"><b>${esc(x.t)}</b>
+  h+=panel('c6','Needs your attention',A.iss.length+' item'+(A.iss.length===1?'':'s'),
+    A.iss.length?`<div style="max-height:262px;overflow:auto" data-k="iss">`+A.iss.map((x,i)=>
+      `<div class="iss" data-ii="${i}"><span class="sev p${x.p}">P${x.p}</span><div><b>${esc(x.t)}</b>
        <span>${esc(x.d)}</span><span class="act">${esc(x.a)}</span></div></div>`).join('')+`</div>`
-    : '<div class="allclear">All clear — nothing needs orders right now.</div>');
+    :'<div class="allclear">All clear — nothing needs orders right now.</div>','issP');
 
-  h+=panel('c3','Month pace', A.dLeft+' day'+(A.dLeft>1?'s':'')+' left',
-    `<div style="padding:6px 0 2px">
-      <div class="hrow"><b>Covered</b><div class="hbar"><i style="width:${A.covPct}%;background:${A.covPct>=70?'var(--green)':A.covPct>=40?'var(--amber)':'var(--red)'}"></i></div><span class="n">${A.covPct}%</span></div>
-      <div style="font-family:var(--mono);font-size:30px;font-weight:700;margin:12px 0 2px">${A.needPerDay}<span style="font-size:13px;color:var(--tx-3);font-weight:400"> / day</span></div>
-      <div style="font-size:12px;color:var(--tx-2)">evaluations needed each remaining day to close the month at 100% — ${A.cov.t-A.cov.d} villages outstanding.</div>
-    </div>`);
+  h+=vTables(j,A,true);
+  return h;
+}
+function donutHealth(v){ const col=v>=80?'var(--green)':v>=60?'var(--amber)':'var(--red)';
+  const C=2*Math.PI*54,f=C*clamp(v,0,100)/100;
+  return `<svg viewBox="0 0 150 150" style="max-width:138px">
+    <circle cx="75" cy="75" r="54" fill="none" stroke="var(--line-2)" stroke-width="13"/>
+    <circle cx="75" cy="75" r="54" fill="none" stroke="${col}" stroke-width="13" stroke-dasharray="${f} ${C-f}" stroke-linecap="round" transform="rotate(-90 75 75)"/>
+    <text x="75" y="72" text-anchor="middle" font-family="var(--mono)" font-size="32" font-weight="750" fill="var(--tx)">${v}</text>
+    <text x="75" y="93" text-anchor="middle" class="axis">HEALTH</text></svg>`;}
 
-  /* row 2: the tiles, with deltas where a prior period exists */
-  h+=stat('c2','Present today', A.present, 'g', A.accounted+' of '+A.officersDue+' accounted');
-  h+=stat('c2','On sanctioned leave', A.onLeave, A.onLeave?'a':'', 'today');
-  h+=stat('c2','Not marked', A.absent, A.absent?'rd':'g', 'as of now');
-  h+=stat('c2','GPs reported', j.month.rows.length, 'bl', 'of '+j.totals.gps+' · '+j.ym);
-  h+=stat('c2','District average', A.avg==null?'—':A.avg, A.avg>=70?'g':A.avg>=55?'a':'rd',
-    A.prevAvg!=null?'last month '+A.prevAvg:'SJ-SCORE this month', delta(A.avg, A.prevAvg, true));
-  const by10=j.today.present.filter(r=>new Date(r.at).getHours()<10).length;
-  h+=stat('c2','Marked by 10:00', A.present?pct(by10,A.present)+'%':'—', pct(by10,Math.max(1,A.present))>=70?'g':'a', by10+' of '+A.present+' present');
-  h+=stat('c2','Red flags', j.month.rfCount, j.month.rfCount?'rd':'g', 'villages this month');
-
-  /* row 3: charts */
-  h+=panel('c6','Attendance map · today\u2019s marks at their own coordinates',
-    '<span style="color:#2E8540">●</span> verified&nbsp;&nbsp;<span style="color:#E0A93F">●</span> no fix · tap a dot',
-    geoMap(j.today.present));
-  h+=panel('c6','Attendance · last 14 days','<span style="color:#2E8540">■</span> present&nbsp;&nbsp;<span style="color:#E0A93F">■</span> leave · 7-day mean '+Math.round(A.att7), bars14(j.att14));
-  h+=panel('c4','Attendance rate · 14-day line','of '+A.officersDue+' officers', lineAtt(j.att14, A.officersDue));
-  h+=panel('c4','Mark-in time today','by hour of day', histMarkIn(j.today.present));
-  h+=panel('c4','Score trend','district average', line6(j.trend));
-  h+=panel('c3','Grades this month', j.ym, donutG(j.month.grades));
-
-  /* row 4: worst five + attendance */
-  const worst=[...j.month.rows].sort((a,b)=>a.score-b.score).slice(0,5);
-  h+=panel('c4','Bottom five villages','call these out first',
+function vTables(j,A,short){
+  const worst=[...j.month.rows].sort((a,b)=>a.score-b.score).slice(0,short?5:1000);
+  let h=panel(short?'c5':'c6','Bottom '+(short?'five':'')+' villages','call these out first',
     `<div class="twrap"><table><thead><tr><th>Village</th><th>Score</th><th>Grade</th><th>Flags</th></tr></thead><tbody>`+
-    (worst.length?worst.map(r=>`<tr><td>${esc(r.gp)}<span class="mut"> · ${esc(r.mandal)}</span></td>
+    (worst.length?worst.map((r,i)=>`<tr data-di="ins:${i}"><td>${esc(r.gp)}<span class="mut"> · ${esc(r.mandal)}</span></td>
       <td class="num">${r.score}</td><td class="gr gr${esc(r.grade)}">${esc(r.grade)}</td>
       <td>${String(r.rf||'').trim()?'<span class="pill bad">RF '+esc(r.rf)+'</span>':'<span class="pill mut">—</span>'}</td></tr>`).join('')
-      :'<tr><td colspan="4" class="empty">Nothing filed yet.</td></tr>')+`</tbody></table></div>`);
-
-  const attRows=[...j.today.present.map(r=>({...r,_s:'P'})),...j.today.onLeave.map(r=>({...r,_s:'L'})),...j.today.absent.map(r=>({...r,_s:'A'}))];
-  h+=panel('c8','Attendance today · officer by officer', A.present+' present · '+A.onLeave+' leave · '+A.absent+' not marked',
-    `<div class="twrap" data-k="att"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th><th>Time</th><th>Location</th><th>Status</th></tr></thead><tbody>`+
-    (attRows.length?attRows.map((r,i)=>`<tr data-di="att:${i}"><td>${esc(r.name)}</td><td class="mut">${esc(r.role)}</td><td class="mut">${esc(r.mandal)}</td>`+
-      `<td class="num">${r._s==='P'?esc(hm(r.at)):'—'}</td>`+
-      `<td>${r._s==='P'?(r.verified?'<span class="pill ok">verified</span>':'<span class="pill warn">no fix</span>')+((r.marks||1)>1?' <span class="pill bad">'+r.marks+'\u00d7</span>':''):'—'}</td>`+
-      `<td>${r._s==='P'?'<span class="pill ok">present</span>':r._s==='L'?'<span class="pill warn">'+esc(r.leaveType||'leave')+'</span>':'<span class="pill bad">not marked</span>'}</td></tr>`).join('')
-      :'<tr><td colspan="6" class="empty">No officer yet today.</td></tr>')+`</tbody></table></div>`);
-
-  /* row 5: coverage league + leave + full filings */
-  h+=panel('c4','Coverage · mandal league', A.cov.d+' of '+A.cov.t+' villages',
-    `<div class="twrap" data-k="cov"><table><thead><tr><th>Mandal</th><th>Done</th><th style="width:42%">Progress</th><th>%</th></tr></thead><tbody>`+
+      :'<tr><td colspan="4" class="empty">Nothing filed yet.</td></tr>')+`</tbody></table></div>`,'worst');
+  window.__ROWS.ins=worst;
+  h+=panel(short?'c7':'c6','Coverage · mandal league',A.cov.d+' of '+A.cov.t+' villages · need '+A.needPerDay+'/day',
+    `<div class="twrap"><table><thead><tr><th>Mandal</th><th>Done</th><th style="width:44%">Progress</th><th>%</th></tr></thead><tbody>`+
     [...j.coverage].sort((a,b)=>pct(a.done,a.total)-pct(b.done,b.total)).map(c=>{const p2=pct(c.done,c.total);
       return `<tr><td>${esc(c.mandal)}</td><td class="num">${c.done}/${c.total}</td>
-      <td><div class="bar"><i style="width:${p2}%;background:${p2>=100?'var(--green)':p2>=50?'#5E9732':'var(--amber)'}"></i></div></td>
-      <td class="num mut">${p2}%</td></tr>`;}).join('')+`</tbody></table></div>`);
+      <td><div class="bar"><i style="width:${p2}%;background:${p2>=100?'var(--green)':p2>=50?'#65A30D':'var(--amber)'}"></i></div></td>
+      <td class="num mut">${p2}%</td></tr>`;}).join('')+`</tbody></table></div>`,'cov');
+  return h;
+}
 
+function vAttendance(j,A){
+  let h='<div class="kpirow">';
+  h+=kpi('Present',IC.u,A.present,delta(A.accounted,A.attY,true),'vs yesterday (with leave)');
+  h+=kpi('On sanctioned leave',IC.c,A.onLeave,'','today');
+  h+=kpi('Not marked',IC.u,A.absent,'',A.sunday?'Sunday':'as of now');
+  h+=kpi('Marked by 10:00',IC.u,A.present?pct(A.by10,A.present)+'%':'—','',A.by10+' of '+A.present);
+  h+=kpi('No location fix',IC.u,j.today.present.filter(r=>!r.verified).length,'','of '+A.present+' present');
+  h+='</div>';
+  h+=panel('c7','Attendance rate · last 14 days','accounted of '+A.officersDue,
+    areaChart(j.att14x,'present','var(--seal)'));
+  h+=panel('c5','Mark-in time today','by hour', histMarkIn(j.today.present));
+  const attRows=[].concat(j.today.present.map(r=>({...r,_s:'P'})),j.today.onLeave.map(r=>({...r,_s:'L'})),j.today.absent.map(r=>({...r,_s:'A'})));
+  window.__ROWS.att=attRows;
+  h+=panel('c12','Officer by officer',A.present+' present · '+A.onLeave+' leave · '+A.absent+' not marked',
+    `<input class="find" id="attFind" placeholder="Search name, role, mandal or status" style="margin-bottom:9px">
+     <div class="twrap" style="max-height:430px"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th><th>Time</th><th>Location</th><th>Status</th></tr></thead><tbody id="attBody">`+
+    attRows.map((r,i)=>attRow(r,i)).join('')+`</tbody></table></div>`,'att');
+  return h;
+}
+function attRow(r,i){
+  return `<tr data-di="att:${i}" data-f="${esc((r.name+' '+r.role+' '+(r.mandal||'')+' '+(r._s==='P'?'present':r._s==='L'?'leave':'not marked')).toLowerCase())}">
+    <td>${esc(r.name)}</td><td class="mut">${esc(r.role)}</td><td class="mut">${esc(r.mandal||'—')}</td>
+    <td class="num">${r._s==='P'?esc(hm(r.at)):'—'}</td>
+    <td>${r._s==='P'?(r.verified?'<span class="pill ok">verified</span>':'<span class="pill warn">no fix</span>')+((r.marks||1)>1?' <span class="pill bad">'+r.marks+'×</span>':''):'—'}</td>
+    <td>${r._s==='P'?'<span class="pill ok">present</span>':r._s==='L'?'<span class="pill warn">'+esc(r.leaveType||'leave')+'</span>':'<span class="pill bad">not marked</span>'}</td></tr>`;
+}
+function vVillages(j,A){
+  let h='<div class="kpirow">';
+  h+=kpi('Filed',IC.h,A.filed,'','of '+A.cov.t+' · '+j.ym);
+  h+=kpi('District average',IC.s,A.avg==null?'—':A.avg,delta(A.avg,A.prevAvg,true),'vs last month');
+  h+=kpi('Red flags',IC.f,j.month.rfCount,'',A.filed?pct(j.month.rfCount,A.filed)+'% of filings':'—');
+  h+=kpi('Grade A + B',IC.s,j.month.grades.A+j.month.grades.B,'',A.filed?pct(j.month.grades.A+j.month.grades.B,A.filed)+'% of filings':'—');
+  h+=kpi('Needed per day',IC.h,A.needPerDay,'',A.wdLeft+' working days left');
+  h+='</div>';
+  h+=panel('c7','Score trend · district average','month by month',trendLine(j.trend));
+  h+=panel('c5','Evaluation outcomes',j.ym,
+    donut([{k:'Grade A',v:j.month.grades.A,c:'#16A34A'},{k:'Grade B',v:j.month.grades.B,c:'#65A30D'},
+           {k:'Grade C',v:j.month.grades.C,c:'#D97706'},{k:'Grade D',v:j.month.grades.D,c:'#DC2626'}],A.filed,'filed'));
+  const mr=[...j.month.rows].sort((a,b)=>a.score-b.score); window.__ROWS.ins=mr;
+  h+=panel('c12','Inspections filed · worst first',mr.length+' villages',
+    `<div class="twrap" style="max-height:430px"><table><thead><tr><th>Village</th><th>Mandal</th><th>Score</th><th>Grade</th><th>Red flags</th><th>Officer</th><th>Date</th></tr></thead><tbody>`+
+    (mr.length?mr.map((r,i)=>`<tr data-di="ins:${i}"><td>${esc(r.gp)}</td><td class="mut">${esc(r.mandal)}</td>
+      <td class="num">${r.score}</td><td class="gr gr${esc(r.grade)}">${esc(r.grade)}</td>
+      <td>${String(r.rf||'').trim()?'<span class="pill bad">RF '+esc(r.rf)+'</span>':'<span class="pill mut">—</span>'}</td>
+      <td class="mut">${esc(String(r.officer||'').replace(/\s*\(\d+\)$/,''))}</td><td class="num mut">${esc(dm(r.date))}</td></tr>`).join('')
+      :'<tr><td colspan="7" class="empty">Nothing filed yet this month.</td></tr>')+`</tbody></table></div>`,'ins')
+  + vTables(j,A,true);
+  return h;
+}
+function vLeave(j,A){
   const lp=j.leave.pending, lr=j.leave.recent.filter(r=>r.status!=='PENDING');
-  h+=panel('c4','Leave register', lp.length+' awaiting orders',
+  const sanctioned=lr.filter(r=>r.status==='APPROVED');
+  const oldestH=lp.length?Math.max(...lp.map(l=>(Date.now()-new Date(l.appliedAt).getTime())/36e5)):0;
+  let h='<div class="kpirow">';
+  h+=kpi('Awaiting orders',IC.c,lp.length,'','on your desk');
+  h+=kpi('Oldest wait',IC.c,lp.length?Math.round(oldestH)+'h':'—','','apply-to-order');
+  h+=kpi('Sanctioned',IC.c,sanctioned.length,'','recent record');
+  h+=kpi('Days sanctioned',IC.c,sanctioned.reduce((s,r)=>s+(r.days||0),0),'','recent record');
+  h+=kpi('Refused / withdrawn',IC.c,lr.length-sanctioned.length,'','recent record');
+  h+='</div>';
+  const row=r=>{const st=r.status==='PENDING'?'<span class="pill warn">waiting</span>':r.status==='APPROVED'?'<span class="pill ok">sanctioned</span>':r.status==='REJECTED'?'<span class="pill bad">refused</span>':'<span class="pill mut">withdrawn</span>';
+    return `<tr><td>${esc(r.name)}<span class="mut"> · ${esc(r.mandal)}</span></td><td class="num">${esc(r.type)}</td><td class="num">${r.days}</td><td class="num mut">${esc(dm(r.from))}</td><td>${st}</td></tr>`;};
+  h+=panel('c6','Awaiting your orders',lp.length+' application'+(lp.length===1?'':'s'),
     `<div class="twrap"><table><thead><tr><th>Officer</th><th>Kind</th><th>Days</th><th>From</th><th>Status</th></tr></thead><tbody>`+
-    (lp.length+lr.length? lp.map(lvRow).join('')+lr.slice(0,14).map(lvRow).join('')
-      :'<tr><td colspan="5" class="empty">No application on record.</td></tr>')+`</tbody></table></div>`);
+    (lp.length?lp.map(row).join(''):'<tr><td colspan="5" class="empty">Nothing waiting.</td></tr>')+`</tbody></table></div>`,'lp');
+  h+=panel('c6','Recent orders',lr.length+' on record',
+    `<div class="twrap"><table><thead><tr><th>Officer</th><th>Kind</th><th>Days</th><th>From</th><th>Status</th></tr></thead><tbody>`+
+    (lr.length?lr.slice(0,60).map(row).join(''):'<tr><td colspan="5" class="empty">No orders yet.</td></tr>')+`</tbody></table></div>`,'lr');
+  return h;
+}
+function vMap(j,A){
+  return panel('c12','Every mark today · live',A.present+' marks · green verified, amber no fix','<div id="map2"></div>');
+}
 
-  const mr=[...j.month.rows].sort((a,b)=>a.score-b.score);
-  h+=panel('c4','Inspections filed · '+j.ym, j.month.rows.length+' villages',
-    `<div class="twrap" data-k="ins"><table><thead><tr><th>Village</th><th>Score</th><th>Officer</th><th>Date</th></tr></thead><tbody>`+
-    (mr.length?mr.map((r,i)=>`<tr data-di="ins:${i}"><td>${esc(r.gp)}<span class="mut"> · ${esc(r.mandal)}</span></td><td class="num">${r.score} <span class="gr gr${esc(r.grade)}">${esc(r.grade)}</span></td>`+
-      `<td class="mut">${esc(String(r.officer||'').replace(/\s*\(\d+\)$/,''))}</td><td class="num mut">${esc(dm(r.date))}</td></tr>`).join('')
-      :'<tr><td colspan="4" class="empty">Nothing filed yet this month.</td></tr>')+`</tbody></table></div>`);
-
-  const keep={}; document.querySelectorAll('#g .twrap[data-k]').forEach(el=>keep[el.dataset.k]=el.scrollTop);
-  window.__ISS=A.iss; window.__ROWS={att:attRows, ins:mr};
-  $('#g').innerHTML=h;
-  document.querySelectorAll('#g .twrap[data-k]').forEach(el=>{ if(keep[el.dataset.k]) el.scrollTop=keep[el.dataset.k]; });
-  wire();
+/* ---------------- render ---------------- */
+function render(j){
+  /* villages filed per day, for the area chart */
+  const byDay={}; j.month.rows.forEach(r=>{byDay[r.date]=(byDay[r.date]||0)+1;});
+  j.att14x=j.att14.map(r=>({...r, filedN:byDay[r.date]||0}));
+  const A=analyse(j); window.__ISS=A.iss; window.__ROWS={att:[],ins:[]};
+  const keep={}; document.querySelectorAll('#g [data-k]').forEach(el=>keep[el.dataset.k]=el.scrollTop);
+  $('#g').innerHTML = VIEW==='overview'?vOverview(j,A)
+    : VIEW==='attendance'?vAttendance(j,A)
+    : VIEW==='villages'?vVillages(j,A)
+    : VIEW==='leave'?vLeave(j,A) : vMap(j,A);
+  document.querySelectorAll('#g [data-k]').forEach(el=>{ if(keep[el.dataset.k]) el.scrollTop=keep[el.dataset.k]; });
+  if(VIEW==='overview') drawMap('map','main');
+  if(VIEW==='map') drawMap('map2','full');
+  const f=$('#attFind'); if(f) f.oninput=()=>{const q=f.value.toLowerCase();
+    document.querySelectorAll('#attBody tr').forEach(tr=>tr.style.display=tr.dataset.f.includes(q)?'':'none');};
   if(!DOWN){ $('#live').className='live'; $('#liveTx').textContent='updated now'; }
 }
-function lvRow(r){
-  const st=r.status==='PENDING'?'<span class="pill warn">waiting</span>'
-    :r.status==='APPROVED'?'<span class="pill ok">sanctioned</span>'
-    :r.status==='REJECTED'?'<span class="pill bad">refused</span>':'<span class="pill mut">withdrawn</span>';
-  return `<tr><td>${esc(r.name)}<span class="mut"> · ${esc(r.mandal)}</span></td><td class="num">${esc(r.type)}</td>`+
-    `<td class="num">${r.days}</td><td class="num mut">${esc(dm(r.from))}</td><td>${st}</td></tr>`;
-}
-function wire(){}
-function openDrawer(title,sub,body){ $('#dTitle').textContent=title; $('#dSub').textContent=sub;
-  $('#dBody').innerHTML=body; $('#drawer').hidden=false; }
+
+/* ---------------- interactions ---------------- */
 document.addEventListener('click',e=>{
   if(e.target.closest('[data-close]')){ $('#drawer').hidden=true; return; }
-  const gd=e.target.closest('.geodot');
-  if(gd){ const p=GEO[+gd.dataset.gi]; if(!p) return;
-    openDrawer(p.name, p.role+' \u00b7 '+(p.mandal||'\u2014'),
-      `<dl><dt>Marked at</dt><dd>${esc(hm(p.at))}</dd><dt>Location</dt><dd>${p.verified?'verified':'no fix'} \u00b7 \u00b1${p.acc||'?'} m</dd>
-       <dt>Coordinates</dt><dd>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</dd>
-       ${(p.marks||1)>1?`<dt>Marked</dt><dd>${p.marks}\u00d7 today</dd>`:''}</dl>
-       <a class="mapsbtn" target="_blank" rel="noopener" href="https://maps.google.com/?q=${p.lat},${p.lng}">Open the pin in Google Maps</a>`);
+  const mt=e.target.closest('.mtab');
+  if(mt){ MET=mt.dataset.met;
+    document.querySelectorAll('.mtab').forEach(x=>x.setAttribute('aria-selected',x===mt));
+    $('#area').innerHTML=areaChart(DATA.att14x,MET,MET==='absent'?'var(--red)':MET==='leave'?'var(--amber)':MET==='filed'?'var(--blue)':'var(--seal)');
+    return; }
+  const mk=e.target.closest('.mk');
+  if(mk && MAP){ const r=DATA.today.present.slice().sort((a,b)=>String(b.at).localeCompare(String(a.at)))[+mk.dataset.mi];
+    if(r&&r.lat&&r.lng){ MAP.setView([r.lat,r.lng],14);
+      MLAYER.eachLayer(l=>{const ll=l.getLatLng(); if(Math.abs(ll.lat-r.lat)<1e-9&&Math.abs(ll.lng-r.lng)<1e-9) l.openPopup();}); }
     return; }
   const ir=e.target.closest('.iss[data-ii]');
-  if(ir && DATA){ const x=window.__ISS[+ir.dataset.ii]; if(!x) return;
-    openDrawer('P'+x.p+' \u00b7 '+x.t, x.d, (x.list&&x.list.length?'<ul>'+x.list.map(v=>'<li>'+esc(v)+'</li>').join('')+'</ul>':'<p style="font-size:13px">'+esc(x.a)+'</p>')+'<p style="font-size:13px;margin-top:12px;color:var(--seal);font-weight:600">\u2192 '+esc(x.a)+'</p>');
-    return; }
+  if(ir){ const x=window.__ISS[+ir.dataset.ii]; if(!x) return;
+    openDrawer('P'+x.p+' · '+x.t,x.d,(x.list&&x.list.length?'<ul>'+x.list.map(v=>'<li>'+esc(v)+'</li>').join('')+'</ul>':'')+
+      '<p style="font-size:13px;margin-top:12px;color:var(--seal);font-weight:600">→ '+esc(x.a)+'</p>'); return; }
   const tr=e.target.closest('tr[data-di]');
   if(tr){ const [kind,i]=tr.dataset.di.split(':'); const r=(window.__ROWS[kind]||[])[+i]; if(!r) return;
-    if(kind==='att') openDrawer(r.name, r.role+' \u00b7 '+(r.mandal||'\u2014'),
+    if(kind==='att') openDrawer(r.name,r.role+' · '+(r.mandal||'—'),
       `<dl><dt>Status</dt><dd>${r._s==='P'?'Present':r._s==='L'?'On leave ('+esc(r.leaveType||'')+')':'Not marked'}</dd>
-       ${r._s==='P'?`<dt>Time</dt><dd>${esc(hm(r.at))}</dd><dt>Location</dt><dd>${r.verified?'verified':'no fix'}</dd>`:''}
-       ${(r.marks||1)>1?`<dt>Marked</dt><dd>${r.marks}\u00d7 today</dd>`:''}</dl>`+
+       ${r._s==='P'?`<dt>Time</dt><dd>${esc(hm(r.at))}</dd><dt>Location</dt><dd>${r.verified?'verified':'no fix'}${r.acc?' · ±'+r.acc+' m':''}</dd>`:''}
+       ${(r.marks||1)>1?`<dt>Marked</dt><dd>${r.marks}× today</dd>`:''}
+       ${r.lat&&r.lng?`<dt>Coordinates</dt><dd>${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}</dd>`:''}</dl>`+
       (r.lat&&r.lng?`<a class="mapsbtn" target="_blank" rel="noopener" href="https://maps.google.com/?q=${r.lat},${r.lng}">Open the pin in Google Maps</a>`:''));
-    else if(kind==='ins') openDrawer(r.gp, r.mandal+' \u00b7 '+dm(r.date),
-      `<dl><dt>Score</dt><dd>${r.score} \u00b7 grade ${esc(r.grade)}</dd><dt>Red flags</dt><dd>${String(r.rf||'').trim()?esc(r.rf):'none'}</dd>
+    else openDrawer(r.gp,r.mandal+' · '+dm(r.date),
+      `<dl><dt>Score</dt><dd>${r.score} · grade ${esc(r.grade)}</dd><dt>Red flags</dt><dd>${String(r.rf||'').trim()?esc(r.rf):'none'}</dd>
        <dt>Filed by</dt><dd>${esc(String(r.officer||''))}</dd></dl>
        <p style="font-size:12.5px;color:var(--tx-2);margin-top:12px">The clause-by-clause scorecard and photographs are on the district Sheet against this village and month.</p>`);
     return; }
 });
+function openDrawer(t,s,b){ $('#dTitle').textContent=t; $('#dSub').textContent=s; $('#dBody').innerHTML=b; $('#drawer').hidden=false; }
 boot();
 </script>
 </body>
