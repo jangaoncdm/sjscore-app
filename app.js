@@ -365,6 +365,7 @@ function getFix(opts){
       Object.assign({enableHighAccuracy:true, timeout:18000, maximumAge:0}, opts||{}));
   });
 }
+const ACC_LIMIT = 250;   /* metres — beyond this it is an area, not a place */
 /* one high-accuracy attempt, then a coarse one — a network fix beats no fix */
 async function getFixTwice(){
   try{ return await getFix(); }
@@ -596,7 +597,11 @@ async function markAttendance(){
   DB.att[key] = {
     id: ATT.id, date: key, ts: ATT.ts || new Date().toISOString(),
     lat: ATT.fix ? ATT.fix.lat : null, lng: ATT.fix ? ATT.fix.lng : null,
-    acc: ATT.fix ? ATT.fix.acc : null, verified: !!ATT.fix,
+    /* A fix good to 2 kilometres is the phone guessing from the network, not
+       the satellite telling us where the officer is. It is recorded, but it
+       does not count as verified presence. */
+    acc: ATT.fix ? ATT.fix.acc : null,
+    verified: !!ATT.fix && Number(ATT.fix.acc) <= ACC_LIMIT,
     photoId: pid, status: 'PRESENT', phone: u.phone, name: u.name, role: u.role, mandal: u.mandal || '',
     tz: Intl.DateTimeFormat().resolvedOptions().timeZone || '', sync: 'local'
   };
@@ -630,7 +635,8 @@ async function _syncAttendance(){
       }, photo: b64 ? {name:`ATT_${a.phone}_${a.date}.jpg`, b64} : null});
       if(r && r.ok){
         a.sync='synced'; a.url=r.url||''; if(a.photoId) BLOBS.del(a.photoId); done++;
-        if(r.duplicate){
+        if(r.resent){ /* the same mark arrived twice on a weak line — nothing to say */ }
+        else if(r.duplicate){
           a.dup = {n:r.marks||2, firstAt:r.firstAt||''};
           if(a.date===todayStr() && document.visibilityState==='visible')
             toast('The district already holds your attendance for today'+(r.firstAt?' — first marked at '+new Date(r.firstAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'')+'. Repeated marking is recorded.', 6000);
@@ -700,7 +706,9 @@ function attendanceStrip(){
   if(!a) return '';
   const t = new Date(a.ts).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
   const bits = ['Attendance marked at ' + t];
-  if(a.verified) bits.push('location recorded'); else bits.push('no location fix — filed as unverified');
+  if(a.verified) bits.push('location recorded');
+  else if(a.acc) bits.push('location only to \u00b1' + Math.round(a.acc) + ' m — filed as unverified');
+  else bits.push('no location fix — filed as unverified');
   if(a.sync !== 'synced') bits.push('on this phone');
   let h = `<div class="banner ${a.verified ? 'ok' : 'warn'}">${a.verified?ICON.tickC:ICON.warn}<span>${esc(bits.join(' · '))}</span></div>`;
   if(a.dup) h += `<div class="banner warn">${ICON.warn}<span>${esc('Attendance was marked '+a.dup.n+' times today'+(a.dup.firstAt?' — the first at '+new Date(a.dup.firstAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'')+'. One mark a day is enough; repeated marking is on the district record.')}</span></div>`;

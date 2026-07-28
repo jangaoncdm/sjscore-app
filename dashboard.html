@@ -125,6 +125,17 @@ tr[data-di]{cursor:pointer} tr:hover td{background:#F8FAFC}
 .iss .act{color:var(--seal);font-weight:600} .iss .act::before{content:"→ ";color:var(--gold)}
 .allclear{padding:20px;text-align:center;color:var(--green);font-weight:650}
 
+/* map tools */
+.mtools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:0 0 10px}
+.mtools .msp{flex:1}
+.fchip{border:1px solid var(--line);border-radius:9px;padding:6px 11px;font-size:12px;color:var(--tx-2);background:#fff}
+.fchip b{font-family:var(--mono);color:var(--tx)}
+.fchip[aria-pressed=true]{background:var(--blue-2);border-color:#B9D0F7;color:var(--blue)}
+.fchip:hover{border-color:#C6D0DE}
+/* briefing */
+.brief{font-size:13.5px;line-height:1.7;white-space:pre-wrap;max-height:330px;overflow:auto}
+.brief b{display:block;margin:12px 0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--tx-3)}
+.briefbar{display:flex;gap:9px;align-items:center;padding-bottom:9px;flex-wrap:wrap}
 /* drawer */
 #drawer{position:fixed;inset:0;z-index:60}
 #drawer .scrim{position:absolute;inset:0;background:rgba(23,35,59,.38)}
@@ -201,7 +212,7 @@ tr[data-di]{cursor:pointer} tr:hover td{background:#F8FAFC}
 'use strict';
 const $=s=>document.querySelector(s);
 let ST=null,TIMER=null,LASTOK=0,EVERY=60000,NEXT=0,INFLIGHT=false,DOWN=false,DATA=null,VIEW='overview',MET='present';
-let MAP=null,MLAYER=null,MAP2=null,M2LAYER=null,GEO=[];
+let MAP=null,MLAYER=null,MAP2=null,M2LAYER=null,GEO=[],MARKERS=[],MFILTER='all',BRIEF=null,BRIEFING=false;
 
 /* ---------------- session ---------------- */
 function boot(){
@@ -324,7 +335,20 @@ function analyse(j){
   if(oldPend.length) iss.push({p:2,t:oldPend.length+' leave application'+(oldPend.length>1?'s':'')+' waiting beyond 48 hours',
     d:'The oldest has waited '+Math.round(oldestH)+' hours.',a:'Pass orders today — held days block fresh applications.',
     list:oldPend.map(l=>l.name+' · '+l.type+' '+l.days+'d from '+dm(l.from))});
-  const noFix=j.today.present.filter(r=>!r.verified);
+  /* A mark is implausible if the fix is coarse enough to cover a mandal, if
+     the phone is not on Indian time, or if the coordinates fall outside a
+     generous box around the district. Any one of those means the location
+     proves nothing. */
+  const OUT=r=>r.lat!=null&&r.lng!=null&&(r.lat<16.4||r.lat>19.2||r.lng<77.6||r.lng>80.9);
+  const bad=j.today.present.filter(r=>OUT(r)||(r.acc&&r.acc>250)||(r.tz&&!/Calcutta|Kolkata/i.test(r.tz)));
+  if(bad.length) iss.push({p:1,t:bad.length+' attendance mark'+(bad.length>1?'s':'')+' cannot be trusted as proof of presence',
+    d:'Coarse fix, a phone not on Indian time, or coordinates outside the district.',
+    a:'Ask each officer to mark again from the field with location switched on. A repeat warrants an explanation in writing.',
+    list:bad.map(r=>r.name+' \u00b7 '+(r.mandal||'\u2014')+' \u00b7 '+
+      (OUT(r)?'outside the district ('+r.lat.toFixed(2)+', '+r.lng.toFixed(2)+')':'')+
+      (r.acc&&r.acc>250?' \u00b1'+Math.round(r.acc)+' m':'')+
+      (r.tz&&!/Calcutta|Kolkata/i.test(r.tz)?' \u00b7 '+r.tz:''))});
+  const noFix=j.today.present.filter(r=>!r.verified&&!bad.includes(r));
   if(noFix.length) iss.push({p:3,t:noFix.length+' attendance mark'+(noFix.length>1?'s':'')+' without a location fix today',
     d:'A one-off is weak signal; a pattern on the same names is not.',a:'Check the fortnight before raising it.',
     list:noFix.map(r=>r.name+' · '+(r.mandal||'—'))});
@@ -398,6 +422,57 @@ function trendLine(rows){
   return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
 }
 
+/* attendance by mandal — where the gaps actually are */
+function mandalAtt(j){
+  const m={};
+  j.coverage.forEach(c=>m[c.mandal]={p:0,l:0,a:0});
+  j.today.present.forEach(r=>{if(m[r.mandal])m[r.mandal].p++;});
+  j.today.onLeave.forEach(r=>{if(m[r.mandal])m[r.mandal].l++;});
+  j.today.absent.forEach(r=>{if(m[r.mandal])m[r.mandal].a++;});
+  const rows=Object.entries(m).map(([k,v])=>({k,...v,t:v.p+v.l+v.a}))
+    .filter(r=>r.t).sort((a,b)=>(b.a/b.t)-(a.a/a.t));
+  if(!rows.length) return '<div class="empty">No officers on the roll yet.</div>';
+  const W=460,H=Math.max(150,rows.length*26+26),BW=W-160;
+  let g='';
+  rows.forEach((r,i)=>{const y=14+i*26;
+    const wp=BW*r.p/r.t, wl=BW*r.l/r.t, wa=BW*r.a/r.t;
+    g+=`<text class="axis" x="0" y="${y+11}" font-size="11" fill="var(--tx)">${esc(r.k.slice(0,16))}</text>`;
+    g+=`<rect x="108" y="${y}" width="${wp}" height="15" fill="#16A34A" rx="2"/>`;
+    g+=`<rect x="${108+wp}" y="${y}" width="${wl}" height="15" fill="#D97706"/>`;
+    g+=`<rect x="${108+wp+wl}" y="${y}" width="${wa}" height="15" fill="#DC2626" rx="2"/>`;
+    g+=`<text class="axis" x="${W-4}" y="${y+11}" text-anchor="end">${r.a?r.a+' missing':'all in'}</text>`;});
+  return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
+}
+/* where the scores actually sit — ten-mark bands */
+function scoreDist(rows){
+  if(!rows.length) return '<div class="empty">Nothing filed yet.</div>';
+  const W=460,H=210,P=30,b=Array(10).fill(0);
+  rows.forEach(r=>{b[clamp(Math.floor(r.score/10),0,9)]++;});
+  const mx=Math.max(1,...b), bw=Math.floor((W-P-12)/10)-5;
+  let g='';[0,.5,1].forEach(f=>{const y=H-24-(H-44)*f;
+    g+=`<line class="gridln" x1="${P}" x2="${W-6}" y1="${y}" y2="${y}"/><text class="axis" x="${P-6}" y="${y+3.5}" text-anchor="end">${Math.round(mx*f)}</text>`;});
+  b.forEach((v,i)=>{const x=P+7+i*(bw+5),hh=(H-44)*v/mx;
+    const c=i>=7?'#16A34A':i>=5?'#65A30D':i>=3?'#D97706':'#DC2626';
+    g+=`<rect x="${x}" y="${H-24-hh}" width="${bw}" height="${hh}" rx="3" fill="${c}" opacity=".9"/>`;
+    if(v) g+=`<text class="axis" x="${x+bw/2}" y="${H-28-hh}" text-anchor="middle" fill="var(--tx)">${v}</text>`;
+    g+=`<text class="axis" x="${x+bw/2}" y="${H-7}" text-anchor="middle">${i*10}</text>`;});
+  return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
+}
+/* who files, and how well — the officer ledger */
+function officerTable(rows){
+  const by={};
+  rows.forEach(r=>{const o=String(r.officer||'—').replace(/\s*\(\d+\)$/,'');
+    by[o]=by[o]||{n:0,sum:0,rf:0,d:0};
+    by[o].n++; by[o].sum+=r.score; if(String(r.rf||'').trim())by[o].rf++; if(r.grade==='D')by[o].d++;});
+  const list=Object.entries(by).map(([k,v])=>({k,n:v.n,avg:Math.round(v.sum/v.n),rf:v.rf,d:v.d}))
+    .sort((a,b)=>b.n-a.n);
+  if(!list.length) return '<div class="empty">Nothing filed yet this month.</div>';
+  return `<div class="twrap"><table><thead><tr><th>Officer</th><th>Filed</th><th>Avg score</th><th>Grade D</th><th>Red flags</th></tr></thead><tbody>`+
+    list.map(o=>`<tr><td>${esc(o.k)}</td><td class="num">${o.n}</td>
+      <td class="num" style="color:${o.avg>=70?'var(--green)':o.avg>=55?'var(--amber)':'var(--red)'}">${o.avg}</td>
+      <td class="num">${o.d||'—'}</td><td class="num">${o.rf?'<span class="pill bad">'+o.rf+'</span>':'—'}</td></tr>`).join('')+
+    `</tbody></table></div>`;
+}
 /* ---------------- building blocks ---------------- */
 const IC={u:'<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M4.5 20c1.2-3.6 4-5.4 7.5-5.4s6.3 1.8 7.5 5.4"/></svg>',
   h:'<svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V9l7-5 7 5v12M9.5 21v-6h5v6"/></svg>',
@@ -411,22 +486,69 @@ function panel(span,title,right,body,k){
   return `<div class="panel ${span}"><div class="hd">${title}<span class="r">${right||''}</span></div><div class="bd"${k?' data-k="'+k+'"':''}>${body}</div></div>`;}
 
 /* ---------------- maps ---------------- */
-function marker(p){ const col=p.verified?'#16A34A':'#D97706';
+function suspect(p){ return (p.lat!=null&&(p.lat<16.4||p.lat>19.2||p.lng<77.6||p.lng>80.9))
+  || (p.acc&&p.acc>250) || (p.tz&&!/Calcutta|Kolkata/i.test(p.tz)); }
+function marker(p){
+  if(p._s==='V'){ const c=p.grade==='A'?'#16A34A':p.grade==='B'?'#65A30D':p.grade==='C'?'#D97706':'#DC2626';
+    return L.circleMarker([p.lat,p.lng],{radius:8,color:'#fff',weight:2,fillColor:c,fillOpacity:.9})
+      .bindPopup(`<b>${esc(p.gp)}</b> &middot; village<br>${esc(p.mandal)}<br>Score ${p.score} &middot; grade ${esc(p.grade)}${String(p.rf||'').trim()?' &middot; <span style="color:#DC2626">RF '+esc(p.rf)+'</span>':''}<br>${esc(String(p.officer||''))}${p.album?'<br><a target="_blank" rel="noopener" href="'+esc(p.album)+'">View the evidence</a>':''}`); }
+  if(p._s==='L') return L.circleMarker([p.lat,p.lng],{radius:7,color:'#fff',weight:2,fillColor:'#8B99AF',fillOpacity:.9})
+      .bindPopup(`<b>${esc(p.name)}</b><br>on sanctioned leave`);
+  const col=suspect(p)?'#DC2626':p.verified?'#16A34A':'#D97706';
   return L.circleMarker([p.lat,p.lng],{radius:(p.marks||1)>1?9:7,color:'#fff',weight:2,fillColor:col,fillOpacity:.95})
-    .bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.role)} · ${esc(p.mandal||'—')}<br>${esc(hm(p.at))} · ${p.verified?'verified':'no fix'}${(p.marks||1)>1?' · <span style="color:#DC2626">'+p.marks+'×</span>':''}<br><a target="_blank" rel="noopener" href="https://maps.google.com/?q=${p.lat},${p.lng}">Open in Google Maps</a>`);}
+    .bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.role)} · ${esc(p.mandal||'—')}<br>${esc(hm(p.at))} · ${suspect(p)?'<span style="color:#DC2626">location not trustworthy</span>':p.verified?'verified':'no fix'}${p.acc?' · ±'+Math.round(p.acc)+' m':''}${(p.marks||1)>1?' · <span style="color:#DC2626">'+p.marks+'×</span>':''}<br><a target="_blank" rel="noopener" href="https://maps.google.com/?q=${p.lat},${p.lng}">Open in Google Maps</a>`);}
+function mapPoints(){
+  const out=[];
+  (DATA.today.present||[]).forEach(r=>{ if(r.lat&&r.lng) out.push({...r,_s:'P'}); });
+  (DATA.today.onLeave||[]).forEach(r=>{ if(r.lat&&r.lng) out.push({...r,_s:'L'}); });
+  (DATA.month.rows||[]).forEach(r=>{ if(r.lat&&r.lng) out.push({...r,_s:'V',name:r.gp,role:'Village',at:r.date}); });
+  return out;
+}
+function passFilter(p){
+  if(MFILTER==='present') return p._s==='P';
+  if(MFILTER==='suspect') return p._s==='P'&&suspect(p);
+  if(MFILTER==='nofix')   return p._s==='P'&&!p.verified&&!suspect(p);
+  if(MFILTER==='villages')return p._s==='V';
+  return true;
+}
+function flyTo(name){
+  const hit=MARKERS.find(x=>x.p.name===name); if(!hit) return;
+  const map=(MAP2&&document.getElementById('map2'))?MAP2:MAP;
+  if(map){ map.setView([hit.p.lat,hit.p.lng],15); hit.mk.openPopup(); }
+}
+function mapTools(){
+  const pts=mapPoints();
+  const names=[...new Set(pts.map(p=>p.name))].sort();
+  return `<div class="mtools">
+    <input class="find" id="mFind" list="mNames" placeholder="Find an officer or village on the map" autocomplete="off">
+    <datalist id="mNames">${names.map(n=>`<option value="${esc(n)}">`).join('')}</datalist>
+    <select class="rsel" id="mPick"><option value="">Jump to&hellip;</option>${names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select>
+    <span class="msp"></span>`+
+    [['all','Everything',pts.length],['present','Present',pts.filter(p=>p._s==='P').length],
+     ['suspect','Not trustworthy',pts.filter(p=>p._s==='P'&&suspect(p)).length],
+     ['nofix','No fix',pts.filter(p=>p._s==='P'&&!p.verified&&!suspect(p)).length],
+     ['villages','Villages filed',pts.filter(p=>p._s==='V').length]]
+     .map(([k,n,c])=>`<button class="fchip" data-mf="${k}" aria-pressed="${MFILTER===k}">${n} <b>${c}</b></button>`).join('')+
+    `<button class="fchip" id="mFit">Fit all</button></div>`;
+}
 function drawMap(id,which){
-  GEO=(DATA.today.present||[]).filter(r=>r.lat&&r.lng);
+  GEO=mapPoints();
   const el=document.getElementById(id); if(!el) return null;
   let map=which==='main'?MAP:MAP2, layer=which==='main'?MLAYER:M2LAYER;
   if(!map||map._container!==el){
-    map=L.map(id,{zoomControl:true,attributionControl:true});
+    /* The wheel must scroll the PAGE, not zoom the map — a map that eats the
+       scroll traps the reader half way down the console. Ctrl+wheel zooms. */
+    map=L.map(id,{zoomControl:true,attributionControl:true,scrollWheelZoom:false});
+    el.addEventListener('wheel',ev=>{ if(ev.ctrlKey){ ev.preventDefault(); map.scrollWheelZoom.enable(); }
+      else map.scrollWheelZoom.disable(); },{passive:false});
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(map);
     layer=L.layerGroup().addTo(map);
     if(which==='main'){MAP=map;MLAYER=layer;}else{MAP2=map;M2LAYER=layer;}
   }
-  layer.clearLayers();
-  if(GEO.length){ GEO.forEach(p=>layer.addLayer(marker(p)));
-    map.fitBounds(L.latLngBounds(GEO.map(p=>[p.lat,p.lng])).pad(0.25)); }
+  layer.clearLayers(); MARKERS=[];
+  const shown=GEO.filter(passFilter);
+  if(shown.length){ shown.forEach(p=>{ const mk=marker(p); MARKERS.push({p:p,mk:mk}); layer.addLayer(mk); });
+    map.fitBounds(L.latLngBounds(shown.map(p=>[p.lat,p.lng])).pad(0.25)); }
   else map.setView([17.72,79.15],10);   /* Jangaon, when nothing is marked yet */
   setTimeout(()=>map.invalidateSize(),60);
   return map;
@@ -448,9 +570,10 @@ function vOverview(j,A){
       `<div class="mk${r.verified?'':' nofix'}" data-mi="${i}"><span class="av">${inits(r.name)}</span>
         <div><b>${esc(r.name)}${(r.marks||1)>1?' <span class="pill bad">'+r.marks+'×</span>':''}</b>
         <span>${esc(r.role)} · ${esc(r.mandal||'—')}</span></div>
-        <span class="t">${esc(hm(r.at))}<br><span class="pill ${r.verified?'ok':'warn'}">${r.verified?'verified':'no fix'}</span></span></div>`).join('')
+        <span class="t">${esc(hm(r.at))}<br><span class="pill ${suspect(r)?'bad':r.verified?'ok':'warn'}">${suspect(r)?'not trustworthy':r.verified?'verified':'no fix'}</span></span></div>`).join('')
       :'<div class="empty">No officer yet today.</div>')+`</div>`,'marks');
-  h+=panel('c7','Live attendance map','tap a marker · drag to move','<div id="map"></div>');
+  h+=panel('c7','Live map · officers and villages','wheel scrolls the page · Ctrl+wheel zooms',
+    mapTools()+'<div id="map"></div>');
 
   h+=panel('c8','District activity · last 14 days','tap a measure',
     `<div class="mtabs" id="mtabs">`+
@@ -478,8 +601,31 @@ function vOverview(j,A){
        <span>${esc(x.d)}</span><span class="act">${esc(x.a)}</span></div></div>`).join('')+`</div>`
     :'<div class="allclear">All clear — nothing needs orders right now.</div>','issP');
 
+  h+=panel('c12','Collector\u2019s briefing','written from today\u2019s figures',
+    `<div class="briefbar"><button class="tbtn pri" id="briefGo">${BRIEFING?'Writing\u2026':(BRIEF?'Write it again':'Write today\u2019s briefing')}</button>
+      <span style="font-size:12px;color:var(--tx-3)">${BRIEF?('written '+hm(BRIEF.at)):'Drawn only from the figures on this screen. Read it as a draft, not as orders.'}</span></div>
+     <div class="brief" id="briefBody">${BRIEF?briefHTML(BRIEF.text):'<span style="color:var(--tx-3);font-size:13px">Not written yet.</span>'}</div>`,'brief');
   h+=vTables(j,A,true);
   return h;
+}
+function briefHTML(t){
+  return esc(t).replace(/^([A-Z][A-Z \u2019'\-]{4,})$/gm,'<b>$1</b>')
+               .replace(/^(\d+)\.\s/gm,'<b style="display:inline;text-transform:none;letter-spacing:0;color:var(--blue)">$1.</b> ');
+}
+function briefFacts(j,A){
+  const L=[];
+  L.push('Date: '+new Date().toDateString()+'. Month '+j.ym+'.');
+  L.push('Officers on the roll: '+A.officersDue+'. Present today '+A.present+', on sanctioned leave '+A.onLeave+', not marked '+A.absent+'. Marked before 10am: '+A.by10+'.');
+  const bad=j.today.present.filter(suspect);
+  if(bad.length) L.push('Marks whose location cannot be trusted ('+bad.length+'): '+bad.map(r=>r.name+' of '+r.mandal+(r.acc>250?' accuracy '+Math.round(r.acc)+'m':'')+(r.tz&&!/Calcutta|Kolkata/i.test(r.tz)?' timezone '+r.tz:'')).join('; ')+'.');
+  if(A.absent) L.push('Not marked today: '+j.today.absent.slice(0,40).map(o=>o.name+' ('+o.role+', '+o.mandal+')').join('; ')+'.');
+  L.push('Villages evaluated this month: '+A.filed+' of '+A.cov.t+'. District average '+(A.avg==null?'n/a':A.avg)+(A.prevAvg!=null?' against '+A.prevAvg+' last month':'')+'. Grades A'+j.month.grades.A+' B'+j.month.grades.B+' C'+j.month.grades.C+' D'+j.month.grades.D+'.');
+  L.push('Red-flagged villages ('+j.month.rfCount+'): '+(j.month.rows.filter(r=>String(r.rf||'').trim()).map(r=>r.gp+' RF'+r.rf+' score '+r.score).join('; ')||'none')+'.');
+  const worst=[...j.month.rows].sort((a,b)=>a.score-b.score).slice(0,8);
+  if(worst.length) L.push('Lowest scoring villages: '+worst.map(r=>r.gp+' ('+r.mandal+') '+r.score+'/100 grade '+r.grade+' filed by '+String(r.officer||'').replace(/\s*\(\d+\)$/,'')).join('; ')+'.');
+  L.push('Mandal coverage: '+j.coverage.map(c=>c.mandal+' '+c.done+'/'+c.total).join('; ')+'. Needed per remaining working day: '+A.needPerDay+'.');
+  L.push('Leave awaiting orders: '+j.leave.pending.length+(j.leave.pending.length?' — '+j.leave.pending.map(l=>l.name+' '+l.type+' '+l.days+'d').join('; '):'')+'.');
+  return L.join('\n');
 }
 function donutHealth(v){ const col=v>=80?'var(--green)':v>=60?'var(--amber)':'var(--red)';
   const C=2*Math.PI*54,f=C*clamp(v,0,100)/100;
@@ -513,11 +659,18 @@ function vAttendance(j,A){
   h+=kpi('On sanctioned leave',IC.c,A.onLeave,'','today');
   h+=kpi('Not marked',IC.u,A.absent,'',A.sunday?'Sunday':'as of now');
   h+=kpi('Marked by 10:00',IC.u,A.present?pct(A.by10,A.present)+'%':'—','',A.by10+' of '+A.present);
-  h+=kpi('No location fix',IC.u,j.today.present.filter(r=>!r.verified).length,'','of '+A.present+' present');
+  h+=kpi('Location not trustworthy',IC.u,j.today.present.filter(r=>suspect(r)||!r.verified).length,'','of '+A.present+' present');
   h+='</div>';
   h+=panel('c7','Attendance rate · last 14 days','accounted of '+A.officersDue,
     areaChart(j.att14x,'present','var(--seal)'));
   h+=panel('c5','Mark-in time today','by hour', histMarkIn(j.today.present));
+  h+=panel('c6','Attendance by mandal · worst first',
+    '<span style="color:#16A34A">■</span> present <span style="color:#D97706">■</span> leave <span style="color:#DC2626">■</span> missing',
+    mandalAtt(j));
+  h+=panel('c6','Location quality today','of '+A.present+' marks',
+    donut([{k:'Verified',v:j.today.present.filter(r=>r.verified&&!suspect(r)).length,c:'#16A34A'},
+           {k:'No fix',v:j.today.present.filter(r=>!r.verified&&!suspect(r)).length,c:'#D97706'},
+           {k:'Not trustworthy',v:j.today.present.filter(suspect).length,c:'#DC2626'}],A.present,'marks'));
   const attRows=[].concat(j.today.present.map(r=>({...r,_s:'P'})),j.today.onLeave.map(r=>({...r,_s:'L'})),j.today.absent.map(r=>({...r,_s:'A'})));
   window.__ROWS.att=attRows;
   h+=panel('c12','Officer by officer',A.present+' present · '+A.onLeave+' leave · '+A.absent+' not marked',
@@ -530,7 +683,7 @@ function attRow(r,i){
   return `<tr data-di="att:${i}" data-f="${esc((r.name+' '+r.role+' '+(r.mandal||'')+' '+(r._s==='P'?'present':r._s==='L'?'leave':'not marked')).toLowerCase())}">
     <td>${esc(r.name)}</td><td class="mut">${esc(r.role)}</td><td class="mut">${esc(r.mandal||'—')}</td>
     <td class="num">${r._s==='P'?esc(hm(r.at)):'—'}</td>
-    <td>${r._s==='P'?(r.verified?'<span class="pill ok">verified</span>':'<span class="pill warn">no fix</span>')+((r.marks||1)>1?' <span class="pill bad">'+r.marks+'×</span>':''):'—'}</td>
+    <td>${r._s==='P'?(suspect(r)?'<span class="pill bad">not trustworthy</span>':r.verified?'<span class="pill ok">verified</span>':'<span class="pill warn">no fix</span>')+((r.marks||1)>1?' <span class="pill bad">'+r.marks+'×</span>':''):'—'}</td>
     <td>${r._s==='P'?'<span class="pill ok">present</span>':r._s==='L'?'<span class="pill warn">'+esc(r.leaveType||'leave')+'</span>':'<span class="pill bad">not marked</span>'}</td></tr>`;
 }
 function vVillages(j,A){
@@ -545,6 +698,8 @@ function vVillages(j,A){
   h+=panel('c5','Evaluation outcomes',j.ym,
     donut([{k:'Grade A',v:j.month.grades.A,c:'#16A34A'},{k:'Grade B',v:j.month.grades.B,c:'#65A30D'},
            {k:'Grade C',v:j.month.grades.C,c:'#D97706'},{k:'Grade D',v:j.month.grades.D,c:'#DC2626'}],A.filed,'filed'));
+  h+=panel('c6','Score distribution','villages by ten-mark band', scoreDist(j.month.rows));
+  h+=panel('c6','Officer ledger · '+j.ym,'who files, and how well', officerTable(j.month.rows));
   const mr=[...j.month.rows].sort((a,b)=>a.score-b.score); window.__ROWS.ins=mr;
   h+=panel('c12','Inspections filed · worst first',mr.length+' villages',
     `<div class="twrap" style="max-height:430px"><table><thead><tr><th>Village</th><th>Mandal</th><th>Score</th><th>Grade</th><th>Red flags</th><th>Officer</th><th>Date</th></tr></thead><tbody>`+
@@ -578,7 +733,9 @@ function vLeave(j,A){
   return h;
 }
 function vMap(j,A){
-  return panel('c12','Every mark today · live',A.present+' marks · green verified, amber no fix','<div id="map2"></div>');
+  return panel('c12','District map · everything located',
+    'green verified &middot; amber no fix &middot; red not trustworthy &middot; grey on leave &middot; villages by grade',
+    mapTools()+'<div id="map2"></div>');
 }
 
 /* ---------------- render ---------------- */
@@ -595,6 +752,8 @@ function render(j){
   document.querySelectorAll('#g [data-k]').forEach(el=>{ if(keep[el.dataset.k]) el.scrollTop=keep[el.dataset.k]; });
   if(VIEW==='overview') drawMap('map','main');
   if(VIEW==='map') drawMap('map2','full');
+  const mf=$('#mFind'); if(mf) mf.onchange=()=>{ if(mf.value) flyTo(mf.value); };
+  const mp=$('#mPick'); if(mp) mp.onchange=()=>{ if(mp.value) flyTo(mp.value); };
   const f=$('#attFind'); if(f) f.oninput=()=>{const q=f.value.toLowerCase();
     document.querySelectorAll('#attBody tr').forEach(tr=>tr.style.display=tr.dataset.f.includes(q)?'':'none');};
   if(!DOWN){ $('#live').className='live'; $('#liveTx').textContent='updated now'; }
@@ -608,6 +767,11 @@ document.addEventListener('click',e=>{
     document.querySelectorAll('.mtab').forEach(x=>x.setAttribute('aria-selected',x===mt));
     $('#area').innerHTML=areaChart(DATA.att14x,MET,MET==='absent'?'var(--red)':MET==='leave'?'var(--amber)':MET==='filed'?'var(--blue)':'var(--seal)');
     return; }
+  if(e.target.closest('#briefGo')){ writeBrief(); return; }
+  const fc=e.target.closest('[data-mf]');
+  if(fc){ MFILTER=fc.dataset.mf; if(DATA) render(DATA); return; }
+  if(e.target.closest('#mFit')){ const m=MAP2&&document.getElementById('map2')?MAP2:MAP;
+    if(m&&MARKERS.length) m.fitBounds(L.latLngBounds(MARKERS.map(x=>[x.p.lat,x.p.lng])).pad(0.25)); return; }
   const mk=e.target.closest('.mk');
   if(mk && MAP){ const r=DATA.today.present.slice().sort((a,b)=>String(b.at).localeCompare(String(a.at)))[+mk.dataset.mi];
     if(r&&r.lat&&r.lng){ MAP.setView([r.lat,r.lng],14);
@@ -627,10 +791,26 @@ document.addEventListener('click',e=>{
       (r.lat&&r.lng?`<a class="mapsbtn" target="_blank" rel="noopener" href="https://maps.google.com/?q=${r.lat},${r.lng}">Open the pin in Google Maps</a>`:''));
     else openDrawer(r.gp,r.mandal+' · '+dm(r.date),
       `<dl><dt>Score</dt><dd>${r.score} · grade ${esc(r.grade)}</dd><dt>Red flags</dt><dd>${String(r.rf||'').trim()?esc(r.rf):'none'}</dd>
-       <dt>Filed by</dt><dd>${esc(String(r.officer||''))}</dd></dl>
-       <p style="font-size:12.5px;color:var(--tx-2);margin-top:12px">The clause-by-clause scorecard and photographs are on the district Sheet against this village and month.</p>`);
+       <dt>Filed by</dt><dd>${esc(String(r.officer||''))}</dd>
+       ${r.photos?`<dt>Photographs</dt><dd>${r.photos}</dd>`:''}</dl>
+       ${r.album?`<a class="mapsbtn" target="_blank" rel="noopener" href="${esc(r.album)}">View the evidence photographs</a>`:''}
+       ${r.folder&&!r.album?`<a class="mapsbtn" target="_blank" rel="noopener" href="https://drive.google.com/drive/folders/${esc(r.folder)}">Open the evidence folder</a>`:''}
+       ${r.lat&&r.lng?`<a class="mapsbtn" target="_blank" rel="noopener" href="https://maps.google.com/?q=${r.lat},${r.lng}">Where it was inspected</a>`:''}
+       <p style="font-size:12.5px;color:var(--tx-2);margin-top:12px">The clause-by-clause scorecard is on the district Sheet against this village and month.</p>`);
     return; }
 });
+async function writeBrief(){
+  if(BRIEFING||!DATA) return;
+  BRIEFING=true; const btn=$('#briefGo'); if(btn){btn.textContent='Writing…';btn.disabled=true;}
+  try{
+    const A=analyse(DATA);
+    const r=await fetch(ST.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({kind:'brief',token:ST.token,facts:briefFacts(DATA,A)})});
+    const j=await r.json();
+    BRIEF = j.ok ? {text:j.text,at:j.at} : {text:'Could not write the briefing.\n\n'+(j.error||''),at:new Date().toISOString()};
+  }catch(e){ BRIEF={text:'Could not reach the district to write the briefing.\n\n'+e.message,at:new Date().toISOString()}; }
+  BRIEFING=false; if(DATA) render(DATA);
+}
 function openDrawer(t,s,b){ $('#dTitle').textContent=t; $('#dSub').textContent=s; $('#dBody').innerHTML=b; $('#drawer').hidden=false; }
 boot();
 </script>
