@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>SJGP · District Monitoring</title>
+<style>
+/* ============================================================
+   SJGP MONITORING — Collectorate, Jangaon
+   The observability idiom: near-black ground, thin-ruled panels,
+   uppercase panel titles, mono numerals, threshold colours.
+   Self-contained on purpose: no fonts, no libraries, no CDNs.
+   ============================================================ */
+:root{
+  --bg:#111217; --panel:#181B1F; --panel-2:#1F2328; --line:#2C3235; --line-2:#22262B;
+  --tx:#D8D9DA; --tx-2:#9DA5B0; --tx-3:#6E7680;
+  --green:#73BF69; --amber:#E0B252; --red:#F2495C; --blue:#5794F2; --gold:#C9A227;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{background:var(--bg);color:var(--tx);font:14px/1.45 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:var(--blue);text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+/* ---------- top bar ---------- */
+.top{position:sticky;top:0;z-index:9;display:flex;align-items:center;gap:14px;
+  padding:10px 18px;background:#0D0E12;border-bottom:1px solid var(--line)}
+.top .seal{width:30px;height:30px;border-radius:7px;background:#fff}
+.top b{font-size:15px;letter-spacing:.01em}
+.top .crumb{color:var(--tx-3);font-size:13px}
+.top .sp{flex:1}
+.live{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:12px;color:var(--tx-2)}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)}
+.live.stale i{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+.live.down i{background:var(--red);box-shadow:0 0 6px var(--red)}
+.rsel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 9px;
+  font-family:var(--mono);font-size:12px;color:var(--tx-2)}
+.rsel:hover,.tbtn:hover{border-color:#3B434A;color:var(--tx)}
+.tbtn{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 11px;font-size:12.5px;color:var(--tx-2)}
+
+/* ---------- grid ---------- */
+.wrap{max-width:1560px;margin:0 auto;padding:14px 18px 40px}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:4px;min-width:0}
+.panel .hd{display:flex;align-items:center;gap:8px;padding:8px 12px 6px;
+  font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tx-2)}
+.panel .hd .r{margin-left:auto;font-family:var(--mono);font-weight:400;text-transform:none;letter-spacing:0;color:var(--tx-3);font-size:11px}
+.panel .bd{padding:4px 12px 12px}
+
+/* stats */
+.stat .bd{padding:2px 12px 14px}
+.stat .v{font-family:var(--mono);font-size:34px;font-weight:700;line-height:1.05}
+.stat .s{font-size:11.5px;color:var(--tx-3);margin-top:3px}
+.g{color:var(--green)} .a{color:var(--amber)} .rd{color:var(--red)} .bl{color:var(--blue)} .gd{color:var(--gold)}
+
+/* charts */
+svg{display:block;width:100%}
+.axis{font-family:var(--mono);font-size:10px;fill:var(--tx-3)}
+.gridln{stroke:var(--line-2);stroke-width:1}
+
+/* tables */
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--tx-3);
+  text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel)}
+td{padding:6.5px 10px;border-bottom:1px solid var(--line-2);color:var(--tx);white-space:nowrap}
+td.mut{color:var(--tx-2)} td.num{font-family:var(--mono);text-align:right}
+tr:hover td{background:var(--panel-2)}
+.twrap{overflow:auto;max-height:340px}
+.pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:1px 8px;border-radius:9px;border:1px solid}
+.pill.ok{color:var(--green);border-color:#2E4B2C;background:#73BF6912}
+.pill.warn{color:var(--amber);border-color:#5A4A22;background:#E0B25212}
+.pill.bad{color:var(--red);border-color:#5A2830;background:#F2495C12}
+.pill.mut{color:var(--tx-3);border-color:var(--line)}
+.bar{height:7px;border-radius:4px;background:var(--line-2);overflow:hidden;min-width:90px}
+.bar i{display:block;height:100%;background:var(--green)}
+.gr{font-family:var(--mono);font-weight:700}
+.grA{color:var(--green)} .grB{color:#A8C36B} .grC{color:var(--amber)} .grD{color:var(--red)}
+.empty{padding:22px 12px;color:var(--tx-3);font-size:13px;text-align:center}
+
+/* spans */
+.c2{grid-column:span 2}.c3{grid-column:span 3}.c4{grid-column:span 4}
+.c6{grid-column:span 6}.c8{grid-column:span 8}.c12{grid-column:span 12}
+@media(max-width:1150px){.c2,.c3{grid-column:span 4}.c4{grid-column:span 6}.c6,.c8{grid-column:span 12}}
+@media(max-width:680px){.c2,.c3,.c4{grid-column:span 6}.wrap{padding:10px 10px 30px}}
+
+/* gate screens */
+.gate{min-height:100vh;display:grid;place-items:center;padding:24px}
+.gate .card{max-width:430px;text-align:center;border:1px solid var(--line);border-radius:8px;
+  background:var(--panel);padding:34px 30px}
+.gate img{width:64px;height:64px;border-radius:14px;background:#fff;margin-bottom:16px}
+.gate h1{font-size:19px;margin-bottom:8px}
+.gate p{color:var(--tx-2);font-size:13.5px;line-height:1.6}
+.gate .rd{color:var(--red)}
+.gate a.tbtn{display:inline-block;margin-top:18px}
+#err{position:fixed;left:0;right:0;bottom:0;background:#2A1518;border-top:1px solid #5A2830;
+  color:#F4A9B2;font-size:13px;padding:9px 18px;font-family:var(--mono);display:none}
+</style>
+</head>
+<body>
+
+<div id="gate" class="gate"><div class="card">
+  <img src="icons/icon-192.png" alt="">
+  <h1>SJGP · District Monitoring</h1>
+  <p id="gateMsg">Checking your sign-in&hellip;</p>
+</div></div>
+
+<div id="app" hidden>
+  <div class="top">
+    <img class="seal" src="icons/icon-192.png" alt="">
+    <b>SJGP Monitoring</b><span class="crumb">Jangaon District · <span id="who"></span></span>
+    <span class="sp"></span>
+    <span class="live" id="live"><i></i><span id="liveTx">connecting</span></span>
+    <select class="rsel" id="every">
+      <option value="30000">30s</option>
+      <option value="60000" selected>1m</option>
+      <option value="300000">5m</option>
+    </select>
+    <button class="tbtn" id="now">Refresh</button>
+    <a class="tbtn" href="./">Open the app</a>
+  </div>
+
+  <div class="wrap"><div class="grid" id="g"></div></div>
+</div>
+<div id="err"></div>
+
+<script>
+'use strict';
+/* ---------------- session: the app's own, on this device ---------------- */
+const $=s=>document.querySelector(s);
+let ST=null, TIMER=null, LASTOK=0;
+
+function boot(){
+  let d=null; try{ d=JSON.parse(localStorage.getItem('sjf5')||'null'); }catch(e){}
+  if(!d || !d.session || !d.session.token || !d.url){
+    gate('Sign in once in the SJGP app on this device, then open this page again. The console uses that sign-in.', true); return;
+  }
+  if((d.session.user||{}).role!=='COLLECTOR'){
+    gate('<span class="rd">The monitoring console is available to the Collector alone.</span> This device is signed in as '+esc((d.session.user||{}).name||'another officer')+'.', true); return;
+  }
+  ST={url:d.url, token:d.session.token, user:d.session.user};
+  $('#who').textContent=ST.user.name;
+  pull(); TIMER=setInterval(tick, 1000);
+  $('#every').onchange=()=>{ EVERY=+$('#every').value; NEXT=Date.now()+EVERY; };
+  $('#now').onclick=()=>pull();
+}
+function gate(msg, showLink){
+  $('#gateMsg').innerHTML=msg + (showLink?'<br><a class="tbtn" href="./">Open the SJGP app</a>':'');
+}
+
+/* ---------------- polling ---------------- */
+let EVERY=60000, NEXT=0, INFLIGHT=false;
+function tick(){
+  const lv=$('#live');
+  if(Date.now()>=NEXT && !INFLIGHT) pull();
+  else if(LASTOK){
+    const age=Math.round((Date.now()-LASTOK)/1000);
+    $('#liveTx').textContent='updated '+(age<5?'now':age+'s ago')+' · next in '+Math.max(0,Math.ceil((NEXT-Date.now())/1000))+'s';
+    lv.className='live'+(age>EVERY/500?' stale':'');
+  }
+}
+async function pull(){
+  if(!ST||INFLIGHT) return; INFLIGHT=true;
+  try{
+    const res=await fetch(ST.url+'?op=dashboard&token='+encodeURIComponent(ST.token));
+    const j=await res.json();
+    if(!j.ok) throw new Error(j.error||'refused');
+    if(/Collector alone/.test('')){} /* keep */
+    LASTOK=Date.now(); NEXT=Date.now()+EVERY;
+    $('#err').style.display='none';
+    if($('#app').hidden){ $('#gate').style.display='none'; $('#app').hidden=false; }
+    render(j);
+  }catch(e){
+    if(/alone/i.test(e.message)){ $('#app').hidden=true; $('#gate').style.display='grid'; gate('<span class="rd">'+esc(e.message)+'</span>', true); clearInterval(TIMER); }
+    else{
+      NEXT=Date.now()+Math.min(EVERY,30000);
+      $('#err').textContent='Could not reach the district ('+esc(e.message)+') — showing the last picture; retrying.';
+      $('#err').style.display='block';
+      $('#live').className='live down'; $('#liveTx').textContent='connection lost';
+    }
+  }finally{ INFLIGHT=false; }
+}
+
+/* ---------------- rendering ---------------- */
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const hm=iso=>{ const d=new Date(iso); return isNaN(d)?'':d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}); };
+const dm=s=>{ const d=new Date(String(s).length>10?s:s+'T00:00:00'); return isNaN(d)?String(s||''):d.toLocaleDateString('en-IN',{day:'numeric',month:'short'}); };
+const pct=(a,b)=>b?Math.round(a*100/b):0;
+
+function stat(span,title,val,cls,sub){
+  return `<div class="panel stat ${span}"><div class="hd">${title}</div>
+    <div class="bd"><div class="v ${cls}">${val}</div><div class="s">${sub||''}</div></div></div>`;
+}
+function panel(span,title,right,body){
+  return `<div class="panel ${span}"><div class="hd">${title}<span class="r">${right||''}</span></div><div class="bd">${body}</div></div>`;
+}
+
+/* hand-rolled charts, the grafana idiom */
+function bars14(rows){
+  const W=560,H=150,P=26, n=rows.length, bw=Math.floor((W-P-8)/n)-4;
+  const mx=Math.max(1,...rows.map(r=>r.present+r.leave));
+  let g='';
+  [0,.5,1].forEach(f=>{ const y=H-18-(H-34)*f;
+    g+=`<line class="gridln" x1="${P}" x2="${W-4}" y1="${y}" y2="${y}"/><text class="axis" x="${P-5}" y="${y+3}" text-anchor="end">${Math.round(mx*f)}</text>`;});
+  rows.forEach((r,i)=>{ const x=P+6+i*(bw+4);
+    const hp=(H-34)*r.present/mx, hl=(H-34)*r.leave/mx;
+    g+=`<rect x="${x}" y="${H-18-hp}" width="${bw}" height="${hp}" fill="#73BF69" rx="1"/>`;
+    if(r.leave) g+=`<rect x="${x}" y="${H-18-hp-hl}" width="${bw}" height="${hl}" fill="#E0B252" rx="1"/>`;
+    if(i%2===0) g+=`<text class="axis" x="${x+bw/2}" y="${H-5}" text-anchor="middle">${r.date.slice(8)}</text>`;});
+  return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
+}
+function line6(rows){
+  const W=560,H=150,P=26;
+  if(!rows.length) return '<div class="empty">No months on record yet.</div>';
+  let g=''; [0,50,100].forEach(v=>{ const y=H-18-(H-34)*v/100;
+    g+=`<line class="gridln" x1="${P}" x2="${W-4}" y1="${y}" y2="${y}"/><text class="axis" x="${P-5}" y="${y+3}" text-anchor="end">${v}</text>`;});
+  const step=(W-P-16)/Math.max(1,rows.length-1);
+  const pt=rows.map((r,i)=>[P+8+i*step, H-18-(H-34)*Math.min(100,r.avg)/100]);
+  if(pt.length>1) g+=`<polyline fill="none" stroke="#5794F2" stroke-width="2" points="${pt.map(p=>p.join(',')).join(' ')}"/>`;
+  pt.forEach((p,i)=>{ g+=`<circle cx="${p[0]}" cy="${p[1]}" r="3.4" fill="#5794F2"/>
+    <text class="axis" x="${p[0]}" y="${p[1]-8}" text-anchor="middle" fill="#D8D9DA">${rows[i].avg}</text>
+    <text class="axis" x="${p[0]}" y="${H-5}" text-anchor="middle">${rows[i].ym.slice(5)}/${rows[i].ym.slice(2,4)}</text>`;});
+  return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
+}
+function donutG(g){
+  const total=g.A+g.B+g.C+g.D;
+  if(!total) return '<div class="empty">Nothing graded yet this month.</div>';
+  const C=['#73BF69','#A8C36B','#E0B252','#F2495C'], K=['A','B','C','D'];
+  let a0=-90, seg='';
+  K.forEach((k,i)=>{ const f=g[k]/total; if(!f) return;
+    const a1=a0+f*360, big=f>.5?1:0;
+    const p=a=>[70+52*Math.cos(a*Math.PI/180), 78+52*Math.sin(a*Math.PI/180)];
+    const [x0,y0]=p(a0),[x1,y1]=p(a1);
+    seg+= f===1 ? `<circle cx="70" cy="78" r="52" fill="none" stroke="${C[i]}" stroke-width="17"/>`
+      : `<path d="M ${x0} ${y0} A 52 52 0 ${big} 1 ${x1} ${y1}" fill="none" stroke="${C[i]}" stroke-width="17"/>`;
+    a0=a1;});
+  const leg=K.map((k,i)=>`<tspan x="150" dy="${i?18:0}" fill="${C[i]}">●</tspan><tspan dx="6" fill="#D8D9DA">${k}</tspan><tspan dx="8" fill="#9DA5B0">${g[k]}</tspan>`).join('');
+  return `<svg viewBox="0 0 300 150"><g>${seg}</g>
+    <text x="70" y="83" text-anchor="middle" class="axis" font-size="20" fill="#D8D9DA">${total}</text>
+    <text class="axis" y="55" font-size="12">${leg}</text></svg>`;
+}
+
+function render(j){
+  const p=j.today.present.length, l=j.today.onLeave.length, ab=j.today.absent.length;
+  const cov=j.coverage.reduce((s,c)=>({t:s.t+c.total, d:s.d+c.done}),{t:0,d:0});
+  let h='';
+  h+=stat('c2','Present today', p, 'g', 'of '+j.totals.officers+' officers');
+  h+=stat('c2','On sanctioned leave', l, l?'a':'', 'today');
+  h+=stat('c2','Not marked', ab, ab?'rd':'g', 'as of now');
+  h+=stat('c2','GPs reported', j.month.rows.length, 'bl', 'of '+j.totals.gps+' · '+j.ym);
+  h+=stat('c2','District average', j.month.avg==null?'—':j.month.avg, j.month.avg>=70?'g':j.month.avg>=55?'a':'rd', 'SJ-SCORE this month');
+  h+=stat('c2','Red flags', j.month.rfCount, j.month.rfCount?'rd':'g', 'villages this month');
+
+  h+=panel('c6','Attendance · last 14 days','<span style="color:#73BF69">■</span> present&nbsp;&nbsp;<span style="color:#E0B252">■</span> leave', bars14(j.att14));
+  h+=panel('c3','Score trend','district average', line6(j.trend));
+  h+=panel('c3','Grades this month', j.ym, donutG(j.month.grades));
+
+  /* attendance today */
+  const attRows=[...j.today.present.map(r=>({...r,_s:'P'})),...j.today.onLeave.map(r=>({...r,_s:'L'})),...j.today.absent.map(r=>({...r,_s:'A'}))];
+  h+=panel('c6','Attendance today · officer by officer', p+' present · '+l+' leave · '+ab+' not marked',
+    `<div class="twrap"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th><th>Time</th><th>Location</th><th>Status</th></tr></thead><tbody>`+
+    (attRows.length?attRows.map(r=>`<tr><td>${esc(r.name)}</td><td class="mut">${esc(r.role)}</td><td class="mut">${esc(r.mandal)}</td>`+
+      `<td class="num">${r._s==='P'?esc(hm(r.at)):'—'}</td>`+
+      `<td>${r._s==='P'?(r.verified?'<span class="pill ok">verified</span>':'<span class="pill warn">no fix</span>'):'—'}</td>`+
+      `<td>${r._s==='P'?'<span class="pill ok">present</span>':r._s==='L'?'<span class="pill warn">'+esc(r.leaveType||'leave')+'</span>':'<span class="pill bad">not marked</span>'}</td></tr>`).join('')
+      :'<tr><td colspan="6" class="empty">No officer yet today.</td></tr>')+`</tbody></table></div>`);
+
+  /* coverage */
+  h+=panel('c6','Coverage · mandal by mandal', cov.d+' of '+cov.t+' villages',
+    `<div class="twrap"><table><thead><tr><th>Mandal</th><th>Reported</th><th style="width:40%">Progress</th><th>%</th></tr></thead><tbody>`+
+    j.coverage.map(c=>`<tr><td>${esc(c.mandal)}</td><td class="num">${c.done} / ${c.total}</td>`+
+      `<td><div class="bar"><i style="width:${pct(c.done,c.total)}%;background:${pct(c.done,c.total)>=100?'#73BF69':pct(c.done,c.total)>=50?'#A8C36B':'#E0B252'}"></i></div></td>`+
+      `<td class="num mut">${pct(c.done,c.total)}%</td></tr>`).join('')+`</tbody></table></div>`);
+
+  /* inspections */
+  const mr=[...j.month.rows].sort((a,b)=>a.score-b.score);
+  h+=panel('c8','Inspections filed · '+j.ym, j.month.rows.length+' villages',
+    `<div class="twrap"><table><thead><tr><th>Village</th><th>Mandal</th><th>Score</th><th>Grade</th><th>Red flags</th><th>Officer</th><th>Date</th></tr></thead><tbody>`+
+    (mr.length?mr.map(r=>`<tr><td>${esc(r.gp)}</td><td class="mut">${esc(r.mandal)}</td><td class="num">${r.score}</td>`+
+      `<td class="gr gr${esc(r.grade)}">${esc(r.grade)}</td>`+
+      `<td>${String(r.rf||'').trim()?'<span class="pill bad">RF '+esc(r.rf)+'</span>':'<span class="pill mut">—</span>'}</td>`+
+      `<td class="mut">${esc(String(r.officer||'').replace(/\s*\(\d+\)$/,''))}</td><td class="num mut">${esc(dm(r.date))}</td></tr>`).join('')
+      :'<tr><td colspan="7" class="empty">Nothing filed yet this month.</td></tr>')+`</tbody></table></div>`);
+
+  /* leave */
+  const lp=j.leave.pending, lr=j.leave.recent.filter(r=>r.status!=='PENDING');
+  h+=panel('c4','Leave register', lp.length+' awaiting orders',
+    `<div class="twrap"><table><thead><tr><th>Officer</th><th>Kind</th><th>Days</th><th>From</th><th>Status</th></tr></thead><tbody>`+
+    (lp.length+lr.length? lp.map(r=>lvRow(r)).join('')+lr.slice(0,14).map(r=>lvRow(r)).join('')
+      :'<tr><td colspan="5" class="empty">No application on record.</td></tr>')+`</tbody></table></div>`);
+
+  $('#g').innerHTML=h;
+  $('#live').className='live'; $('#liveTx').textContent='updated now';
+}
+function lvRow(r){
+  const st=r.status==='PENDING'?'<span class="pill warn">waiting</span>'
+    :r.status==='APPROVED'?'<span class="pill ok">sanctioned</span>'
+    :r.status==='REJECTED'?'<span class="pill bad">refused</span>':'<span class="pill mut">withdrawn</span>';
+  return `<tr><td>${esc(r.name)}<span class="mut"> · ${esc(r.mandal)}</span></td><td class="num">${esc(r.type)}</td>`+
+    `<td class="num">${r.days}</td><td class="num mut">${esc(dm(r.from))}</td><td>${st}</td></tr>`;
+}
+boot();
+</script>
+</body>
+</html>

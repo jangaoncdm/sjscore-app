@@ -13,7 +13,7 @@
      own, not one common album at the end.
    ============================================================ */
 const SERVER_URL = 'https://script.google.com/macros/s/AKfycbz8Ye9LqGB3bLWkTWcdw6JvU__U9K4VRaG-IFFpwc67G__1vdpMryV6NEfz5FJrnezS/exec';
-const APP_VERSION = '5.9';
+const APP_VERSION = '6.0';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -831,6 +831,12 @@ function districtHome(u, ym){
       <div class="row tap" data-leave="1"><span class="ico" style="background:${pend?'var(--warn)':'var(--ink-4)'}">${ICON.cal}</span>
         <span class="lbl"><b>${pend ? pend + (pend===1?' application waiting':' applications waiting') : 'No application waiting'}</b>
         <span>Sanctioned or refused by you alone</span></span><span class="chev"></span></div></div></div>`;
+    h += `<div class="group"><div class="hdr">Monitoring</div><div class="card">
+      <a class="row tap" href="dashboard.html" style="text-decoration:none;color:inherit">
+        <span class="ico" style="background:var(--seal-deep)">${ICON.eye}</span>
+        <span class="lbl"><b>District monitoring console</b>
+        <span>Attendance, scores and leave, live on one screen. Yours alone.</span></span><span class="chev"></span></a>
+    </div></div>`;
   }
   h += `<div class="group"><button class="btn quiet" data-refresh="1">Refresh from district</button>
         <p style="font-size:12px;color:var(--ink-3);text-align:center;padding-top:9px">${DB.cacheAt?('Updated '+new Date(DB.cacheAt).toLocaleString('en-IN')):'Not loaded yet — tap Refresh'}</p></div>`;
