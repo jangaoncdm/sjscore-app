@@ -125,6 +125,13 @@ tr[data-di]{cursor:pointer} tr:hover td{background:#F8FAFC}
 .iss .act{color:var(--seal);font-weight:600} .iss .act::before{content:"→ ";color:var(--gold)}
 .allclear{padding:20px;text-align:center;color:var(--green);font-weight:650}
 
+/* what's new */
+.newsbar{background:#fff;border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:12px;
+  padding:11px 15px;display:flex;gap:11px;align-items:center;flex-wrap:wrap;box-shadow:var(--sh)}
+.newsbar>b{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--tx-3)}
+.newspill{font-size:12.5px;background:var(--blue-2);color:var(--blue);border-radius:9px;padding:5px 11px;font-weight:650}
+.newspill.leave{background:var(--amber-2);color:var(--amber)}
+.newspill i{font-style:normal;font-weight:400;color:var(--tx-2);margin-left:7px}
 /* map tools */
 .mtools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:0 0 10px}
 .mtools .msp{flex:1}
@@ -212,7 +219,7 @@ tr[data-di]{cursor:pointer} tr:hover td{background:#F8FAFC}
 'use strict';
 const $=s=>document.querySelector(s);
 let ST=null,TIMER=null,LASTOK=0,EVERY=60000,NEXT=0,INFLIGHT=false,DOWN=false,DATA=null,VIEW='overview',MET='present';
-let MAP=null,MLAYER=null,MAP2=null,M2LAYER=null,GEO=[],MARKERS=[],MFILTER='all',BRIEF=null,BRIEFING=false;
+let MAP=null,MLAYER=null,MAP2=null,M2LAYER=null,GEO=[],MARKERS=[],MFILTER='all',BRIEF=null,BRIEFING=false,NEWS=[],REC={};
 
 /* ---------------- session ---------------- */
 function boot(){
@@ -250,6 +257,7 @@ async function pull(){
     $('#err').style.display='none'; $('#g').classList.remove('dim');
     if($('#app').hidden){ $('#gate').style.display='none'; $('#app').hidden=false; }
     $('#hisub').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' · Jangaon District';
+    whatsNew(j);
     render(j);
   }catch(e){
     if(/alone/i.test(e.message)){ $('#app').hidden=true; $('#gate').style.display='grid'; gate('<span class="rd">'+esc(e.message)+'</span>',true); clearInterval(TIMER); }
@@ -260,6 +268,39 @@ async function pull(){
   }finally{ INFLIGHT=false; }
 }
 
+/* What is new since the Collector last looked. The browser's own
+   notification is used where permission is given — it is not a push
+   service and only fires while this page is open, which is honest about
+   what a Sheet-backed system can do. */
+const SEEN_KEY='sjgp_seen_v1';
+function seen(){ try{ return JSON.parse(localStorage.getItem(SEEN_KEY)||'{}'); }catch(e){ return {}; } }
+function setSeen(o){ try{ localStorage.setItem(SEEN_KEY, JSON.stringify(o)); }catch(e){} }
+function notify(title, body){
+  try{
+    if(!('Notification' in window)) return;
+    if(Notification.permission==='granted') new Notification(title,{body:body,icon:'icons/icon-192.png',tag:'sjgp'});
+    else if(Notification.permission!=='denied') Notification.requestPermission();
+  }catch(e){}
+}
+function whatsNew(j){
+  const was=seen(), now={leave:(j.leave.pending||[]).length, filed:(j.month.rows||[]).length,
+    lastLeave:(j.leave.pending[0]||{}).appliedAt||'', ym:j.ym};
+  const msgs=[];
+  if(was.ym===now.ym){
+    const nl=now.leave-(was.leave||0), nf=now.filed-(was.filed||0);
+    if(nl>0){ const who=(j.leave.pending||[]).slice(0,3).map(l=>l.name+' ('+l.type+' '+l.days+'d)').join(', ');
+      msgs.push({k:'leave', t:nl+' new leave application'+(nl>1?'s':''), d:who}); }
+    if(nf>0){ const v=[...j.month.rows].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,3)
+        .map(r=>r.gp+' '+r.score+'/100'+(String(r.rf||'').trim()?' RF':'')).join(', ');
+      msgs.push({k:'filed', t:nf+' new village evaluation'+(nf>1?'s':''), d:v}); }
+  }
+  setSeen(now);
+  if(msgs.length && was.ym){
+    NEWS=msgs.concat(NEWS).slice(0,6);
+    msgs.forEach(m=>notify('SJGP · '+m.t, m.d));
+  }
+  return msgs;
+}
 /* ---------------- helpers ---------------- */
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const hm=iso=>{const d=new Date(iso);return isNaN(d)?'':d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});};
@@ -531,11 +572,25 @@ function mapTools(){
      .map(([k,n,c])=>`<button class="fchip" data-mf="${k}" aria-pressed="${MFILTER===k}">${n} <b>${c}</b></button>`).join('')+
     `<button class="fchip" id="mFit">Fit all</button></div>`;
 }
+function mapDiag(){
+  const P=(DATA.today.present||[]), V=(DATA.month.rows||[]);
+  const anyCoord=P.some(r=>r.lat&&r.lng)||V.some(r=>r.lat&&r.lng);
+  if(anyCoord) return '';
+  if(!P.length&&!V.length) return 'Nothing has been marked or filed today, so there is nothing to place on the map.';
+  return 'The district is sending '+P.length+' attendance mark(s) and '+V.length+' filing(s), but NO COORDINATES with them. '+
+         'That means the Apps Script on the Sheet is an older version: open Extensions \u25b8 Apps Script, paste the current Code.gs, '+
+         'then Deploy \u25b8 Manage deployments \u25b8 edit \u25b8 Version: New version \u25b8 Deploy. The map fills by itself on the next refresh.';
+}
 function drawMap(id,which){
   GEO=mapPoints();
   const el=document.getElementById(id); if(!el) return null;
+  const diag=mapDiag();
+  if(diag){ el.innerHTML='<div style="height:100%;display:grid;place-items:center;padding:26px;text-align:center;'+
+    'color:var(--tx-2);font-size:13px;line-height:1.65;background:#F8FAFC;border-radius:12px">'+esc(diag)+'</div>';
+    el.classList.remove('leaflet-container'); return null; }
   let map=which==='main'?MAP:MAP2, layer=which==='main'?MLAYER:M2LAYER;
-  if(!map||map._container!==el){
+  if(map&&map._container!==el){ try{ map.remove(); }catch(e){} map=null; }
+  if(!map){
     /* The wheel must scroll the PAGE, not zoom the map — a map that eats the
        scroll traps the reader half way down the console. Ctrl+wheel zooms. */
     map=L.map(id,{zoomControl:true,attributionControl:true,scrollWheelZoom:false});
@@ -556,7 +611,13 @@ function drawMap(id,which){
 
 /* ---------------- views ---------------- */
 function vOverview(j,A){
-  let h='<div class="kpirow">';
+  let h='';
+  if(NEWS.length) h+=`<div class="c12 newsbar">
+    <b>Since you last looked</b>${NEWS.map(m=>`<span class="newspill ${m.k}">${esc(m.t)}<i>${esc(m.d)}</i></span>`).join('')}
+    <button class="fchip" id="newsClear">Clear</button>
+    ${(typeof Notification!=='undefined'&&Notification.permission!=='granted')?'<button class="fchip" id="newsAsk">Alert me on this screen</button>':''}
+  </div>`;
+  h+='<div class="kpirow">';
   h+=kpi('Attendance today',IC.u,A.accounted,delta(A.accounted,A.attY,true),'of '+A.officersDue+' · vs yesterday');
   h+=kpi('Not marked',IC.u,A.absent,'',A.sunday?'Sunday':'as of now');
   h+=kpi('Villages evaluated',IC.h,A.filed,'','of '+A.cov.t+' · '+j.ym);
@@ -582,7 +643,8 @@ function vOverview(j,A){
     `</div><div id="area">${areaChart(j.att14x, MET, MET==='absent'?'var(--red)':MET==='leave'?'var(--amber)':MET==='filed'?'var(--blue)':'var(--seal)')}</div>`);
   h+=panel('c4','Evaluation outcomes',j.ym,
     donut([{k:'Grade A',v:j.month.grades.A,c:'#16A34A'},{k:'Grade B',v:j.month.grades.B,c:'#65A30D'},
-           {k:'Grade C',v:j.month.grades.C,c:'#D97706'},{k:'Grade D',v:j.month.grades.D,c:'#DC2626'}],A.filed,'filed'));
+           {k:'Grade C',v:j.month.grades.C,c:'#D97706'},{k:'Grade D',v:j.month.grades.D,c:'#DC2626'}],A.filed,'filed')
+    + bestWorst(j));
 
   h+=panel('c6','District health · '+j.ym,(A.wSum<100?A.wSum+'% of the index in play':'weighted of five parts'),
     `<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
@@ -626,6 +688,35 @@ function briefFacts(j,A){
   L.push('Mandal coverage: '+j.coverage.map(c=>c.mandal+' '+c.done+'/'+c.total).join('; ')+'. Needed per remaining working day: '+A.needPerDay+'.');
   L.push('Leave awaiting orders: '+j.leave.pending.length+(j.leave.pending.length?' — '+j.leave.pending.map(l=>l.name+' '+l.type+' '+l.days+'d').join('; '):'')+'.');
   return L.join('\n');
+}
+/* who is carrying the district and who is dragging it — villages and mandals */
+function bestWorst(j){
+  const rows=j.month.rows;
+  if(!rows.length) return '';
+  const s=[...rows].sort((a,b)=>b.score-a.score);
+  const byM={};
+  rows.forEach(r=>{ byM[r.mandal]=byM[r.mandal]||{sum:0,n:0,rf:0};
+    byM[r.mandal].sum+=r.score; byM[r.mandal].n++; if(String(r.rf||'').trim())byM[r.mandal].rf++; });
+  const ms=Object.entries(byM).map(([k,v])=>({k,avg:Math.round(v.sum/v.n),n:v.n,rf:v.rf}))
+    .filter(m=>m.n>=1).sort((a,b)=>b.avg-a.avg);
+  const line=(lbl,name,sub,val,col)=>`<div style="display:flex;align-items:baseline;gap:9px;padding:7px 0;border-bottom:1px solid var(--line-2)">
+    <span style="font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--tx-3);width:74px;flex:none">${lbl}</span>
+    <div style="min-width:0;flex:1"><b style="font-size:13px">${esc(name)}</b>
+      <span style="display:block;font-size:11.5px;color:var(--tx-3)">${esc(sub)}</span></div>
+    <b style="font-family:var(--mono);font-size:16px;color:${col}">${val}</b></div>`;
+  let h='<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:6px">';
+  h+=line('Best village', s[0].gp, s[0].mandal+' · '+String(s[0].officer||'').replace(/\s*\(\d+\)$/,''), s[0].score, 'var(--green)');
+  h+=line('Worst village', s[s.length-1].gp, s[s.length-1].mandal+' · '+String(s[s.length-1].officer||'').replace(/\s*\(\d+\)$/,''), s[s.length-1].score, 'var(--red)');
+  if(ms.length){
+    h+=line('Best mandal', ms[0].k, ms[0].n+' filed'+(ms[0].rf?' · '+ms[0].rf+' flagged':''), ms[0].avg, 'var(--green)');
+    const w=ms[ms.length-1];
+    h+=line('Worst mandal', w.k, w.n+' filed'+(w.rf?' · '+w.rf+' flagged':''), w.avg, 'var(--red)');
+  }
+  const flagged=rows.filter(r=>String(r.rf||'').trim());
+  h+=`<div style="padding:9px 0 2px;font-size:12px;color:var(--tx-2)">
+    Spread ${s[s.length-1].score}–${s[0].score} · median ${s[Math.floor(s.length/2)].score}
+    ${flagged.length?' · '+flagged.length+' flagged':''}</div></div>`;
+  return h;
 }
 function donutHealth(v){ const col=v>=80?'var(--green)':v>=60?'var(--amber)':'var(--red)';
   const C=2*Math.PI*54,f=C*clamp(v,0,100)/100;
@@ -768,6 +859,8 @@ document.addEventListener('click',e=>{
     $('#area').innerHTML=areaChart(DATA.att14x,MET,MET==='absent'?'var(--red)':MET==='leave'?'var(--amber)':MET==='filed'?'var(--blue)':'var(--seal)');
     return; }
   if(e.target.closest('#briefGo')){ writeBrief(); return; }
+  if(e.target.closest('#newsClear')){ NEWS=[]; if(DATA) render(DATA); return; }
+  if(e.target.closest('#newsAsk')){ try{ Notification.requestPermission().then(()=>{ if(DATA) render(DATA); }); }catch(e2){} return; }
   const fc=e.target.closest('[data-mf]');
   if(fc){ MFILTER=fc.dataset.mf; if(DATA) render(DATA); return; }
   if(e.target.closest('#mFit')){ const m=MAP2&&document.getElementById('map2')?MAP2:MAP;
@@ -789,7 +882,8 @@ document.addEventListener('click',e=>{
        ${(r.marks||1)>1?`<dt>Marked</dt><dd>${r.marks}× today</dd>`:''}
        ${r.lat&&r.lng?`<dt>Coordinates</dt><dd>${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}</dd>`:''}</dl>`+
       (r.lat&&r.lng?`<a class="mapsbtn" target="_blank" rel="noopener" href="https://maps.google.com/?q=${r.lat},${r.lng}">Open the pin in Google Maps</a>`:''));
-    else openDrawer(r.gp,r.mandal+' · '+dm(r.date),
+    else { openVillage(r); return; }
+    /* unreachable */ openDrawer(r.gp,r.mandal+' · '+dm(r.date),
       `<dl><dt>Score</dt><dd>${r.score} · grade ${esc(r.grade)}</dd><dt>Red flags</dt><dd>${String(r.rf||'').trim()?esc(r.rf):'none'}</dd>
        <dt>Filed by</dt><dd>${esc(String(r.officer||''))}</dd>
        ${r.photos?`<dt>Photographs</dt><dd>${r.photos}</dd>`:''}</dl>
@@ -799,6 +893,54 @@ document.addEventListener('click',e=>{
        <p style="font-size:12.5px;color:var(--tx-2);margin-top:12px">The clause-by-clause scorecard is on the district Sheet against this village and month.</p>`);
     return; }
 });
+/* The whole filed record: every clause with the mark it carried, the
+   evidence notes, the photographs and the red flags. */
+async function openVillage(r){
+  const head=`<dl><dt>Score</dt><dd>${r.score} of 100 · grade <span class="gr gr${esc(r.grade)}">${esc(r.grade)}</span></dd>
+    <dt>Red flags</dt><dd>${String(r.rf||'').trim()?'<span class="pill bad">RF '+esc(r.rf)+'</span>':'none'}</dd>
+    <dt>Filed by</dt><dd>${esc(String(r.officer||''))}</dd><dt>Date</dt><dd>${esc(dm(r.date))}</dd>
+    ${r.photos?`<dt>Photographs</dt><dd>${r.photos}</dd>`:''}</dl>
+    ${r.album?`<a class="mapsbtn" target="_blank" rel="noopener" href="${esc(r.album)}">Open the photographs</a> `:''}
+    ${r.lat&&r.lng?`<a class="mapsbtn" target="_blank" rel="noopener" href="https://maps.google.com/?q=${r.lat},${r.lng}">Where it was inspected</a>`:''}`;
+  openDrawer(r.gp, r.mandal+' · '+dm(r.date), head+'<p style="margin-top:14px;color:var(--tx-3);font-size:13px">Reading the clause-by-clause record…</p>');
+  const key=r.gp+'|'+DATA.ym;
+  try{
+    if(!REC[key]){
+      const res=await fetch(ST.url+'?op=record&token='+encodeURIComponent(ST.token)+'&gp='+encodeURIComponent(r.gp)+'&ym='+encodeURIComponent(DATA.ym));
+      REC[key]=await res.json();
+    }
+    const j=REC[key];
+    if(!j.ok){ $('#dBody').innerHTML=head+'<p style="margin-top:14px;color:var(--tx-2);font-size:13px">'+esc(j.error||'The clause detail is not available.')+'</p>'; return; }
+    $('#dBody').innerHTML=head+recordHTML(j.row);
+  }catch(e){ $('#dBody').innerHTML=head+'<p style="margin-top:14px;color:var(--tx-2);font-size:13px">Could not read the clause detail: '+esc(e.message)+'</p>'; }
+}
+function recordHTML(row){
+  let p=null;
+  try{ p=JSON.parse(row.payload||row.Payload||'{}'); }catch(e){}
+  if(!p||!p.s) return '<p style="margin-top:14px;color:var(--tx-2);font-size:13px">The clause detail was not stored with this filing.</p>';
+  const marks=Object.keys(p.s).filter(k=>!k.startsWith('p')).sort();
+  const ps=Object.keys(p.s).filter(k=>k.startsWith('p')).sort();
+  const ev=p.ev||{}, evp=p.evp||{};
+  const rows=ks=>ks.map(k=>{
+    const note=(ev[k]||'').trim(), shots=(evp[k]||[]).length;
+    return `<tr><td><b>${esc(k.replace(/^p/,'').toUpperCase())}</b></td>
+      <td class="num">${p.s[k]}</td>
+      <td style="white-space:normal;font-size:12px;color:var(--tx-2)">${note?esc(note):'<span style="color:var(--tx-3)">no note</span>'}${shots?` <span class="pill ok">${shots} photo${shots>1?'s':''}</span>`:''}</td></tr>`;}).join('');
+  let h=`<div style="margin-top:16px"><b style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--tx-3)">Clause by clause</b>
+    <table style="margin-top:7px"><thead><tr><th>Clause</th><th>Mark</th><th>Evidence recorded</th></tr></thead><tbody>${rows(marks)}</tbody></table></div>`;
+  if(ps.length) h+=`<div style="margin-top:16px"><b style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--tx-3)">Panchayat Secretary</b>
+    <table style="margin-top:7px"><thead><tr><th>Clause</th><th>Mark</th><th>Evidence</th></tr></thead><tbody>${rows(ps)}</tbody></table></div>`;
+  const noEv=marks.filter(k=>!(ev[k]||'').trim() && !((evp[k]||[]).length));
+  h+=`<div style="margin-top:16px;font-size:12.5px;color:var(--tx-2);line-height:1.6">
+    <b style="color:var(--tx)">${marks.length}</b> clauses scored ·
+    <b style="color:${noEv.length?'var(--amber)':'var(--green)'}">${marks.length-noEv.length}</b> carry a note or a photograph
+    ${p.tIn?` · visit ${esc(p.tIn)}–${esc(p.tOut||'')}`:''}
+    ${p.workers&&p.workers.length?` · ${p.workers.filter(w=>w.name&&w.name.trim()).length} sanitation worker(s) checked`:''}
+    ${p.photos?` · ${p.photos.length} of the 14 points photographed`:''}</div>`;
+  if(p.rf&&p.rf.length) h+=`<div style="margin-top:12px"><span class="pill bad">Red flags: ${esc(p.rf.join(', '))}</span>
+    ${p.rfNote?`<p style="margin-top:7px;font-size:12.5px;color:var(--tx-2)">${esc(p.rfNote)}</p>`:''}</div>`;
+  return h;
+}
 async function writeBrief(){
   if(BRIEFING||!DATA) return;
   BRIEFING=true; const btn=$('#briefGo'); if(btn){btn.textContent='Writing…';btn.disabled=true;}
