@@ -70,6 +70,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .kpi .ic svg{width:16px;height:16px;fill:none;stroke:var(--blue);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .kpi .v{font-family:var(--mono);font-size:29px;font-weight:750;margin-top:7px;letter-spacing:-.01em}
 .kpi .foot{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:11.5px;color:var(--tx-3)}
+.kpi.tapk{cursor:pointer} .kpi.tapk:hover{border-color:#C6D0DE;box-shadow:0 2px 8px rgba(23,35,59,.09)}
 .delta{font-family:var(--mono);font-size:11.5px;font-weight:750;padding:1px 7px;border-radius:8px}
 .delta.up{color:var(--green);background:var(--green-2)} .delta.dn{color:var(--red);background:var(--red-2)}
 .delta.fl{color:var(--tx-3);background:var(--line-2)}
@@ -153,6 +154,8 @@ tr[data-di]{cursor:pointer} tr:hover td{background:#F8FAFC}
 #drawer dt{color:var(--tx-3)} #drawer dd{font-weight:600;word-break:break-word}
 #drawer .x{position:absolute;right:12px;top:10px;font-size:22px;color:var(--tx-3);padding:4px 8px}
 #drawer ul{margin:8px 0 0 18px;font-size:13px;line-height:1.75}
+#drawer .dsec{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--tx-3)}
+#drawer table td{padding:5.5px 8px;cursor:pointer}
 #drawer .mapsbtn{display:inline-block;margin-top:14px;border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:13px}
 
 .c3{grid-column:span 3}.c4{grid-column:span 4}.c5{grid-column:span 5}.c6{grid-column:span 6}
@@ -520,8 +523,8 @@ const IC={u:'<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M
   s:'<svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.4 5.9.8-4.3 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8L3.5 9.2l5.9-.8z"/></svg>',
   f:'<svg viewBox="0 0 24 24"><path d="M6 21V4m0 1h11l-2.5 3.5L17 12H6"/></svg>',
   c:'<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>'};
-function kpi(title,ic,val,dlt,foot){
-  return `<div class="kpi"><div class="hd">${title}<span class="ic">${ic}</span></div>
+function kpi(title,ic,val,dlt,foot,act){
+  return `<div class="kpi${act?' tapk':''}"${act?' data-act="'+act+'"':''}><div class="hd">${title}<span class="ic">${ic}</span></div>
     <div class="v">${val}</div><div class="foot">${dlt||''}<span>${foot||''}</span></div></div>`;}
 function panel(span,title,right,body,k){
   return `<div class="panel ${span}"><div class="hd">${title}<span class="r">${right||''}</span></div><div class="bd"${k?' data-k="'+k+'"':''}>${body}</div></div>`;}
@@ -618,11 +621,11 @@ function vOverview(j,A){
     ${(typeof Notification!=='undefined'&&Notification.permission!=='granted')?'<button class="fchip" id="newsAsk">Alert me on this screen</button>':''}
   </div>`;
   h+='<div class="kpirow">';
-  h+=kpi('Attendance today',IC.u,A.accounted,delta(A.accounted,A.attY,true),'of '+A.officersDue+' · vs yesterday');
-  h+=kpi('Not marked',IC.u,A.absent,'',A.sunday?'Sunday':'as of now');
-  h+=kpi('Villages evaluated',IC.h,A.filed,'','of '+A.cov.t+' · '+j.ym);
-  h+=kpi('District average',IC.s,A.avg==null?'—':A.avg,delta(A.avg,A.prevAvg,true),'vs last month');
-  h+=kpi('Red flags',IC.f,j.month.rfCount,'',A.filed?pct(j.month.rfCount,A.filed)+'% of filings':'nothing filed');
+  h+=kpi('Attendance today',IC.u,A.accounted,delta(A.accounted,A.attY,true),'of '+A.officersDue+' · vs yesterday','view:attendance');
+  h+=kpi('Not marked',IC.u,A.absent,'',A.sunday?'Sunday':'tap for names','list:absent');
+  h+=kpi('Villages evaluated',IC.h,A.filed,'','of '+A.cov.t+' · tap to open','view:villages');
+  h+=kpi('District average',IC.s,A.avg==null?'—':A.avg,delta(A.avg,A.prevAvg,true),'vs last month','view:villages');
+  h+=kpi('Red flags',IC.f,j.month.rfCount,'',A.filed?pct(j.month.rfCount,A.filed)+'% · tap for the list':'nothing filed','list:flags');
   h+='</div>';
 
   const mkList=j.today.present.slice().sort((a,b)=>String(b.at).localeCompare(String(a.at)));
@@ -667,6 +670,7 @@ function vOverview(j,A){
     `<div class="briefbar"><button class="tbtn pri" id="briefGo">${BRIEFING?'Writing\u2026':(BRIEF?'Write it again':'Write today\u2019s briefing')}</button>
       <span style="font-size:12px;color:var(--tx-3)">${BRIEF?('written '+hm(BRIEF.at)):'Drawn only from the figures on this screen. Read it as a draft, not as orders.'}</span></div>
      <div class="brief" id="briefBody">${BRIEF?briefHTML(BRIEF.text):'<span style="color:var(--tx-3);font-size:13px">Not written yet.</span>'}</div>`,'brief');
+  h+=panel('c12','Day by day · the last fortnight','tap a day for its villages', dayTable(j),'dayd');
   h+=vTables(j,A,true);
   return h;
 }
@@ -690,6 +694,31 @@ function briefFacts(j,A){
   return L.join('\n');
 }
 /* who is carrying the district and who is dragging it — villages and mandals */
+/* the day book: what each day actually produced */
+function dayRows(j){
+  const byDay={};
+  j.month.rows.forEach(r=>{ const d=r.date; byDay[d]=byDay[d]||{filed:[],rf:0,sum:0};
+    byDay[d].filed.push(r); byDay[d].sum+=r.score; if(String(r.rf||'').trim())byDay[d].rf++; });
+  return j.att14.map(a=>{ const d=byDay[a.date]||{filed:[],rf:0,sum:0};
+    return {date:a.date, present:a.present, leave:a.leave,
+      absent:Math.max(0,(j.totals.officers-1)-a.present-a.leave),
+      filed:d.filed.length, avg:d.filed.length?Math.round(d.sum/d.filed.length):null,
+      rf:d.rf, list:d.filed}; }).reverse();
+}
+function dayTable(j){
+  const rows=dayRows(j); window.__ROWS.dayd=rows;
+  return `<div class="twrap"><table><thead><tr><th>Day</th><th>Present</th><th>Leave</th><th>Missing</th><th>Filed</th><th>Day avg</th><th>Flags</th></tr></thead><tbody>`+
+    rows.map((r,i)=>{const sun=new Date(r.date+'T00:00:00').getDay()===0;
+      return `<tr data-dd="${i}" style="cursor:pointer${sun?';opacity:.55':''}">
+      <td>${esc(dm(r.date))}${sun?' <span class="mut">Sun</span>':''}</td>
+      <td class="num" style="color:var(--green)">${r.present||'—'}</td>
+      <td class="num">${r.leave||'—'}</td>
+      <td class="num" style="color:${sun?'var(--tx-3)':r.absent?'var(--red)':'var(--green)'}">${sun?'—':r.absent}</td>
+      <td class="num">${r.filed||'—'}</td>
+      <td class="num">${r.avg==null?'—':r.avg}</td>
+      <td class="num">${r.rf?'<span class="pill bad">'+r.rf+'</span>':'—'}</td></tr>`;}).join('')+
+    `</tbody></table></div>`;
+}
 function bestWorst(j){
   const rows=j.month.rows;
   if(!rows.length) return '';
@@ -730,15 +759,17 @@ function vTables(j,A,short){
   const worst=[...j.month.rows].sort((a,b)=>a.score-b.score).slice(0,short?5:1000);
   let h=panel(short?'c5':'c6','Bottom '+(short?'five':'')+' villages','call these out first',
     `<div class="twrap"><table><thead><tr><th>Village</th><th>Score</th><th>Grade</th><th>Flags</th></tr></thead><tbody>`+
-    (worst.length?worst.map((r,i)=>`<tr data-di="ins:${i}"><td>${esc(r.gp)}<span class="mut"> · ${esc(r.mandal)}</span></td>
+    (worst.length?worst.map((r,i)=>`<tr data-di="worst:${i}"><td>${esc(r.gp)}<span class="mut"> · ${esc(r.mandal)}</span></td>
       <td class="num">${r.score}</td><td class="gr gr${esc(r.grade)}">${esc(r.grade)}</td>
       <td>${String(r.rf||'').trim()?'<span class="pill bad">RF '+esc(r.rf)+'</span>':'<span class="pill mut">—</span>'}</td></tr>`).join('')
       :'<tr><td colspan="4" class="empty">Nothing filed yet.</td></tr>')+`</tbody></table></div>`,'worst');
-  window.__ROWS.ins=worst;
-  h+=panel(short?'c7':'c6','Coverage · mandal league',A.cov.d+' of '+A.cov.t+' villages · need '+A.needPerDay+'/day',
+  window.__ROWS.worst=worst;   /* its own registry — it was silently masking the main table's rows */
+  const covRows=[...j.coverage].sort((a,b)=>pct(a.done,a.total)-pct(b.done,b.total));
+  window.__ROWS.mandal=covRows;
+  h+=panel(short?'c7':'c6','Coverage · mandal league',A.cov.d+' of '+A.cov.t+' villages · need '+A.needPerDay+'/day · tap a mandal',
     `<div class="twrap"><table><thead><tr><th>Mandal</th><th>Done</th><th style="width:44%">Progress</th><th>%</th></tr></thead><tbody>`+
-    [...j.coverage].sort((a,b)=>pct(a.done,a.total)-pct(b.done,b.total)).map(c=>{const p2=pct(c.done,c.total);
-      return `<tr><td>${esc(c.mandal)}</td><td class="num">${c.done}/${c.total}</td>
+    covRows.map((c,i)=>{const p2=pct(c.done,c.total);
+      return `<tr data-md="${i}"><td>${esc(c.mandal)}</td><td class="num">${c.done}/${c.total}</td>
       <td><div class="bar"><i style="width:${p2}%;background:${p2>=100?'var(--green)':p2>=50?'#65A30D':'var(--amber)'}"></i></div></td>
       <td class="num mut">${p2}%</td></tr>`;}).join('')+`</tbody></table></div>`,'cov');
   return h;
@@ -789,6 +820,7 @@ function vVillages(j,A){
   h+=panel('c5','Evaluation outcomes',j.ym,
     donut([{k:'Grade A',v:j.month.grades.A,c:'#16A34A'},{k:'Grade B',v:j.month.grades.B,c:'#65A30D'},
            {k:'Grade C',v:j.month.grades.C,c:'#D97706'},{k:'Grade D',v:j.month.grades.D,c:'#DC2626'}],A.filed,'filed'));
+  h+=panel('c12','Day by day · filings and attendance','tap a day', dayTable(j),'dayd2');
   h+=panel('c6','Score distribution','villages by ten-mark band', scoreDist(j.month.rows));
   h+=panel('c6','Officer ledger · '+j.ym,'who files, and how well', officerTable(j.month.rows));
   const mr=[...j.month.rows].sort((a,b)=>a.score-b.score); window.__ROWS.ins=mr;
@@ -858,6 +890,18 @@ document.addEventListener('click',e=>{
     document.querySelectorAll('.mtab').forEach(x=>x.setAttribute('aria-selected',x===mt));
     $('#area').innerHTML=areaChart(DATA.att14x,MET,MET==='absent'?'var(--red)':MET==='leave'?'var(--amber)':MET==='filed'?'var(--blue)':'var(--seal)');
     return; }
+  const kp=e.target.closest('[data-act]');
+  if(kp){ const [kind,arg]=kp.dataset.act.split(':');
+    if(kind==='view'){ VIEW=arg; document.querySelectorAll('#nav [data-v]').forEach(x=>x.toggleAttribute('aria-current',x.dataset.v===arg)); if(DATA) render(DATA); }
+    else if(arg==='absent'){ const ab=DATA.today.absent;
+      openDrawer('Not marked today', ab.length+' officer'+(ab.length===1?'':'s'),
+        ab.length?'<ul>'+ab.map(o=>'<li>'+esc(o.name)+' · '+esc(o.role)+' · '+esc(o.mandal||'—')+'</li>').join('')+'</ul>':'<p style="font-size:13px">Everyone is accounted for.</p>'); }
+    else if(arg==='flags'){ const fl=DATA.month.rows.filter(r=>String(r.rf||'').trim());
+      window.__ROWS.fl=fl;
+      openDrawer('Red-flagged villages', fl.length+' this month',
+        fl.length?`<table><tbody>${fl.map((r,i)=>`<tr data-di="fl:${i}"><td>${esc(r.gp)}<span class="mut"> · ${esc(r.mandal)}</span></td><td class="num">${r.score}</td><td><span class="pill bad">RF ${esc(r.rf)}</span></td></tr>`).join('')}</tbody></table>`
+        :'<p style="font-size:13px">None.</p>'); }
+    return; }
   if(e.target.closest('#briefGo')){ writeBrief(); return; }
   if(e.target.closest('#newsClear')){ NEWS=[]; if(DATA) render(DATA); return; }
   if(e.target.closest('#newsAsk')){ try{ Notification.requestPermission().then(()=>{ if(DATA) render(DATA); }); }catch(e2){} return; }
@@ -874,16 +918,27 @@ document.addEventListener('click',e=>{
   if(ir){ const x=window.__ISS[+ir.dataset.ii]; if(!x) return;
     openDrawer('P'+x.p+' · '+x.t,x.d,(x.list&&x.list.length?'<ul>'+x.list.map(v=>'<li>'+esc(v)+'</li>').join('')+'</ul>':'')+
       '<p style="font-size:13px;margin-top:12px;color:var(--seal);font-weight:600">→ '+esc(x.a)+'</p>'); return; }
+  const md=e.target.closest('tr[data-md]');
+  if(md){ const c=(window.__ROWS.mandal||[])[+md.dataset.md]; if(c) openMandal(c); return; }
+  const dd=e.target.closest('tr[data-dd]');
+  if(dd){ const d=(window.__ROWS.dayd||[])[+dd.dataset.dd]; if(!d) return;
+    window.__ROWS.day=d.list;
+    openDrawer(dm(d.date), d.present+' present · '+d.leave+' leave · '+d.absent+' missing',
+      d.list.length?`<b class="dsec">Villages filed that day · tap one</b><table style="margin-top:6px"><tbody>${
+        d.list.map((r,i)=>`<tr data-di="day:${i}"><td>${esc(r.gp)}<span class="mut"> · ${esc(r.mandal)}</span></td>
+        <td class="num">${r.score}</td><td class="gr gr${esc(r.grade)}">${esc(r.grade)}</td></tr>`).join('')}</tbody></table>`
+      :'<p style="font-size:13px;color:var(--tx-2)">Nothing was filed that day.</p>'+
+       (d.avg!=null?'':'')); return; }
   const tr=e.target.closest('tr[data-di]');
   if(tr){ const [kind,i]=tr.dataset.di.split(':'); const r=(window.__ROWS[kind]||[])[+i]; if(!r) return;
+    if(kind==='ins'||kind==='worst'||kind==='day'||kind==='mv'||kind==='fl'){ openVillage(r); return; }
     if(kind==='att') openDrawer(r.name,r.role+' · '+(r.mandal||'—'),
       `<dl><dt>Status</dt><dd>${r._s==='P'?'Present':r._s==='L'?'On leave ('+esc(r.leaveType||'')+')':'Not marked'}</dd>
        ${r._s==='P'?`<dt>Time</dt><dd>${esc(hm(r.at))}</dd><dt>Location</dt><dd>${r.verified?'verified':'no fix'}${r.acc?' · ±'+r.acc+' m':''}</dd>`:''}
        ${(r.marks||1)>1?`<dt>Marked</dt><dd>${r.marks}× today</dd>`:''}
        ${r.lat&&r.lng?`<dt>Coordinates</dt><dd>${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}</dd>`:''}</dl>`+
       (r.lat&&r.lng?`<a class="mapsbtn" target="_blank" rel="noopener" href="https://maps.google.com/?q=${r.lat},${r.lng}">Open the pin in Google Maps</a>`:''));
-    else { openVillage(r); return; }
-    /* unreachable */ openDrawer(r.gp,r.mandal+' · '+dm(r.date),
+    else openDrawer(r.gp,r.mandal+' · '+dm(r.date),
       `<dl><dt>Score</dt><dd>${r.score} · grade ${esc(r.grade)}</dd><dt>Red flags</dt><dd>${String(r.rf||'').trim()?esc(r.rf):'none'}</dd>
        <dt>Filed by</dt><dd>${esc(String(r.officer||''))}</dd>
        ${r.photos?`<dt>Photographs</dt><dd>${r.photos}</dd>`:''}</dl>
@@ -941,6 +996,29 @@ function recordHTML(row){
     ${p.rfNote?`<p style="margin-top:7px;font-size:12.5px;color:var(--tx-2)">${esc(p.rfNote)}</p>`:''}</div>`;
   return h;
 }
+/* the whole mandal on one sheet: officers today, villages filed, villages pending */
+function openMandal(c){
+  const m=c.mandal;
+  const pres=DATA.today.present.filter(r=>r.mandal===m), lv=DATA.today.onLeave.filter(r=>r.mandal===m),
+        abs=DATA.today.absent.filter(r=>r.mandal===m);
+  const filed=DATA.month.rows.filter(r=>r.mandal===m).sort((a,b)=>a.score-b.score);
+  const avg=filed.length?Math.round(filed.reduce((s2,r)=>s2+r.score,0)/filed.length):null;
+  const rf=filed.filter(r=>String(r.rf||'').trim());
+  window.__ROWS.mv=filed;
+  const body=`<dl>
+    <dt>Attendance today</dt><dd>${pres.length} present · ${lv.length} leave · <span style="color:${abs.length?'var(--red)':'var(--green)'}">${abs.length} not marked</span></dd>
+    <dt>Coverage</dt><dd>${c.done} of ${c.total} villages (${pct(c.done,c.total)}%)</dd>
+    <dt>Average score</dt><dd>${avg==null?'—':avg}</dd>
+    <dt>Red flags</dt><dd>${rf.length?'<span class="pill bad">'+rf.length+'</span>':'none'}</dd></dl>
+  ${abs.length?`<div style="margin-top:13px"><b class="dsec">Not marked today</b><ul>${abs.map(o=>'<li>'+esc(o.name)+' · '+esc(o.role)+'</li>').join('')}</ul></div>`:''}
+  ${filed.length?`<div style="margin-top:13px"><b class="dsec">Villages evaluated · tap one</b>
+    <table style="margin-top:6px"><tbody>${filed.map((r,i)=>`<tr data-di="mv:${i}"><td>${esc(r.gp)}</td>
+      <td class="num">${r.score}</td><td class="gr gr${esc(r.grade)}">${esc(r.grade)}</td>
+      <td>${String(r.rf||'').trim()?'<span class="pill bad">RF</span>':''}</td></tr>`).join('')}</tbody></table></div>`:''}
+  ${(c.pending&&c.pending.length)?`<div style="margin-top:13px"><b class="dsec">Still to evaluate (${c.pending.length})</b>
+    <p style="font-size:12.5px;color:var(--tx-2);line-height:1.7;margin-top:5px">${c.pending.map(esc).join(' · ')}</p></div>`:''}`;
+  openDrawer(m+' mandal', pct(c.done,c.total)+'% covered · '+(pres.length+lv.length+abs.length)+' officers', body);
+}
 async function writeBrief(){
   if(BRIEFING||!DATA) return;
   BRIEFING=true; const btn=$('#briefGo'); if(btn){btn.textContent='Writing…';btn.disabled=true;}
@@ -949,7 +1027,21 @@ async function writeBrief(){
     const r=await fetch(ST.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
       body:JSON.stringify({kind:'brief',token:ST.token,facts:briefFacts(DATA,A)})});
     const j=await r.json();
-    BRIEF = j.ok ? {text:j.text,at:j.at} : {text:'Could not write the briefing.\n\n'+(j.error||''),at:new Date().toISOString()};
+    if(j.ok) BRIEF={text:j.text,at:j.at};
+    else{
+      const e=String(j.error||'');
+      let cure='';
+      if(/UrlFetchApp|external_request|permission/i.test(e))
+        cure='\n\nWHAT TO DO\nThe script has never been given permission to reach the internet, because it was authorised before the briefing existed.\n'+
+             '1. Open the Sheet \u25b8 Extensions \u25b8 Apps Script.\n'+
+             '2. In the function list at the top choose authoriseBriefing and press Run.\n'+
+             '3. Google will show "Authorization required" \u2014 press Review permissions, choose your account, Advanced, Go to the project, Allow.\n'+
+             '4. Deploy \u25b8 Manage deployments \u25b8 pencil \u25b8 Version: New version \u25b8 Deploy.\n'+
+             'Then press this button again.';
+      else if(/No briefing key/i.test(e))
+        cure='\n\nWHAT TO DO\nApps Script \u25b8 open setBriefKey, paste your key into the KEY line, Run, then delete the key from the line and save.';
+      BRIEF={text:'Could not write the briefing.\n\n'+e+cure, at:new Date().toISOString()};
+    }
   }catch(e){ BRIEF={text:'Could not reach the district to write the briefing.\n\n'+e.message,at:new Date().toISOString()}; }
   BRIEFING=false; if(DATA) render(DATA);
 }
