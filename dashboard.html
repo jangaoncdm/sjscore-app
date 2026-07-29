@@ -675,8 +675,27 @@ function vOverview(j,A){
   return h;
 }
 function briefHTML(t){
-  return esc(t).replace(/^([A-Z][A-Z \u2019'\-]{4,})$/gm,'<b>$1</b>')
-               .replace(/^(\d+)\.\s/gm,'<b style="display:inline;text-transform:none;letter-spacing:0;color:var(--blue)">$1.</b> ');
+  const SEC={'THE DAY IN ONE LINE':['#2563EB','var(--blue-2)'],'THE TREND':['#5B6B84','#F1F4F8'],
+    'DOING WELL':['#16A34A','var(--green-2)'],'NEEDS FOCUS':['#DC2626','var(--red-2)'],
+    'ORDERS TO PASS':['#B8860B','#FBF6E7'],'WATCH':['#D97706','var(--amber-2)']};
+  const names=Object.keys(SEC);
+  const lines=String(t).split(/\r?\n/);
+  let html='', cur=null, buf=[];
+  const flush=()=>{ if(cur===null){ if(buf.join('').trim()) html+='<p style="margin:0 0 10px">'+esc(buf.join('\n').trim())+'</p>'; buf=[]; return; }
+    const [col,bg]=SEC[cur];
+    const body=buf.join('\n').trim();
+    const items=body.split(/\n/).map(x=>x.trim()).filter(Boolean).map(x=>{
+      const m=x.match(/^(\d+)\.\s*(.*)$/); if(m) return '<li style="margin:4px 0"><b style="color:'+col+'">'+m[1]+'.</b> '+esc(m[2])+'</li>';
+      return '<li style="margin:4px 0;list-style:none">'+esc(x.replace(/^[\u2022\-\*]\s*/,'\u2022 '))+'</li>';});
+    html+='<div style="border:1px solid var(--line);border-left:4px solid '+col+';background:'+bg+
+      ';border-radius:10px;padding:10px 14px;margin:0 0 10px">'+
+      '<b style="display:block;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:'+col+';margin-bottom:5px">'+esc(cur)+'</b>'+
+      (items.length?'<ul style="margin:0;padding-left:6px">'+items.join('')+'</ul>':'<span style="color:var(--tx-3);font-size:12.5px">Nothing today.</span>')+'</div>';
+    buf=[]; };
+  lines.forEach(ln=>{ const up=ln.trim().toUpperCase().replace(/[:.]$/,'');
+    if(names.includes(up)){ flush(); cur=up; } else buf.push(ln); });
+  flush();
+  return html||esc(t);
 }
 function briefFacts(j,A){
   const L=[];
