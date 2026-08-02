@@ -121,10 +121,12 @@ svg{display:block;width:100%}
 
 /* tables */
 table{width:100%;border-collapse:collapse;font-size:12.5px}
-th{font-size:10.5px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--tx-3);
-  text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:1}
-td{padding:7.5px 10px;border-bottom:1px solid var(--line-2);white-space:nowrap}
-td.mut{color:var(--tx-2)} td.num{font-family:var(--mono);text-align:right}
+th{font-size:10.5px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--tx-2);
+  text-align:center;padding:8px 10px;border:1px solid var(--line);position:sticky;top:0;background:var(--well);z-index:1}
+th:first-child{text-align:left}
+td{padding:7.5px 10px;border:1px solid var(--line-2);white-space:nowrap;text-align:center}
+td:first-child{text-align:left}
+td.mut{color:var(--tx-2)} td.num{font-family:var(--mono);text-align:center}
 tr[data-di]{cursor:pointer} tr:hover td{background:#F8FAFC}
 .twrap{overflow:auto;max-height:352px;border-radius:14px;box-shadow:var(--nm-in-sm);background:var(--well)}
 th{background:var(--well)}
@@ -245,6 +247,7 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:#D8DEE
       <div><h1 id="hi">Welcome back</h1><div class="sub" id="hisub"></div></div>
       <span class="sp"></span>
       <span class="live" id="live"><i></i><span id="liveTx">connecting</span></span>
+      <select class="rsel" id="monPick" title="Month under review"></select>
       <select class="rsel" id="every"><option value="30000">30s</option><option value="60000" selected>1m</option><option value="300000">5m</option></select>
       <button class="tbtn" id="now">Refresh</button>
       <a class="tbtn pri" href="./">Open the app</a>
@@ -274,7 +277,7 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:#D8DEE
 <script>
 'use strict';
 const $=s=>document.querySelector(s);
-let ST=null,TIMER=null,LASTOK=0,EVERY=60000,NEXT=0,INFLIGHT=false,DOWN=false,DATA=null,VIEW='overview',MET='present';
+let ST=null,TIMER=null,LASTOK=0,EVERY=60000,NEXT=0,INFLIGHT=false,DOWN=false,DATA=null,VIEW='overview',MET='present',MONTH='',SORTD=true;
 let MAP=null,MLAYER=null,MAP2=null,M2LAYER=null,GEO=[],MARKERS=[],MFILTER='all',BRIEF=null,BRIEFING=false,NEWS=[],REC={};
 
 /* ---------------- session ---------------- */
@@ -306,14 +309,16 @@ function tick(){
 async function pull(){
   if(!ST||INFLIGHT) return; INFLIGHT=true;
   try{
-    const res=await fetch(ST.url+'?op=dashboard&token='+encodeURIComponent(ST.token));
+    const res=await fetch(ST.url+'?op=dashboard&token='+encodeURIComponent(ST.token)+(MONTH?'&ym='+encodeURIComponent(MONTH):''));
     const j=await res.json();
     if(!j.ok) throw new Error(j.error||'refused');
     LASTOK=Date.now(); NEXT=Date.now()+EVERY; DOWN=false; DATA=j;
     $('#err').style.display='none'; $('#g').classList.remove('dim');
     if($('#app').hidden){ $('#gate').style.display='none'; $('#app').hidden=false; }
     $('#g').removeAttribute('aria-busy');
-    $('#hisub').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' · Jangaon District';
+    $('#hisub').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' · Jangaon District'
+      +(MONTH&&MONTH!==new Date().toISOString().slice(0,7)?' · REVIEWING '+monName(MONTH):'');
+    monPick(j);
     whatsNew(j);
     render(j);
   }catch(e){
@@ -364,6 +369,17 @@ function whatsNew(j){
   return msgs;
 }
 /* ---------------- helpers ---------------- */
+const monName=ym=>{const d=new Date(ym+'-02T00:00:00');return isNaN(d)?ym:d.toLocaleDateString('en-IN',{month:'long',year:'numeric'});};
+function monPick(j){
+  const sel=$('#monPick'); if(!sel) return;
+  const cur=new Date().toISOString().slice(0,7);
+  const set={}; set[cur]=1; (j.trend||[]).forEach(t=>set[t.ym]=1); if(j.ym) set[j.ym]=1;
+  const yms=Object.keys(set).sort().reverse();
+  const want=yms.map(y=>y+'|'+(MONTH||cur)).join(',');
+  if(sel.dataset.k===want) return; sel.dataset.k=want;
+  sel.innerHTML=yms.map(y=>`<option value="${y}" ${(MONTH||cur)===y?'selected':''}>${y===cur?'This month':monName(y)}</option>`).join('');
+  sel.onchange=()=>{ MONTH=sel.value===cur?'':sel.value; DATA=null; $('#g').setAttribute('aria-busy','true'); pull(); };
+}
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const hm=iso=>{const d=new Date(iso);return isNaN(d)?'':d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});};
 const dm=s=>{const d=new Date(String(s).length>10?s:s+'T00:00:00');return isNaN(d)?String(s||''):d.toLocaleDateString('en-IN',{day:'numeric',month:'short'});};
@@ -901,8 +917,9 @@ function vVillages(j,A){
   h+=panel('c12','Day by day · filings and attendance','tap a day', dayTable(j),'dayd2');
   h+=panel('c6','Score distribution','villages by ten-mark band', scoreDist(j.month.rows));
   h+=panel('c6','Officer ledger · '+j.ym,'who files, and how well', officerTable(j.month.rows));
-  const mr=[...j.month.rows].sort((a,b)=>a.score-b.score); window.__ROWS.ins=mr;
-  h+=panel('c12','Inspections filed · worst first',mr.length+' villages',
+  const mr=[...j.month.rows].sort((a,b)=>SORTD?(b.score-a.score):(a.score-b.score)); window.__ROWS.ins=mr;
+  h+=panel('c12','Inspections filed · '+(SORTD?'highest score first':'lowest score first'),
+    '<button class="fchip" id="insSort" style="min-height:36px">Flip order</button> · '+mr.length+' villages',
     `<div class="twrap" style="max-height:430px"><table><thead><tr><th>Village</th><th>Mandal</th><th>Score</th><th>Grade</th><th>Red flags</th><th>Officer</th><th>Date</th></tr></thead><tbody>`+
     (mr.length?mr.map((r,i)=>`<tr data-di="ins:${i}"><td>${esc(r.gp)}</td><td class="mut">${esc(r.mandal)}</td>
       <td class="num">${r.score}</td><td class="gr gr${esc(r.grade)}">${esc(r.grade)}</td>
@@ -944,7 +961,9 @@ function render(j){
   /* villages filed per day, for the area chart */
   const byDay={}; j.month.rows.forEach(r=>{byDay[r.date]=(byDay[r.date]||0)+1;});
   j.att14x=j.att14.map(r=>({...r, filedN:byDay[r.date]||0}));
-  const A=analyse(j); window.__ISS=A.iss; window.__ROWS={att:[],ins:[]};
+  const A=analyse(j); window.__ISS=A.iss;
+  /* refreshes must not orphan an open drawer: keep prior registries, replace only what this render rebuilds */
+  window.__ROWS=window.__ROWS||{}; window.__ROWS.att=[]; window.__ROWS.ins=[];
   const keep={}; document.querySelectorAll('#g [data-k]').forEach(el=>keep[el.dataset.k]=el.scrollTop);
   $('#g').innerHTML = VIEW==='overview'?vOverview(j,A)
     : VIEW==='attendance'?vAttendance(j,A)
@@ -996,6 +1015,7 @@ document.addEventListener('click',e=>{
   if(ir){ const x=window.__ISS[+ir.dataset.ii]; if(!x) return;
     openDrawer('P'+x.p+' · '+x.t,x.d,(x.list&&x.list.length?'<ul>'+x.list.map(v=>'<li>'+esc(v)+'</li>').join('')+'</ul>':'')+
       '<p style="font-size:13px;margin-top:12px;color:var(--seal);font-weight:600">→ '+esc(x.a)+'</p>'); return; }
+  if(e.target.closest('#insSort')){ SORTD=!SORTD; if(DATA) render(DATA); return; }
   const md=e.target.closest('tr[data-md]');
   if(md){ const c=(window.__ROWS.mandal||[])[+md.dataset.md]; if(c) openMandal(c); return; }
   const dd=e.target.closest('tr[data-dd]');
@@ -1029,7 +1049,8 @@ document.addEventListener('click',e=>{
 /* The whole filed record: every clause with the mark it carried, the
    evidence notes, the photographs and the red flags. */
 async function openVillage(r){
-  const head=`<dl><dt>Score</dt><dd>${r.score} of 100 · grade <span class="gr gr${esc(r.grade)}">${esc(r.grade)}</span></dd>
+  const head=`${r.album?`<a class="mapsbtn" target="_blank" rel="noopener" href="${esc(r.album)}" style="display:block;text-align:center;font-weight:700;background:linear-gradient(145deg,#1B7A40,#14532D);color:#fff;border:0;margin:0 0 14px">Open the photographs (${r.photos||'all'})</a>`:''}
+  <dl><dt>Score</dt><dd>${r.score} of 100 · grade <span class="gr gr${esc(r.grade)}">${esc(r.grade)}</span></dd>
     <dt>Red flags</dt><dd>${String(r.rf||'').trim()?'<span class="pill bad">RF '+esc(r.rf)+'</span>':'none'}</dd>
     <dt>Filed by</dt><dd>${esc(String(r.officer||''))}</dd><dt>Date</dt><dd>${esc(dm(r.date))}</dd>
     ${r.photos?`<dt>Photographs</dt><dd>${r.photos}</dd>`:''}</dl>
@@ -1047,6 +1068,7 @@ async function openVillage(r){
     $('#dBody').innerHTML=head+recordHTML(j.row);
   }catch(e){ $('#dBody').innerHTML=head+'<p style="margin-top:14px;color:var(--tx-2);font-size:13px">Could not read the clause detail: '+esc(e.message)+'</p>'; }
 }
+const SEC_NAMES={A:'A · Household & premises',B:'B · Drains and public places',C:'C · Waste collection',D:'D · Segregation shed',E:'E · Institutions',F:'F · Water bodies & tanks',G:'G · Records & staff',P:'Panchayat Secretary'};
 function recordHTML(row){
   let p=null;
   try{ p=JSON.parse(row.payload||row.Payload||'{}'); }catch(e){}
@@ -1054,15 +1076,20 @@ function recordHTML(row){
   const marks=Object.keys(p.s).filter(k=>!k.startsWith('p')).sort();
   const ps=Object.keys(p.s).filter(k=>k.startsWith('p')).sort();
   const ev=p.ev||{}, evp=p.evp||{};
-  const rows=ks=>ks.map(k=>{
+  const line=k=>{
     const note=(ev[k]||'').trim(), shots=(evp[k]||[]).length;
     return `<tr><td><b>${esc(k.replace(/^p/,'').toUpperCase())}</b></td>
       <td class="num">${p.s[k]}</td>
-      <td style="white-space:normal;font-size:12px;color:var(--tx-2)">${note?esc(note):'<span style="color:var(--tx-3)">no note</span>'}${shots?` <span class="pill ok">${shots} photo${shots>1?'s':''}</span>`:''}</td></tr>`;}).join('');
-  let h=`<div style="margin-top:16px"><b style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--tx-3)">Clause by clause</b>
-    <table style="margin-top:7px"><thead><tr><th>Clause</th><th>Mark</th><th>Evidence recorded</th></tr></thead><tbody>${rows(marks)}</tbody></table></div>`;
-  if(ps.length) h+=`<div style="margin-top:16px"><b style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--tx-3)">Panchayat Secretary</b>
-    <table style="margin-top:7px"><thead><tr><th>Clause</th><th>Mark</th><th>Evidence</th></tr></thead><tbody>${rows(ps)}</tbody></table></div>`;
+      <td style="white-space:normal;font-size:12px;color:var(--tx-2);text-align:left">${note?esc(note):'<span style="color:var(--tx-3)">no note</span>'}${shots?` <span class="pill ok">${shots} photo${shots>1?'s':''}</span>`:''}</td></tr>`;};
+  /* one table per section, with the section's own total */
+  const bySec={}; marks.forEach(k=>{const g=k[0].toUpperCase();(bySec[g]=bySec[g]||[]).push(k);});
+  let h='';
+  Object.keys(bySec).sort().forEach(g=>{
+    const ks=bySec[g], tot=ks.reduce((s2,k)=>s2+(Number(p.s[k])||0),0);
+    h+=`<div style="margin-top:16px"><b class="dsec">${esc(SEC_NAMES[g]||('Section '+g))} · ${tot} marks</b>
+      <table style="margin-top:7px"><thead><tr><th style="width:64px">Clause</th><th style="width:56px">Mark</th><th>Evidence recorded</th></tr></thead><tbody>${ks.map(line).join('')}</tbody></table></div>`;});
+  if(ps.length) h+=`<div style="margin-top:16px"><b class="dsec">${esc(SEC_NAMES.P)}</b>
+    <table style="margin-top:7px"><thead><tr><th style="width:64px">Clause</th><th style="width:56px">Mark</th><th>Evidence</th></tr></thead><tbody>${ps.map(line).join('')}</tbody></table></div>`;
   const noEv=marks.filter(k=>!(ev[k]||'').trim() && !((evp[k]||[]).length));
   h+=`<div style="margin-top:16px;font-size:12.5px;color:var(--tx-2);line-height:1.6">
     <b style="color:var(--tx)">${marks.length}</b> clauses scored ·
