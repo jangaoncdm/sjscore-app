@@ -299,7 +299,7 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:#D8DEE
 const $=s=>document.querySelector(s);
 let ST=null,TIMER=null,LASTOK=0,EVERY=60000,NEXT=0,INFLIGHT=false,DOWN=false,DATA=null,VIEW='overview',MET='present',MONTH='',SORTD=true;
 let MAP=null,MLAYER=null,MAP2=null,M2LAYER=null,GEO=[],MARKERS=[],MFILTER='all',BRIEF=null,BRIEFING=false,NEWS=[],REC={};
-let CHAT=[],ASKING=false,XLSXP=null;
+let CHAT=[],ASKING=false,XLSXP=null,NTC_UNCHK={},NTC_DECIDING=false;
 
 /* ---------------- session ---------------- */
 function boot(){
@@ -338,6 +338,7 @@ async function pull(){
     if($('#app').hidden){ $('#gate').style.display='none'; $('#app').hidden=false; }
     $('#g').removeAttribute('aria-busy');
     $('#hisub').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' · Jangaon District'
+      +(j.off&&j.off.today?' · HOLIDAY — '+(j.off.why||''):'')
       +(MONTH&&MONTH!==new Date().toISOString().slice(0,7)?' · REVIEWING '+monName(MONTH):'');
     monPick(j);
     whatsNew(j);
@@ -421,6 +422,7 @@ function analyse(j){
   const accounted=present+onLeave, attPct=pct(accounted,Math.max(1,officersDue));
   const cov=j.coverage.reduce((s,c)=>({t:s.t+c.total,d:s.d+c.done}),{t:0,d:0});
   const now=new Date(), sunday=now.getDay()===0, filed=j.month.rows.length;
+  const off=(j.off&&j.off.today&&(j.off.why||'Holiday'))||(sunday?'Sunday':'');
   const wd=(a,b)=>{let n=0;for(let d=a;d<=b;d++){if(new Date(now.getFullYear(),now.getMonth(),d).getDay()!==0)n++;}return n;};
   const last=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
   const wdGone=wd(1,now.getDate()), wdAll=wd(1,last), wdLeft=Math.max(1,wdAll-wdGone+1);
@@ -434,7 +436,7 @@ function analyse(j){
   const attY=y.present+y.leave;
   const by10=j.today.present.filter(r=>new Date(r.at).getHours()<10).length;
   const parts=[
-    {k:'Attendance',w:25,v:sunday?null:attPct,why:sunday?'Sunday — not counted':accounted+' of '+officersDue+' accounted'},
+    {k:'Attendance',w:25,v:off?null:attPct,why:off?off+' — not counted':accounted+' of '+officersDue+' accounted'},
     {k:'Coverage',w:25,v:expected===0?null:clamp(Math.round(cov.d*100/Math.max(1,expected)),0,100),
       why:expected===0?'month opening — grace':cov.d+' filed against '+expected+' expected by now'},
     {k:'Scores',w:30,v:avg==null?null:avg,why:avg==null?'nothing filed yet':'district average '+avg},
@@ -446,7 +448,7 @@ function analyse(j){
   const health=wSum<45?null:Math.round(parts.reduce((s,p)=>s+(p.v==null?0:p.v*p.w),0)/wSum);
 
   const iss=[];
-  if(absent>0&&!sunday&&now.getHours()>=11){
+  if(absent>0&&!off&&now.getHours()>=11){
     const byM={}; j.today.absent.forEach(o=>byM[o.mandal||'—']=(byM[o.mandal||'—']||0)+1);
     const worst=Object.entries(byM).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([m,n])=>m+' ('+n+')').join(', ');
     iss.push({p:1,t:absent+' officer'+(absent>1?'s':'')+' not marked as of '+hm(new Date().toISOString()),
@@ -475,11 +477,16 @@ function analyse(j){
   if(oldPend.length) iss.push({p:2,t:oldPend.length+' leave application'+(oldPend.length>1?'s':'')+' waiting beyond 48 hours',
     d:'The oldest has waited '+Math.round(oldestH)+' hours.',a:'Pass orders today — held days block fresh applications.',
     list:oldPend.map(l=>l.name+' · '+l.type+' '+l.days+'d from '+dm(l.from))});
+  if(j.notices&&(j.notices.proposed||[]).length) iss.push({p:1,
+    t:(j.notices.proposed.length)+' proposed notice'+(j.notices.proposed.length>1?'s':'')+' await your approval',
+    d:'Nothing has been served — the morning pass only proposes.',
+    a:'Open Notices, untick any that should not go, and press Send.',
+    list:j.notices.proposed.slice(0,40).map(n=>n.name+' · '+(n.mandal||'—')+' · '+dm(n.date))});
   if(j.notices&&j.notices.pending) iss.push({p:2,
-    t:j.notices.pending+' show-cause notice'+(j.notices.pending>1?'s':'')+' awaiting acknowledgement',
+    t:j.notices.pending+' served notice'+(j.notices.pending>1?'s':'')+' awaiting acknowledgement',
     d:'Each locks that officer\u2019s app until acknowledged; persistence means the app is not being opened at all.',
     a:'Have the MPDO put the officer on the phone; the Notices view carries the register.',
-    list:(j.notices.rows||[]).filter(n=>n.status!=='ACK').slice(0,40).map(n=>n.no+' · '+n.name+' · '+(n.mandal||'—')+' · '+n.date)});
+    list:(j.notices.rows||[]).filter(n=>n.status==='PENDING').slice(0,40).map(n=>(n.no||'—')+' · '+n.name+' · '+(n.mandal||'—')+' · '+dm(n.date))});
   /* A mark is implausible if the fix is coarse enough to cover a mandal, if
      the phone is not on Indian time, or if the coordinates fall outside a
      generous box around the district. Any one of those means the location
@@ -500,7 +507,7 @@ function analyse(j){
   if(prevAvg!=null&&avg!=null&&avg<prevAvg-3) iss.push({p:3,t:'District average has slipped: '+prevAvg+' → '+avg,
     d:'Against last month, on '+filed+' filings so far.',a:'Read the bottom five before the next review.'});
   iss.sort((a,b)=>a.p-b.p);
-  return {health,parts,wSum,attPct,cov,needPerDay,wdLeft,avg,prevAvg,iss,accounted,officersDue,absent,present,onLeave,filed,by10,attY,sunday};
+  return {health,parts,wSum,attPct,cov,needPerDay,wdLeft,avg,prevAvg,iss,accounted,officersDue,absent,present,onLeave,filed,by10,attY,sunday,off};
 }
 
 /* ---------------- charts ---------------- */
@@ -722,8 +729,9 @@ function vOverview(j,A){
     ${(typeof Notification!=='undefined'&&Notification.permission!=='granted')?'<button class="fchip" id="newsAsk">Alert me on this screen</button>':''}
   </div>`;
   h+='<div class="kpirow">';
-  h+=kpi('Attendance today',IC.u,A.accounted,delta(A.accounted,A.attY,true),'of '+A.officersDue+' · vs yesterday','view:attendance');
-  h+=kpi('Not marked',IC.u,A.absent,'',A.sunday?'Sunday':'tap for names','list:absent');
+  h+=kpi('Attendance today',IC.u,A.accounted,A.off?'':delta(A.accounted,A.attY,true),
+    A.off?esc(A.off)+' — voluntary marks only':'of '+A.officersDue+' · vs yesterday','view:attendance');
+  h+=kpi('Not marked',IC.u,A.off?'—':A.absent,'',A.off?esc(A.off)+' — not tracked today':'tap for names',A.off?null:'list:absent');
   h+=kpi('Villages evaluated',IC.h,A.filed,'','of '+A.cov.t+' · tap to open','view:villages');
   h+=kpi('District average',IC.s,A.avg==null?'—':A.avg,delta(A.avg,A.prevAvg,true),'vs last month','view:villages');
   h+=kpi('Red flags',IC.f,j.month.rfCount,'',A.filed?pct(j.month.rfCount,A.filed)+'% · tap for the list':'nothing filed','list:flags');
@@ -853,11 +861,14 @@ function askFacts(j,A){
     '; red-flagged '+j.month.rfCount+'; needed per remaining working day '+A.needPerDay+' ('+A.wdLeft+' working day'+(A.wdLeft>1?'s':'')+' left).');
   const fl=j.month.rows.filter(r=>String(r.rf||'').trim());
   L.push('RED-FLAG VILLAGES ('+fl.length+'): '+(fl.map(r=>r.gp+' ('+r.mandal+') RF '+r.rf+' score '+r.score).join('; ')||'none')+'.');
+  if(A.off) L.push('TODAY IS OFF: '+A.off+'. Attendance is optional and not counted; no notice can arise today; any marks are voluntary.');
   if(j.notices){ const nth=x=>x+(x===1?'st':x===2?'nd':x===3?'rd':'th');
-    L.push('SHOW-CAUSE NOTICES (rule: first '+j.notices.grace+' in a month warn, then 1 CL debits per day of continued default at day-close): issued today '+j.notices.today+
-      '; awaiting acknowledgement '+j.notices.pending+'; this month '+j.notices.month+' with '+j.notices.debitsMonth+' CL debit(s). Latest: '+
-      ((j.notices.rows||[]).slice(0,25).map(n=>n.no+' '+n.name+' ('+(n.mandal||'—')+') for '+n.date+', '+nth(n.seq)+' of month, '+
-        (n.status==='ACK'?'acknowledged':'PENDING')+(n.clDebited?', 1 CL debited':'')).join('; ')||'none')+'.'); }
+    L.push('SHOW-CAUSE NOTICES (lifecycle: the morning pass PROPOSES; nothing is served, numbered or emailed until the Collector approves on the console; first '+j.notices.grace+' SERVED in a month warn, then 1 CL debits per day of continued default at day-close): awaiting the Collector\u2019s approval '+((j.notices.proposed||[]).length)+
+      (((j.notices.proposed||[]).length)?' ('+j.notices.proposed.slice(0,30).map(p=>p.name+' ('+(p.mandal||'—')+') for '+p.date).join('; ')+')':'')+
+      '; served today '+j.notices.today+'; served awaiting acknowledgement '+j.notices.pending+'; served this month '+j.notices.month+' with '+j.notices.debitsMonth+' CL debit(s). Latest register entries: '+
+      ((j.notices.rows||[]).slice(0,25).map(n=>(n.no||'unnumbered')+' '+n.name+' ('+(n.mandal||'—')+') for '+n.date+', '+
+        (n.status==='PROPOSED'?'PROPOSED (unserved)':n.status==='DROPPED'?'dropped':nth(n.seq)+' of month, '+(n.status==='ACK'?'acknowledged':'PENDING'))+
+        (n.clDebited?', 1 CL debited':'')).join('; ')||'none')+'.'); }
   L.push('LEAVE AWAITING ORDERS ('+j.leave.pending.length+'): '+
     (j.leave.pending.map(l=>l.name+' ('+(l.mandal||'—')+') '+l.type+' '+l.days+'d from '+l.from+', applied '+String(l.appliedAt).slice(0,10)).join('; ')||'none')+'.');
   L.push('RECENT LEAVE ORDERS: '+(j.leave.recent.slice(0,15).map(l=>l.name+' '+l.type+' '+l.days+'d — '+l.status).join('; ')||'none')+'.');
@@ -884,6 +895,27 @@ function chatHTML(){
   return h;
 }
 function scrollChat(){ const el=$('#chatLog'); if(el) el.scrollTop=el.scrollHeight; }
+async function decideNotices(mode){
+  if(NTC_DECIDING||!DATA) return;
+  const ids=[...document.querySelectorAll('.ntcCk')].filter(c=>c.checked).map(c=>c.dataset.id);
+  const msg=$('#ntcDecMsg');
+  if(!ids.length){ if(msg) msg.textContent='Nothing is ticked.'; return; }
+  if(mode==='drop' && !confirm(ids.length+' proposal(s) will be dropped — no number, never served. Proceed?')) return;
+  NTC_DECIDING=true;
+  if(msg) msg.textContent=(mode==='approve'?'Serving':'Dropping')+' '+ids.length+'\u2026';
+  try{
+    const r=await fetch(ST.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({kind:'noticeDecide',token:ST.token,
+        approve:mode==='approve'?ids:[], drop:mode==='drop'?ids:[]})});
+    const j=await r.json();
+    if(j.ok){
+      ids.forEach(id=>delete NTC_UNCHK[id]);
+      if(msg) msg.textContent=(j.served?j.served+' served ('+j.mailed+' emailed)':'')+(j.dropped?(j.served?' · ':'')+j.dropped+' dropped':'')+' · '+j.proposed+' still awaiting';
+      LASTOK=0; pull();
+    } else if(msg) msg.textContent='Refused: '+(j.error||'unknown')+(/unknown request/i.test(String(j.error))?' — the Sheet needs the 6.7 Code.gs.':'');
+  }catch(e){ if(msg) msg.textContent='Could not reach the Sheet — try again.'; }
+  NTC_DECIDING=false;
+}
 async function sendAsk(q){
   q=String(q||'').trim(); if(!q||ASKING||!DATA) return;
   CHAT.push({role:'user',content:q}); ASKING=true; render(DATA); scrollChat();
@@ -931,25 +963,28 @@ function todayRoster(j){
 const ROSTER_HEAD=['Officer','Role','Mandal','Status','Leave type','Marked at','Marks','Location','Latitude','Longitude','± m'];
 function matrixData(j){
   if(!j||!j.attm||!Array.isArray(j.attm.dates)||!Array.isArray(j.attm.rows)||!j.attm.rows.length) return null;
-  const dates=j.attm.dates, sun=dates.map(d=>new Date(d+'T00:00:00').getDay()===0);
-  const wdN=sun.filter(s=>!s).length;
+  const dates=j.attm.dates, hol={};
+  (j.attm.off||[]).forEach(d=>hol[d]=true);
+  const offd=dates.map(d=>new Date(d+'T00:00:00').getDay()===0||!!hol[d]);   /* Sunday or Holidays-tab date */
+  const sun=dates.map(d=>new Date(d+'T00:00:00').getDay()===0);
+  const wdN=offd.filter(s=>!s).length;
   const rows=j.attm.rows.map(r=>{
     const name=r[0],role=r[1],mandal=r[2],days=String(r[3]||'');
     let pw=0,lw=0;
     const cells=dates.map((d,i)=>{const c=days[i]||'-';
-      if(c==='P'){ if(!sun[i])pw++; return 'P'; }
-      if(c==='L'){ if(!sun[i])lw++; return 'L'; }
-      return sun[i]?'S':'A'; });
+      if(c==='P'){ if(!offd[i])pw++; return 'P'; }
+      if(c==='L'){ if(!offd[i])lw++; return 'L'; }
+      return sun[i]?'S':hol[d]?'H':'A'; });
     const aw=Math.max(0,wdN-pw-lw);
     return {name,role,mandal,cells,p:pw,l:lw,a:aw,pct:wdN?Math.round((pw+lw)*100/wdN):0};
   }).sort((x,y)=>x.pct-y.pct||String(x.mandal).localeCompare(String(y.mandal))||String(x.name).localeCompare(String(y.name)));
-  return {dates,sun,rows,wdN};
+  return {dates,sun,offd,hol,rows,wdN};
 }
 function matrixRows(M){
-  const head=['Officer','Role','Mandal'].concat(M.dates.map((d,i)=>dm(d)+(M.sun[i]?' Su':'')))
+  const head=['Officer','Role','Mandal'].concat(M.dates.map((d,i)=>dm(d)+(M.sun[i]?' Su':M.hol&&M.hol[d]?' H':'')))
     .concat(['Present','Leave','Not marked','Attendance %']);
   const rows=M.rows.map(r=>[r.name,r.role,r.mandal||''].concat(r.cells).concat([r.p,r.l,r.a,r.pct+'%']));
-  rows.push([]); rows.push(['P present · L on leave · A not marked · S Sunday','','','% counts working days only — Sundays are excluded']);
+  rows.push([]); rows.push(['P present · L on leave · A not marked · S Sunday · H holiday','','','% counts working days only — Sundays and holidays are excluded']);
   return [head].concat(rows);
 }
 function mandalCompare(j){
@@ -1107,10 +1142,13 @@ function vTables(j,A,short){
 }
 
 function vAttendance(j,A){
-  let h='<div class="kpirow">';
+  let h='';
+  if(A.off) h+=panel('c12','Holiday — '+esc(A.off),'attendance is optional today',
+    '<div style="font-size:13px;color:var(--tx-2);line-height:1.7">The day is not counted, no officer is listed as not marked, and no notice can arise. Marks below, if any, are voluntary.</div>');
+  h+='<div class="kpirow">';
   h+=kpi('Present',IC.u,A.present,delta(A.accounted,A.attY,true),'vs yesterday (with leave)');
   h+=kpi('On sanctioned leave',IC.c,A.onLeave,'','today');
-  h+=kpi('Not marked',IC.u,A.absent,'',A.sunday?'Sunday':'as of now');
+  h+=kpi('Not marked',IC.u,A.off?'—':A.absent,'',A.off?esc(A.off)+' — not tracked today':'as of now');
   h+=kpi('Marked by 10:00',IC.u,A.present?pct(A.by10,A.present)+'%':'—','',A.by10+' of '+A.present);
   h+=kpi('Location not trustworthy',IC.u,j.today.present.filter(r=>suspect(r)||!r.verified).length,'','of '+A.present+' present');
   h+='</div>';
@@ -1197,27 +1235,47 @@ function vLeave(j,A){
 }
 function vNotices(j,A){
   const N=j.notices;
-  if(!N) return panel('c12','Show-cause notices','needs the 6.6 backend',
-    '<div class="empty">The notice register needs the 6.6 Code.gs on the Sheet — paste it, deploy a new version, and run installNoticeTriggers once from the editor. The rest of the console is unaffected.</div>');
+  if(!N) return panel('c12','Show-cause notices','needs the 6.7 backend',
+    '<div class="empty">The notice register needs the 6.7 Code.gs on the Sheet — paste it, deploy a new version, and run installNoticeTriggers once from the editor. The rest of the console is unaffected.</div>');
+  const P=N.proposed||[];
   let h='<div class="kpirow">';
-  h+=kpi('Issued today',IC.f,N.today,'','at the mid-morning pass');
-  h+=kpi('Awaiting acknowledgement',IC.f,N.pending,'','locks the officer\u2019s app');
-  h+=kpi('This month',IC.f,N.month,'','on the register');
+  h+=kpi('Awaiting your approval',IC.f,P.length,'','nothing served without your word');
+  h+=kpi('Served, awaiting ack',IC.f,N.pending,'','locks the officer\u2019s app');
+  h+=kpi('Served this month',IC.f,N.month,'','on the register');
   h+=kpi('CL debits this month',IC.f,N.debitsMonth,'','beyond the '+N.grace+' warnings');
   h+='</div>';
+  if(P.length){
+    const chk=id=>NTC_UNCHK[id]?'':' checked';
+    h+=panel('c12','Proposed notices — your approval is awaited',
+      'untick any that should not go · Send serves, numbers and emails · Drop kills a proposal unnumbered',
+      `<div class="twrap" style="max-height:380px"><table><thead><tr><th style="width:36px"></th><th>Officer</th><th>Mandal</th><th>For</th></tr></thead><tbody>`+
+      P.map(p=>`<tr><td><input type="checkbox" class="ntcCk" data-id="${esc(p.id)}"${chk(p.id)}></td>
+        <td>${esc(p.name)}<span class="mut"> · ${esc(p.role)}</span></td>
+        <td class="mut">${esc(p.mandal||'—')}</td><td class="num">${esc(dm(p.date))}</td></tr>`).join('')+
+      `</tbody></table></div>
+      <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+        <button class="tbtn pri" id="ntcSend">Send the ticked notices</button>
+        <button class="tbtn" id="ntcDrop">Drop the ticked</button>
+        <span class="mut" id="ntcDecMsg" style="align-self:center;font-size:12.5px"></span>
+      </div>
+      <div class="mut" style="font-size:12px;margin-top:8px">Sending assigns the /SJSP-SCN/ running number, serves the notice in the officer\u2019s app (which locks until acknowledged) and emails it where an address is on the roll. A dropped proposal takes no number and is never seen by the officer. Unticked rows simply wait.</div>`);
+  } else {
+    h+=panel('c12','Proposed notices','the morning pass proposes; you decide',
+      '<div class="empty">Nothing awaits approval. The ~11:15 trigger proposes a notice for every unmarked officer on a working day; the proposals appear here for your word before anything is served.</div>');
+  }
   window.__ROWS.ntc=N.rows;
   h+=panel('c12','Notice register · latest first',
-    'first '+N.grace+' in a month warn · debits settle at day-close · tap a row',
+    'served notices only carry numbers · first '+N.grace+' served in a month warn · debits settle at day-close · tap a row',
     `<div class="twrap" style="max-height:520px"><table><thead><tr><th>No.</th><th>Date</th><th>Officer</th><th>Mandal</th><th>Of month</th><th>Status</th><th>Acknowledged</th><th>CL</th></tr></thead><tbody>`+
-    (N.rows.length?N.rows.map((n,i)=>`<tr data-di="ntc:${i}"><td class="num mut">${esc(n.no)}</td><td class="num">${esc(dm(n.date))}</td>
+    (N.rows.length?N.rows.map((n,i)=>`<tr data-di="ntc:${i}"><td class="num mut">${esc(n.no||'—')}</td><td class="num">${esc(dm(n.date))}</td>
       <td>${esc(n.name)}<span class="mut"> · ${esc(n.role)}</span></td><td class="mut">${esc(n.mandal||'—')}</td>
-      <td class="num">${n.seq}${n.seq>N.grace?' <span class="pill bad">debit band</span>':''}</td>
-      <td>${n.status==='ACK'?'<span class="pill ok">acknowledged</span>':'<span class="pill warn">pending</span>'}</td>
+      <td class="num">${n.seq||'—'}${n.seq>N.grace?' <span class="pill bad">debit band</span>':''}</td>
+      <td>${n.status==='ACK'?'<span class="pill ok">acknowledged</span>':n.status==='PENDING'?'<span class="pill warn">awaiting ack</span>':n.status==='PROPOSED'?'<span class="pill">proposed</span>':'<span class="pill">dropped</span>'}</td>
       <td class="num mut">${n.ackAt?esc(dm(n.ackAt)+' '+hm(n.ackAt)):'—'}</td>
       <td>${n.clDebited?'<span class="pill bad">1 day</span>':'—'}</td></tr>`).join('')
      :'<tr><td colspan="8" class="empty">No notices on the register.</td></tr>')+`</tbody></table></div>`,'ntc');
   h+=panel('c12','How the rule runs','the register is the record',
-    '<div style="font-size:13px;color:var(--tx-2);line-height:1.75">On working days (Sundays and the Holidays tab excepted), unmarked attendance draws a show-cause notice at the mid-morning trigger, emailed where an address is on the roll and served in the app, which stands locked until acknowledged. The first '+N.grace+' notices in a calendar month are warnings; from the next one on, if attendance is still unmarked at the evening settlement, one day of CL is debited on the Leave register — loss of pay once the year\u2019s CL is exhausted. Acknowledgement is receipt, not excuse: marking attendance is the only cure.</div>');
+    '<div style="font-size:13px;color:var(--tx-2);line-height:1.75">On working days (Sundays and the Holidays tab excepted), the mid-morning pass PROPOSES a notice for every officer with no attendance and no sanctioned leave — nothing is served, numbered or emailed until you press Send here. A served notice locks the officer\u2019s app until acknowledged. The first '+N.grace+' served notices in a calendar month are warnings; from the next one on, if attendance is still unmarked at the evening settlement, one day of CL is debited on the Leave register — loss of pay once the year\u2019s CL is exhausted. Acknowledgement is receipt, not excuse: marking attendance is the only cure. A proposal left standing overnight can still be sent the next day, but its evening settlement has passed — it can warn, never debit.</div>');
   return h;
 }
 function vMap(j,A){
@@ -1285,6 +1343,10 @@ document.addEventListener('click',e=>{
   const ac=e.target.closest('[data-ask]');
   if(ac){ sendAsk(ac.dataset.ask); return; }
   if(e.target.closest('#askClear')){ CHAT=[]; if(DATA) render(DATA); return; }
+  const ck=e.target.closest('.ntcCk');
+  if(ck){ if(ck.checked) delete NTC_UNCHK[ck.dataset.id]; else NTC_UNCHK[ck.dataset.id]=1; return; }
+  if(e.target.closest('#ntcSend')){ decideNotices('approve'); return; }
+  if(e.target.closest('#ntcDrop')){ decideNotices('drop'); return; }
   if(e.target.closest('#newsClear')){ NEWS=[]; if(DATA) render(DATA); return; }
   if(e.target.closest('#newsAsk')){ try{ Notification.requestPermission().then(()=>{ if(DATA) render(DATA); }); }catch(e2){} return; }
   const fc=e.target.closest('[data-mf]');
@@ -1315,10 +1377,16 @@ document.addEventListener('click',e=>{
   const tr=e.target.closest('tr[data-di]');
   if(tr){ const [kind,i]=tr.dataset.di.split(':'); const r=(window.__ROWS[kind]||[])[+i]; if(!r) return;
     if(kind==='ntc'){ const g=(DATA.notices||{}).grace||3;
-      openDrawer('Notice '+r.no, r.name+' · '+r.role+' · '+(r.mandal||'—'),
-        `<dl><dt>For the date</dt><dd>${esc(r.date)}</dd>
-         <dt>Standing</dt><dd>${r.seq}${r.seq===1?'st':r.seq===2?'nd':r.seq===3?'rd':'th'} notice of the month${r.seq>g?' · <span class="pill bad">debit band</span>':' · warning band'}</dd>
-         <dt>Status</dt><dd>${r.status==='ACK'?'Acknowledged '+esc(dm(r.ackAt)+' '+hm(r.ackAt)):'<span class="pill warn">Awaiting acknowledgement — the officer\u2019s app is locked</span>'}</dd>
+      const nth=x=>x+(x===1?'st':x===2?'nd':x===3?'rd':'th');
+      const stLine=r.status==='ACK'?'Acknowledged '+esc(dm(r.ackAt)+' '+hm(r.ackAt))
+        :r.status==='PENDING'?'<span class="pill warn">Served — awaiting acknowledgement; the officer\u2019s app is locked</span>'
+        :r.status==='PROPOSED'?'<span class="pill">Proposed — not served; awaiting your word on the Notices view</span>'
+        :'Dropped'+(r.decidedBy?' by '+esc(r.decidedBy):'')+' — never served, no number taken';
+      openDrawer('Notice '+(r.no||'(unnumbered)'), r.name+' · '+r.role+' · '+(r.mandal||'—'),
+        `<dl><dt>For the date</dt><dd>${esc(dm(r.date))}</dd>
+         <dt>Standing</dt><dd>${r.seq?nth(r.seq)+' served notice of the month'+(r.seq>g?' · <span class="pill bad">debit band</span>':' · warning band'):'—'}</dd>
+         <dt>Status</dt><dd>${stLine}</dd>
+         ${r.decidedBy&&r.status!=='DROPPED'&&r.status!=='PROPOSED'?`<dt>Served by</dt><dd>${esc(r.decidedBy)}</dd>`:''}
          ${r.ackNote?`<dt>Officer\u2019s explanation</dt><dd style="white-space:pre-wrap">${esc(r.ackNote)}</dd>`:''}
          <dt>Leave debit</dt><dd>${r.clDebited?'<span class="pill bad">1 day debited</span> — entry on the Leave register (SYSTEM · SJSP attendance rule)':'none against this notice'}</dd></dl>`);
       return; }

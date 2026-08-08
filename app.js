@@ -13,7 +13,7 @@
      own, not one common album at the end.
    ============================================================ */
 const SERVER_URL = 'https://script.google.com/macros/s/AKfycbz8Ye9LqGB3bLWkTWcdw6JvU__U9K4VRaG-IFFpwc67G__1vdpMryV6NEfz5FJrnezS/exec';
-const APP_VERSION = '6.6';
+const APP_VERSION = '6.7';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -151,6 +151,7 @@ function load(){
   DB.att = DB.att || {}; DB.prefs = DB.prefs || {sun:0,big:0};
   DB.records = DB.records || {}; DB.cache = DB.cache || []; DB.master = DB.master || []; DB.leave = DB.leave || [];
   DB.notices = DB.notices || {rows:[], at:0, grace:3};
+  DB.holidays = DB.holidays || {};          /* the year's off days, from the district */
   DB.noticeAckQ = DB.noticeAckQ || [];      /* acknowledged on the phone, awaiting signal */
   DB.noticeDone = DB.noticeDone || {};      /* ids acknowledged locally — the gate lifts at once */
   Object.values(DB.records).forEach(r => { if(r.filed === undefined) r.filed = (r.sync === 'synced'); });
@@ -439,7 +440,10 @@ function gate(){
     return;
   }
   /* Attendance stands between sign-in and the rest of the app, for everyone. */
-  if(!attExempt(user().role) && !DB.att[todayStr()]){ $('#app').hidden = true; $('#noticeGate').classList.remove('on'); openAttendance(); return; }
+  /* On an off day — Sunday or a date on the district's Holidays list —
+     attendance is voluntary: the gate stands down, the day is not counted,
+     and no notice can arise. Marking anyway stays one tap from Home. */
+  if(!attExempt(user().role) && !DB.att[todayStr()] && !dayOff()){ $('#app').hidden = true; $('#noticeGate').classList.remove('on'); openAttendance(); return; }
   $('#attend').classList.remove('on');
   /* Then the notices: pending show-cause notices lock everything else.
      Attendance is deliberately let through first — marking it is the cure,
@@ -475,7 +479,7 @@ async function signIn(){
       DB.url=url; DB.session={token:r.token, user:r.user}; saveNow();
       $('#lPin').value=''; m.textContent='';
       try{ const g = await get({op:'gps'}); if(g.ok){ DB.master=g.gps; saveNow(); } }catch(e){}
-      try{ const n = await get({op:'notices'}); if(n.ok){ DB.notices={rows:n.rows||[], at:Date.now(), grace:n.grace||3}; saveNow(); } }catch(e){}
+      try{ const n = await get({op:'notices'}); if(n.ok){ DB.notices={rows:n.rows||[], at:Date.now(), grace:n.grace||3}; DB.holidays=n.holidays||{}; saveNow(); } }catch(e){}
       gate(); toast('Signed in — ' + (r.user.name||''));
     } else { m.className='msg'; m.textContent = r.error || 'Sign-in failed.'; }
   }catch(e){ m.className='msg'; m.textContent='Cannot reach the server. Check the network and try again.'; }
@@ -506,6 +510,11 @@ function openAttendance(){
   $('#attWho').innerHTML = `${esc(u.name)} · ${esc(roleName(u.role))}${u.mandal?' · '+esc(u.mandal)+' mandal':''}`;
   $('#attMsg').textContent = ''; $('#attShot').hidden = true;
   $('#attend').classList.add('on');
+
+  /* On a holiday the gate is voluntary — say so in the header; the way
+     back is drawn by drawAttendance with the rest of the actions. */
+  if(dayOff() && !DB.att[todayStr()])
+    $('#attDate').textContent = dayName(todayStr()) + ' · Holiday — ' + dayOff();
 
   /* Sanctioned leave is not absence. Nobody is asked for a photograph and a
      location on a day the Collector has already granted them. */
@@ -554,6 +563,8 @@ function wireAttSteps(){
 
 function drawAttendance(){
   const box = $('#attActions');
+  const holBack = (dayOff() && !DB.att[todayStr()])
+    ? '<button class="btn quiet" id="attHolBack" style="margin-top:9px">Not now — today is a holiday</button>' : '';
   const camStep = $('#stepCam'), fix = ATT && ATT.fix;
   const canShoot = !!fix || (attTries >= 2);
   camStep.className = 'step' + (ATT && ATT.b64 ? ' done' : (canShoot ? ' busy' : ''));
@@ -579,6 +590,9 @@ function drawAttendance(){
   if(attExempt((user()||{}).role)){
     box.insertAdjacentHTML('beforeend', `<button class="btn quiet" id="attSkip" style="margin-top:9px">Not now</button>`);
     $('#attSkip').addEventListener('click', () => { ATT = null; $('#attend').classList.remove('on'); $('#app').hidden = false; buildTabs(); go(TAB); });
+  } else if(holBack){
+    box.insertAdjacentHTML('beforeend', holBack);
+    $('#attHolBack').addEventListener('click', () => { ATT = null; $('#attend').classList.remove('on'); gate(); });
   }
 }
 $('#camAtt').addEventListener('change', async ev => {
@@ -675,6 +689,12 @@ const roleName = r => ({PS:'Panchayat Secretary', MPDO:'MPDO', MSO:'Mandal Speci
    the day's debit stands or falls on attendance alone.
    ============================================================ */
 const seqth = n => n + (n===1?'st':n===2?'nd':n===3?'rd':'th');
+const dmy = d => { const p=String(d||'').split('-'); return p.length===3?p[2]+'.'+p[1]+'.'+p[0]:String(d||''); };
+/* is today off, and what the district calls it — '' on a working day */
+function dayOff(){
+  if(new Date().getDay()===0) return 'Sunday';
+  return (DB.holidays||{})[todayStr()] || '';
+}
 const tstr = iso => { const d=new Date(iso); return isNaN(d)?'':d.toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:true}); };
 function pendingNotices(){
   return ((DB.notices&&DB.notices.rows)||[]).filter(n => n.status==='PENDING' && !DB.noticeDone[n.id]);
@@ -696,6 +716,7 @@ async function refreshNotices(force){
     const r=await get({op:'notices'});
     if(r&&r.ok){
       DB.notices={rows:r.rows||[], at:Date.now(), grace:r.grace||3};
+      DB.holidays=r.holidays||DB.holidays||{};
       /* what the district has already recorded need not travel again */
       DB.noticeAckQ=DB.noticeAckQ.filter(a=>{ const row=(r.rows||[]).find(x=>x.id===a.id); return !(row&&row.status==='ACK'); });
       Object.keys(DB.noticeDone).forEach(id=>{
@@ -723,18 +744,19 @@ function scnHTML(n, withAck){
    <div class="scnhead">
      <p class="gvt">Government of Telangana</p>
      <p class="off">Office of the Collector &amp; District Magistrate :: Jangaon District</p>
-     <div class="noline"><span>Notice No. <b>${esc(n.no)}</b></span><span>Dated: <b>${esc(n.date)}</b></span></div>
+     <div class="noline"><span>Notice No. <b>${esc(n.no)}</b></span><span>Dated: <b>${esc(dmy(n.date))}</b></span></div>
      <h3>SHOW CAUSE NOTICE</h3>
      <div style="text-align:center;margin-top:7px"><span class="seqpill ${n.seq>=g?'hot':''}">${seqth(n.seq)} notice this month</span></div>
    </div>
    <div class="scnbody">
-     <p class="sub">Sub: SJSP &ndash; Daily attendance in the SJSP App &ndash; Failure to mark attendance on ${esc(n.date)} &ndash; Explanation called for within 48 hours &ndash; Regarding.</p>
-     <p>On verification of the SJSP App attendance report for ${esc(n.date)}, it is noticed that you failed to mark your attendance in the App on that date. Non-marking of attendance as mandated amounts to unauthorised absence from assigned duty and prima facie constitutes dereliction of duty in violation of Rule 3 of the Telangana Civil Services (Conduct) Rules, 1964.</p>
+     <p class="sub">Sub: SJSP &ndash; Daily attendance in the SJSP App &ndash; Failure to mark attendance on ${esc(dmy(n.date))} &ndash; Explanation called for within 48 hours &ndash; Regarding.</p>
+     <p>On verification of the SJSP App attendance report for ${esc(dmy(n.date))}, it is noticed that you failed to mark your attendance in the App on that date. Non-marking of attendance as mandated amounts to unauthorised absence from assigned duty and prima facie constitutes dereliction of duty in violation of Rule 3 of the Telangana Civil Services (Conduct) Rules, 1964.</p>
      <p>You are directed to acknowledge this notice and to submit your written explanation, to reach the undersigned within 48 (forty-eight) hours, as to why disciplinary action should not be initiated under the Telangana Civil Services (CC&amp;A) Rules, 1991. If sanctioned leave, prior permission, or a verifiable technical difficulty is claimed, documentary proof shall be furnished. You shall mark daily attendance in the App henceforth without fail.</p>
      <div class="caution">${esc(caution)}</div>
-     ${n.clDebited?'<div class="caution" style="margin-top:9px">One day of leave stands debited against this notice at the close of '+esc(n.date)+'. The entry is on the Leave register.</div>':''}
+     ${n.clDebited?'<div class="caution" style="margin-top:9px">One day of leave stands debited against this notice at the close of '+esc(dmy(n.date))+'. The entry is on the Leave register.</div>':''}
      ${n.status==='ACK'&&!withAck?'<p style="margin-top:10px;color:var(--ink-2)">Acknowledged '+esc(tstr(n.ackAt))+(n.ackNote?' &mdash; \u201c'+esc(n.ackNote)+'\u201d':'')+'</p>':''}
-     <p style="margin-top:10px;color:var(--ink-2);font-size:12.5px">Sd/- SANDEEP KUMAR JHA, I.A.S., Collector &amp; District Magistrate, Jangaon District.</p>
+     <p style="margin-top:12px;color:var(--ink-2);font-size:12.5px">Jangaon,<br>Dated: ${esc(dmy(n.date))}.</p>
+     <p style="margin-top:8px;color:var(--ink-2);font-size:12.5px">Sd/- SANDEEP KUMAR JHA, I.A.S.,<br>Collector &amp; District Magistrate, Jangaon District.</p>
    </div>
    ${withAck?`<div class="ackzone">
      <textarea id="exp-${esc(n.id)}" placeholder="Your explanation (optional here \u2014 it travels to the Collector with the acknowledgement; the formal 48-hour written explanation may follow through the MPDO)"></textarea>
@@ -791,7 +813,7 @@ function renderNotices(){
       :n.status==='ACK'?'<span class="st ok">acknowledged</span>'
       :'<span class="st pend">awaiting ack</span>';
     return `<div class="ntc" data-ntc="${esc(n.id)}"><span class="nno">${esc(n.no)}</span>
-      <span class="nt"><b>Attendance not marked · ${esc(n.date)}</b>
+      <span class="nt"><b>Attendance not marked · ${esc(dmy(n.date))}</b>
       <span>${seqth(n.seq)} notice of the month${n.status==='ACK'&&n.ackAt?' · acknowledged '+esc(tstr(n.ackAt)):''}</span></span>${st}</div>`;
   }).join(''):emptyState('No notices','Your attendance file is clean.'))+'</div>';
   $('#ntcBody').innerHTML=h;
@@ -843,6 +865,7 @@ function renderHome(){
 
   body.innerHTML = h2;
   const b=$('#homeStart'); if(b) b.addEventListener('click', ()=>openPicker());
+  const aw=$('#attAnyway'); if(aw) aw.addEventListener('click', ()=>{ $('#app').hidden=true; openAttendance(); });
   body.querySelectorAll('[data-open]').forEach(el=>el.addEventListener('click',()=>openRecord(el.dataset.open, el.dataset.ym||ymNow())));
   body.querySelectorAll('[data-view]').forEach(el=>el.addEventListener('click',()=>openView(el.dataset.view)));
   body.querySelectorAll('[data-refresh]').forEach(el=>el.addEventListener('click', refreshDistrict));
@@ -854,6 +877,10 @@ function banner(kind, icon, text){
 }
 function attendanceStrip(){
   const a = DB.att[todayStr()];
+  const off = dayOff();
+  if(!a && off && !attExempt((user()||{}).role))
+    return `<div class="banner ok">${ICON.tickC}<span>${esc('Holiday — '+off+'. Attendance is optional today, is not counted, and draws no notice.')}</span></div>
+      <div style="padding:0 var(--pad) 4px"><button class="btn sm quiet" id="attAnyway">Mark attendance anyway</button></div>`;
   if(!a) return '';
   const t = new Date(a.ts).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
   const bits = ['Attendance marked at ' + t];
