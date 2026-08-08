@@ -13,7 +13,7 @@
      own, not one common album at the end.
    ============================================================ */
 const SERVER_URL = 'https://script.google.com/macros/s/AKfycbz8Ye9LqGB3bLWkTWcdw6JvU__U9K4VRaG-IFFpwc67G__1vdpMryV6NEfz5FJrnezS/exec';
-const APP_VERSION = '6.4';
+const APP_VERSION = '6.6';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -150,6 +150,9 @@ function load(){
   }
   DB.att = DB.att || {}; DB.prefs = DB.prefs || {sun:0,big:0};
   DB.records = DB.records || {}; DB.cache = DB.cache || []; DB.master = DB.master || []; DB.leave = DB.leave || [];
+  DB.notices = DB.notices || {rows:[], at:0, grace:3};
+  DB.noticeAckQ = DB.noticeAckQ || [];      /* acknowledged on the phone, awaiting signal */
+  DB.noticeDone = DB.noticeDone || {};      /* ids acknowledged locally — the gate lifts at once */
   Object.values(DB.records).forEach(r => { if(r.filed === undefined) r.filed = (r.sync === 'synced'); });
 }
 let st;
@@ -294,15 +297,17 @@ const TAB_DEFS = {
   home:    ['Home',    '<svg viewBox="0 0 24 24"><path d="M12 3.2 3.6 10v10.3h6.1v-6h4.6v6h6.1V10z"/></svg>'],
   inspect: ['Inspect', '<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 2.4a7.6 7.6 0 1 1 0 15.2 7.6 7.6 0 0 1 0-15.2m1.1 2.3-1.1 5.1-3.6 2.6 1.3 1.9 4.5-3.2z"/></svg>'],
   records: ['Records', '<svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zm8 1.8V8h4.2zM8.5 11h7v1.8h-7zm0 3.6h7v1.8h-7zm0 3.6h4.6V20H8.5z"/></svg>'],
+  notices: ['Notices', '<svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zm8 1.8V8h4.2zM11.1 10h1.8v5h-1.8zm.9 6.4a1.15 1.15 0 1 1 0 2.3 1.15 1.15 0 0 1 0-2.3z"/></svg>'],
   more:    ['More',    '<svg viewBox="0 0 24 24"><path d="M6 10.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6m6 0a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6m6 0a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6"/></svg>']
 };
 function buildTabs(){
-  const keys = canEdit() ? ['home','inspect','records','more'] : ['home','records','more'];
+  const keys = canEdit() ? ['home','inspect','records','notices','more'] : ['home','records','notices','more'];
   $('#tabs').innerHTML = keys.map(k => {
     const [label, svg] = TAB_DEFS[k];
     return `<button role="tab" data-s="${k}" aria-selected="${k===TAB?'true':'false'}" aria-label="${label}">
-      ${svg}<span>${label}</span>${k==='records'?'<i class="dot" id="pendDot" hidden></i>':''}</button>`;
+      ${svg}<span>${label}</span>${k==='records'?'<i class="dot" id="pendDot" hidden></i>':''}${k==='notices'?'<i class="dot" id="ntcDot" hidden></i>':''}</button>`;
   }).join('');
+  updateNtcDot();
 }
 
 let TAB='home';
@@ -315,6 +320,7 @@ function go(tab){
   if(tab==='home') renderHome();
   if(tab==='inspect') renderInspect();
   if(tab==='records') renderRecords();
+  if(tab==='notices') renderNotices();
   if(tab==='more') renderMore();
 }
 $('#tabs').addEventListener('click', e => { const b=e.target.closest('button'); if(b) go(b.dataset.s); });
@@ -433,8 +439,14 @@ function gate(){
     return;
   }
   /* Attendance stands between sign-in and the rest of the app, for everyone. */
-  if(!attExempt(user().role) && !DB.att[todayStr()]){ $('#app').hidden = true; openAttendance(); return; }
+  if(!attExempt(user().role) && !DB.att[todayStr()]){ $('#app').hidden = true; $('#noticeGate').classList.remove('on'); openAttendance(); return; }
   $('#attend').classList.remove('on');
+  /* Then the notices: pending show-cause notices lock everything else.
+     Attendance is deliberately let through first — marking it is the cure,
+     and a lock that blocks the cure would only manufacture more notices. */
+  refreshNotices();
+  if(pendingNotices().length){ $('#app').hidden = true; openNoticeGate(); return; }
+  $('#noticeGate').classList.remove('on');
   $('#app').hidden = false;
   buildTabs(); go(canEdit() ? TAB : (TAB === 'inspect' ? 'home' : TAB)); updateDot();
   if(IOS && !STANDALONE && !DB.iosTipSeen) setTimeout(()=>$('#iosTip').classList.add('on'), 1400);
@@ -463,6 +475,7 @@ async function signIn(){
       DB.url=url; DB.session={token:r.token, user:r.user}; saveNow();
       $('#lPin').value=''; m.textContent='';
       try{ const g = await get({op:'gps'}); if(g.ok){ DB.master=g.gps; saveNow(); } }catch(e){}
+      try{ const n = await get({op:'notices'}); if(n.ok){ DB.notices={rows:n.rows||[], at:Date.now(), grace:n.grace||3}; saveNow(); } }catch(e){}
       gate(); toast('Signed in — ' + (r.user.name||''));
     } else { m.className='msg'; m.textContent = r.error || 'Sign-in failed.'; }
   }catch(e){ m.className='msg'; m.textContent='Cannot reach the server. Check the network and try again.'; }
@@ -653,6 +666,144 @@ async function _syncAttendance(){
    ============================================================ */
 const roleName = r => ({PS:'Panchayat Secretary', MPDO:'MPDO', MSO:'Mandal Special Officer', MPO:'MPO',
   DPO:'District Panchayat Officer', DLPO:'Divisional Panchayat Officer', COLLECTOR:'Collector & District Magistrate'}[r] || r);
+/* ============================================================
+   SHOW-CAUSE NOTICES
+   A pending notice locks the app — everything except marking today's
+   attendance, which is the cure and is never blocked. Acknowledgement is
+   recorded on the phone at once (the lock lifts) and reaches the district
+   when signal returns, exactly as attendance does. Receipt is not excuse:
+   the day's debit stands or falls on attendance alone.
+   ============================================================ */
+const seqth = n => n + (n===1?'st':n===2?'nd':n===3?'rd':'th');
+const tstr = iso => { const d=new Date(iso); return isNaN(d)?'':d.toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:true}); };
+function pendingNotices(){
+  return ((DB.notices&&DB.notices.rows)||[]).filter(n => n.status==='PENDING' && !DB.noticeDone[n.id]);
+}
+function updateNtcDot(){ const d=$('#ntcDot'); if(d) d.hidden=!pendingNotices().length; }
+function ntfy(title, body){
+  try{
+    if(!('Notification' in window)) return;
+    if(Notification.permission==='granted') new Notification(title,{body:body,icon:'icons/icon-192.png',tag:'sjsp-scn'});
+  }catch(e){}
+}
+let NTC_FETCHING=false;
+async function refreshNotices(force){
+  if(NTC_FETCHING||!navigator.onLine||!DB.session) return;
+  if(!force && Date.now()-((DB.notices&&DB.notices.at)||0) < 5*60000) return;
+  NTC_FETCHING=true;
+  try{
+    const was=pendingNotices().length;
+    const r=await get({op:'notices'});
+    if(r&&r.ok){
+      DB.notices={rows:r.rows||[], at:Date.now(), grace:r.grace||3};
+      /* what the district has already recorded need not travel again */
+      DB.noticeAckQ=DB.noticeAckQ.filter(a=>{ const row=(r.rows||[]).find(x=>x.id===a.id); return !(row&&row.status==='ACK'); });
+      Object.keys(DB.noticeDone).forEach(id=>{
+        if(DB.noticeAckQ.some(a=>a.id===id)) return;
+        const row=(r.rows||[]).find(x=>x.id===id);
+        if(!row||row.status==='ACK') delete DB.noticeDone[id];
+      });
+      saveNow(); updateNtcDot();
+      const now=pendingNotices().length;
+      if(now>was) ntfy('Show cause notice — SJSP', 'Attendance was not marked. Open the app and acknowledge the notice.');
+      if(now && !$('#attend').classList.contains('on') && !$('#noticeGate').classList.contains('on')) gate();
+      if(TAB==='notices' && !$('#app').hidden) renderNotices();
+    }
+  }catch(e){}
+  NTC_FETCHING=false;
+}
+function scnHTML(n, withAck){
+  const g=(DB.notices&&DB.notices.grace)||3, hot=n.seq>g, last=n.seq===g;
+  const caution = hot
+    ? 'This is the '+seqth(n.seq)+' notice of the calendar month — beyond the '+g+' warnings. If attendance remains unmarked at the close of the day, one day of Casual Leave is debited (loss of pay once the year\u2019s CL is exhausted).'
+    : last
+    ? 'This is the '+seqth(n.seq)+' notice of the calendar month — the last warning. From the next default, one day of CL is debited at the close of the day.'
+    : 'This is the '+seqth(n.seq)+' notice of the calendar month. After '+g+' notices in a month, each further default debits one day of CL at the close of the day.';
+  return `<div class="scn">
+   <div class="scnhead">
+     <p class="gvt">Government of Telangana</p>
+     <p class="off">Office of the Collector &amp; District Magistrate :: Jangaon District</p>
+     <div class="noline"><span>Notice No. <b>${esc(n.no)}</b></span><span>Dated: <b>${esc(n.date)}</b></span></div>
+     <h3>SHOW CAUSE NOTICE</h3>
+     <div style="text-align:center;margin-top:7px"><span class="seqpill ${n.seq>=g?'hot':''}">${seqth(n.seq)} notice this month</span></div>
+   </div>
+   <div class="scnbody">
+     <p class="sub">Sub: SJSP &ndash; Daily attendance in the SJSP App &ndash; Failure to mark attendance on ${esc(n.date)} &ndash; Explanation called for within 48 hours &ndash; Regarding.</p>
+     <p>On verification of the SJSP App attendance report for ${esc(n.date)}, it is noticed that you failed to mark your attendance in the App on that date. Non-marking of attendance as mandated amounts to unauthorised absence from assigned duty and prima facie constitutes dereliction of duty in violation of Rule 3 of the Telangana Civil Services (Conduct) Rules, 1964.</p>
+     <p>You are directed to acknowledge this notice and to submit your written explanation, to reach the undersigned within 48 (forty-eight) hours, as to why disciplinary action should not be initiated under the Telangana Civil Services (CC&amp;A) Rules, 1991. If sanctioned leave, prior permission, or a verifiable technical difficulty is claimed, documentary proof shall be furnished. You shall mark daily attendance in the App henceforth without fail.</p>
+     <div class="caution">${esc(caution)}</div>
+     ${n.clDebited?'<div class="caution" style="margin-top:9px">One day of leave stands debited against this notice at the close of '+esc(n.date)+'. The entry is on the Leave register.</div>':''}
+     ${n.status==='ACK'&&!withAck?'<p style="margin-top:10px;color:var(--ink-2)">Acknowledged '+esc(tstr(n.ackAt))+(n.ackNote?' &mdash; \u201c'+esc(n.ackNote)+'\u201d':'')+'</p>':''}
+     <p style="margin-top:10px;color:var(--ink-2);font-size:12.5px">Sd/- SANDEEP KUMAR JHA, I.A.S., Collector &amp; District Magistrate, Jangaon District.</p>
+   </div>
+   ${withAck?`<div class="ackzone">
+     <textarea id="exp-${esc(n.id)}" placeholder="Your explanation (optional here \u2014 it travels to the Collector with the acknowledgement; the formal 48-hour written explanation may follow through the MPDO)"></textarea>
+     <button class="btn" style="margin-top:10px" data-ack="${esc(n.id)}">I acknowledge receipt of this notice</button>
+   </div>`:''}
+  </div>`;
+}
+function openNoticeGate(){
+  const list=pendingNotices();
+  $('#ntcMsg').textContent='';
+  $('#ntcWho').textContent=(list.length===1?'One notice stands':list.length+' notices stand')+
+    ' against unmarked attendance. The app remains locked until each is acknowledged below. Acknowledgement records receipt; your explanation travels with it to the Collector.';
+  $('#ntcList').innerHTML=list.map(n=>scnHTML(n,true)).join('');
+  $('#noticeGate').classList.add('on');
+  window.scrollTo(0,0);
+}
+function ackNotice(id, note){
+  const when=new Date().toISOString();
+  DB.noticeDone[id]=when;
+  DB.noticeAckQ.push({id:id, ackAt:when, note:String(note||'').slice(0,1000)});
+  const row=((DB.notices&&DB.notices.rows)||[]).find(x=>x.id===id);
+  if(row){ row.status='ACK'; row.ackAt=when; row.ackNote=String(note||''); }
+  saveNow(); updateNtcDot();
+  toast(navigator.onLine?'Notice acknowledged — sending to the district':'Notice acknowledged — it reaches the district when signal returns', 3500);
+  syncNoticeAcks();
+  if(pendingNotices().length) openNoticeGate(); else gate();
+}
+async function syncNoticeAcks(){
+  if(!navigator.onLine||!DB.session||!DB.noticeAckQ.length) return;
+  try{
+    const r=await post({kind:'noticeAck', token:DB.session.token, acks:DB.noticeAckQ.slice(0,40)});
+    if(r&&r.ok){ DB.noticeAckQ=[]; saveNow(); }
+  }catch(e){}
+}
+$('#ntcList').addEventListener('click', e=>{
+  const b=e.target.closest('[data-ack]'); if(!b) return;
+  b.disabled=true;
+  const ta=document.getElementById('exp-'+b.dataset.ack);
+  ackNotice(b.dataset.ack, (ta&&ta.value)||'');
+});
+$('#ntcSignOut').addEventListener('click', endSession);
+function renderNotices(){
+  const rows=((DB.notices&&DB.notices.rows)||[]);
+  const g=(DB.notices&&DB.notices.grace)||3;
+  const pend=pendingNotices().length;
+  $('#ntcSub').textContent=rows.length
+    ? rows.length+' on your file · '+(pend?pend+' awaiting acknowledgement':'all acknowledged')
+    : 'Nothing on your file';
+  let h='<div class="rulebox"><b>The attendance rule.</b> Unmarked attendance on a working day draws a show-cause notice at mid-morning. The first '+g+' notices in a calendar month are warnings; from the next one on, one day of CL is debited at the close of the day if attendance is still unmarked — loss of pay once the year\u2019s CL is exhausted. Sundays and declared holidays are never counted. Marking attendance is the cure; acknowledgement alone does not stop the debit.</div>';
+  if(('Notification' in window) && Notification.permission==='default')
+    h+='<div style="padding:12px var(--pad) 0"><button class="btn sm sec" id="ntcAlerts">Alert me on this phone when a notice arrives</button></div>';
+  h+='<div class="pillar" style="margin-top:12px">'+(rows.length?rows.map(n=>{
+    const st=n.clDebited?'<span class="st deb">CL debited</span>'
+      :n.status==='ACK'?'<span class="st ok">acknowledged</span>'
+      :'<span class="st pend">awaiting ack</span>';
+    return `<div class="ntc" data-ntc="${esc(n.id)}"><span class="nno">${esc(n.no)}</span>
+      <span class="nt"><b>Attendance not marked · ${esc(n.date)}</b>
+      <span>${seqth(n.seq)} notice of the month${n.status==='ACK'&&n.ackAt?' · acknowledged '+esc(tstr(n.ackAt)):''}</span></span>${st}</div>`;
+  }).join(''):emptyState('No notices','Your attendance file is clean.'))+'</div>';
+  $('#ntcBody').innerHTML=h;
+  const al=$('#ntcAlerts'); if(al) al.onclick=()=>{ try{ Notification.requestPermission().then(()=>renderNotices()); }catch(e){} };
+  $('#ntcBody').querySelectorAll('[data-ntc]').forEach(el=>el.onclick=()=>{
+    const n=rows.find(x=>x.id===el.dataset.ntc); if(!n) return;
+    showSheet(scnHTML(n,false)+'<div style="padding:12px 0 4px"><button class="btn sec" id="ntcClose">Close</button></div>');
+    const c=$('#ntcClose'); if(c) c.onclick=hideSheet;
+  });
+  refreshNotices();
+}
+
 function emptyState(t,p){ return `<div class="empty">${ICON.empty}<b>${esc(t)}</b><p>${esc(p)}</p></div>`; }
 function showScreen(id){ $$('.screen').forEach(s=>s.classList.toggle('on', s.id==='s-'+id)); window.scrollTo(0,0); }
 
@@ -1705,6 +1856,8 @@ async function autoSync(){
   SYNCING = true;
   try{
     try{ await syncAttendance(); }catch(e){}
+    try{ await syncNoticeAcks(); }catch(e){}
+    try{ refreshNotices(); }catch(e){}
     try{ await syncLeave(); }catch(e){}
     try{ if(leaveVisible((user()||{}).role)) await refreshLeave(); }catch(e){}
 

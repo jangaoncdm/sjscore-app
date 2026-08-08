@@ -174,6 +174,25 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:#D8DEE
 .fchip b{font-family:var(--mono);color:var(--tx)}
 .fchip[aria-pressed=true]{box-shadow:var(--nm-in-sm);color:var(--pri);font-weight:700}
 .fchip:hover{color:var(--tx)}
+/* export bar */
+.expbar{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.expbar .tbtn{min-height:40px}
+.expnote{font-size:12px;color:var(--tx-3)}
+
+/* the ask desk */
+.chat{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
+.chatlog{max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:2px 2px 6px}
+.msg{max-width:88%;padding:9px 13px;border-radius:14px;font-size:13.5px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
+.msg.q{align-self:flex-end;background:var(--seal);color:#fff;border-bottom-right-radius:4px}
+.msg.a{align-self:flex-start;background:#F1F4F8;border:1px solid var(--line);border-bottom-left-radius:4px}
+.msg.err{align-self:flex-start;background:var(--red-2);border:1px solid #F0C6C6;color:#8F1D1D;border-bottom-left-radius:4px}
+.msg.wait{align-self:flex-start;background:transparent;color:var(--tx-3);padding:2px 4px}
+.askrow{display:flex;gap:8px;margin-top:10px}
+.askrow input{flex:1;min-width:0;border:1px solid var(--line);border-radius:12px;padding:11px 13px;font:inherit;font-size:13.5px;background:var(--panel);color:var(--tx)}
+.askrow input:focus{outline:2px solid var(--seal);outline-offset:1px}
+.askrow input:disabled{opacity:.6}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+
 /* briefing */
 .brief{font-size:13.5px;line-height:1.7;white-space:pre-wrap;max-height:330px;overflow:auto}
 .brief b{display:block;margin:12px 0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--tx-3)}
@@ -238,6 +257,7 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:#D8DEE
       <button data-v="attendance"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M4.5 20c1.2-3.6 4-5.4 7.5-5.4s6.3 1.8 7.5 5.4"/></svg>Attendance</button>
       <button data-v="villages"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V9l7-5 7 5v12M9.5 21v-6h5v6"/></svg>Villages</button>
       <button data-v="leave"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>Leave</button>
+      <button data-v="notices"><svg viewBox="0 0 24 24"><path d="M12 3a5.5 5.5 0 0 0-5.5 5.5V12l-1.8 3.4h14.6L17.5 12V8.5A5.5 5.5 0 0 0 12 3z"/><path d="M9.8 17.8a2.3 2.3 0 0 0 4.4 0"/></svg>Notices</button>
       <button data-v="map"><svg viewBox="0 0 24 24"><path d="M9 4 3.8 6v14L9 18l6 2 5.2-2V4L15 6 9 4zM9 4v14M15 6v14"/></svg>Map</button>
     </nav>
     <div class="railfoot">District Operations Center<br>Rc.No.788/DPO/26/34<br><a href="./">Open the field app</a></div>
@@ -279,6 +299,7 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:#D8DEE
 const $=s=>document.querySelector(s);
 let ST=null,TIMER=null,LASTOK=0,EVERY=60000,NEXT=0,INFLIGHT=false,DOWN=false,DATA=null,VIEW='overview',MET='present',MONTH='',SORTD=true;
 let MAP=null,MLAYER=null,MAP2=null,M2LAYER=null,GEO=[],MARKERS=[],MFILTER='all',BRIEF=null,BRIEFING=false,NEWS=[],REC={};
+let CHAT=[],ASKING=false,XLSXP=null;
 
 /* ---------------- session ---------------- */
 function boot(){
@@ -454,6 +475,11 @@ function analyse(j){
   if(oldPend.length) iss.push({p:2,t:oldPend.length+' leave application'+(oldPend.length>1?'s':'')+' waiting beyond 48 hours',
     d:'The oldest has waited '+Math.round(oldestH)+' hours.',a:'Pass orders today — held days block fresh applications.',
     list:oldPend.map(l=>l.name+' · '+l.type+' '+l.days+'d from '+dm(l.from))});
+  if(j.notices&&j.notices.pending) iss.push({p:2,
+    t:j.notices.pending+' show-cause notice'+(j.notices.pending>1?'s':'')+' awaiting acknowledgement',
+    d:'Each locks that officer\u2019s app until acknowledged; persistence means the app is not being opened at all.',
+    a:'Have the MPDO put the officer on the phone; the Notices view carries the register.',
+    list:(j.notices.rows||[]).filter(n=>n.status!=='ACK').slice(0,40).map(n=>n.no+' · '+n.name+' · '+(n.mandal||'—')+' · '+n.date)});
   /* A mark is implausible if the fix is coarse enough to cover a mandal, if
      the phone is not on Indian time, or if the coordinates fall outside a
      generous box around the district. Any one of those means the location
@@ -741,10 +767,23 @@ function vOverview(j,A){
        <span>${esc(x.d)}</span><span class="act">${esc(x.a)}</span></div></div>`).join('')+`</div>`
     :'<div class="allclear">All clear — nothing needs orders right now.</div>','issP');
 
-  h+=panel('c12','Collector\u2019s briefing','written from today\u2019s figures',
+  h+=panel('c12','Collector\u2019s briefing desk','written from today\u2019s figures · and it answers questions',
     `<div class="briefbar"><button class="tbtn pri" id="briefGo">${BRIEFING?'Writing\u2026':(BRIEF?'Write it again':'Write today\u2019s briefing')}</button>
       <span style="font-size:12px;color:var(--tx-3)">${BRIEF?('written '+hm(BRIEF.at)):'Drawn only from the figures on this screen. Read it as a draft, not as orders.'}</span></div>
-     <div class="brief" id="briefBody">${BRIEF?briefHTML(BRIEF.text):'<span style="color:var(--tx-3);font-size:13px">Not written yet.</span>'}</div>`,'brief');
+     <div class="brief" id="briefBody">${BRIEF?briefHTML(BRIEF.text):'<span style="color:var(--tx-3);font-size:13px">Not written yet.</span>'}</div>
+     <div class="chat">
+       <b style="display:block;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--tx-3);margin-bottom:8px">Ask the figures</b>
+       <div class="chatlog" id="chatLog" data-k="chatlog">${chatHTML()}</div>
+       <div class="askrow">
+         <input id="askIn" placeholder="Ask anything the figures can answer — who, where, how many\u2026" autocomplete="off" enterkeyhint="send"${ASKING?' disabled':''}>
+         <button class="tbtn pri" id="askGo"${ASKING?' disabled':''}>${ASKING?'Asking\u2026':'Ask'}</button>
+       </div>
+       <div class="chips">${CHAT.length
+         ? '<button class="fchip" id="askClear">Clear the thread</button>'
+         : ['Who has not marked today?','Which mandal is furthest behind on coverage?','List the red-flag villages with scores','Draft a memo to the MPDOs on today\u2019s absentees']
+             .map(q=>`<button class="fchip" data-ask="${esc(q)}">${esc(q)}</button>`).join('')}</div>
+       <div style="font-size:11.5px;color:var(--tx-3);margin-top:8px">Answers come from the figures on this screen alone. Drafts it writes are drafts — nothing is an order until the Collector passes it.</div>
+     </div>`,'brief');
   h+=panel('c12','Day by day · the last fortnight','tap a day for its villages', dayTable(j),'dayd');
   h+=vTables(j,A,true);
   return h;
@@ -786,6 +825,204 @@ function briefFacts(j,A){
   L.push('Mandal coverage: '+j.coverage.map(c=>c.mandal+' '+c.done+'/'+c.total).join('; ')+'. Needed per remaining working day: '+A.needPerDay+'.');
   L.push('Leave awaiting orders: '+j.leave.pending.length+(j.leave.pending.length?' — '+j.leave.pending.map(l=>l.name+' '+l.type+' '+l.days+'d').join('; '):'')+'.');
   return L.join('\n');
+}
+
+/* ---------------- the ask desk ----------------
+   Everything the Collector might ask after, in one plain-text record. The
+   most question-worthy sections ride first, so if the backend ever trims
+   the tail it loses mark-in times, never the gaps. */
+function askFacts(j,A){
+  const L=[];
+  const off=r=>r.name+' ('+r.role+', '+(r.mandal||'—')+')';
+  L.push('AS OF '+new Date().toString().slice(0,21)+' · month under review '+j.ym+' · Jangaon district.');
+  L.push('ROLL: '+A.officersDue+' officers due to mark (the Collector is not counted). TODAY: present '+A.present+', on sanctioned leave '+A.onLeave+', not marked '+A.absent+'; marked before 10am '+A.by10+'.');
+  L.push('NOT MARKED TODAY ('+A.absent+'): '+(j.today.absent.map(off).join('; ')||'none')+'.');
+  L.push('ON LEAVE TODAY ('+A.onLeave+'): '+(j.today.onLeave.map(r=>off(r)+(r.leaveType?' · '+r.leaveType:'')).join('; ')||'none')+'.');
+  const bad=j.today.present.filter(suspect);
+  L.push('MARKS WHOSE LOCATION IS NOT TRUSTWORTHY ('+bad.length+'): '+(bad.map(r=>r.name+' of '+(r.mandal||'—')).join('; ')||'none')+'.');
+  const noFix=j.today.present.filter(r=>!r.verified&&!suspect(r));
+  L.push('MARKED WITHOUT A LOCATION FIX ('+noFix.length+'): '+(noFix.map(r=>r.name).join('; ')||'none')+'.');
+  const mm={}; j.coverage.forEach(c=>{mm[c.mandal]={p:0,l:0,a:0,done:c.done,total:c.total};});
+  j.today.present.forEach(r=>{if(mm[r.mandal])mm[r.mandal].p++;});
+  j.today.onLeave.forEach(r=>{if(mm[r.mandal])mm[r.mandal].l++;});
+  j.today.absent.forEach(r=>{if(mm[r.mandal])mm[r.mandal].a++;});
+  L.push('MANDAL TABLE (present/leave/not-marked today · villages evaluated of total): '+
+    Object.keys(mm).sort().map(k=>{const v=mm[k];return k+' '+v.p+'/'+v.l+'/'+v.a+' · '+v.done+' of '+v.total;}).join('; ')+'.');
+  L.push('MONTH '+j.ym+': villages evaluated '+A.filed+' of '+A.cov.t+'; district average '+(A.avg==null?'n/a':A.avg)+
+    (A.prevAvg!=null?' (last month '+A.prevAvg+')':'')+'; grades A '+j.month.grades.A+', B '+j.month.grades.B+', C '+j.month.grades.C+', D '+j.month.grades.D+
+    '; red-flagged '+j.month.rfCount+'; needed per remaining working day '+A.needPerDay+' ('+A.wdLeft+' working day'+(A.wdLeft>1?'s':'')+' left).');
+  const fl=j.month.rows.filter(r=>String(r.rf||'').trim());
+  L.push('RED-FLAG VILLAGES ('+fl.length+'): '+(fl.map(r=>r.gp+' ('+r.mandal+') RF '+r.rf+' score '+r.score).join('; ')||'none')+'.');
+  if(j.notices){ const nth=x=>x+(x===1?'st':x===2?'nd':x===3?'rd':'th');
+    L.push('SHOW-CAUSE NOTICES (rule: first '+j.notices.grace+' in a month warn, then 1 CL debits per day of continued default at day-close): issued today '+j.notices.today+
+      '; awaiting acknowledgement '+j.notices.pending+'; this month '+j.notices.month+' with '+j.notices.debitsMonth+' CL debit(s). Latest: '+
+      ((j.notices.rows||[]).slice(0,25).map(n=>n.no+' '+n.name+' ('+(n.mandal||'—')+') for '+n.date+', '+nth(n.seq)+' of month, '+
+        (n.status==='ACK'?'acknowledged':'PENDING')+(n.clDebited?', 1 CL debited':'')).join('; ')||'none')+'.'); }
+  L.push('LEAVE AWAITING ORDERS ('+j.leave.pending.length+'): '+
+    (j.leave.pending.map(l=>l.name+' ('+(l.mandal||'—')+') '+l.type+' '+l.days+'d from '+l.from+', applied '+String(l.appliedAt).slice(0,10)).join('; ')||'none')+'.');
+  L.push('RECENT LEAVE ORDERS: '+(j.leave.recent.slice(0,15).map(l=>l.name+' '+l.type+' '+l.days+'d — '+l.status).join('; ')||'none')+'.');
+  L.push('LAST 14 DAYS (date · present/leave): '+j.att14.map(a=>a.date.slice(5)+' '+a.present+'/'+a.leave).join('; ')+'.');
+  const M=matrixData(j);
+  if(M){ const low=M.rows.filter(r=>r.pct<80).slice(0,20);
+    if(low.length) L.push('LOWEST ATTENDANCE OVER THE LAST '+M.wdN+' WORKING DAYS: '+
+      low.map(r=>r.name+' ('+(r.mandal||'—')+') '+(r.p+r.l)+'/'+M.wdN+' = '+r.pct+'%').join('; ')+'.'); }
+  L.push('VILLAGES STILL TO EVALUATE THIS MONTH, BY MANDAL: '+j.coverage.map(c=>{
+    const p=c.pending||[]; return c.mandal+' ('+p.length+'): '+(p.slice(0,25).join(', ')||'—')+(p.length>25?' +'+(p.length-25)+' more':'');}).join(' | ')+'.');
+  const filed=[...j.month.rows].sort((a,b)=>a.score-b.score);
+  L.push('VILLAGES EVALUATED THIS MONTH ('+filed.length+'), worst first — village (mandal) score/grade[ RF] by officer on date: '+
+    (filed.slice(0,320).map(r=>r.gp+' ('+r.mandal+') '+r.score+'/'+r.grade+(String(r.rf||'').trim()?' RF'+r.rf:'')+
+      ' by '+String(r.officer||'').replace(/\s*\(\d+\)$/,'')+' on '+r.date).join('; ')||'none')+'.');
+  L.push('PRESENT TODAY WITH MARK-IN TIME: '+
+    (j.today.present.map(r=>r.name+' ('+(r.mandal||'—')+') '+hm(r.at)+((r.marks||1)>1?' ×'+r.marks:'')).join('; ')||'none')+'.');
+  return L.join('\n');
+}
+function chatHTML(){
+  if(!CHAT.length&&!ASKING)
+    return '<div class="msg a" style="color:var(--tx-2)">Ask a question — the desk answers from the live figures on this screen alone, and says so where the record is silent.</div>';
+  let h=CHAT.map(m=>`<div class="msg ${m.role==='user'?'q':(m.err?'err':'a')}">${esc(m.content)}</div>`).join('');
+  if(ASKING) h+='<div class="msg wait">Reading the figures\u2026</div>';
+  return h;
+}
+function scrollChat(){ const el=$('#chatLog'); if(el) el.scrollTop=el.scrollHeight; }
+async function sendAsk(q){
+  q=String(q||'').trim(); if(!q||ASKING||!DATA) return;
+  CHAT.push({role:'user',content:q}); ASKING=true; render(DATA); scrollChat();
+  try{
+    const A=analyse(DATA);
+    const hist=CHAT.filter(m=>!m.err).slice(-8).map(m=>({role:m.role,content:m.content}));
+    const r=await fetch(ST.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({kind:'ask',token:ST.token,facts:askFacts(DATA,A),messages:hist})});
+    const j=await r.json();
+    if(j.ok) CHAT.push({role:'assistant',content:j.text||'(no answer)'});
+    else{
+      const e=String(j.error||'refused'); let cure='';
+      if(/UrlFetchApp|external_request|permission/i.test(e))
+        cure=' Run authoriseBriefing once in Apps Script and redeploy — the briefing button above carries the full steps.';
+      else if(/No briefing key/i.test(e))
+        cure=' Set ANTHROPIC_API_KEY with setBriefKey in Apps Script.';
+      else if(/unknown request/i.test(e))
+        cure=' The Sheet is running an older Code.gs — paste the 6.5 backend and deploy a new version; the rest of the console works meanwhile.';
+      CHAT.push({role:'assistant',err:true,content:'Could not answer: '+e+cure});
+    }
+  }catch(e){ CHAT.push({role:'assistant',err:true,content:'Could not reach the district: '+e.message}); }
+  ASKING=false; if(DATA) render(DATA); scrollChat();
+}
+
+/* ---------------- attendance export ----------------
+   CSV needs nothing from the network; the Excel workbook pulls SheetJS from
+   the CDN once, on the first press, and says so if it cannot. */
+const csvCell=v=>{const s=String(v==null?'':v);return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
+const csvText=rows=>'\uFEFF'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n');
+function dlBlob(name,mime,text){
+  const b=new Blob([text],{type:mime}), u=URL.createObjectURL(b), a=document.createElement('a');
+  a.href=u; a.download=name; document.body.appendChild(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(u); a.remove();},400);
+}
+function todayRoster(j){
+  const rows=[];
+  j.today.present.forEach(r=>rows.push([r.name,r.role,r.mandal||'','PRESENT','',hm(r.at),r.marks||1,
+    suspect(r)?'NOT TRUSTWORTHY':r.verified?'Verified':'No fix',
+    r.lat==null?'':r.lat, r.lng==null?'':r.lng, r.acc==null?'':Math.round(r.acc)]));
+  j.today.onLeave.forEach(r=>rows.push([r.name,r.role,r.mandal||'','ON LEAVE',r.leaveType||'','','','','','','']));
+  j.today.absent.forEach(r=>rows.push([r.name,r.role,r.mandal||'','NOT MARKED','','','','','','','']));
+  rows.sort((a,b)=>String(a[2]).localeCompare(String(b[2]))||String(a[0]).localeCompare(String(b[0])));
+  return rows;
+}
+const ROSTER_HEAD=['Officer','Role','Mandal','Status','Leave type','Marked at','Marks','Location','Latitude','Longitude','± m'];
+function matrixData(j){
+  if(!j||!j.attm||!Array.isArray(j.attm.dates)||!Array.isArray(j.attm.rows)||!j.attm.rows.length) return null;
+  const dates=j.attm.dates, sun=dates.map(d=>new Date(d+'T00:00:00').getDay()===0);
+  const wdN=sun.filter(s=>!s).length;
+  const rows=j.attm.rows.map(r=>{
+    const name=r[0],role=r[1],mandal=r[2],days=String(r[3]||'');
+    let pw=0,lw=0;
+    const cells=dates.map((d,i)=>{const c=days[i]||'-';
+      if(c==='P'){ if(!sun[i])pw++; return 'P'; }
+      if(c==='L'){ if(!sun[i])lw++; return 'L'; }
+      return sun[i]?'S':'A'; });
+    const aw=Math.max(0,wdN-pw-lw);
+    return {name,role,mandal,cells,p:pw,l:lw,a:aw,pct:wdN?Math.round((pw+lw)*100/wdN):0};
+  }).sort((x,y)=>x.pct-y.pct||String(x.mandal).localeCompare(String(y.mandal))||String(x.name).localeCompare(String(y.name)));
+  return {dates,sun,rows,wdN};
+}
+function matrixRows(M){
+  const head=['Officer','Role','Mandal'].concat(M.dates.map((d,i)=>dm(d)+(M.sun[i]?' Su':'')))
+    .concat(['Present','Leave','Not marked','Attendance %']);
+  const rows=M.rows.map(r=>[r.name,r.role,r.mandal||''].concat(r.cells).concat([r.p,r.l,r.a,r.pct+'%']));
+  rows.push([]); rows.push(['P present · L on leave · A not marked · S Sunday','','','% counts working days only — Sundays are excluded']);
+  return [head].concat(rows);
+}
+function mandalCompare(j){
+  const m={}; const bump=(r,k)=>{const mm=r.mandal||'—'; m[mm]=m[mm]||{p:0,l:0,a:0,p14:0,w14:0}; m[mm][k]++;};
+  j.today.present.forEach(r=>bump(r,'p')); j.today.onLeave.forEach(r=>bump(r,'l')); j.today.absent.forEach(r=>bump(r,'a'));
+  const M=matrixData(j);
+  if(M) M.rows.forEach(r=>{const mm=r.mandal||'—'; m[mm]=m[mm]||{p:0,l:0,a:0,p14:0,w14:0}; m[mm].p14+=r.p+r.l; m[mm].w14+=M.wdN;});
+  return Object.keys(m).sort().map(k=>{const v=m[k],t=v.p+v.l+v.a;
+    return [k,t,v.p,v.l,v.a,t?Math.round((v.p+v.l)*100/t)+'%':'—',v.w14?Math.round(v.p14*100/v.w14)+'%':'—'];});
+}
+function loadXLSX(){
+  if(window.XLSX) return Promise.resolve();
+  if(XLSXP) return XLSXP;
+  XLSXP=new Promise((res,rej)=>{const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload=()=>res(); s.onerror=()=>{XLSXP=null; rej(new Error('Could not load the Excel writer — check the connection and press again.'));};
+    document.head.appendChild(s);});
+  return XLSXP;
+}
+function expNote(t){ const el=$('#expNote'); if(el) el.textContent=t; }
+async function doExport(kind){
+  if(!DATA){ expNote('Nothing to export yet — the figures have not arrived.'); return; }
+  const day=new Date().toISOString().slice(0,10), j=DATA;
+  if(kind==='today'){
+    dlBlob('SJGP_Attendance_Today_'+day+'.csv','text/csv;charset=utf-8',csvText([ROSTER_HEAD].concat(todayRoster(j))));
+    expNote('Saved: today, officer by officer ('+(j.today.present.length+j.today.onLeave.length+j.today.absent.length)+' officers).'); return; }
+  if(kind==='absent'){
+    const rows=j.today.absent.map(r=>[r.name,r.role,r.mandal||'']).sort((a,b)=>String(a[2]).localeCompare(String(b[2]))||String(a[0]).localeCompare(String(b[0])));
+    const body=[['Officer','Role','Mandal']].concat(rows.length?rows:[['Everyone is accounted for today.','','']]);
+    body.push([]); body.push(['Not marked',rows.length,'of '+(j.totals.officers-1)+' due · '+day]);
+    dlBlob('SJGP_NotMarked_'+day+'.csv','text/csv;charset=utf-8',csvText(body));
+    expNote('Saved: not marked today ('+rows.length+').'); return; }
+  if(kind==='matrix'){
+    const M=matrixData(j);
+    if(!M){ expNote('The 14-day matrix needs the 6.5 Code.gs on the Sheet — paste it, deploy a new version, refresh. Today\u2019s exports work meanwhile.'); return; }
+    dlBlob('SJGP_Attendance_14day_'+day+'.csv','text/csv;charset=utf-8',csvText(matrixRows(M)));
+    expNote('Saved: 14-day comparative matrix ('+M.rows.length+' officers × '+M.dates.length+' days).'); return; }
+  if(kind==='xlsx'){
+    expNote('Preparing the workbook\u2026');
+    try{ await loadXLSX(); }catch(e){ expNote(e.message); return; }
+    const wb=XLSX.utils.book_new();
+    const A=analyse(j), M=matrixData(j);
+    const summary=[
+      ['SJGP · Attendance record','Jangaon district'],
+      ['Generated',new Date().toLocaleString('en-IN')],
+      ['Month under review',j.ym],
+      [],
+      ['Officers due to mark',A.officersDue],
+      ['Present today',A.present],['On sanctioned leave',A.onLeave],['Not marked',A.absent],
+      ['Marked before 10:00',A.by10],
+      [],
+      ['Mandal comparison','Officers','Present','Leave','Not marked','Today %','14-day %']
+    ].concat(mandalCompare(j));
+    const shS=XLSX.utils.aoa_to_sheet(summary); shS['!cols']=[{wch:26},{wch:12},{wch:10},{wch:10},{wch:12},{wch:10},{wch:10}];
+    XLSX.utils.book_append_sheet(wb,shS,'Summary');
+    const shT=XLSX.utils.aoa_to_sheet([ROSTER_HEAD].concat(todayRoster(j)));
+    shT['!cols']=[{wch:24},{wch:8},{wch:16},{wch:12},{wch:10},{wch:10},{wch:6},{wch:16},{wch:10},{wch:10},{wch:6}];
+    XLSX.utils.book_append_sheet(wb,shT,'Today');
+    const abs=j.today.absent.map(r=>[r.name,r.role,r.mandal||'']).sort((a,b)=>String(a[2]).localeCompare(String(b[2]))||String(a[0]).localeCompare(String(b[0])));
+    const shA=XLSX.utils.aoa_to_sheet([['Officer','Role','Mandal']].concat(abs.length?abs:[['Everyone is accounted for today.']]));
+    shA['!cols']=[{wch:24},{wch:8},{wch:16}];
+    XLSX.utils.book_append_sheet(wb,shA,'Not marked');
+    if(M){ const shM=XLSX.utils.aoa_to_sheet(matrixRows(M));
+      shM['!cols']=[{wch:24},{wch:8},{wch:16}].concat(M.dates.map(()=>({wch:7}))).concat([{wch:8},{wch:7},{wch:11},{wch:12}]);
+      XLSX.utils.book_append_sheet(wb,shM,'Officer × day 14d'); }
+    const dr=dayRows(j);
+    const shD=XLSX.utils.aoa_to_sheet([['Date','Present','Leave','Not marked','Villages filed','Day average','Red flags']]
+      .concat(dr.map(r=>[r.date,r.present,r.leave,r.absent,r.filed,r.avg==null?'':r.avg,r.rf])));
+    shD['!cols']=[{wch:12},{wch:9},{wch:8},{wch:11},{wch:13},{wch:11},{wch:9}];
+    XLSX.utils.book_append_sheet(wb,shD,'Daily counts');
+    XLSX.writeFile(wb,'SJGP_Attendance_'+day+'.xlsx');
+    expNote('Saved: SJGP_Attendance_'+day+'.xlsx'+(M?'':' — the 14-day sheet needs the 6.5 Code.gs on the Sheet.'));
+    return; }
 }
 /* who is carrying the district and who is dragging it — villages and mandals */
 /* the day book: what each day actually produced */
@@ -877,6 +1114,14 @@ function vAttendance(j,A){
   h+=kpi('Marked by 10:00',IC.u,A.present?pct(A.by10,A.present)+'%':'—','',A.by10+' of '+A.present);
   h+=kpi('Location not trustworthy',IC.u,j.today.present.filter(r=>suspect(r)||!r.verified).length,'','of '+A.present+' present');
   h+='</div>';
+  h+=panel('c12','Export the attendance record','opens in Excel · names, gaps and the fortnight compared',
+    `<div class="expbar">
+      <button class="tbtn pri" data-exp="xlsx">Excel workbook (.xlsx)</button>
+      <button class="tbtn" data-exp="today">CSV · today, officer by officer</button>
+      <button class="tbtn" data-exp="absent">CSV · not marked today</button>
+      <button class="tbtn" data-exp="matrix">CSV · 14-day comparative matrix</button>
+      <span class="expnote" id="expNote">The workbook carries every sheet: today, the gaps, officer × day, mandal comparison, daily counts.</span>
+    </div>`);
   h+=panel('c7','Attendance rate · last 14 days','accounted of '+A.officersDue,
     areaChart(j.att14x,'present','var(--seal)'));
   h+=panel('c5','Mark-in time today','by hour', histMarkIn(j.today.present));
@@ -950,6 +1195,31 @@ function vLeave(j,A){
     (lr.length?lr.slice(0,60).map(row).join(''):'<tr><td colspan="5" class="empty">No orders yet.</td></tr>')+`</tbody></table></div>`,'lr');
   return h;
 }
+function vNotices(j,A){
+  const N=j.notices;
+  if(!N) return panel('c12','Show-cause notices','needs the 6.6 backend',
+    '<div class="empty">The notice register needs the 6.6 Code.gs on the Sheet — paste it, deploy a new version, and run installNoticeTriggers once from the editor. The rest of the console is unaffected.</div>');
+  let h='<div class="kpirow">';
+  h+=kpi('Issued today',IC.f,N.today,'','at the mid-morning pass');
+  h+=kpi('Awaiting acknowledgement',IC.f,N.pending,'','locks the officer\u2019s app');
+  h+=kpi('This month',IC.f,N.month,'','on the register');
+  h+=kpi('CL debits this month',IC.f,N.debitsMonth,'','beyond the '+N.grace+' warnings');
+  h+='</div>';
+  window.__ROWS.ntc=N.rows;
+  h+=panel('c12','Notice register · latest first',
+    'first '+N.grace+' in a month warn · debits settle at day-close · tap a row',
+    `<div class="twrap" style="max-height:520px"><table><thead><tr><th>No.</th><th>Date</th><th>Officer</th><th>Mandal</th><th>Of month</th><th>Status</th><th>Acknowledged</th><th>CL</th></tr></thead><tbody>`+
+    (N.rows.length?N.rows.map((n,i)=>`<tr data-di="ntc:${i}"><td class="num mut">${esc(n.no)}</td><td class="num">${esc(dm(n.date))}</td>
+      <td>${esc(n.name)}<span class="mut"> · ${esc(n.role)}</span></td><td class="mut">${esc(n.mandal||'—')}</td>
+      <td class="num">${n.seq}${n.seq>N.grace?' <span class="pill bad">debit band</span>':''}</td>
+      <td>${n.status==='ACK'?'<span class="pill ok">acknowledged</span>':'<span class="pill warn">pending</span>'}</td>
+      <td class="num mut">${n.ackAt?esc(dm(n.ackAt)+' '+hm(n.ackAt)):'—'}</td>
+      <td>${n.clDebited?'<span class="pill bad">1 day</span>':'—'}</td></tr>`).join('')
+     :'<tr><td colspan="8" class="empty">No notices on the register.</td></tr>')+`</tbody></table></div>`,'ntc');
+  h+=panel('c12','How the rule runs','the register is the record',
+    '<div style="font-size:13px;color:var(--tx-2);line-height:1.75">On working days (Sundays and the Holidays tab excepted), unmarked attendance draws a show-cause notice at the mid-morning trigger, emailed where an address is on the roll and served in the app, which stands locked until acknowledged. The first '+N.grace+' notices in a calendar month are warnings; from the next one on, if attendance is still unmarked at the evening settlement, one day of CL is debited on the Leave register — loss of pay once the year\u2019s CL is exhausted. Acknowledgement is receipt, not excuse: marking attendance is the only cure.</div>');
+  return h;
+}
 function vMap(j,A){
   return panel('c12','District map · everything located',
     'green verified &middot; amber no fix &middot; red not trustworthy &middot; grey on leave &middot; villages by grade',
@@ -964,11 +1234,14 @@ function render(j){
   const A=analyse(j); window.__ISS=A.iss;
   /* refreshes must not orphan an open drawer: keep prior registries, replace only what this render rebuilds */
   window.__ROWS=window.__ROWS||{}; window.__ROWS.att=[]; window.__ROWS.ins=[];
+  /* the poll must not eat a half-typed question */
+  const ai=$('#askIn'), aiVal=ai?ai.value:'', aiFoc=ai&&document.activeElement===ai;
   const keep={}; document.querySelectorAll('#g [data-k]').forEach(el=>keep[el.dataset.k]=el.scrollTop);
   $('#g').innerHTML = VIEW==='overview'?vOverview(j,A)
     : VIEW==='attendance'?vAttendance(j,A)
     : VIEW==='villages'?vVillages(j,A)
-    : VIEW==='leave'?vLeave(j,A) : vMap(j,A);
+    : VIEW==='leave'?vLeave(j,A)
+    : VIEW==='notices'?vNotices(j,A) : vMap(j,A);
   document.querySelectorAll('#g [data-k]').forEach(el=>{ if(keep[el.dataset.k]) el.scrollTop=keep[el.dataset.k]; });
   if(VIEW==='overview') drawMap('map','main');
   if(VIEW==='map') drawMap('map2','full');
@@ -976,6 +1249,12 @@ function render(j){
   const mp=$('#mPick'); if(mp) mp.onchange=()=>{ if(mp.value) flyTo(mp.value); };
   const f=$('#attFind'); if(f) f.oninput=()=>{const q=f.value.toLowerCase();
     document.querySelectorAll('#attBody tr').forEach(tr=>tr.style.display=tr.dataset.f.includes(q)?'':'none');};
+  const ni=$('#askIn');
+  if(ni){
+    if(aiVal&&!ni.value) ni.value=aiVal;
+    if(aiFoc){ ni.focus(); try{ni.setSelectionRange(ni.value.length,ni.value.length);}catch(e2){} }
+    ni.onkeydown=e2=>{ if(e2.key==='Enter'&&ni.value.trim()){ e2.preventDefault(); const q=ni.value; ni.value=''; sendAsk(q); } };
+  }
   if(!DOWN){ $('#live').className='live'; $('#liveTx').textContent='updated now'; }
 }
 
@@ -1000,6 +1279,12 @@ document.addEventListener('click',e=>{
         :'<p style="font-size:13px">None.</p>'); }
     return; }
   if(e.target.closest('#briefGo')){ writeBrief(); return; }
+  const ex=e.target.closest('[data-exp]');
+  if(ex){ doExport(ex.dataset.exp); return; }
+  if(e.target.closest('#askGo')){ const inp=$('#askIn'); if(inp&&inp.value.trim()){ const q=inp.value; inp.value=''; sendAsk(q); } return; }
+  const ac=e.target.closest('[data-ask]');
+  if(ac){ sendAsk(ac.dataset.ask); return; }
+  if(e.target.closest('#askClear')){ CHAT=[]; if(DATA) render(DATA); return; }
   if(e.target.closest('#newsClear')){ NEWS=[]; if(DATA) render(DATA); return; }
   if(e.target.closest('#newsAsk')){ try{ Notification.requestPermission().then(()=>{ if(DATA) render(DATA); }); }catch(e2){} return; }
   const fc=e.target.closest('[data-mf]');
@@ -1029,6 +1314,14 @@ document.addEventListener('click',e=>{
        (d.avg!=null?'':'')); return; }
   const tr=e.target.closest('tr[data-di]');
   if(tr){ const [kind,i]=tr.dataset.di.split(':'); const r=(window.__ROWS[kind]||[])[+i]; if(!r) return;
+    if(kind==='ntc'){ const g=(DATA.notices||{}).grace||3;
+      openDrawer('Notice '+r.no, r.name+' · '+r.role+' · '+(r.mandal||'—'),
+        `<dl><dt>For the date</dt><dd>${esc(r.date)}</dd>
+         <dt>Standing</dt><dd>${r.seq}${r.seq===1?'st':r.seq===2?'nd':r.seq===3?'rd':'th'} notice of the month${r.seq>g?' · <span class="pill bad">debit band</span>':' · warning band'}</dd>
+         <dt>Status</dt><dd>${r.status==='ACK'?'Acknowledged '+esc(dm(r.ackAt)+' '+hm(r.ackAt)):'<span class="pill warn">Awaiting acknowledgement — the officer\u2019s app is locked</span>'}</dd>
+         ${r.ackNote?`<dt>Officer\u2019s explanation</dt><dd style="white-space:pre-wrap">${esc(r.ackNote)}</dd>`:''}
+         <dt>Leave debit</dt><dd>${r.clDebited?'<span class="pill bad">1 day debited</span> — entry on the Leave register (SYSTEM · SJSP attendance rule)':'none against this notice'}</dd></dl>`);
+      return; }
     if(kind==='ins'||kind==='worst'||kind==='day'||kind==='mv'||kind==='fl'){ openVillage(r); return; }
     if(kind==='att') openDrawer(r.name,r.role+' · '+(r.mandal||'—'),
       `<dl><dt>Status</dt><dd>${r._s==='P'?'Present':r._s==='L'?'On leave ('+esc(r.leaveType||'')+')':'Not marked'}</dd>
