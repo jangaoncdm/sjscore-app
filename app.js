@@ -692,8 +692,11 @@ const seqth = n => n + (n===1?'st':n===2?'nd':n===3?'rd':'th');
 const dmy = d => { const p=String(d||'').split('-'); return p.length===3?p[2]+'.'+p[1]+'.'+p[0]:String(d||''); };
 /* is today off, and what the district calls it — '' on a working day */
 function dayOff(){
-  if(new Date().getDay()===0) return 'Sunday';
-  return (DB.holidays||{})[todayStr()] || '';
+  const d=new Date();
+  if(d.getDay()===0) return 'Sunday';
+  const h=(DB.holidays||{})[todayStr()]; if(h) return h;
+  if(d.getDay()===6 && d.getDate()>=8 && d.getDate()<=14) return 'Second Saturday';   /* standing rule, tab or no tab */
+  return '';
 }
 const tstr = iso => { const d=new Date(iso); return isNaN(d)?'':d.toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:true}); };
 function pendingNotices(){
@@ -805,7 +808,7 @@ function renderNotices(){
   $('#ntcSub').textContent=rows.length
     ? rows.length+' on your file · '+(pend?pend+' awaiting acknowledgement':'all acknowledged')
     : 'Nothing on your file';
-  let h='<div class="rulebox"><b>The attendance rule.</b> Unmarked attendance on a working day draws a show-cause notice at mid-morning. The first '+g+' notices in a calendar month are warnings; from the next one on, one day of CL is debited at the close of the day if attendance is still unmarked — loss of pay once the year\u2019s CL is exhausted. Sundays and declared holidays are never counted. Marking attendance is the cure; acknowledgement alone does not stop the debit.</div>';
+  let h='<div class="rulebox"><b>The attendance rule.</b> Unmarked attendance on a working day draws a show-cause notice at mid-morning. The first '+g+' notices in a calendar month are warnings; from the next one on, one day of CL is debited at the close of the day if attendance is still unmarked — loss of pay once the year\u2019s CL is exhausted. Sundays, second Saturdays and declared holidays are never counted. Marking attendance is the cure; acknowledgement alone does not stop the debit.</div>';
   if(('Notification' in window) && Notification.permission==='default')
     h+='<div style="padding:12px var(--pad) 0"><button class="btn sm sec" id="ntcAlerts">Alert me on this phone when a notice arrives</button></div>';
   h+='<div class="pillar" style="margin-top:12px">'+(rows.length?rows.map(n=>{
