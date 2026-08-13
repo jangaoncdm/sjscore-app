@@ -13,7 +13,7 @@
      own, not one common album at the end.
    ============================================================ */
 const SERVER_URL = 'https://script.google.com/macros/s/AKfycbz8Ye9LqGB3bLWkTWcdw6JvU__U9K4VRaG-IFFpwc67G__1vdpMryV6NEfz5FJrnezS/exec';
-const APP_VERSION = '6.7';
+const APP_VERSION = '6.7.1';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -692,11 +692,8 @@ const seqth = n => n + (n===1?'st':n===2?'nd':n===3?'rd':'th');
 const dmy = d => { const p=String(d||'').split('-'); return p.length===3?p[2]+'.'+p[1]+'.'+p[0]:String(d||''); };
 /* is today off, and what the district calls it — '' on a working day */
 function dayOff(){
-  const d=new Date();
-  if(d.getDay()===0) return 'Sunday';
-  const h=(DB.holidays||{})[todayStr()]; if(h) return h;
-  if(d.getDay()===6 && d.getDate()>=8 && d.getDate()<=14) return 'Second Saturday';   /* standing rule, tab or no tab */
-  return '';
+  if(new Date().getDay()===0) return 'Sunday';
+  return (DB.holidays||{})[todayStr()] || '';
 }
 const tstr = iso => { const d=new Date(iso); return isNaN(d)?'':d.toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:true}); };
 function pendingNotices(){
@@ -808,7 +805,7 @@ function renderNotices(){
   $('#ntcSub').textContent=rows.length
     ? rows.length+' on your file · '+(pend?pend+' awaiting acknowledgement':'all acknowledged')
     : 'Nothing on your file';
-  let h='<div class="rulebox"><b>The attendance rule.</b> Unmarked attendance on a working day draws a show-cause notice at mid-morning. The first '+g+' notices in a calendar month are warnings; from the next one on, one day of CL is debited at the close of the day if attendance is still unmarked — loss of pay once the year\u2019s CL is exhausted. Sundays, second Saturdays and declared holidays are never counted. Marking attendance is the cure; acknowledgement alone does not stop the debit.</div>';
+  let h='<div class="rulebox"><b>The attendance rule.</b> Unmarked attendance on a working day draws a show-cause notice at mid-morning. The first '+g+' notices in a calendar month are warnings; from the next one on, one day of CL is debited at the close of the day if attendance is still unmarked — loss of pay once the year\u2019s CL is exhausted. Sundays and declared holidays are never counted. Marking attendance is the cure; acknowledgement alone does not stop the debit.</div>';
   if(('Notification' in window) && Notification.permission==='default')
     h+='<div style="padding:12px var(--pad) 0"><button class="btn sm sec" id="ntcAlerts">Alert me on this phone when a notice arrives</button></div>';
   h+='<div class="pillar" style="margin-top:12px">'+(rows.length?rows.map(n=>{
@@ -869,6 +866,14 @@ function renderHome(){
   body.innerHTML = h2;
   const b=$('#homeStart'); if(b) b.addEventListener('click', ()=>openPicker());
   const aw=$('#attAnyway'); if(aw) aw.addEventListener('click', ()=>{ $('#app').hidden=true; openAttendance(); });
+  const ap=$('#attPush');
+  if(ap) ap.addEventListener('click', async ()=>{
+    if(!navigator.onLine){ toast('No signal yet. The app keeps trying by itself — keep it open where there is a line.', 5000); return; }
+    ap.disabled=true; ap.innerHTML='<span class="spin"></span>Sending';
+    const n=await syncAttendance().catch(()=>0);
+    toast(n?'The district has your attendance now.':'It did not get through. The app will keep trying.', 5000);
+    renderHome();
+  });
   body.querySelectorAll('[data-open]').forEach(el=>el.addEventListener('click',()=>openRecord(el.dataset.open, el.dataset.ym||ymNow())));
   body.querySelectorAll('[data-view]').forEach(el=>el.addEventListener('click',()=>openView(el.dataset.view)));
   body.querySelectorAll('[data-refresh]').forEach(el=>el.addEventListener('click', refreshDistrict));
@@ -890,8 +895,18 @@ function attendanceStrip(){
   if(a.verified) bits.push('location recorded');
   else if(a.acc) bits.push('location only to \u00b1' + Math.round(a.acc) + ' m — filed as unverified');
   else bits.push('no location fix — filed as unverified');
-  if(a.sync !== 'synced') bits.push('on this phone');
-  let h = `<div class="banner ${a.verified ? 'ok' : 'warn'}">${a.verified?ICON.tickC:ICON.warn}<span>${esc(bits.join(' · '))}</span></div>`;
+  let h = '';
+  /* A MARK HELD ON THE PHONE IS NOT A MARK THE DISTRICT HAS. This used to be
+     four quiet words at the end of a green banner, and officers who had
+     honestly marked were read as absent. It now says so plainly, in amber,
+     with the button that fixes it. */
+  if(a.sync !== 'synced'){
+    h += `<div class="banner bad">${ICON.warn}<span>${esc(bits.join(' · '))} — <b>NOT YET RECEIVED BY THE DISTRICT.</b> It is held on this phone only. Until it reaches the district you count as unmarked.</span></div>`
+       + `<div style="padding:0 var(--pad) 4px"><button class="btn sm" id="attPush">Send it to the district now</button></div>`;
+  } else {
+    bits.push('received by the district');
+    h += `<div class="banner ${a.verified ? 'ok' : 'warn'}">${a.verified?ICON.tickC:ICON.warn}<span>${esc(bits.join(' · '))}</span></div>`;
+  }
   if(a.dup) h += `<div class="banner warn">${ICON.warn}<span>${esc('Attendance was marked '+a.dup.n+' times today'+(a.dup.firstAt?' — the first at '+new Date(a.dup.firstAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'')+'. One mark a day is enough; repeated marking is on the district record.')}</span></div>`;
   return h;
 }

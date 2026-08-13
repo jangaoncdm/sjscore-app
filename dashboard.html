@@ -129,8 +129,6 @@ td:first-child{text-align:left}
 td.mut{color:var(--tx-2)} td.num{font-family:var(--mono);text-align:center}
 tr[data-di]{cursor:pointer} tr:hover td{background:#F8FAFC}
 .twrap{overflow:auto;max-height:352px;border-radius:14px;box-shadow:var(--nm-in-sm);background:var(--well)}
-.ntcdoc{white-space:pre-wrap;font-family:var(--mono);font-size:12px;line-height:1.7;background:var(--well);box-shadow:var(--nm-in-sm);border-radius:12px;padding:14px 16px;max-height:56vh;overflow:auto;color:var(--tx)}
-.ntcvl{font-family:var(--mono);font-size:11.5px;color:var(--seal);text-decoration:none;border-bottom:1px dotted var(--seal)}
 th{background:var(--well)}
 tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:#D8DEE9}
 .pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:1.5px 8px;border-radius:9px}
@@ -912,50 +910,14 @@ async function decideNotices(mode){
     const j=await r.json();
     if(j.ok){
       ids.forEach(id=>delete NTC_UNCHK[id]);
-      if(msg) msg.textContent=(j.served?j.served+' served ('+j.mailed+' emailed)':'')+(j.dropped?(j.served?' · ':'')+j.dropped+' dropped':'')+' · '+j.proposed+' still awaiting';
+      const bits=[];
+      if(j.served) bits.push(j.served+' served ('+j.mailed+' emailed)');
+      if(j.cured) bits.push(j.cured+' cured — attendance had reached the district after all, so nothing was served');
+      if(j.dropped) bits.push(j.dropped+' dropped');
+      if(msg) msg.textContent=bits.join(' · ')+' · '+j.proposed+' still awaiting';
       LASTOK=0; pull();
     } else if(msg) msg.textContent='Refused: '+(j.error||'unknown')+(/unknown request/i.test(String(j.error))?' — the Sheet needs the 6.7 Code.gs.':'');
   }catch(e){ if(msg) msg.textContent='Could not reach the Sheet — try again.'; }
-  NTC_DECIDING=false;
-}
-/* 6.7.1 · the letter itself, fetched from the register. A served notice
-   is recomposed word for word as it was emailed; a proposal reads as it
-   will if sent; a dropped one as it never went. */
-async function viewNotice(id){
-  openDrawer('The letter','fetching from the register\u2026','<div class="empty">One moment.</div>');
-  try{
-    const r=await fetch(ST.url+'?op=noticetext&token='+encodeURIComponent(ST.token)+'&id='+encodeURIComponent(id));
-    const j=await r.json();
-    if(!j.ok) throw new Error(j.error||'refused');
-    const sub=j.status==='ACK'?'served & acknowledged — as emailed'
-             :j.status==='PENDING'?'served, awaiting acknowledgement — as emailed'
-             :j.status==='PROPOSED'?'proposed — will read as below if sent'
-             :'dropped — never served';
-    openDrawer('Notice '+(j.no||'(unnumbered)')+' · '+j.name, sub,
-      (j.note?'<div class="mut" style="font-size:12.5px;margin-bottom:10px;line-height:1.6">'+esc(j.note)+'</div>':'')+
-      '<div class="mut" style="font-size:12px;margin-bottom:6px">Email subject: '+esc(j.subject)+'</div>'+
-      '<pre class="ntcdoc">'+esc(j.body)+'</pre>'+
-      (j.status==='PROPOSED'?`<div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
-        <button class="tbtn pri" data-nd1="approve:${esc(j.id)}">Send this notice</button>
-        <button class="tbtn" data-nd1="drop:${esc(j.id)}">Drop it</button></div>`:''));
-  }catch(e){
-    openDrawer('The letter','could not be fetched',
-      '<div class="empty">'+esc(String(e.message||e))+' — if this reads "unknown request", the Sheet needs the 6.7.1 Code.gs deployed.</div>');
-  }
-}
-/* decide a single notice straight from the letter view */
-async function decideOne(mode,id){
-  if(NTC_DECIDING) return;
-  if(mode==='drop' && !confirm('This proposal will be dropped — no number, never served. Proceed?')) return;
-  NTC_DECIDING=true;
-  try{
-    const r=await fetch(ST.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify({kind:'noticeDecide',token:ST.token,
-        approve:mode==='approve'?[id]:[], drop:mode==='drop'?[id]:[]})});
-    const j=await r.json();
-    if(j.ok){ delete NTC_UNCHK[id]; $('#drawer').hidden=true; LASTOK=0; pull(); }
-    else alert('Refused: '+(j.error||'unknown'));
-  }catch(e){ alert('Could not reach the Sheet — try again.'); }
   NTC_DECIDING=false;
 }
 async function sendAsk(q){
@@ -1289,12 +1251,11 @@ function vNotices(j,A){
   if(P.length){
     const chk=id=>NTC_UNCHK[id]?'':' checked';
     h+=panel('c12','Proposed notices — your approval is awaited',
-      'untick any that should not go · View shows the letter word for word · Send serves, numbers and emails · Drop kills a proposal unnumbered',
-      `<div class="twrap" style="max-height:380px"><table><thead><tr><th style="width:36px"></th><th>Officer</th><th>Mandal</th><th>For</th><th style="width:52px"></th></tr></thead><tbody>`+
+      'untick any that should not go · Send serves, numbers and emails · Drop kills a proposal unnumbered',
+      `<div class="twrap" style="max-height:380px"><table><thead><tr><th style="width:36px"></th><th>Officer</th><th>Mandal</th><th>For</th></tr></thead><tbody>`+
       P.map(p=>`<tr><td><input type="checkbox" class="ntcCk" data-id="${esc(p.id)}"${chk(p.id)}></td>
         <td>${esc(p.name)}<span class="mut"> · ${esc(p.role)}</span></td>
-        <td class="mut">${esc(p.mandal||'—')}</td><td class="num">${esc(dm(p.date))}</td>
-        <td><a href="#" class="ntcvl" data-nv="${esc(p.id)}">view</a></td></tr>`).join('')+
+        <td class="mut">${esc(p.mandal||'—')}</td><td class="num">${esc(dm(p.date))}</td></tr>`).join('')+
       `</tbody></table></div>
       <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
         <button class="tbtn pri" id="ntcSend">Send the ticked notices</button>
@@ -1304,21 +1265,21 @@ function vNotices(j,A){
       <div class="mut" style="font-size:12px;margin-top:8px">Sending assigns the /SJSP-SCN/ running number, serves the notice in the officer\u2019s app (which locks until acknowledged) and emails it where an address is on the roll. A dropped proposal takes no number and is never seen by the officer. Unticked rows simply wait.</div>`);
   } else {
     h+=panel('c12','Proposed notices','the morning pass proposes; you decide',
-      '<div class="empty">Nothing awaits approval. The ~11:15 trigger proposes a notice for every unmarked officer on a working day (Sundays, second Saturdays and the Holidays tab never count); the proposals appear here for your word before anything is served.</div>');
+      '<div class="empty">Nothing awaits approval. The ~11:15 trigger proposes a notice for every unmarked officer on a working day; the proposals appear here for your word before anything is served.</div>');
   }
   window.__ROWS.ntc=N.rows;
   h+=panel('c12','Notice register · latest first',
-    'served notices only carry numbers · first '+N.grace+' served in a month warn · debits settle at day-close · tap a row for the letter',
+    'served notices only carry numbers · first '+N.grace+' served in a month warn · debits settle at day-close · tap a row',
     `<div class="twrap" style="max-height:520px"><table><thead><tr><th>No.</th><th>Date</th><th>Officer</th><th>Mandal</th><th>Of month</th><th>Status</th><th>Acknowledged</th><th>CL</th></tr></thead><tbody>`+
     (N.rows.length?N.rows.map((n,i)=>`<tr data-di="ntc:${i}"><td class="num mut">${esc(n.no||'—')}</td><td class="num">${esc(dm(n.date))}</td>
       <td>${esc(n.name)}<span class="mut"> · ${esc(n.role)}</span></td><td class="mut">${esc(n.mandal||'—')}</td>
       <td class="num">${n.seq||'—'}${n.seq>N.grace?' <span class="pill bad">debit band</span>':''}</td>
-      <td>${n.status==='ACK'?'<span class="pill ok">acknowledged</span>':n.status==='PENDING'?'<span class="pill warn">awaiting ack</span>':n.status==='PROPOSED'?'<span class="pill">proposed</span>':'<span class="pill">dropped</span>'}</td>
+      <td>${n.status==='ACK'?'<span class="pill ok">acknowledged</span>':n.status==='PENDING'?'<span class="pill warn">awaiting ack</span>':n.status==='PROPOSED'?'<span class="pill">proposed</span>':n.status==='CURED'?'<span class="pill ok">cured — marked after all</span>':n.status==='WITHDRAWN'?'<span class="pill ok">withdrawn</span>':'<span class="pill">dropped</span>'}</td>
       <td class="num mut">${n.ackAt?esc(dm(n.ackAt)+' '+hm(n.ackAt)):'—'}</td>
       <td>${n.clDebited?'<span class="pill bad">1 day</span>':'—'}</td></tr>`).join('')
      :'<tr><td colspan="8" class="empty">No notices on the register.</td></tr>')+`</tbody></table></div>`,'ntc');
   h+=panel('c12','How the rule runs','the register is the record',
-    '<div style="font-size:13px;color:var(--tx-2);line-height:1.75">On working days (Sundays, second Saturdays and the Holidays tab excepted), the mid-morning pass PROPOSES a notice for every officer with no attendance and no sanctioned leave — nothing is served, numbered or emailed until you press Send here. A served notice locks the officer\u2019s app until acknowledged. The first '+N.grace+' served notices in a calendar month are warnings; from the next one on, if attendance is still unmarked at the evening settlement, one day of CL is debited on the Leave register — loss of pay once the year\u2019s CL is exhausted. Acknowledgement is receipt, not excuse: marking attendance is the only cure. A proposal left standing overnight can still be sent the next day, but its evening settlement has passed — it can warn, never debit.</div>');
+    '<div style="font-size:13px;color:var(--tx-2);line-height:1.75">On working days (Sundays and the Holidays tab excepted), a pass at 18:00 \u2014 after duty hours, so a phone on weak signal has the whole day to reach the district \u2014 PROPOSES a notice for every officer with no attendance and no sanctioned leave — nothing is served, numbered or emailed until you press Send here. A served notice locks the officer\u2019s app until acknowledged. The first '+N.grace+' served notices in a calendar month are warnings; from the next one on, if attendance is still unmarked when the NEXT morning\u2019s settlement re-reads the closed day, one day of CL is debited on the Leave register — loss of pay once the year\u2019s CL is exhausted. Acknowledgement is receipt, not excuse: marking attendance is the only cure. Attendance is read three times before a rupee moves — at 18:00, again when you approve, and again at settlement — so a mark held up on a weak line withdraws the notice by itself and shows as <b>cured</b>.</div>');
   return h;
 }
 function vMap(j,A){
@@ -1390,10 +1351,6 @@ document.addEventListener('click',e=>{
   if(ck){ if(ck.checked) delete NTC_UNCHK[ck.dataset.id]; else NTC_UNCHK[ck.dataset.id]=1; return; }
   if(e.target.closest('#ntcSend')){ decideNotices('approve'); return; }
   if(e.target.closest('#ntcDrop')){ decideNotices('drop'); return; }
-  const nv=e.target.closest('[data-nv]');
-  if(nv){ e.preventDefault(); viewNotice(nv.dataset.nv); return; }
-  const nd=e.target.closest('[data-nd1]');
-  if(nd){ const s=nd.dataset.nd1, ix=s.indexOf(':'); decideOne(s.slice(0,ix), s.slice(ix+1)); return; }
   if(e.target.closest('#newsClear')){ NEWS=[]; if(DATA) render(DATA); return; }
   if(e.target.closest('#newsAsk')){ try{ Notification.requestPermission().then(()=>{ if(DATA) render(DATA); }); }catch(e2){} return; }
   const fc=e.target.closest('[data-mf]');
@@ -1428,6 +1385,8 @@ document.addEventListener('click',e=>{
       const stLine=r.status==='ACK'?'Acknowledged '+esc(dm(r.ackAt)+' '+hm(r.ackAt))
         :r.status==='PENDING'?'<span class="pill warn">Served — awaiting acknowledgement; the officer\u2019s app is locked</span>'
         :r.status==='PROPOSED'?'<span class="pill">Proposed — not served; awaiting your word on the Notices view</span>'
+        :r.status==='CURED'?'<span class="pill ok">Cured — the officer\u2019s attendance reached the district before service. Never served, no number taken.</span>'
+        :r.status==='WITHDRAWN'?'<span class="pill ok">Withdrawn — attendance was on record; the notice was issued in error and any debit reversed.</span>'
         :'Dropped'+(r.decidedBy?' by '+esc(r.decidedBy):'')+' — never served, no number taken';
       openDrawer('Notice '+(r.no||'(unnumbered)'), r.name+' · '+r.role+' · '+(r.mandal||'—'),
         `<dl><dt>For the date</dt><dd>${esc(dm(r.date))}</dd>
@@ -1435,9 +1394,7 @@ document.addEventListener('click',e=>{
          <dt>Status</dt><dd>${stLine}</dd>
          ${r.decidedBy&&r.status!=='DROPPED'&&r.status!=='PROPOSED'?`<dt>Served by</dt><dd>${esc(r.decidedBy)}</dd>`:''}
          ${r.ackNote?`<dt>Officer\u2019s explanation</dt><dd style="white-space:pre-wrap">${esc(r.ackNote)}</dd>`:''}
-         <dt>Leave debit</dt><dd>${r.clDebited?'<span class="pill bad">1 day debited</span> — entry on the Leave register (SYSTEM · SJSP attendance rule)':'none against this notice'}</dd></dl>`+
-        (r.id?`<button class="tbtn" style="margin-top:14px" data-nv="${esc(r.id)}">View the letter${(r.status==='PENDING'||r.status==='ACK')?' as served':''}</button>`
-             :`<div class="mut" style="font-size:12px;margin-top:12px">The letter view needs the 6.7.1 Code.gs deployed on the Sheet.</div>`));
+         <dt>Leave debit</dt><dd>${r.clDebited?'<span class="pill bad">1 day debited</span> — entry on the Leave register (SYSTEM · SJSP attendance rule)':'none against this notice'}</dd></dl>`);
       return; }
     if(kind==='ins'||kind==='worst'||kind==='day'||kind==='mv'||kind==='fl'){ openVillage(r); return; }
     if(kind==='att') openDrawer(r.name,r.role+' · '+(r.mandal||'—'),
