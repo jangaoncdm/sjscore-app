@@ -13,7 +13,7 @@
      own, not one common album at the end.
    ============================================================ */
 const SERVER_URL = 'https://script.google.com/macros/s/AKfycbz8Ye9LqGB3bLWkTWcdw6JvU__U9K4VRaG-IFFpwc67G__1vdpMryV6NEfz5FJrnezS/exec';
-const APP_VERSION = '6.7.1';
+const APP_VERSION = '6.8.2';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -151,6 +151,8 @@ function load(){
   DB.att = DB.att || {}; DB.prefs = DB.prefs || {sun:0,big:0};
   DB.records = DB.records || {}; DB.cache = DB.cache || []; DB.master = DB.master || []; DB.leave = DB.leave || [];
   DB.notices = DB.notices || {rows:[], at:0, grace:3};
+  DB.reminders = DB.reminders || [];        /* informal nudges — they never lock the app */
+  DB.remSeen = DB.remSeen || {};            /* ids already shown on this phone */
   DB.holidays = DB.holidays || {};          /* the year's off days, from the district */
   DB.noticeAckQ = DB.noticeAckQ || [];      /* acknowledged on the phone, awaiting signal */
   DB.noticeDone = DB.noticeDone || {};      /* ids acknowledged locally — the gate lifts at once */
@@ -479,7 +481,7 @@ async function signIn(){
       DB.url=url; DB.session={token:r.token, user:r.user}; saveNow();
       $('#lPin').value=''; m.textContent='';
       try{ const g = await get({op:'gps'}); if(g.ok){ DB.master=g.gps; saveNow(); } }catch(e){}
-      try{ const n = await get({op:'notices'}); if(n.ok){ DB.notices={rows:n.rows||[], at:Date.now(), grace:n.grace||3}; DB.holidays=n.holidays||{}; saveNow(); } }catch(e){}
+      try{ const n = await get({op:'notices'}); if(n.ok){ DB.notices={rows:n.rows||[], at:Date.now(), grace:n.grace||3, scnFrom:n.scnFrom||3, cutoff:n.cutoff||11}; DB.reminders=n.reminders||[]; DB.holidays=n.holidays||{}; saveNow(); } }catch(e){}
       gate(); toast('Signed in — ' + (r.user.name||''));
     } else { m.className='msg'; m.textContent = r.error || 'Sign-in failed.'; }
   }catch(e){ m.className='msg'; m.textContent='Cannot reach the server. Check the network and try again.'; }
@@ -662,6 +664,10 @@ async function _syncAttendance(){
       }, photo: b64 ? {name:`ATT_${a.phone}_${a.date}.jpg`, b64} : null});
       if(r && r.ok){
         a.sync='synced'; a.url=r.url||''; if(a.photoId) BLOBS.del(a.photoId); done++;
+        /* the district tells us how far this handset's clock is out. The
+           record is kept on the district's clock either way, but the officer
+           is seeing the wrong time on his own screen and should know. */
+        if(typeof r.skew === 'number') DB.skew = r.skew;
         if(r.resent){ /* the same mark arrived twice on a weak line — nothing to say */ }
         else if(r.duplicate){
           a.dup = {n:r.marks||2, firstAt:r.firstAt||''};
@@ -715,8 +721,17 @@ async function refreshNotices(force){
     const was=pendingNotices().length;
     const r=await get({op:'notices'});
     if(r&&r.ok){
-      DB.notices={rows:r.rows||[], at:Date.now(), grace:r.grace||3};
+      const remWas=(DB.reminders||[]).length;
+      DB.notices={rows:r.rows||[], at:Date.now(), grace:r.grace||3, scnFrom:r.scnFrom||3, cutoff:r.cutoff||11};
+      DB.reminders=r.reminders||[];
       DB.holidays=r.holidays||DB.holidays||{};
+      /* a new reminder is pushed the moment it is seen, but locks nothing */
+      const fresh=(DB.reminders||[]).filter(x=>!DB.remSeen[x.id]);
+      if(fresh.length && remWas){
+        ntfy('SJSP reminder \u2014 ' + dmy(fresh[0].date), fresh[0].reason);
+        toast(fresh[0].reason, 6000);
+      }
+      fresh.forEach(x=>{ DB.remSeen[x.id]=1; });
       /* what the district has already recorded need not travel again */
       DB.noticeAckQ=DB.noticeAckQ.filter(a=>{ const row=(r.rows||[]).find(x=>x.id===a.id); return !(row&&row.status==='ACK'); });
       Object.keys(DB.noticeDone).forEach(id=>{
@@ -805,7 +820,17 @@ function renderNotices(){
   $('#ntcSub').textContent=rows.length
     ? rows.length+' on your file · '+(pend?pend+' awaiting acknowledgement':'all acknowledged')
     : 'Nothing on your file';
-  let h='<div class="rulebox"><b>The attendance rule.</b> Unmarked attendance on a working day draws a show-cause notice at mid-morning. The first '+g+' notices in a calendar month are warnings; from the next one on, one day of CL is debited at the close of the day if attendance is still unmarked — loss of pay once the year\u2019s CL is exhausted. Sundays and declared holidays are never counted. Marking attendance is the cure; acknowledgement alone does not stop the debit.</div>';
+  const scnFrom=(DB.notices&&DB.notices.scnFrom)||3, cut=(DB.notices&&DB.notices.cutoff)||11;
+  const rems=(DB.reminders||[]);
+  let h='<div class="rulebox"><b>The attendance rule.</b> Attendance is due in the App by <b>'+cut+':00 AM</b> on every working day, from the place of duty. The first '+(scnFrom-1)+' unmarked days of a calendar month draw a <b>reminder</b> only — nothing goes on your record. On the <b>'+scnFrom+'rd</b> unmarked day a <b>show-cause notice</b> is issued, and from that day each further unmarked day costs one day of CL — loss of pay once the year\u2019s CL is exhausted. Sundays and declared holidays are never counted. Marking attendance is the cure.</div>';
+  if(rems.length){
+    h+='<div class="group" style="padding:14px var(--pad) 0"><div class="hdr">Reminders \u00b7 not on your record</div></div><div class="pillar">'+rems.map(r=>
+      `<div class="ntc"><span class="nno">${esc(dmy(r.date).slice(0,5))}</span>
+       <span class="nt"><b>${esc(r.reason)}</b>
+       <span>${r.kind==='MISS'?'Reminder '+(r.miss===1?'one':'two')+' of '+(scnFrom-1)+' — a notice issues on the '+scnFrom+'rd unmarked day':'Advisory only — no notice, no deduction'}</span></span>
+       <span class="st ok">reminder</span></div>`).join('')+'</div>';
+  }
+  h+=(rems.length?'<div class="group" style="padding:16px var(--pad) 0"><div class="hdr">Show-cause notices</div></div>':'');
   if(('Notification' in window) && Notification.permission==='default')
     h+='<div style="padding:12px var(--pad) 0"><button class="btn sm sec" id="ntcAlerts">Alert me on this phone when a notice arrives</button></div>';
   h+='<div class="pillar" style="margin-top:12px">'+(rows.length?rows.map(n=>{
@@ -844,7 +869,8 @@ function renderHome(){
   const h=new Date().getHours();
   const greet = (h<12?'Good morning':h<17?'Good afternoon':'Good evening');
   const first = String(u.name||'').replace(/,.*$/,'').split(' ').slice(0,2).join(' ');
-  $('#homeHi').textContent = greet + (first ? ', ' + first : '');
+  /* the greeting is the page's one flourish: the name carries the gradient */
+  $('#homeHi').innerHTML = esc(greet) + (first ? ',<br><span class="grad">' + esc(first) + '</span>' : '');
   $('#homeSub').textContent = roleName(u.role) + (u.mandal ? ' · ' + u.mandal + ' mandal' : ' · Jangaon District');
   const ym=ymNow(), body=$('#homeBody');
   let h2 = attendanceStrip();
@@ -906,6 +932,11 @@ function attendanceStrip(){
   } else {
     bits.push('received by the district');
     h += `<div class="banner ${a.verified ? 'ok' : 'warn'}">${a.verified?ICON.tickC:ICON.warn}<span>${esc(bits.join(' · '))}</span></div>`;
+  }
+  const sk = Number(DB.skew) || 0;
+  if(Math.abs(sk) > 120){
+    const mins = Math.round(Math.abs(sk) / 60);
+    h += `<div class="banner warn">${ICON.warn}<span>This phone\u2019s clock is about <b>${mins} minute${mins===1?'':'s'} ${sk>0?'fast':'slow'}</b>, so times on this screen read wrong. Your attendance is recorded on the district\u2019s clock, so nothing is lost. Please set date and time to automatic in the phone\u2019s settings.</span></div>`;
   }
   if(a.dup) h += `<div class="banner warn">${ICON.warn}<span>${esc('Attendance was marked '+a.dup.n+' times today'+(a.dup.firstAt?' — the first at '+new Date(a.dup.firstAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'')+'. One mark a day is enough; repeated marking is on the district record.')}</span></div>`;
   return h;

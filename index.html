@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
-<meta name="theme-color" content="#14532D">
+<meta name="theme-color" content="#F3F4F9">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="SJGP">
@@ -30,45 +30,60 @@
       lives in a ruled margin the way it does in the register itself.
    ========================================================================== */
 :root{
-  /* ink */
-  --ink:#0B1410; --ink-2:#4A554F; --ink-3:#6F7A74; --ink-4:#9AA49E;
-  /* ground */
-  --canvas:#F1F4F1; --surface:#FFFFFF; --surface-2:#F7F9F7; --surface-3:#E9EEEA;
-  /* the Collectorate seal green */
-  --seal:#14532D; --seal-2:#1B6E3C; --seal-deep:#0C3A1E; --seal-tint:#E3EFE8; --seal-line:#BFD6C8;
-  /* gold — fill and text weights are different colours on purpose */
-  --gold:#B8860B; --gold-2:#D9A62E; --gold-ink:#805800; --gold-tint:#FAF1DA;
+  /* ink — near-black with a blue cast, so it sits on cool paper without muddying */
+  --ink:#10121C; --ink-2:#545A6E; --ink-3:#767D93; --ink-4:#9BA1B4;
+  /* ground — cool paper, not cream. A register printed on office stock. */
+  --canvas:#F3F4F9; --surface:#FFFFFF; --surface-2:#FAFAFE; --surface-3:#EAEBF4;
+  /* the institutional primary. Still named --seal: it is the Collectorate's
+     colour in the app, now indigo rather than the seal green. 30 rules read
+     these names, so the names stay and only the values move. */
+  --seal:#4A40CE; --seal-2:#5B51E0; --seal-deep:#2B2482; --seal-tint:#ECEBFC; --seal-line:#C7C3F0;
+  /* the two ends of the headline gradient — the one flourish on the page */
+  --iris:#7A5AF5; --teal:#0E8FA8;
+  /* amber — the colour of an inline mark in a printed page */
+  --gold:#B4690E; --gold-2:#D98A1F; --gold-ink:#8A4F06; --gold-tint:#FDF1DC;
   /* states */
-  --flag:#A8201A; --flag-tint:#FAE8E6;
-  --warn:#8A4F06; --warn-tint:#FAEFDD;
-  --ok:#15602F; --ok-tint:#E1F0E7;
-  --info:#0B566B; --info-tint:#E0EEF2;
+  --flag:#C42B22; --flag-tint:#FDECEA;
+  --warn:#8A4F06; --warn-tint:#FDF1DC;
+  --ok:#0B7A5A; --ok-tint:#E2F4EE;
+  --info:#0E6E88; --info-tint:#E2F1F5;
   /* pillars */
-  --pA:#166534; --pB:#0B6478; --pC:#8A4F06; --pD:#1D4ED8; --pE:#5B21B6; --pF:#A8201A; --pG:#334155;
+  --pA:#0B7A5A; --pB:#0E6E88; --pC:#8A4F06; --pD:#3A45C7; --pE:#6B3FD4; --pF:#C42B22; --pG:#4A5163;
   /* lines */
-  --hair:rgba(11,20,16,.12); --hair-2:rgba(11,20,16,.07); --hair-3:rgba(11,20,16,.045);
+  --hair:rgba(16,18,28,.13); --hair-2:rgba(16,18,28,.075); --hair-3:rgba(16,18,28,.045);
   /* shape */
   --r-card:16px; --r-ctl:12px; --r-chip:11px; --r-pill:999px;
   --pad:16px; --gut:52px;
-  /* type */
-  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Noto Sans",sans-serif;
+  /* type — no webfonts: this app must open with no signal. The character
+     comes from treatment (mono eyebrows, weight jumps, tight tracking),
+     which costs nothing to load. */
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable Text","Segoe UI",Roboto,"Noto Sans",sans-serif;
+  --display:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI Variable Display","Segoe UI",Roboto,"Noto Sans",sans-serif;
   --serif:Georgia,"Times New Roman","Noto Serif",serif;
-  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono","Cascadia Mono","Segoe UI Mono",Menlo,Consolas,monospace;
   --fs:17px;
-  /* depth */
-  --shadow:0 1px 2px rgba(11,20,16,.05), 0 8px 22px -14px rgba(11,20,16,.20);
-  --shadow-lift:0 2px 6px rgba(11,20,16,.07), 0 18px 40px -18px rgba(11,20,16,.30);
+  /* depth — light and cool, never a grey smudge */
+  --shadow:0 1px 2px rgba(16,18,28,.045), 0 8px 22px -14px rgba(42,36,130,.18);
+  --shadow-lift:0 2px 6px rgba(16,18,28,.06), 0 18px 40px -18px rgba(42,36,130,.28);
   --ease:cubic-bezier(.32,.72,0,1);
   --tabh:calc(56px + env(safe-area-inset-bottom));
 }
 
+/* the one flourish: a headline whose second half runs indigo to teal */
+.grad{background:linear-gradient(96deg, var(--seal) 0%, var(--iris) 42%, var(--teal) 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  -webkit-text-fill-color:transparent}
+@supports not ((-webkit-background-clip:text) or (background-clip:text)){ .grad{color:var(--seal);-webkit-text-fill-color:currentColor} }
+/* mono eyebrow — the label device this design is built on */
+.eyebrow,.group>.hdr,.siwrap .hdr2{font-family:var(--mono)}
+
 /* Sunlight — flattens every translucency, darkens every rule, thickens type.
    Meant to be switched on outdoors and left on. */
 html[data-sun="1"]{
-  --canvas:#FFFFFF; --surface:#FFFFFF; --surface-2:#F2F5F2; --surface-3:#E4EAE5;
-  --ink:#000000; --ink-2:#33403A; --ink-3:#4E5B54; --ink-4:#6B776F;
+  --canvas:#FFFFFF; --surface:#FFFFFF; --surface-2:#F4F5FA; --surface-3:#E4E6F0;
+  --ink:#000000; --ink-2:#31364A; --ink-3:#4B5165; --ink-4:#69708A;
   --hair:rgba(0,0,0,.34); --hair-2:rgba(0,0,0,.20); --hair-3:rgba(0,0,0,.12);
-  --seal:#0C3A1E; --seal-2:#0F4526; --gold-ink:#6B4900; --flag:#8E1610;
+  --seal:#2B2482; --seal-2:#332B96; --gold-ink:#6B4900; --flag:#96170F;
   --shadow:none; --shadow-lift:0 0 0 1px rgba(0,0,0,.28);
 }
 html[data-sun="1"] .card,html[data-sun="1"] .pillar,html[data-sun="1"] .kpi,
@@ -121,15 +136,16 @@ main{flex:1;padding-bottom:calc(var(--tabh) + 10px)}
 .nav .side.r{justify-content:flex-end}
 .nav .side button{min-height:44px;padding:0 10px;font-size:16px;color:var(--seal-2);font-weight:550;border-radius:10px}
 .nav .side button:active{background:var(--surface-3)}
-.masthead{background:linear-gradient(168deg, var(--seal-deep) 0%, var(--seal) 82%);color:#fff;
+.masthead{background:var(--canvas);color:var(--ink);
   margin:calc(-1 * env(safe-area-inset-top) - 56px) 0 4px;
-  padding:calc(env(safe-area-inset-top) + 66px) var(--pad) 18px;position:relative}
-.masthead::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;
-  background:linear-gradient(90deg, var(--gold) 0%, var(--gold) 34%, transparent 34%)}
-.masthead .eyebrow{font-size:10.5px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--gold-2)}
-.masthead h2{font-size:26px;font-weight:800;letter-spacing:-.025em;color:#fff;margin-top:5px}
-.masthead p{font-size:13.5px;color:rgba(255,255,255,.75);margin-top:4px}
-html[data-sun="1"] .masthead{background:var(--seal-deep)}
+  padding:calc(env(safe-area-inset-top) + 62px) var(--pad) 22px;position:relative}
+.masthead::after{content:"";position:absolute;left:var(--pad);right:var(--pad);bottom:0;height:1px;
+  background:var(--hair-2)}
+.masthead .eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--seal)}
+.masthead h2{font-family:var(--display);font-size:31px;font-weight:800;letter-spacing:-.032em;
+  line-height:1.08;color:var(--ink);margin-top:9px}
+.masthead p{font-size:13.5px;color:var(--ink-2);margin-top:7px}
+html[data-sun="1"] .masthead{background:#fff}
 .bigtitle{padding:4px var(--pad) 2px}
 .bigtitle h2{font-size:31px;font-weight:700;letter-spacing:-.025em;line-height:1.14}
 .bigtitle p{font-size:14px;color:var(--ink-2);margin-top:4px}
@@ -198,23 +214,24 @@ html[data-sun="1"] .masthead{background:var(--seal-deep)}
 /* ---------- sign in: brand band above, credentials below ---------- */
 #signin{position:fixed;inset:0;z-index:80;background:var(--canvas);display:flex;flex-direction:column;
   overflow-y:auto;-webkit-overflow-scrolling:touch}
-.brandband{background:linear-gradient(168deg, var(--seal-deep) 0%, var(--seal) 78%);color:#fff;
-  padding:calc(env(safe-area-inset-top) + 44px) 26px 30px;position:relative}
-.brandband::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;
-  background:linear-gradient(90deg, var(--gold) 0%, var(--gold) 34%, transparent 34%)}
-.brandband .mark{width:64px;height:64px;border-radius:16px;margin-bottom:18px;background:#fff;
-  box-shadow:0 6px 20px rgba(0,0,0,.28)}
-.brandband .eyebrow{font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
-  color:var(--gold-2);margin-bottom:7px}
-.brandband h1{font-size:34px;font-weight:800;letter-spacing:-.03em;line-height:1.06;color:#fff}
-.brandband .sub{font-size:15px;color:rgba(255,255,255,.82);margin-top:10px;max-width:23em;line-height:1.5}
-.brandband .two{font-size:14px;color:rgba(255,255,255,.66);margin-top:14px;max-width:24em;line-height:1.55;
-  padding-top:13px;border-top:1px solid rgba(255,255,255,.16)}
+.brandband{background:var(--canvas);color:var(--ink);
+  padding:calc(env(safe-area-inset-top) + 46px) 26px 30px;position:relative}
+.brandband::after{content:"";position:absolute;left:26px;right:26px;bottom:0;height:2px;
+  background:linear-gradient(90deg, var(--seal) 0%, var(--iris) 46%, var(--teal) 92%, transparent 92%)}
+.brandband .mark{width:64px;height:64px;border-radius:16px;margin-bottom:20px;background:#fff;
+  box-shadow:0 1px 3px rgba(16,18,28,.10), 0 14px 34px -16px rgba(42,36,130,.34)}
+.brandband .eyebrow{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--seal);margin-bottom:12px}
+.brandband h1{font-family:var(--display);font-size:38px;font-weight:800;letter-spacing:-.035em;
+  line-height:1.04;color:var(--ink)}
+.brandband .sub{font-size:15px;color:var(--ink-2);margin-top:12px;max-width:25em;line-height:1.55}
+.brandband .two{font-size:14px;color:var(--ink-3);margin-top:16px;max-width:26em;line-height:1.55;
+  padding-top:14px;border-top:1px solid var(--hair-2)}
 .siwrap{padding:26px 22px calc(env(safe-area-inset-bottom) + 24px);display:flex;flex-direction:column;flex:1}
 .siwrap .hdr2{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
   padding:0 4px 9px}
 #signin .card{margin-bottom:12px}
-html[data-sun="1"] .brandband{background:var(--seal-deep)}
+html[data-sun="1"] .brandband{background:#fff}
 .msg{font-size:14.5px;min-height:22px;padding:2px 4px 8px;color:var(--flag);line-height:1.4}
 .msg.info{color:var(--ink-2)}
 .fineprint{font-size:12.5px;color:var(--ink-3);text-align:center;margin-top:auto;padding-top:26px;line-height:1.55}
@@ -512,27 +529,33 @@ body.kb .tabs,body.kb .strip{transform:translateY(160%);pointer-events:none}
     left:0;top:0;bottom:0;right:auto;width:236px;
     flex-direction:column;justify-content:flex-start;gap:2px;
     padding:118px 12px 18px;
-    background:linear-gradient(178deg, var(--seal-deep) 0%, var(--seal) 90%);
-    border-top:0;border-right:1px solid rgba(0,0,0,.18);
+    background:var(--surface);
+    border-top:0;border-right:1px solid var(--hair-2);
     -webkit-backdrop-filter:none;backdrop-filter:none}
-  html[data-sun="1"] .tabs{background:var(--seal-deep)}
+  html[data-sun="1"] .tabs{background:#fff;border-right-color:var(--hair)}
   .tabs::before{
-    content:"SJGP";position:absolute;top:34px;left:24px;
-    font-size:27px;font-weight:800;letter-spacing:-.02em;color:#fff}
+    content:"SJGP";position:absolute;top:34px;left:24px;font-family:var(--display);
+    font-size:27px;font-weight:800;letter-spacing:-.03em;color:var(--ink)}
   .tabs::after{
     content:"Swachh Jangaon Gram Panchayat";position:absolute;top:72px;left:24px;right:18px;
-    font-size:11.5px;line-height:1.45;color:rgba(255,255,255,.62)}
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;line-height:1.5;color:var(--ink-3)}
   .tabs button{
+    flex:0 0 auto;   /* the rail stacks; without this the phone's flex:1 spreads
+                        the five buttons down the whole height of the monitor */
     flex-direction:row;justify-content:flex-start;gap:13px;max-width:none;width:100%;
-    min-height:46px;padding:0 14px;border-radius:11px;color:rgba(255,255,255,.72)}
+    min-height:46px;padding:0 14px;border-radius:11px;color:var(--ink-2)}
   .tabs button svg{width:21px;height:21px;margin:0}
-  .tabs button span{font-size:14px;font-weight:650;letter-spacing:0}
-  .tabs button[aria-selected=true]{color:#fff;background:rgba(255,255,255,.13)}
+  .tabs button span{font-size:14px;font-weight:600;letter-spacing:0}
+  .tabs button[aria-selected=true]{color:var(--seal);background:var(--seal-tint);font-weight:700}
+  .tabs button[aria-selected=true] span{font-weight:700}
   .tabs .dot{border-color:transparent}
   body.kb .tabs{transform:none;pointer-events:auto}
 
   /* the working column */
-  main{margin-left:236px;max-width:900px;padding:0 34px}
+  /* main is a column-flex child: stretch gives it the full container width
+     and the left margin then pushes it off the right edge. The width is set
+     explicitly instead, so nothing overflows at any size. */
+  main{margin-left:236px;width:calc(100% - 236px);max-width:940px;padding:0 34px}
   .nav{max-width:none;left:236px}
   .strip{max-width:none;top:calc(env(safe-area-inset-top) + 56px)}
   .masthead{border-radius:0 0 16px 16px;margin-left:0;margin-right:0}
@@ -552,6 +575,48 @@ body.kb .tabs,body.kb .strip{transform:translateY(160%);pointer-events:none}
   .brandband::after{top:0;bottom:0;left:auto;right:0;width:3px;height:auto;
     background:linear-gradient(180deg, var(--gold) 0%, var(--gold) 34%, transparent 34%)}
   .siwrap{flex:1;justify-content:center;max-width:470px;margin:0 auto;padding:48px 34px}
+}
+
+/* ============================================================
+   THE OFFICE MONITOR — 1500px and beyond.
+   A 2K screen was showing one phone-width column and a field of
+   empty paper. The column widens, and the card groups tile two
+   and three abreast, so the width carries content instead of
+   margin. Cards keep a readable measure; only the layout grows.
+   ============================================================ */
+@media (min-width:1500px){
+  .tabs{width:260px;padding:122px 14px 18px}
+  /* the working column is centred in the space beside the rail, rather than
+     pinned to it — otherwise a 2560 monitor leaves a third of itself blank */
+  main{margin-left:260px;width:calc(100% - 260px);max-width:none;padding:0 44px}
+  main > .screen{max-width:1440px;margin:0 auto;width:100%}
+  .nav{left:260px}
+  /* The cards live inside the body wrapper of each screen, not directly
+     under the section, so the grid goes there. The nav, masthead and title
+     stay above it in normal flow. */
+  #homeBody,#recBody,#ntcBody,#inspBody{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+    column-gap:26px;align-items:start}
+  #moreBody,#lvBody{max-width:720px}   /* settings and leave read as one column */
+  /* main already carries the side padding; inside the grid the cards drop
+     their own horizontal margin or the columns lose width to it */
+  #homeBody > *,#recBody > *,#ntcBody > *,#inspBody > *{margin-left:0;margin-right:0}
+  /* anything that speaks for the whole screen keeps the full width */
+  #homeBody > .banner,#homeBody > .kpis,#homeBody > .rulebox,
+  #recBody  > .banner,#recBody  > .kpis,#recBody  > .rulebox,
+  #ntcBody  > .banner,#ntcBody  > .kpis,#ntcBody  > .rulebox,
+  #inspBody > .banner,#inspBody > .kpis,#inspBody > .rulebox,
+  #homeBody > .group.wide,#recBody > .group.wide{grid-column:1 / -1}
+  .kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+@media (min-width:1980px){
+  main{padding:0 56px}
+  main > .screen{max-width:1760px}
+  #homeBody,#recBody,#ntcBody,#inspBody{
+    grid-template-columns:repeat(3,minmax(0,1fr));column-gap:30px}
+  .kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .bigtitle h2{font-size:38px}
+  .masthead h2{font-size:36px}
 }
 </style>
 </head>

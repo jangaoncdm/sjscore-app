@@ -416,6 +416,16 @@ function delta(now,prev,goodUp,suffix){
 }
 
 /* ---------------- analytics (honest math kept) ---------------- */
+/* a handset more than two minutes out is worth naming: it is why a mark can
+   read 10:49 when the clock on the wall says 10:38 */
+const SKEW_TOL=120;
+function skewPill(r){
+  const s=Number(r&&r.skew)||0;
+  if(Math.abs(s)<=SKEW_TOL) return '';
+  const m=Math.round(Math.abs(s)/60);
+  return ' <span class="pill warn" title="This phone\u2019s clock is '+m+' minute(s) '+(s>0?'fast':'slow')+
+    '. The district\u2019s own clock has been used.">clock '+m+'m '+(s>0?'fast':'slow')+'</span>';
+}
 function analyse(j){
   const officersDue=j.totals.officers-1;
   const present=j.today.present.length,onLeave=j.today.onLeave.length,absent=j.today.absent.length;
@@ -477,6 +487,12 @@ function analyse(j){
   if(oldPend.length) iss.push({p:2,t:oldPend.length+' leave application'+(oldPend.length>1?'s':'')+' waiting beyond 48 hours',
     d:'The oldest has waited '+Math.round(oldestH)+' hours.',a:'Pass orders today — held days block fresh applications.',
     list:oldPend.map(l=>l.name+' · '+l.type+' '+l.days+'d from '+dm(l.from))});
+  const badClocks=(j.today.present||[]).filter(r=>Math.abs(Number(r.skew)||0)>SKEW_TOL);
+  if(badClocks.length) iss.push({p:3,
+    t:badClocks.length+' phone'+(badClocks.length>1?'s have clocks':' has a clock')+' set wrong',
+    d:'Their marks were recorded against the district\u2019s clock, so nothing is lost \u2014 but the officer sees the wrong time on his own screen, and a phone running fast can look late when it is not.',
+    a:'Ask them to set date and time to automatic on the handset.',
+    list:badClocks.map(r=>r.name+' · '+(r.mandal||'—')+' · '+Math.round(Math.abs(r.skew)/60)+' min '+(r.skew>0?'fast':'slow'))});
   if(j.notices&&(j.notices.proposed||[]).length) iss.push({p:1,
     t:(j.notices.proposed.length)+' proposed notice'+(j.notices.proposed.length>1?'s':'')+' await your approval',
     d:'Nothing has been served — the morning pass only proposes.',
@@ -743,7 +759,7 @@ function vOverview(j,A){
       `<div class="mk${r.verified?'':' nofix'}" data-mi="${i}"><span class="av">${inits(r.name)}</span>
         <div><b>${esc(r.name)}${(r.marks||1)>1?' <span class="pill bad">'+r.marks+'×</span>':''}</b>
         <span>${esc(r.role)} · ${esc(r.mandal||'—')}</span></div>
-        <span class="t">${esc(hm(r.at))}<br><span class="pill ${suspect(r)?'bad':r.verified?'ok':'warn'}">${suspect(r)?'not trustworthy':r.verified?'verified':'no fix'}</span></span></div>`).join('')
+        <span class="t">${esc(hm(r.at))}${skewPill(r)}<br><span class="pill ${suspect(r)?'bad':r.verified?'ok':'warn'}">${suspect(r)?'not trustworthy':r.verified?'verified':'no fix'}</span></span></div>`).join('')
       :'<div class="empty">No officer yet today.</div>')+`</div>`,'marks');
   h+=panel('c7','Live map · officers and villages','wheel scrolls the page · Ctrl+wheel zooms',
     mapTools()+'<div id="map"></div>');
@@ -863,7 +879,8 @@ function askFacts(j,A){
   L.push('RED-FLAG VILLAGES ('+fl.length+'): '+(fl.map(r=>r.gp+' ('+r.mandal+') RF '+r.rf+' score '+r.score).join('; ')||'none')+'.');
   if(A.off) L.push('TODAY IS OFF: '+A.off+'. Attendance is optional and not counted; no notice can arise today; any marks are voluntary.');
   if(j.notices){ const nth=x=>x+(x===1?'st':x===2?'nd':x===3?'rd':'th');
-    L.push('SHOW-CAUSE NOTICES (lifecycle: the morning pass PROPOSES; nothing is served, numbered or emailed until the Collector approves on the console; first '+j.notices.grace+' SERVED in a month warn, then 1 CL debits per day of continued default at day-close): awaiting the Collector\u2019s approval '+((j.notices.proposed||[]).length)+
+    if(j.notices.reminders) L.push('REMINDERS (informal, sent automatically, never on the register, never a deduction): sent today '+j.notices.reminders.today+', this month '+j.notices.reminders.month+'. Latest: '+((j.notices.reminders.rows||[]).slice(0,20).map(r=>r.name+' ('+(r.mandal||'—')+') '+r.date+' \u2014 '+r.reason).join('; ')||'none')+'.');
+    L.push('SHOW-CAUSE NOTICES (lifecycle: the 1st and 2nd unmarked days of a month draw reminders only; the '+(j.notices.scnFrom||3)+'rd unmarked day PROPOSES a notice; nothing is served, numbered or emailed until the Collector approves on the console; from that '+(j.notices.scnFrom||3)+'rd unmarked day each further unmarked working day debits 1 CL after the day closes): awaiting the Collector\u2019s approval '+((j.notices.proposed||[]).length)+
       (((j.notices.proposed||[]).length)?' ('+j.notices.proposed.slice(0,30).map(p=>p.name+' ('+(p.mandal||'—')+') for '+p.date).join('; ')+')':'')+
       '; served today '+j.notices.today+'; served awaiting acknowledgement '+j.notices.pending+'; served this month '+j.notices.month+' with '+j.notices.debitsMonth+' CL debit(s). Latest register entries: '+
       ((j.notices.rows||[]).slice(0,25).map(n=>(n.no||'unnumbered')+' '+n.name+' ('+(n.mandal||'—')+') for '+n.date+', '+
@@ -956,7 +973,7 @@ function dlBlob(name,mime,text){
 }
 function todayRoster(j){
   const rows=[];
-  j.today.present.forEach(r=>rows.push([r.name,r.role,r.mandal||'','PRESENT','',hm(r.at),r.marks||1,
+  j.today.present.forEach(r=>rows.push([r.name,r.role,r.mandal||'','PRESENT','',hm(r.at)+(Math.abs(Number(r.skew)||0)>SKEW_TOL?' (phone '+Math.round(Math.abs(r.skew)/60)+'m '+(r.skew>0?'fast':'slow')+')':''),r.marks||1,
     suspect(r)?'NOT TRUSTWORTHY':r.verified?'Verified':'No fix',
     r.lat==null?'':r.lat, r.lng==null?'':r.lng, r.acc==null?'':Math.round(r.acc)]));
   j.today.onLeave.forEach(r=>rows.push([r.name,r.role,r.mandal||'','ON LEAVE',r.leaveType||'','','','','','','']));
@@ -1243,10 +1260,12 @@ function vNotices(j,A){
     '<div class="empty">The notice register needs the 6.7 Code.gs on the Sheet — paste it, deploy a new version, and run installNoticeTriggers once from the editor. The rest of the console is unaffected.</div>');
   const P=N.proposed||[];
   let h='<div class="kpirow">';
-  h+=kpi('Awaiting your approval',IC.f,P.length,'','nothing served without your word');
+  const R=N.reminders||{today:0,month:0,lateToday:0,rows:[]};
+  h+=kpi('Awaiting your approval',IC.f,P.length,'','3rd unmarked day or beyond');
+  h+=kpi('Reminders sent today',IC.f,R.today,'',R.lateToday?R.lateToday+' for late marking or late sync':'1st and 2nd misses');
   h+=kpi('Served, awaiting ack',IC.f,N.pending,'','locks the officer\u2019s app');
   h+=kpi('Served this month',IC.f,N.month,'','on the register');
-  h+=kpi('CL debits this month',IC.f,N.debitsMonth,'','beyond the '+N.grace+' warnings');
+  h+=kpi('CL debits this month',IC.f,N.debitsMonth,'','from the '+(N.scnFrom||3)+'rd unmarked day');
   h+='</div>';
   if(P.length){
     const chk=id=>NTC_UNCHK[id]?'':' checked';
@@ -1267,6 +1286,16 @@ function vNotices(j,A){
     h+=panel('c12','Proposed notices','the morning pass proposes; you decide',
       '<div class="empty">Nothing awaits approval. The ~11:15 trigger proposes a notice for every unmarked officer on a working day; the proposals appear here for your word before anything is served.</div>');
   }
+  if((N.reminders&&N.reminders.rows||[]).length){
+    h+=panel('c12','Reminders \u2014 already sent, nothing on the register',
+      'the 1st and 2nd unmarked days of a month, and late or late-received marks',
+      `<div class="twrap" style="max-height:300px"><table><thead><tr><th>Date</th><th>Officer</th><th>Mandal</th><th>Reason</th></tr></thead><tbody>`+
+      N.reminders.rows.map(r=>`<tr><td class="num">${esc(dm(r.date))}</td>
+        <td>${esc(r.name)}<span class="mut"> · ${esc(r.role)}</span></td>
+        <td class="mut">${esc(r.mandal||'—')}</td>
+        <td>${esc(r.reason)}${r.kind==='MISS'?' <span class="pill">miss '+r.miss+'</span>':' <span class="pill">advisory</span>'}</td></tr>`).join('')+
+      `</tbody></table></div>`);
+  }
   window.__ROWS.ntc=N.rows;
   h+=panel('c12','Notice register · latest first',
     'served notices only carry numbers · first '+N.grace+' served in a month warn · debits settle at day-close · tap a row',
@@ -1279,7 +1308,7 @@ function vNotices(j,A){
       <td>${n.clDebited?'<span class="pill bad">1 day</span>':'—'}</td></tr>`).join('')
      :'<tr><td colspan="8" class="empty">No notices on the register.</td></tr>')+`</tbody></table></div>`,'ntc');
   h+=panel('c12','How the rule runs','the register is the record',
-    '<div style="font-size:13px;color:var(--tx-2);line-height:1.75">On working days (Sundays and the Holidays tab excepted), a pass at 18:00 \u2014 after duty hours, so a phone on weak signal has the whole day to reach the district \u2014 PROPOSES a notice for every officer with no attendance and no sanctioned leave — nothing is served, numbered or emailed until you press Send here. A served notice locks the officer\u2019s app until acknowledged. The first '+N.grace+' served notices in a calendar month are warnings; from the next one on, if attendance is still unmarked when the NEXT morning\u2019s settlement re-reads the closed day, one day of CL is debited on the Leave register — loss of pay once the year\u2019s CL is exhausted. Acknowledgement is receipt, not excuse: marking attendance is the only cure. Attendance is read three times before a rupee moves — at 18:00, again when you approve, and again at settlement — so a mark held up on a weak line withdraws the notice by itself and shows as <b>cured</b>.</div>');
+    '<div style="font-size:13px;color:var(--tx-2);line-height:1.75">Attendance is due by '+(N.cutoff||11)+':00 from the place of duty. A pass at 18:00 \u2014 after duty hours, so a phone on weak signal has the whole day to reach the district \u2014 sorts every officer: a mark in time draws nothing; a late mark or a mark received late draws an advisory reminder; the 1st and 2nd unmarked days of the month draw a reminder, sent at once and never entered on the register; the '+(N.scnFrom||3)+'rd unmarked day PROPOSES a show-cause notice — nothing is served, numbered or emailed until you press Send here. A served notice locks the officer\u2019s app until acknowledged. The first '+N.grace+' served notices in a calendar month are warnings; from the next one on, if attendance is still unmarked when the NEXT morning\u2019s settlement re-reads the closed day, one day of CL is debited on the Leave register — loss of pay once the year\u2019s CL is exhausted. Acknowledgement is receipt, not excuse: marking attendance is the only cure. Attendance is read three times before a rupee moves — at 18:00, again when you approve, and again at settlement — so a mark held up on a weak line withdraws the notice by itself and shows as <b>cured</b>.</div>');
   return h;
 }
 function vMap(j,A){
