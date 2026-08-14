@@ -13,7 +13,7 @@
      own, not one common album at the end.
    ============================================================ */
 const SERVER_URL = 'https://script.google.com/macros/s/AKfycbz8Ye9LqGB3bLWkTWcdw6JvU__U9K4VRaG-IFFpwc67G__1vdpMryV6NEfz5FJrnezS/exec';
-const APP_VERSION = '6.8.2';
+const APP_VERSION = '6.8.3';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -2142,10 +2142,19 @@ function entitlement(type, year){
 }
 /* Sanctioned leave is spent; an application awaiting orders is committed and
    cannot be spent twice. Both come off what is left. */
-function leaveBalance(type, year){
+/* One officer's account, never the room's. On an officer's phone DB.leave
+   holds only his own file, but on the Collector's device it holds the whole
+   district — and without the phone filter this function was summing every
+   officer's CL into one number, so every application read "91 taken · 0
+   left". The orders were safe (the Sheet re-checks the balance per officer
+   before sanctioning), but the screen the orders were passed from was lying. */
+function leaveBalance(type, year, phone){
   const y = Number(year) || new Date().getFullYear();
+  const norm = p => String(p || '').replace(/\D/g, '').slice(-10);
+  const ph = norm(phone || (user() || {}).phone);
   const ent = entitlement(type, y);
-  const mine = (DB.leave || []).filter(l => l.type === type && String(l.from || '').slice(0,4) === String(y));
+  const mine = (DB.leave || []).filter(l => norm(l.phone) === ph &&
+    l.type === type && String(l.from || '').slice(0,4) === String(y));
   const used = mine.filter(l => l.status === 'APPROVED').reduce((s,l) => s + (Number(l.days) || 0), 0);
   const held = mine.filter(l => l.status === 'PENDING').reduce((s,l) => s + (Number(l.days) || 0), 0);
   return {ent, used, held, left: Math.max(0, ent - used - held)};
@@ -2371,7 +2380,7 @@ function openLeaveOne(id){
       ${l.address?`<div class="row"><span class="lbl"><b>Address during leave</b><span>${esc(l.address)}</span></span></div>`:''}
       ${l.cert?`<div class="row"><span class="lbl"><b>Medical certificate</b><span>${esc(l.cert)}</span></span></div>`:''}
       <div class="row"><span class="lbl"><b>Leaving headquarters</b></span><span class="val">${l.hq?'Yes':'No'}</span></div>
-      ${leaveMeta(l.type).counts ? (()=>{ const b=leaveBalance(l.type, Number(String(l.from).slice(0,4)));
+      ${leaveMeta(l.type).counts ? (()=>{ const b=leaveBalance(l.type, Number(String(l.from).slice(0,4)), l.phone);
         return `<div class="row"><span class="lbl"><b>${esc(leaveName(l.type))} account</b>
           <span>${b.ent} for the year · ${b.used} taken · ${b.left} left</span></span></div>`; })() : ''}
       <div class="row"><span class="lbl"><b>Status</b></span>${lvPill(l.status)}</div>
