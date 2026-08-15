@@ -19,7 +19,7 @@
    pasted back by hand after every publish. The empty string below is only a
    fallback for the case where config.js is missing. */
 const SERVER_URL = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
-const APP_VERSION = '6.9';
+const APP_VERSION = '6.9.1';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -2253,18 +2253,23 @@ function renderLeave(){
       boss ? 'Applications from the MPO, the Panchayat Secretary and the MPDO appear here for your orders.'
            : 'Leave is applied for here and goes to the Collector for orders. Apply before you leave station wherever it is possible to do so.');
   } else {
+    /* ONE row per application. There used to be a second block below this
+       that drew the whole list again as plain rows carrying the status pill —
+       so every application appeared twice, and the second copy could not even
+       be tapped. The pill it carried was worth keeping, so it now sits on the
+       row itself, where a status is only worth stating if it is not the one
+       the filter already implies. */
     h += `<div class="group" style="margin-top:14px"><div class="card">` + list.map(l => {
       const who = boss ? `<em>${esc(String(l.name||''))}</em> · ${esc(roleName(l.role))}${l.mandal?' · '+esc(l.mandal):''}<br>` : '';
+      const showPill = l.status !== 'PENDING' || LVFILTER === 'ALL' || !boss;
       return `<button class="lvrow" data-lv="${esc(l.id)}">
         <span class="tag">${esc(l.type)}</span>
         <span class="mid"><b>${esc(leaveName(l.type))}</b>
-          <span>${who}${esc(lvSpan(l))}${l.sync!=='synced'?' · on this phone':''}</span></span>
+          <span>${who}${esc(lvSpan(l))}${l.sync!=='synced'?' · on this phone':''}</span>
+          ${showPill ? `<span style="display:inline-block;margin-top:5px">${lvPill(l.status)}</span>` : ''}</span>
         <span class="lvdays">${l.days}<small>${l.days===1?'day':'days'}</small></span>
         </button>`;
     }).join('') + `</div></div>`;
-    h += `<div class="group"><div class="card">` + list.map(l =>
-      `<div class="row" style="padding-top:6px;padding-bottom:6px"><span class="lbl"><b style="font-size:13px">${esc(leaveName(l.type))} · ${esc(lvSpan(l))}</b></span>${lvPill(l.status)}</div>`
-    ).join('') + `</div></div>`;
   }
   $('#lvBody').innerHTML = h;
   wireLeave();
