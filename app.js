@@ -12,8 +12,14 @@
    • Every clause carries its own evidence — a note and photographs of its
      own, not one common album at the end.
    ============================================================ */
-const SERVER_URL = 'https://script.google.com/macros/s/AKfycbz8Ye9LqGB3bLWkTWcdw6JvU__U9K4VRaG-IFFpwc67G__1vdpMryV6NEfz5FJrnezS/exec';
-const APP_VERSION = '6.8.3';
+/* The address of the district's Apps Script web app.
+   It is NOT a secret — it ships inside this file to every phone and any
+   browser can read it. It lives in config.js, which stays in the repository
+   and is never overwritten by an upgrade pack, so it no longer has to be
+   pasted back by hand after every publish. The empty string below is only a
+   fallback for the case where config.js is missing. */
+const SERVER_URL = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
+const APP_VERSION = '6.9.1';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -2247,18 +2253,23 @@ function renderLeave(){
       boss ? 'Applications from the MPO, the Panchayat Secretary and the MPDO appear here for your orders.'
            : 'Leave is applied for here and goes to the Collector for orders. Apply before you leave station wherever it is possible to do so.');
   } else {
+    /* ONE row per application. There used to be a second block below this
+       that drew the whole list again as plain rows carrying the status pill —
+       so every application appeared twice, and the second copy could not even
+       be tapped. The pill it carried was worth keeping, so it now sits on the
+       row itself, where a status is only worth stating if it is not the one
+       the filter already implies. */
     h += `<div class="group" style="margin-top:14px"><div class="card">` + list.map(l => {
       const who = boss ? `<em>${esc(String(l.name||''))}</em> · ${esc(roleName(l.role))}${l.mandal?' · '+esc(l.mandal):''}<br>` : '';
+      const showPill = l.status !== 'PENDING' || LVFILTER === 'ALL' || !boss;
       return `<button class="lvrow" data-lv="${esc(l.id)}">
         <span class="tag">${esc(l.type)}</span>
         <span class="mid"><b>${esc(leaveName(l.type))}</b>
-          <span>${who}${esc(lvSpan(l))}${l.sync!=='synced'?' · on this phone':''}</span></span>
+          <span>${who}${esc(lvSpan(l))}${l.sync!=='synced'?' · on this phone':''}</span>
+          ${showPill ? `<span style="display:inline-block;margin-top:5px">${lvPill(l.status)}</span>` : ''}</span>
         <span class="lvdays">${l.days}<small>${l.days===1?'day':'days'}</small></span>
         </button>`;
     }).join('') + `</div></div>`;
-    h += `<div class="group"><div class="card">` + list.map(l =>
-      `<div class="row" style="padding-top:6px;padding-bottom:6px"><span class="lbl"><b style="font-size:13px">${esc(leaveName(l.type))} · ${esc(lvSpan(l))}</b></span>${lvPill(l.status)}</div>`
-    ).join('') + `</div></div>`;
   }
   $('#lvBody').innerHTML = h;
   wireLeave();
@@ -2349,6 +2360,16 @@ async function submitLeave(){
       return;
     }
   }
+  /* the same spell twice. The district refuses it too, but there is no sense
+     sending an application that cannot stand, and the officer should be told
+     at once rather than after the line comes back. */
+  const clash = (DB.leave || []).find(x => (x.status === 'PENDING' || x.status === 'APPROVED') &&
+    String(x.from || '') <= to && String(x.to || '') >= from);
+  if(clash){
+    toast((clash.status === 'APPROVED' ? 'Leave is already sanctioned' : 'An application is already with the Collector') +
+      ' for ' + lvSpan(clash) + '. Open it under Leave rather than applying again.', 6500);
+    return;
+  }
   const btn = $('#lvSend'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Sending';
   const l = {
     id: 'LV' + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
@@ -2362,6 +2383,11 @@ async function submitLeave(){
   DB.leave = DB.leave || []; DB.leave.unshift(l); saveNow();
   hideSheet(); renderLeave();
   const sent = await syncLeave();
+  if(l.rejected){                        /* the district refused it as a duplicate */
+    DB.leave = DB.leave.filter(x => x.id !== l.id); saveNow(); renderLeave();
+    toast(l.rejected, 7000);
+    return;
+  }
   toast(sent ? 'Sent to the Collector' : 'Saved on this phone — it goes when there is signal');
   renderLeave();
 }
@@ -2435,7 +2461,12 @@ async function decideLeave(id, status, remarks){
 
 /* ---------------- moving it about ---------------- */
 async function syncLeave(){
-  const list = (DB.leave || []).filter(l => l.sync !== 'synced');
+  /* only what THIS phone raised. On the Collector's device DB.leave holds the
+     whole district, and none of those rows carry a sync flag — without this
+     filter the console re-posts every officer's application back at the
+     Sheet, and stalls on the first one that is not its own. */
+  const me = (user() || {}).phone;
+  const list = (DB.leave || []).filter(l => l.sync !== 'synced' && (!l.phone || l.phone === me));
   if(!list.length || !navigator.onLine) return 0;
   let done = 0;
   for(const l of list){
@@ -2445,6 +2476,7 @@ async function syncLeave(){
         reason:l.reason, address:l.address, hq:l.hq, cert:l.cert||'', status:l.status
       }});
       if(r && r.ok){ l.sync = 'synced'; done++; saveNow(); }
+      else if(r && r.duplicate){ l.rejected = r.error; saveNow(); }
       else break;
     }catch(e){ break; }
   }
