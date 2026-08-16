@@ -1,0 +1,101 @@
+# ============================================================================
+# SJGP — one commit, everything deployed
+# ----------------------------------------------------------------------------
+# What this does when anything is committed to main:
+#   1. copies the files in app/ to the root of the site, so GitHub Pages
+#      publishes the new app and console — but NEVER touches config.js,
+#      which holds the district's server address;
+#   2. pushes backend/Code.gs and backend/Admin.gs into the Apps Script
+#      project and creates a NEW DEPLOYMENT VERSION, which is the step that
+#      actually puts the backend live;
+#   3. refuses the whole run if a secret has crept into the repository.
+#
+# One-time setup is in DEPLOY.md. After that there is nothing to paste, no
+# SALT to restore, and no Deploy menu to click.
+# ============================================================================
+name: Deploy SJGP
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  guard:
+    name: Tests and secret check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: No real SALT anywhere in the repository
+        run: |
+          BAD=$(grep -rIn --exclude-dir=.git --exclude-dir=.github \
+                 -E "SALT_FALLBACK[[:space:]]*=[[:space:]]*'" . 2>/dev/null \
+                 | grep -v "CHANGE-THIS-LONG-RANDOM-SALT" || true)
+          if [ -n "$BAD" ]; then
+            echo "$BAD"
+            echo "::error::A real salt is present in the repository. It belongs in Script Properties."
+            exit 1
+          fi
+          if grep -rIn --exclude-dir=.git -E "ANTHROPIC_API_KEY[[:space:]]*=[[:space:]]*'sk-" . ; then
+            echo "::error::An API key is present in the repository."
+            exit 1
+          fi
+          echo "Clean."
+      - name: The whole suite, against the real backend files
+        run: npm test
+
+  site:
+    name: Publish the app and console
+    needs: guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copy app/ to the site root, leaving config.js alone
+        run: |
+          for f in index.html app.js sw.js dashboard.html manifest.webmanifest privacy.html; do
+            [ -f "app/$f" ] && cp "app/$f" "./$f" && echo "published $f"
+          done
+          [ -d app/icons ] && cp -r app/icons ./ || true
+          [ -d app/screenshots ] && cp -r app/screenshots ./ || true
+          if [ ! -f config.js ]; then
+            echo "::error::config.js is missing. Copy app/config.example.js to config.js once, with the district's /exec address."
+            exit 1
+          fi
+      - name: Commit whatever changed
+        run: |
+          git config user.name  "SJGP deploy"
+          git config user.email "deploy@users.noreply.github.com"
+          git add -A ':!backend' ':!.github'
+          git diff --staged --quiet || git commit -m "publish: ${{ github.event.head_commit.message }}"
+          git push
+
+  backend:
+    name: Push and deploy the Apps Script backend
+    needs: guard
+    runs-on: ubuntu-latest
+    if: ${{ vars.SJGP_SCRIPT_ID != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Install clasp
+        run: npm install -g @google/clasp@2.4.2
+      - name: Sign in with the stored credential
+        run: echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
+      - name: Push the code
+        run: |
+          printf '{"scriptId":"%s","rootDir":"backend"}\n' "${{ vars.SJGP_SCRIPT_ID }}" > .clasp.json
+          clasp push --force
+      - name: Deploy a new version
+        run: |
+          clasp deploy -i "${{ vars.SJGP_DEPLOYMENT_ID }}" -d "auto ${{ github.run_number }}: ${{ github.event.head_commit.message }}"
+      - name: Confirm the district is answering on the new code
+        run: |
+          sleep 15
+          URL="${{ vars.SJGP_EXEC_URL }}?op=diag"
+          OUT=$(curl -sL --max-time 45 "$URL" || true)
+          echo "$OUT"
+          echo "$OUT" | grep -q '"ok":true' || { echo "::error::The district did not answer with ok:true after deploying."; exit 1; }
