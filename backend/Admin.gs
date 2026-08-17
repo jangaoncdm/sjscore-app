@@ -806,3 +806,217 @@ function saltStatus(){
     L.push('\nRun migrateSalt() on the CURRENT code to move it into Script Properties.');
   Logger.log(L.join('\n'));
 }
+
+/* ============================================================================
+ * 9. FIELD ISSUE REGISTER · 17.08.2026
+ * ----------------------------------------------------------------------------
+ * The mandals' issue tracker of 17.08.2026, encoded the same way as the
+ * 28.07 register in Code.gs, with the lessons of that batch applied:
+ *   - a dry-run twin (showFieldFixes2) prints the whole plan first;
+ *   - every applied change is written to Audit (PINs excepted — a PIN is
+ *     printed ONCE in the log and nowhere else);
+ *   - fresh PINs are derived from the batch date, so running the batch a
+ *     second time yields the SAME PIN and changes nothing — the 28.07
+ *     resetPin seeded from the day it was run, and a nervous re-run on a
+ *     later day would have re-scrambled PINs already circulated.
+ *
+ * THE OPS
+ *   find:{phone|role|mandal|gp}  locates the row (phone exact; role exact;
+ *                                mandal/gp by contains, so spelling variants
+ *                                like Kothapally/Kothapalle both land)
+ *   setPhone     writes the number AND re-keys the PIN (skip if already so)
+ *   claimPhone   as setPhone, but first releases the number from any other
+ *                row holding it — that row is left blank and flagged
+ *   setName / setGp / setMandal  corrects the text
+ *   resetPin     fresh PIN, number unchanged
+ *   deactivate   the row stops counting — for long leave, so no absence can
+ *                be manufactured against an officer who is not expected
+ *   addRow       registers an officer; skipped if the number is on the roll
+ * ========================================================================== */
+var FIX2_BATCH = '17.08.2026';
+var FIELD_FIXES_2 = [
+  /* 1 — P. Madhavi returns from child-care leave to Chinnapendyala */
+  {why:'Issue 1: Penthala Madhavi (PS, Chilpur) back from child-care leave — register 9553399695',
+   addRow:{phone:'9553399695', name:'Penthala Madhavi', role:'PS', mandal:'Chilpur', gp:'Chinnapendyala'}},
+  {why:'Issue 1: G. Ratna held Chinnapendyala in charge during that leave; on Madhavi’s return she keeps Sreepathipalle alone',
+   find:{role:'PS', gp:'Sreepathipalle'}, setGp:'Sreepathipalle'},
+
+  /* 2 — deputation into Desaithanda */
+  {why:'Issue 2: Thouti Reddy Shashi Kumar deputed from Tharigoppula to Desaithanda (Chilpur) — the Desaithanda row takes his number and name',
+   find:{role:'PS', gp:'Desaithanda'}, setPhone:'9493438111', setName:'Thouti Reddy Shashi Kumar'},
+
+  /* 3 & 4 — the Peddapahad / Pedda Thanda (M) tangle, finished properly.
+     28.07 confirmed 9848188052 as D. Praveen Kumar's and claimed it onto the
+     row matching "Peddapahad" — but never corrected that row's name or
+     village, which is why K. Jyothi's village now shows a stranger. */
+  {why:'Issue 4: D. Praveen Kumar — his row reads his name and his village Pedda Thanda (M), and his PIN is reset (he reports "wrong PIN")',
+   find:{phone:'9848188052'}, setName:'Donthi Praveen Kumar', setGp:'Pedda Thanda (M)', resetPin:true},
+  {why:'Issue 3: Kadavergu Jyothi (PS Peddapahad, Jangaon) — the row on her number is corrected to her name and village',
+   find:{phone:'8309450336'}, setName:'Kadavergu Jyothi', setGp:'Peddapahad', setMandal:'Jangaon'},
+  {why:'Issue 3: and if 8309450336 was never on the roll, she is registered (skips when the line above found her)',
+   addRow:{phone:'8309450336', name:'Kadavergu Jyothi', role:'PS', mandal:'Jangaon', gp:'Peddapahad'}},
+
+  /* 5 — Venkriyala */
+  {why:'Issue 5: Gouraipally Kavitha (PS Venkriyala) told "number not registered" — the Venkriyala row takes 9398525190',
+   find:{role:'PS', gp:'Venkriyala'}, setPhone:'9398525190', setName:'Gouraipally Kavitha'},
+
+  /* 6 & 7 — the Cheeturu / Ramachandragudem swap, both directions */
+  {why:'Issue 6: L. Mahesh Kumar confirmed on Cheeturu (applied 28.07 — kept here so this batch reads complete)',
+   find:{phone:'7680966701'}, setGp:'Cheeturu', setMandal:'Lingala Ghanpur'},
+  {why:'Issue 7: V. Srinivas Reddy deputed to Ramachandragudem — if his number is on the roll, it moves',
+   find:{phone:'8008756396'}, setGp:'Ramachandragudem', setMandal:'Lingala Ghanpur'},
+  {why:'Issue 7: and if not (28.07 overwrote the Cheeturu row’s number, which may have been his), he is registered',
+   addRow:{phone:'8008756396', name:'V. Srinivas Reddy', role:'PS', mandal:'Lingala Ghanpur', gp:'Ramachandragudem'}},
+  {why:'Issue 7: D. Rambabu held Ramachandragudem in charge; he keeps Jeedikal alone once Srinivas Reddy holds it',
+   find:{role:'PS', gp:'Jeedikal'}, setGp:'Jeedikal'},
+
+  /* 8 — child-care leave: the roll must stop expecting her */
+  {why:'Issue 8: Basvaraju Mounika (PS Ramrajupalle) on child-care leave — row set inactive so no absence can be counted against her; reactivate on return. Her charge is with Rajashekar — see CONTESTED_2 before touching any number.',
+   find:{phone:'9391744487'}, deactivate:true},
+
+  /* 9 — the officer says where she works; the register follows */
+  {why:'Issue 9: N. Santhoshini works Dharmagadda Thanda; her row said Dharavath Thanda. NOTE: this leaves Dharavath Thanda unheld — see CONTESTED_2',
+   find:{phone:'9398535516'}, setGp:'Dharmagadda Thanda'},
+
+  /* 10 & 11 — wrong PINs */
+  {why:'Issue 10: Kota Bayyanna (PS Rangarai Gudem) — wrong PIN, fresh PIN on his number',
+   find:{phone:'9866775245'}, resetPin:true},
+  {why:'Issue 10: and if that number was never on the roll, he is registered',
+   addRow:{phone:'9866775245', name:'Kota Bayyanna', role:'PS', mandal:'Ghanpur (Stn)', gp:'Rangarai Gudem'}},
+  {why:'Issue 11: Shaik Irfan (PS Pedda Thanda (Y)) — wrong PIN, fresh PIN',
+   find:{phone:'7794936639'}, resetPin:true},
+
+  /* 12 — the app shows her as MPDO because her number sits on a senior row
+     too, and one number folds into one login with the senior rank winning */
+  {why:'Issue 12: Thandra Swapna (PS Kothapally) shown as "MPDO Lingala Ghanpur" — 9133467909 also sits on that MPDO row and the senior rank wins the login. Her PS row claims the number; the MPDO row is blanked and NEEDS A REAL NUMBER from the office',
+   find:{role:'PS', gp:'Kothapal'}, claimPhone:'9133467909'}
+];
+
+/* What the tracker asks for but the record contradicts. Nothing here is
+   applied. Settle each with the office, move the answer into FIELD_FIXES_2,
+   and delete the entry. */
+var CONTESTED_2 = [
+  {issue:8, name:'Ramrajupalle charge', q:'The tracker says "give login to 9912383087" for Rajashekar — but 28.07 already gave J. Rajashekar (Neermala) the village in charge, and if his existing sign-in works, moving him to a new number would lock him out. WHOSE number is 9912383087, and does his current login work?'},
+  {issue:9, name:'Dharavath Thanda', q:'Once Santhoshini’s row moves to Dharmagadda Thanda, nobody holds Dharavath Thanda — and 28.07 put 7675827928 on a Dharmagadda Thanda row, so that village may now be held twice. Who actually holds Dharavath Thanda, and is 7675827928 a real officer?'}
+];
+
+/* the PIN a fix hands out — derived from the number AND the batch date, so
+   running the batch again yields the same PIN and re-runs change nothing */
+function fix2Pin_(phone){
+  return String(1000 + (parseInt(hash_(phone + '|' + FIX2_BATCH, 'fix2').replace(/\D/g, '').slice(0, 6) || '0', 10) % 9000));
+}
+function showFieldFixes2(){ fieldFixes2_(false); }
+function applyFieldFixes2(){ fieldFixes2_(true); }
+function fieldFixes2_(commit){
+  const t = uidx_(), sh = t.sh, v = sh.getDataRange().getValues();
+  const width = Math.max(sh.getLastColumn(), U_HEAD.length);
+  const byPhone = {}, out = [];
+  for(let i = 1; i < v.length; i++){ const ph = phone10_(v[i][t.ix.phone]); if(ph && byPhone[ph] == null) byPhone[ph] = i; }
+  const findRow = f => {
+    for(let i = 1; i < v.length; i++){
+      if(f.phone && phone10_(v[i][t.ix.phone]) !== phone10_(f.phone)) continue;
+      if(f.role && String(v[i][t.ix.role]).trim().toUpperCase() !== f.role) continue;
+      if(f.mandal && String(v[i][t.ix.mandal]).trim().toLowerCase().indexOf(f.mandal.toLowerCase()) < 0) continue;
+      if(f.gp && String(v[i][t.ix.gp]).toLowerCase().indexOf(f.gp.toLowerCase()) < 0) continue;
+      return i;
+    } return -1;
+  };
+  const writeRow = i => { if(commit) sh.getRange(i + 1, 1, 1, v[i].length || width).setValues([v[i]]); };
+
+  FIELD_FIXES_2.forEach(fx => {
+    try{
+      if(fx.addRow){
+        const a = fx.addRow, ph = phone10_(a.phone);
+        if(byPhone[ph] != null){ out.push('SKIP (already on the roll): ' + fx.why); return; }
+        const pin = fix2Pin_(ph);
+        const row = new Array(width).fill('');
+        const put = (k, val) => { if(t.ix[k] >= 0) row[t.ix[k]] = val; };
+        put('phone', "'" + ph); put('name', a.name); put('role', a.role);
+        put('mandal', a.mandal || ''); put('gp', a.gp || '');
+        put('hash', hash_(ph, pin)); put('initpin', ''); put('active', 'TRUE');
+        if(commit){
+          sh.appendRow(row);
+          admLog_('FIELD FIX ' + FIX2_BATCH, a.name + ' (' + ph + ')', 'registered · ' + a.role + ' · ' + (a.mandal || '') + ' / ' + (a.gp || ''));
+        }
+        v.push(row); byPhone[ph] = v.length - 1;
+        out.push((commit ? 'ADDED: ' : 'would ADD: ') + a.name + ' (' + a.role + ', ' + a.gp + ') ' + ph + ' — PIN ' + pin + ' (change forced on first sign-in)');
+        return;
+      }
+      const i = findRow(fx.find);
+      if(i < 0){ out.push('NOT FOUND (fix by hand): ' + fx.why); return; }
+      const changed = [], audit = [];
+      if(fx.deactivate){
+        if(String(v[i][t.ix.active]).toUpperCase() !== 'FALSE'){
+          v[i][t.ix.active] = 'FALSE'; writeRow(i);
+          if(commit) admLog_('FIELD FIX ' + FIX2_BATCH, cell_(v[i], t.ix.name), 'deactivated · ' + fx.why.slice(0, 180));
+          out.push((commit ? 'DEACTIVATED: ' : 'would DEACTIVATE: ') + fx.why);
+        } else out.push('OK ALREADY: ' + fx.why);
+        return;
+      }
+      if(fx.claimPhone){
+        const np = phone10_(fx.claimPhone);
+        if(phone10_(v[i][t.ix.phone]) === np && v[i][t.ix.hash]){ /* already his row */ }
+        else{
+          const other = byPhone[np];
+          if(other != null && other !== i){
+            v[other][t.ix.phone] = ''; v[other][t.ix.hash] = ''; writeRow(other);
+            out.push('  released ' + np + ' from row ' + (other + 1) + ' (' + (cell_(v[other], t.ix.name) || cell_(v[other], t.ix.role)) + ') — that officer needs a real number before they can sign in');
+            audit.push('released ' + np + ' from ' + (cell_(v[other], t.ix.name) || 'row ' + (other + 1)));
+          }
+          const pin = fix2Pin_(np);
+          v[i][t.ix.phone] = np; v[i][t.ix.hash] = hash_(np, pin); if(t.ix.initpin >= 0) v[i][t.ix.initpin] = '';
+          byPhone[np] = i;
+          changed.push('claimed ' + np + ', PIN ' + pin); audit.push('claimed ' + np + ', PIN re-keyed');
+        }
+      }
+      if(fx.setPhone){
+        const np = phone10_(fx.setPhone), old = phone10_(v[i][t.ix.phone]);
+        if(old === np && v[i][t.ix.hash]){ /* already right */ }
+        else if(byPhone[np] != null && byPhone[np] !== i){ out.push('CONFLICT (number already on row ' + (byPhone[np] + 1) + '): ' + fx.why); return; }
+        else{
+          const pin = fix2Pin_(np);
+          v[i][t.ix.phone] = np; v[i][t.ix.hash] = hash_(np, pin); if(t.ix.initpin >= 0) v[i][t.ix.initpin] = '';
+          byPhone[np] = i;
+          changed.push('phone ' + (old || '(blank)') + ' → ' + np + ', PIN ' + pin);
+          audit.push('phone ' + (old || '(blank)') + ' → ' + np + ', PIN re-keyed');
+        }
+      }
+      if(fx.setName && String(v[i][t.ix.name]).trim() !== fx.setName){
+        audit.push('name "' + v[i][t.ix.name] + '" → "' + fx.setName + '"');
+        changed.push('name → ' + fx.setName); v[i][t.ix.name] = fx.setName;
+      }
+      if(fx.setGp && String(v[i][t.ix.gp]).trim() !== fx.setGp){
+        audit.push('villages "' + v[i][t.ix.gp] + '" → "' + fx.setGp + '"');
+        changed.push('villages → ' + fx.setGp); v[i][t.ix.gp] = fx.setGp;
+      }
+      if(fx.setMandal && String(v[i][t.ix.mandal]).trim() !== fx.setMandal){
+        audit.push('mandal "' + v[i][t.ix.mandal] + '" → "' + fx.setMandal + '"');
+        changed.push('mandal → ' + fx.setMandal); v[i][t.ix.mandal] = fx.setMandal;
+      }
+      if(fx.resetPin){
+        const ph = phone10_(v[i][t.ix.phone]), pin = fix2Pin_(ph);
+        if(v[i][t.ix.hash] === hash_(ph, pin)){ /* this batch already reset it */ }
+        else{
+          v[i][t.ix.hash] = hash_(ph, pin); if(t.ix.initpin >= 0) v[i][t.ix.initpin] = '';
+          changed.push('PIN reset → ' + pin); audit.push('PIN reset');
+        }
+      }
+      if(changed.length){
+        writeRow(i);
+        if(commit) admLog_('FIELD FIX ' + FIX2_BATCH, cell_(v[i], t.ix.name) + ' (' + phone10_(v[i][t.ix.phone]) + ')', audit.join('; '));
+        out.push((commit ? 'FIXED: ' : 'would FIX: ') + fx.why + ' — ' + changed.join('; '));
+      } else out.push('OK ALREADY: ' + fx.why);
+    }catch(err){ out.push('ERROR on "' + fx.why + '": ' + err); }
+  });
+
+  out.push('');
+  if(CONTESTED_2.length){
+    out.push('NOT TOUCHED — the tracker and the record disagree; settle these with the office:');
+    CONTESTED_2.forEach(c => out.push('  Issue ' + c.issue + ' (' + c.name + '): ' + c.q));
+    out.push('');
+  }
+  out.push(commit === true
+    ? 'Applied. The PINs above are shown ONCE — circulate each to that officer alone. Now run rosterAudit(): it should show the blanked MPDO Lingala Ghanpur row, and whatever CONTESTED_2 leaves open.'
+    : 'DRY RUN — nothing was written. Read the plan above, then run applyFieldFixes2().');
+  Logger.log(out.join('\n'));
+}

@@ -1,0 +1,5 @@
+# Field issue trackers carry officers' personal mobile numbers in bulk.
+# They are worked here and encoded into Admin.gs registers, but the raw
+# spreadsheets stay off the public repository.
+Issue/
+node_modules/

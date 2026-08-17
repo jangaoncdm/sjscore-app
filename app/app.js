@@ -19,7 +19,7 @@
    pasted back by hand after every publish. The empty string below is only a
    fallback for the case where config.js is missing. */
 const SERVER_URL = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
-const APP_VERSION = '6.9.1';
+const APP_VERSION = '6.9.2';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -386,6 +386,36 @@ async function getFixTwice(){
   try{ return await getFix(); }
   catch(e){ return await getFix({enableHighAccuracy:false, timeout:15000, maximumAge:120000}); }
 }
+/* THE SLOW SATELLITE. A cold GPS needs a minute or two of open sky — longer
+   than one attempt can politely wait — so a phone would answer with a
+   ±2000 m network guess and the mark was filed unverified through no fault
+   of the officer. While he takes the photograph the phone now keeps
+   listening, and the best fix to arrive before he presses Mark is the one
+   that is filed. It can only improve: a worse reading is never taken. */
+let ATT_WATCH = null;
+function stopAttWatch(){
+  if(ATT_WATCH != null){ try{ navigator.geolocation.clearWatch(ATT_WATCH); }catch(e){} ATT_WATCH = null; }
+}
+function refineAttFix(){
+  if(!navigator.geolocation || ATT_WATCH != null) return;
+  const t0 = Date.now();
+  ATT_WATCH = navigator.geolocation.watchPosition(p => {
+    if(!ATT){ stopAttWatch(); return; }
+    const f = {lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy, at:new Date().toISOString()};
+    const had = !!ATT.fix;
+    if(!ATT.fix || f.acc < ATT.fix.acc){
+      ATT.fix = f; ATT.geoFailed = false;
+      const step = $('#stepGeo');
+      if(step){
+        step.className = 'step done'; $('#geoN').innerHTML = ICON.tick;
+        $('#geoTxt').innerHTML = `<span class="num">${esc(fixText(f))}</span>` +
+          (f.acc > ACC_LIMIT ? '<br>Still coarse — the phone is listening for a better fix. Open sky helps.' : '');
+      }
+      if(!had) drawAttendance();                 /* the photograph step unlocks */
+    }
+    if(f.acc <= 50 || Date.now() - t0 > 150000) stopAttWatch();
+  }, ()=>{}, {enableHighAccuracy:true, maximumAge:0});
+}
 const fixText = f => f ? `${f.lat.toFixed(5)}, ${f.lng.toFixed(5)} · \u00b1${Math.round(f.acc)} m` : 'Not captured';
 const stampTime = ts => new Date(ts).toLocaleString('en-IN',
   {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', hour12:true});
@@ -557,11 +587,13 @@ async function startAttFix(){
     ATT.fix = await getFixTwice(); ATT.geoFailed = false;
     step.className = 'step done'; $('#geoN').innerHTML = ICON.tick;
     $('#geoTxt').innerHTML = `<span class="num">${esc(fixText(ATT.fix))}</span>` +
-      (ATT.fix.acc > 100 ? '<br>The fix is coarse. Step into the open and tap to read it again.' : '');
+      (ATT.fix.acc > 100 ? '<br>The fix is coarse — the phone keeps listening while you take the photograph. Open sky helps.' : '');
+    if(ATT.fix.acc > 100) refineAttFix();        /* the satellite may still improve on the network's guess */
   }catch(e){
     attTries++;
     step.className = 'step'; $('#geoN').textContent = '1';
     $('#geoTxt').textContent = e.message + (attTries >= 2 ? ' Tap here to try once more.' : ' Tap here to try again.');
+    refineAttFix();                              /* and keep an ear open even after a refusal to answer */
   }
   drawAttendance();
 }
@@ -597,10 +629,10 @@ function drawAttendance(){
   }
   if(attExempt((user()||{}).role)){
     box.insertAdjacentHTML('beforeend', `<button class="btn quiet" id="attSkip" style="margin-top:9px">Not now</button>`);
-    $('#attSkip').addEventListener('click', () => { ATT = null; $('#attend').classList.remove('on'); $('#app').hidden = false; buildTabs(); go(TAB); });
+    $('#attSkip').addEventListener('click', () => { stopAttWatch(); ATT = null; $('#attend').classList.remove('on'); $('#app').hidden = false; buildTabs(); go(TAB); });
   } else if(holBack){
     box.insertAdjacentHTML('beforeend', holBack);
-    $('#attHolBack').addEventListener('click', () => { ATT = null; $('#attend').classList.remove('on'); gate(); });
+    $('#attHolBack').addEventListener('click', () => { stopAttWatch(); ATT = null; $('#attend').classList.remove('on'); gate(); });
   }
 }
 $('#camAtt').addEventListener('change', async ev => {
@@ -625,6 +657,7 @@ $('#camAtt').addEventListener('change', async ev => {
 });
 async function markAttendance(){
   if(!ATT || !ATT.b64) return;
+  stopAttWatch();                              /* whatever fix stands now is the one filed */
   const btn = $('#attMark'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Marking';
   const u = user(), key = todayStr();
   const pid = 'att_' + ATT.id;
