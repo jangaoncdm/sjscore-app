@@ -841,9 +841,12 @@ var FIELD_FIXES_2 = [
   {why:'Issue 1: G. Ratna held Chinnapendyala in charge during that leave; on Madhavi’s return she keeps Sreepathipalle alone',
    find:{role:'PS', gp:'Sreepathipalle'}, setGp:'Sreepathipalle'},
 
-  /* 2 — deputation into Desaithanda */
-  {why:'Issue 2: Thouti Reddy Shashi Kumar deputed from Tharigoppula to Desaithanda (Chilpur) — the Desaithanda row takes his number and name',
-   find:{role:'PS', gp:'Desaithanda'}, setPhone:'9493438111', setName:'Thouti Reddy Shashi Kumar'},
+  /* 2 — deputation into Desaithanda. The 17.08 run found NO row whose
+     village reads "Desaithanda", so his own number is the surer key. */
+  {why:'Issue 2: Thouti Reddy Shashi Kumar deputed from Tharigoppula to Desaithanda (Chilpur) — if his number is on the roll, it moves to Desaithanda',
+   find:{phone:'9493438111'}, setGp:'Desaithanda', setMandal:'Chilpur', setName:'Thouti Reddy Shashi Kumar'},
+  {why:'Issue 2: and if 9493438111 was never on the roll, he is registered on Desaithanda — verify the spelling against the GPs tab afterwards',
+   addRow:{phone:'9493438111', name:'Thouti Reddy Shashi Kumar', role:'PS', mandal:'Chilpur', gp:'Desaithanda'}},
 
   /* 3 & 4 — the Peddapahad / Pedda Thanda (M) tangle, finished properly.
      28.07 confirmed 9848188052 as D. Praveen Kumar's and claimed it onto the
@@ -955,17 +958,23 @@ function fieldFixes2_(commit){
       }
       if(fx.claimPhone){
         const np = phone10_(fx.claimPhone);
-        if(phone10_(v[i][t.ix.phone]) === np && v[i][t.ix.hash]){ /* already his row */ }
+        /* Release the number from EVERY other row first — even when the
+           target row already holds it. The 17.08 run found the number on
+           BOTH the Secretary's row and the MPDO's, and a check that read
+           "already claimed" as "already released" left the senior row in
+           place — so the folded login still answered as the MPDO. */
+        for(let o = 1; o < v.length; o++){
+          if(o === i || phone10_(v[o][t.ix.phone]) !== np) continue;
+          v[o][t.ix.phone] = ''; v[o][t.ix.hash] = ''; writeRow(o);
+          out.push('  ' + (commit ? 'released ' : 'would release ') + np + ' from row ' + (o + 1) + ' (' + (cell_(v[o], t.ix.name) || cell_(v[o], t.ix.role)) + ') — that officer needs a real number before they can sign in');
+          changed.push('released ' + np + ' from row ' + (o + 1));
+          audit.push('released ' + np + ' from ' + (cell_(v[o], t.ix.name) || 'row ' + (o + 1)));
+        }
+        byPhone[np] = i;
+        if(phone10_(v[i][t.ix.phone]) === np && v[i][t.ix.hash]){ /* already signed in on it — the PIN is not touched */ }
         else{
-          const other = byPhone[np];
-          if(other != null && other !== i){
-            v[other][t.ix.phone] = ''; v[other][t.ix.hash] = ''; writeRow(other);
-            out.push('  released ' + np + ' from row ' + (other + 1) + ' (' + (cell_(v[other], t.ix.name) || cell_(v[other], t.ix.role)) + ') — that officer needs a real number before they can sign in');
-            audit.push('released ' + np + ' from ' + (cell_(v[other], t.ix.name) || 'row ' + (other + 1)));
-          }
           const pin = fix2Pin_(np);
           v[i][t.ix.phone] = np; v[i][t.ix.hash] = hash_(np, pin); if(t.ix.initpin >= 0) v[i][t.ix.initpin] = '';
-          byPhone[np] = i;
           changed.push('claimed ' + np + ', PIN ' + pin); audit.push('claimed ' + np + ', PIN re-keyed');
         }
       }

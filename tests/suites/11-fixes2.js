@@ -11,7 +11,8 @@ const U = ['Phone', 'Name', 'Role', 'Mandal', 'GP', 'Email', 'InitPin', 'Hash', 
 function seedRoll(env){
   env.mkSheet('Users', U, [
     { Phone: '9111111101', Name: 'G. Ratna',           Role: 'PS',   Mandal: 'Chilpur',         GP: 'Sreepathipalle, Chinnapendyala', Hash: 'H1',  Active: 'TRUE' },
-    { Phone: '9111111102', Name: 'Old Desai Holder',   Role: 'PS',   Mandal: 'Chilpur',         GP: 'Desaithanda',                    Hash: 'H2',  Active: 'TRUE' },
+    /* the roll spells it apart — the 17.08 run's find by village came back NOT FOUND */
+    { Phone: '9111111102', Name: 'Old Desai Holder',   Role: 'PS',   Mandal: 'Chilpur',         GP: 'Desai Thanda',                   Hash: 'H2',  Active: 'TRUE' },
     /* 28.07 claimed 9848188052 onto the Peddapahad row without fixing its name */
     { Phone: '9848188052', Name: 'M. Srinivasa Chary', Role: 'PS',   Mandal: 'Jangaon',         GP: 'Peddapahad',                     Hash: 'H3',  Active: 'TRUE' },
     { Phone: '8309450336', Name: 'Wrong Name',         Role: 'PS',   Mandal: 'Jangaon',         GP: 'Pedda Thanda (M)',               Hash: 'H4',  Active: 'TRUE' },
@@ -22,10 +23,10 @@ function seedRoll(env){
     { Phone: '9398535516', Name: 'N. Santhoshini',     Role: 'PS',   Mandal: 'Devaruppula',     GP: 'Dharavath Thanda',               Hash: 'H9',  Active: 'TRUE' },
     { Phone: '9866775245', Name: 'Kota Bayyanna',      Role: 'PS',   Mandal: 'Ghanpur (Stn)',   GP: 'Rangarai Gudem',                 Hash: 'H10', Active: 'TRUE' },
     { Phone: '7794936639', Name: 'Shaik Irfan',        Role: 'PS',   Mandal: 'Jangaon',         GP: 'Pedda Thanda (Y)',               Hash: 'H11', Active: 'TRUE' },
-    /* the shared number: her number sits on the senior row, so the login reads MPDO */
+    /* the shared number, as the 17.08 run actually found it: on BOTH rows —
+       her own sign-in works, but the senior rank wins the folded login */
     { Phone: '9133467909', Name: 'MPDO L. Ghanpur',    Role: 'MPDO', Mandal: 'Lingala Ghanpur', GP: '',                               Hash: 'H12', Active: 'TRUE' },
-    /* her own row was left blank-phoned by the 28.07 release */
-    { Phone: '',           Name: 'Thandra Swapna',     Role: 'PS',   Mandal: 'Ghanpur (Stn)',   GP: 'Kothapalle',                     Hash: '',    Active: 'TRUE' }
+    { Phone: '9133467909', Name: 'Thandra Swapna',     Role: 'PS',   Mandal: 'Ghanpur (Stn)',   GP: 'Kothapalle',                     Hash: 'H13', Active: 'TRUE' }
   ]);
 }
 const rowOf = (env, phone) => {
@@ -59,9 +60,12 @@ module.exports = {
     t.ok(env.logs.some(l => /NOT TOUCHED/.test(l) && /9912383087/.test(l)), 'the contested Ramrajupalle number is flagged, not applied');
     t.ok(env.logs.some(l => /Dharavath Thanda/.test(l) && /held twice/.test(l)), 'the Dharavath Thanda contradiction is spelt out');
 
+    /* before the cure, the folded login answers as the MPDO — the defect itself */
+    t.eq(c.findByPhone_('9133467909').role, 'MPDO', 'the shared number reads MPDO before the fix');
+
     c.applyFieldFixes2();
     const rows = env.sheets['Users'].rows;
-    t.eq(rows.length - 1, 15, 'two officers registered: Madhavi and Srinivas Reddy — and nobody else');
+    t.eq(rows.length - 1, 16, 'three officers registered: Madhavi, Shashi Kumar and Srinivas Reddy — and nobody else');
 
     /* issue 1 — Madhavi registered, the in-charge released */
     const madhavi = rowOf(env, '9553399695');
@@ -70,10 +74,13 @@ module.exports = {
     t.eq(madhavi.Hash, c.hash_('9553399695', c.fix2Pin_('9553399695')), 'with a PIN this batch can reproduce');
     t.eq(rowOf(env, '9111111101').GP, 'Sreepathipalle', 'G. Ratna keeps Sreepathipalle alone');
 
-    /* issue 2 — the Desaithanda row belongs to the deputed officer now */
+    /* issue 2 — no village on the roll reads "Desaithanda", so he is
+       registered fresh; the row that spells it apart is left alone */
     const desai = rowOf(env, '9493438111');
     t.ok(!!desai && desai.GP === 'Desaithanda', 'Desaithanda answers to 9493438111');
     t.eq(desai.Name, 'Thouti Reddy Shashi Kumar', 'under his own name');
+    t.eq(desai.Hash, c.hash_('9493438111', c.fix2Pin_('9493438111')), 'with a PIN this batch can reproduce');
+    t.eq(rowOf(env, '9111111102').GP, 'Desai Thanda', 'the differently-spelt row is not touched — it was never proved to be his');
 
     /* issues 3 & 4 — the Peddapahad tangle undone */
     const praveen = rowOf(env, '9848188052');
@@ -105,9 +112,12 @@ module.exports = {
     t.eq(rowOf(env, '9866775245').Hash, c.hash_('9866775245', c.fix2Pin_('9866775245')), 'Bayyanna’s PIN is fresh');
     t.eq(rowOf(env, '7794936639').Hash, c.hash_('7794936639', c.fix2Pin_('7794936639')), 'Irfan’s PIN is fresh');
 
-    /* issue 12 — the defect the officer actually saw, cured at the login */
+    /* issue 12 — the defect the officer actually saw, cured at the login.
+       Her number sat on BOTH rows; the senior row is released even though
+       her own row already held it, and her working PIN is not touched. */
     const swapna = rowByName(env, 'Thandra Swapna');
-    t.eq(c.phone10_(swapna.Phone), '9133467909', 'her PS row claims the number');
+    t.eq(c.phone10_(swapna.Phone), '9133467909', 'her PS row keeps the number');
+    t.eq(swapna.Hash, 'H13', 'her PIN, which already worked, is not re-keyed');
     const mpdo = rowByName(env, 'MPDO L. Ghanpur');
     t.eq(String(mpdo.Phone), '', 'the MPDO row is released');
     t.eq(String(mpdo.Hash), '', 'and cannot sign in until the office gives it a real number');
