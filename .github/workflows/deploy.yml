@@ -65,11 +65,16 @@ jobs:
             exit 1
           fi
       - name: Commit whatever changed
+        # The commit message travels as an environment variable, never pasted
+        # into the script: a ${{ }} substitution is raw text, and a message
+        # carrying quotes once broke the shell and failed the whole publish.
+        env:
+          MSG: ${{ github.event.head_commit.message }}
         run: |
           git config user.name  "SJGP deploy"
           git config user.email "deploy@users.noreply.github.com"
           git add -A ':!backend' ':!.github'
-          git diff --staged --quiet || git commit -m "publish: ${{ github.event.head_commit.message }}"
+          git diff --staged --quiet || git commit -m "publish: $(printf '%s' "$MSG" | head -n 1)"
           git push
 
   backend:
@@ -90,8 +95,12 @@ jobs:
           printf '{"scriptId":"%s","rootDir":"backend"}\n' "${{ vars.SJGP_SCRIPT_ID }}" > .clasp.json
           clasp push --force
       - name: Deploy a new version
+        # Same rule as the publish step: the message rides an environment
+        # variable, first line only, so no commit message can break the shell.
+        env:
+          MSG: ${{ github.event.head_commit.message }}
         run: |
-          clasp deploy -i "${{ vars.SJGP_DEPLOYMENT_ID }}" -d "auto ${{ github.run_number }}: ${{ github.event.head_commit.message }}"
+          clasp deploy -i "${{ vars.SJGP_DEPLOYMENT_ID }}" -d "auto ${{ github.run_number }}: $(printf '%s' "$MSG" | head -n 1 | cut -c1-120)"
       - name: Confirm the district is answering on the new code
         run: |
           sleep 15
