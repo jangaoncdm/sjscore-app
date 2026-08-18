@@ -19,7 +19,7 @@
    pasted back by hand after every publish. The empty string below is only a
    fallback for the case where config.js is missing. */
 const SERVER_URL = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
-const APP_VERSION = '6.9.2';
+const APP_VERSION = '6.9.3';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -411,7 +411,7 @@ function refineAttFix(){
         $('#geoTxt').innerHTML = `<span class="num">${esc(fixText(f))}</span>` +
           (f.acc > ACC_LIMIT ? '<br>Still coarse — the phone is listening for a better fix. Open sky helps.' : '');
       }
-      if(!had) drawAttendance();                 /* the photograph step unlocks */
+      if(!had){ drawAttendance(); sendSeenPing(); }   /* the photograph step unlocks */
     }
     if(f.acc <= 50 || Date.now() - t0 > 150000) stopAttWatch();
   }, ()=>{}, {enableHighAccuracy:true, maximumAge:0});
@@ -569,6 +569,11 @@ function openAttendance(){
   wireAttSteps();
   drawAttendance();
   startAttFix();
+  /* said on the screen, because it is done from this screen — no location
+     is ever noted that the officer was not told about while it happened */
+  if(!document.getElementById('pingNote'))
+    $('#attSteps').insertAdjacentHTML('afterend',
+      '<div id="pingNote" style="font-size:11.5px;line-height:1.5;color:#6B7280;padding:8px 4px 0">Opening this screen notes your location for the district until attendance is marked.</div>');
 
   /* the orders may have been passed since this phone last spoke to the district,
      so ask once — and if leave has been sanctioned, put the gate up again as leave */
@@ -577,6 +582,23 @@ function openAttendance(){
       if(approvedLeaveToday() && !DB.att[todayStr()] && $('#attend').classList.contains('on')) openAttendance();
     }).catch(()=>{});
   }
+}
+/* THE SEEN PING. An officer who opens the app without having marked has,
+   until now, left no trace at all — on weak signal he could stand at his
+   duty point all morning and the district would read him as absent with no
+   more to say. The gate already reads a location; this reports that same
+   fix as "the app was opened here", said to the officer on this very
+   screen. It is receipt, never attendance: it cures nothing, counts
+   nothing, and stops the moment the day is marked. */
+async function sendSeenPing(){
+  try{
+    if(!navigator.onLine || !ATT || !ATT.fix) return;
+    if(dayOff() || DB.att[todayStr()] || approvedLeaveToday()) return;
+    if(DB.lastPing && Date.now() - DB.lastPing < 15*60*1000) return;
+    DB.lastPing = Date.now(); saveNow();
+    await post({kind:'seen', token:DB.session.token,
+      ping:{ts:new Date().toISOString(), lat:ATT.fix.lat, lng:ATT.fix.lng, acc:ATT.fix.acc}});
+  }catch(e){}
 }
 async function startAttFix(){
   const step = $('#stepGeo');
@@ -589,6 +611,7 @@ async function startAttFix(){
     $('#geoTxt').innerHTML = `<span class="num">${esc(fixText(ATT.fix))}</span>` +
       (ATT.fix.acc > 100 ? '<br>The fix is coarse — the phone keeps listening while you take the photograph. Open sky helps.' : '');
     if(ATT.fix.acc > 100) refineAttFix();        /* the satellite may still improve on the network's guess */
+    sendSeenPing();                              /* the district is told the app was opened here */
   }catch(e){
     attTries++;
     step.className = 'step'; $('#geoN').textContent = '1';
