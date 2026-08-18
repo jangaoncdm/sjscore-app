@@ -1381,6 +1381,10 @@ function marker(p){
       .bindPopup(`<b>${esc(p.gp)}</b> &middot; village<br>${esc(p.mandal)}<br>Score ${p.score} &middot; grade ${esc(p.grade)}${String(p.rf||'').trim()?' &middot; <span style="color:#DC2626">RF '+esc(p.rf)+'</span>':''}<br>${esc(String(p.officer||''))}${p.album?'<br><a target="_blank" rel="noopener" href="'+esc(p.album)+'">View the evidence</a>':''}`); }
   if(p._s==='L') return L.circleMarker([p.lat,p.lng],{radius:7,color:'#fff',weight:2,fillColor:'#8B99AF',fillOpacity:.9})
       .bindPopup(`<b>${esc(p.name)}</b><br>on sanctioned leave`);
+  /* not marked today: a dashed ring at the place he LAST marked — history
+     shown as history, never dressed up as where he stands now */
+  if(p._s==='A') return L.circleMarker([p.lat,p.lng],{radius:8.5,color:'#DC2626',weight:2.2,dashArray:'4 3',fillColor:'#DC2626',fillOpacity:.12})
+      .bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.role)} · ${esc(p.mandal||'—')}<br><span style="color:#DC2626;font-weight:700">not marked today</span><br>last marked here on ${esc(dm(p.lastDate||''))}`);
   const col=suspect(p)?'#DC2626':p.verified?'#16A34A':'#D97706';
   return L.circleMarker([p.lat,p.lng],{radius:(p.marks||1)>1?9:7,color:'#fff',weight:2,fillColor:col,fillOpacity:.95})
     .bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.role)} · ${esc(p.mandal||'—')}<br>${esc(hm(p.at))} · ${suspect(p)?'<span style="color:#DC2626">location not trustworthy</span>':p.verified?'verified':'no fix'}${p.acc?' · ±'+Math.round(p.acc)+' m':''}${(p.marks||1)>1?' · <span style="color:#DC2626">'+p.marks+'×</span>':''}<br><a target="_blank" rel="noopener" href="https://maps.google.com/?q=${p.lat},${p.lng}">Open in Google Maps</a>`);}
@@ -1388,6 +1392,7 @@ function mapPoints(){
   const out=[];
   (DATA.today.present||[]).forEach(r=>{ if(r.lat&&r.lng) out.push({...r,_s:'P'}); });
   (DATA.today.onLeave||[]).forEach(r=>{ if(r.lat&&r.lng) out.push({...r,_s:'L'}); });
+  (DATA.today.absent||[]).forEach(r=>{ if(r.lat&&r.lng) out.push({...r,_s:'A'}); });
   (DATA.month.rows||[]).forEach(r=>{ if(r.lat&&r.lng) out.push({...r,_s:'V',name:r.gp,role:'Village',at:r.date}); });
   return out;
 }
@@ -1395,6 +1400,7 @@ function passFilter(p){
   if(MFILTER==='present') return p._s==='P';
   if(MFILTER==='suspect') return p._s==='P'&&suspect(p);
   if(MFILTER==='nofix')   return p._s==='P'&&!p.verified&&!suspect(p);
+  if(MFILTER==='absent')  return p._s==='A';
   if(MFILTER==='villages')return p._s==='V';
   return true;
 }
@@ -1414,6 +1420,7 @@ function mapTools(){
     [['all','Everything',pts.length],['present','Present',pts.filter(p=>p._s==='P').length],
      ['suspect','Not trustworthy',pts.filter(p=>p._s==='P'&&suspect(p)).length],
      ['nofix','No fix',pts.filter(p=>p._s==='P'&&!p.verified&&!suspect(p)).length],
+     ['absent','Not marked',pts.filter(p=>p._s==='A').length],
      ['villages','Villages filed',pts.filter(p=>p._s==='V').length]]
      .map(([k,n,c])=>`<button class="fchip" data-mf="${k}" aria-pressed="${MFILTER===k}">${n} <b>${c}</b></button>`).join('')+
     `<button class="fchip" id="mFit">Fit all</button></div>`;
@@ -2046,7 +2053,7 @@ function vNotices(j,A){
 }
 function vMap(j,A){
   return panel('c12','District map · everything located',
-    'green verified &middot; amber no fix &middot; red not trustworthy &middot; grey on leave &middot; villages by grade',
+    'green verified &middot; amber no fix &middot; red not trustworthy &middot; grey on leave &middot; dashed ring not marked, at last known place &middot; villages by grade',
     mapTools()+'<div id="map2"></div>');
 }
 
