@@ -1077,15 +1077,26 @@ function doGet(e){
       return [o.name, o.role, o.mandal, days];
     });
 
-    /* inspections: this month in full, six months in trend */
+    /* inspections: this month in full, six months in trend — district AND
+       mandal by mandal, because a district average of two points says
+       nothing a Collector can act on. The same single pass also keeps the
+       month before the one under review, so the console can name the
+       villages that moved. */
+    const prevYm = (() => { const y = Number(ymN.slice(0, 4)), m = Number(ymN.slice(5, 7));
+      return m > 1 ? y + '-' + ('0' + (m - 1)).slice(-2) : (y - 1) + '-12'; })();
     const ish = sheet_('Inspections', HEADERS), im = headMap_(ish, HEADERS);
     const iv = ish.getDataRange().getValues();
-    const monthRows = [], trend = {};
+    const monthRows = [], trend = {}, mtr = {}, prevRows = [];
     for(let i = 1; i < iv.length; i++){
       const ym = String(iv[i][im.ix.ym] || ''); if(!ym) continue;
       const sc = Number(iv[i][im.ix.score]) || 0;
       trend[ym] = trend[ym] || {sum:0, n:0};
       trend[ym].sum += sc; trend[ym].n++;
+      const md = cell_(iv[i], im.ix.mandal) || '—';
+      mtr[ym] = mtr[ym] || {};
+      const mm2 = mtr[ym][md] = mtr[ym][md] || {sum:0, n:0};
+      mm2.sum += sc; mm2.n++;
+      if(ym === prevYm) prevRows.push({ gp:cell_(iv[i], im.ix.gp), mandal:md, score:sc });
       if(ym === ymN) monthRows.push({
         gp:cell_(iv[i], im.ix.gp), mandal:cell_(iv[i], im.ix.mandal), score:sc,
         album:cell_(iv[i], im.ix.album), folder:cell_(iv[i], im.ix.photoFolder),
@@ -1095,6 +1106,11 @@ function doGet(e){
     }
     const months = Object.keys(trend).sort().slice(-6)
       .map(k => ({ym:k, avg:Math.round(trend[k].sum/trend[k].n), n:trend[k].n}));
+    const trendm = Object.keys(trend).sort().slice(-6).map(k => {
+      const o = {};
+      Object.keys(mtr[k] || {}).forEach(m2 => { o[m2] = { avg: Math.round(mtr[k][m2].sum / mtr[k][m2].n), n: mtr[k][m2].n }; });
+      return { ym: k, m: o };
+    });
 
     /* coverage: reported against the roll, mandal by mandal */
     const gsh = sheet_('GPs', ['GP','Mandal']), gv = gsh.getDataRange().getValues();
@@ -1171,7 +1187,7 @@ function doGet(e){
       att14:att14, month:{rows:monthRows, grades:gradeCount,
         avg: monthRows.length ? Math.round(monthRows.reduce((s,r)=>s+r.score,0)/monthRows.length) : null,
         rfCount: monthRows.filter(r=>String(r.rf||'').trim()).length},
-      trend:months, coverage:coverage,
+      trend:months, trendm:trendm, prev:{ ym:prevYm, rows:prevRows.slice(0, 400) }, coverage:coverage,
       off:offInfo_(today),
       attm:{dates:mDates, rows:attMatrix, off:(function(){ const hs=holidaySet_(); return mDates.filter(d => !!hs[d]); })()},
       notices:{today:nToday, pending:nPend, debitsMonth:nDebM, month:nMonth, grace:NOTICE_GRACE,

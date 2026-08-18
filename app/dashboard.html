@@ -576,18 +576,87 @@ function histMarkIn(rows){
         <text class="axis" x="${x+bw/2}" y="${H-7}" text-anchor="middle">${i+6}</text>`;});
   return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
 }
-function trendLine(rows){
-  const W=460,H=210,P=30;
-  if(!rows.length) return '<div class="empty">No months on record yet.</div>';
-  let g='';[0,50,100].forEach(v=>{const y=H-24-(H-44)*v/100;
-    g+=`<line class="gridln" x1="${P}" x2="${W-6}" y1="${y}" y2="${y}"/><text class="axis" x="${P-6}" y="${y+3.5}" text-anchor="end">${v}</text>`;});
-  const step=(W-P-18)/Math.max(1,rows.length-1);
-  const pts=rows.map((r,i)=>[P+9+i*step,H-24-(H-44)*Math.min(100,r.avg)/100]);
-  g+=`<path d="${smooth(pts)}" fill="none" stroke="var(--blue)" stroke-width="2.4"/>`;
-  pts.forEach((p,i)=>{g+=`<circle cx="${p[0]}" cy="${p[1]}" r="3.4" fill="var(--blue)"/>
-    <text class="axis" x="${p[0]}" y="${p[1]-9}" text-anchor="middle" fill="var(--tx)">${rows[i].avg}</text>
-    <text class="axis" x="${p[0]}" y="${H-7}" text-anchor="middle">${rows[i].ym.slice(5)}/${rows[i].ym.slice(2,4)}</text>`;});
+/* The score heat grid. A district average drawn as a line across two months
+   told the Collector nothing — the district is not one place. This is every
+   mandal against every month on record, in the register's own grade colours,
+   with the number in every cell so nobody has to trust a tint. The district
+   row rides last, as context rather than headline. */
+const BAND=s=>s>=85?'#16A34A':s>=70?'#65A30D':s>=55?'#D97706':'#DC2626';
+function trendHeat(j){
+  const tm=j.trendm||[];
+  if(!tm.length) return '<div class="empty">No months on record yet.</div>';
+  const latest=tm[tm.length-1].m||{};
+  const mandals=[...new Set(tm.flatMap(t=>Object.keys(t.m||{})))]
+    .sort((a,b)=>((latest[b]||{}).avg??-1)-((latest[a]||{}).avg??-1));
+  if(!mandals.length) return '<div class="empty">No months on record yet.</div>';
+  const W=460,LBL=112,rowH=27,gap=3,top=20;
+  const cw=(W-LBL-6-(tm.length-1)*gap)/tm.length;
+  const H=top+(mandals.length+1)*(rowH+gap)+30;
+  let g='';
+  tm.forEach((t,c)=>{g+=`<text class="axis" x="${LBL+c*(cw+gap)+cw/2}" y="12" text-anchor="middle">${t.ym.slice(5)}/${t.ym.slice(2,4)}</text>`;});
+  const cell=(x,y,sc,tip,strong)=>{
+    if(sc==null) return `<rect x="${x}" y="${y}" width="${cw}" height="${rowH}" rx="4" fill="var(--tx-3)" opacity=".07"/>`+
+      `<text class="axis" x="${x+cw/2}" y="${y+rowH/2+3.5}" text-anchor="middle">—</text>`;
+    return `<g><title>${esc(tip)}</title>`+
+      `<rect x="${x}" y="${y}" width="${cw}" height="${rowH}" rx="4" fill="${BAND(sc)}" opacity="${strong?.28:.17}"/>`+
+      `<text x="${x+cw/2}" y="${y+rowH/2+4}" text-anchor="middle" font-size="11.5" font-weight="${strong?750:650}" font-family="var(--mono)" fill="var(--tx)">${sc}</text></g>`;
+  };
+  mandals.forEach((md,r)=>{
+    const y=top+r*(rowH+gap);
+    g+=`<g><title>${esc(md)}</title><text class="axis" x="${LBL-8}" y="${y+rowH/2+3.5}" text-anchor="end" fill="var(--tx-2)">${esc(md.length>15?md.slice(0,14)+'…':md)}</text></g>`;
+    tm.forEach((t,c)=>{
+      const e=(t.m||{})[md];
+      g+=cell(LBL+c*(cw+gap),y,e?e.avg:null,e?md+' · '+monName(t.ym)+' · average '+e.avg+' over '+e.n+' village'+(e.n===1?'':'s'):'');
+    });
+  });
+  const dy=top+mandals.length*(rowH+gap);
+  g+=`<line class="gridln" x1="6" x2="${W-6}" y1="${dy-1.5}" y2="${dy-1.5}"/>`;
+  g+=`<text class="axis" x="${LBL-8}" y="${dy+rowH/2+3.5}" text-anchor="end" font-weight="700" fill="var(--tx)">DISTRICT</text>`;
+  const dm2={};(j.trend||[]).forEach(t=>dm2[t.ym]=t);
+  tm.forEach((t,c)=>{const e=dm2[t.ym];
+    g+=cell(LBL+c*(cw+gap),dy,e?e.avg:null,e?'District · '+monName(t.ym)+' · average '+e.avg+' over '+e.n+' villages':'',true);});
+  let lx=LBL;
+  [['A ≥85','#16A34A'],['B ≥70','#65A30D'],['C ≥55','#D97706'],['D <55','#DC2626']].forEach(b=>{
+    g+=`<rect x="${lx}" y="${H-16}" width="10" height="10" rx="3" fill="${b[1]}" opacity=".55"/>
+        <text class="axis" x="${lx+14}" y="${H-7.5}">${b[0]}</text>`;lx+=76;});
   return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
+}
+/* The villages that moved. Month-on-month, name by name — the trend a
+   district average buries. The grey dot is last month, the coloured dot is
+   now; only villages evaluated in both months can appear. */
+function movers(j){
+  const pv=(j.prev&&j.prev.rows)||[];
+  if(!pv.length) return '<div class="empty">Movement appears from the second month on record — '+esc(monName(j.ym))+' is the first.</div>';
+  const pm={};pv.forEach(r=>pm[r.mandal+'|'+r.gp]=r.score);
+  const both=(j.month.rows||[]).map(r=>({gp:r.gp,mandal:r.mandal,a:pm[r.mandal+'|'+r.gp],b:r.score}))
+    .filter(r=>r.a!=null).map(r=>({...r,d:r.b-r.a}));
+  if(!both.length) return '<div class="empty">No village on record in both months yet.</div>';
+  const ups=both.filter(r=>r.d>0).sort((x,y)=>y.d-x.d).slice(0,5);
+  const downs=both.filter(r=>r.d<0).sort((x,y)=>x.d-y.d).slice(0,5);
+  if(!ups.length&&!downs.length) return '<div class="empty">'+both.length+' villages evaluated in both months — not one moved.</div>';
+  const W=460,LBL=136,rowH=25,X0=LBL+10,X1=W-52;
+  const sx=v=>X0+(X1-X0)*clamp(v,0,100)/100;
+  let y=8,g='';
+  [0,50,100].forEach(v=>{g+=`<line class="gridln" x1="${sx(v)}" x2="${sx(v)}" y1="20" y2="__H__"/><text class="axis" x="${sx(v)}" y="12" text-anchor="middle">${v}</text>`;});
+  y=26;
+  const row=r=>{
+    const up=r.d>0,c=up?'var(--green)':'var(--red)';
+    g+=`<g><title>${esc(r.gp+' ('+r.mandal+') · '+r.a+' → '+r.b+' ('+(up?'+':'')+r.d+')')}</title>
+      <text class="axis" x="${LBL}" y="${y+3.5}" text-anchor="end" fill="var(--tx-2)">${esc(r.gp.length>19?r.gp.slice(0,18)+'…':r.gp)}</text>
+      <line x1="${sx(r.a)}" x2="${sx(r.b)}" y1="${y}" y2="${y}" stroke="#C9CFDD" stroke-width="2.5"/>
+      <circle cx="${sx(r.a)}" cy="${y}" r="3.6" fill="var(--tx-3)"/>
+      <circle cx="${sx(r.b)}" cy="${y}" r="4.6" fill="${c}"/>
+      <text x="${W-4}" y="${y+3.5}" text-anchor="end" font-family="var(--mono)" font-size="11" font-weight="700" fill="${c}">${up?'+':''}${r.d}</text></g>`;
+    y+=rowH;
+  };
+  const head=t=>{g+=`<text x="0" y="${y+2}" font-size="9.5" letter-spacing=".14em" font-weight="700" font-family="var(--mono)" fill="var(--tx-3)">${t}</text>`;y+=17;};
+  if(ups.length){head('CLIMBING');ups.forEach(row);y+=6;}
+  if(downs.length){head('SLIPPING');downs.forEach(row);y+=6;}
+  g+=`<circle cx="${LBL+14}" cy="${y+4}" r="3.6" fill="var(--tx-3)"/><text class="axis" x="${LBL+22}" y="${y+7.5}">last month</text>
+      <circle cx="${LBL+106}" cy="${y+4}" r="4.6" fill="var(--green)"/><circle cx="${LBL+118}" cy="${y+4}" r="4.6" fill="var(--red)"/>
+      <text class="axis" x="${LBL+128}" y="${y+7.5}">this month</text>`;
+  const H=y+16;
+  return `<svg viewBox="0 0 ${W} ${H}">${g.replace(/__H__/g,H-14)}</svg>`;
 }
 
 /* attendance by mandal — where the gaps actually are */
@@ -1214,13 +1283,14 @@ function vVillages(j,A){
   h+=kpi('Grade A + B',IC.s,j.month.grades.A+j.month.grades.B,'',A.filed?pct(j.month.grades.A+j.month.grades.B,A.filed)+'% of filings':'—');
   h+=kpi('Needed per day',IC.h,A.needPerDay,'',A.wdLeft+' working days left');
   h+='</div>';
-  h+=panel('c7','Score trend · district average','month by month',trendLine(j.trend));
+  h+=panel('c7','Score heat · mandal by month','grade colours · district row last',trendHeat(j));
   h+=panel('c5','Evaluation outcomes',j.ym,
     donut([{k:'Grade A',v:j.month.grades.A,c:'#16A34A'},{k:'Grade B',v:j.month.grades.B,c:'#65A30D'},
            {k:'Grade C',v:j.month.grades.C,c:'#D97706'},{k:'Grade D',v:j.month.grades.D,c:'#DC2626'}],A.filed,'filed'));
-  h+=panel('c12','Day by day · filings and attendance','tap a day', dayTable(j),'dayd2');
+  h+=panel('c6','Villages that moved',(j.prev&&j.prev.rows&&j.prev.rows.length?monName(j.prev.ym)+' → '+monName(j.ym):'month on month'),movers(j));
   h+=panel('c6','Score distribution','villages by ten-mark band', scoreDist(j.month.rows));
-  h+=panel('c6','Officer ledger · '+j.ym,'who files, and how well', officerTable(j.month.rows));
+  h+=panel('c12','Day by day · filings and attendance','tap a day', dayTable(j),'dayd2');
+  h+=panel('c12','Officer ledger · '+j.ym,'who files, and how well', officerTable(j.month.rows));
   const mr=[...j.month.rows].sort((a,b)=>SORTD?(b.score-a.score):(a.score-b.score)); window.__ROWS.ins=mr;
   h+=panel('c12','Inspections filed · '+(SORTD?'highest score first':'lowest score first'),
     '<button class="fchip" id="insSort" style="min-height:36px">Flip order</button> · '+mr.length+' villages',
