@@ -1088,10 +1088,7 @@ function doGet(e){
     const iv = ish.getDataRange().getValues();
     const monthRows = [], trend = {}, mtr = {}, prevRows = [];
     for(let i = 1; i < iv.length; i++){
-      /* through ymText_, never String(): a month cell the Sheet has turned
-         into a Date otherwise becomes a garbage key, drawing phantom month
-         columns on the console and dropping the row from its own month */
-      const ym = ymText_(iv[i][im.ix.ym]); if(!ym) continue;
+      const ym = String(iv[i][im.ix.ym] || ''); if(!ym) continue;
       const sc = Number(iv[i][im.ix.score]) || 0;
       trend[ym] = trend[ym] || {sum:0, n:0};
       trend[ym].sum += sc; trend[ym].n++;

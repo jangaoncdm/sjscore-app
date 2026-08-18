@@ -583,9 +583,7 @@ function histMarkIn(rows){
    row rides last, as context rather than headline. */
 const BAND=s=>s>=85?'#16A34A':s>=70?'#65A30D':s>=55?'#D97706':'#DC2626';
 function trendHeat(j){
-  /* only true yyyy-mm keys may draw a column — a month cell an old row
-     carries as a Date once became a phantom column that crushed the rest */
-  const tm=(j.trendm||[]).filter(t=>/^\d{4}-\d{2}$/.test(String(t.ym))).slice(-6);
+  const tm=j.trendm||[];
   if(!tm.length) return '<div class="empty">No months on record yet.</div>';
   const latest=tm[tm.length-1].m||{};
   const mandals=[...new Set(tm.flatMap(t=>Object.keys(t.m||{})))]
@@ -601,7 +599,7 @@ function trendHeat(j){
       `<text class="axis" x="${x+cw/2}" y="${y+rowH/2+3.5}" text-anchor="middle">—</text>`;
     return `<g><title>${esc(tip)}</title>`+
       `<rect x="${x}" y="${y}" width="${cw}" height="${rowH}" rx="4" fill="${BAND(sc)}" opacity="${strong?.28:.17}"/>`+
-      `<text x="${x+cw/2}" y="${y+rowH/2+4}" text-anchor="middle" style="font:${strong?750:650} 11.5px var(--mono)" fill="var(--tx)">${sc}</text></g>`;
+      `<text x="${x+cw/2}" y="${y+rowH/2+4}" text-anchor="middle" font-size="11.5" font-weight="${strong?750:650}" font-family="var(--mono)" fill="var(--tx)">${sc}</text></g>`;
   };
   mandals.forEach((md,r)=>{
     const y=top+r*(rowH+gap);
@@ -648,10 +646,10 @@ function movers(j){
       <line x1="${sx(r.a)}" x2="${sx(r.b)}" y1="${y}" y2="${y}" stroke="#C9CFDD" stroke-width="2.5"/>
       <circle cx="${sx(r.a)}" cy="${y}" r="3.6" fill="var(--tx-3)"/>
       <circle cx="${sx(r.b)}" cy="${y}" r="4.6" fill="${c}"/>
-      <text x="${W-4}" y="${y+3.5}" text-anchor="end" style="font:700 11px var(--mono)" fill="${c}">${up?'+':''}${r.d}</text></g>`;
+      <text x="${W-4}" y="${y+3.5}" text-anchor="end" font-family="var(--mono)" font-size="11" font-weight="700" fill="${c}">${up?'+':''}${r.d}</text></g>`;
     y+=rowH;
   };
-  const head=t=>{g+=`<text x="0" y="${y+2}" letter-spacing=".14em" style="font:700 9.5px var(--mono)" fill="var(--tx-3)">${t}</text>`;y+=17;};
+  const head=t=>{g+=`<text x="0" y="${y+2}" font-size="9.5" letter-spacing=".14em" font-weight="700" font-family="var(--mono)" fill="var(--tx-3)">${t}</text>`;y+=17;};
   if(ups.length){head('CLIMBING');ups.forEach(row);y+=6;}
   if(downs.length){head('SLIPPING');downs.forEach(row);y+=6;}
   g+=`<circle cx="${LBL+14}" cy="${y+4}" r="3.6" fill="var(--tx-3)"/><text class="axis" x="${LBL+22}" y="${y+7.5}">last month</text>

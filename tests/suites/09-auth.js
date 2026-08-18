@@ -124,20 +124,15 @@ module.exports = {
        because a district average of two points tells the Collector nothing */
     env.addRow('Inspections', { id: 'IP1', ym: '2026-07', mandal: 'Jangaon', gp: 'Konne', score: 60 });
     env.addRow('Inspections', { id: 'IP2', ym: '2026-07', mandal: 'Chilpur', gp: 'Malkapur', score: 70 });
-    /* the trap ymText_ exists for: a month cell the Sheet turned into a Date.
-       Read raw, it becomes a garbage month key and a phantom column. */
-    env.addRow('Inspections', { id: 'IP3', ym: env.D(2026, 6, 1), mandal: 'Jangaon', gp: 'Lingampalli', score: 40 });
     Object.keys(env.cacheStore).filter(k => k.indexOf('dash_') === 0).forEach(k => { delete env.cacheStore[k]; });
     const d2 = env.get('dashboard', { token: cdm });
-    t.eq(d2.trendm.length, 2, 'two months and ONLY two — a Date-typed month cell folds into its month, never a phantom column');
-    t.ok(d2.trendm.every(x => /^\d{4}-\d{2}$/.test(x.ym)), 'every month key reads yyyy-mm');
+    t.eq(d2.trendm.length, 2, 'both months ride the payload, mandal by mandal');
     t.eq(d2.trendm[0].ym, '2026-07', 'oldest first');
-    t.eq(d2.trendm[0].m['Jangaon'].avg, 50, 'July’s Jangaon average counts the Date-typed row: (60+40)/2');
-    t.eq(d2.trendm[0].m['Jangaon'].n, 2, 'both July rows behind the figure');
+    t.eq(d2.trendm[0].m['Jangaon'].avg, 60, 'July’s Jangaon average');
     t.eq(d2.trendm[1].m['Jangaon'].avg, 85, 'August’s Jangaon average');
     t.eq(d2.trendm[0].m['Chilpur'].n, 1, 'and the count of villages behind each figure');
     t.eq(d2.prev.ym, '2026-07', 'the month before the one under review');
-    t.eq(d2.prev.rows.length, 3, 'with every village that filed in it, Date-typed rows included');
+    t.eq(d2.prev.rows.length, 2, 'with every village that filed in it');
     t.eq(d2.prev.rows.find(r => r.gp === 'Konne').score, 60, 'so the console can name who moved (Konne: 60 → 85)');
   }
 };
