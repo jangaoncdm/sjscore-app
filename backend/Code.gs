@@ -1024,13 +1024,18 @@ function doGet(e){
         .concat(ash.getRange(start, 1, lastRow - start + 1, ash.getLastColumn()).getValues());
     /* every count is of OFFICERS, never of rows — historical duplicate rows
        collapse here, and repeated marking is carried as a count, not a copy */
-    const todayByPh = {}, dailyPh = {};
+    const todayByPh = {}, dailyPh = {}, lastFix = {};
     for(let i = 1; i < av.length; i++){
       const d = dateText_(av[i][am.ix.date]); if(!d) continue;
       const ph = phone10_(av[i][am.ix.phone]); if(!ph) continue;
       const st = String(av[i][am.ix.status] || 'PRESENT');
       dailyPh[d] = dailyPh[d] || {};
       dailyPh[d][ph] = st;
+      /* the officer's LAST located mark — rows arrive in order, so the last
+         one seen wins. An officer missing today can then be shown on the
+         map at the place he last marked, said as exactly that. */
+      const fl = Number(av[i][am.ix.lat]), fg = Number(av[i][am.ix.lng]);
+      if(fl && fg) lastFix[ph] = { lat: fl, lng: fg, d: d };
       if(d === today){
         const rowMarks = Number(av[i][am.ix.markCount]) || 1;
         const prev = todayByPh[ph];
@@ -1064,7 +1069,9 @@ function doGet(e){
       att14.push({date:key, present:(daily[key]||{}).present||0, leave:(daily[key]||{}).leave||0});
     }
     const markedPh = {}; todayRows.forEach(r => markedPh[r.phone] = true);
-    const absent = officers.filter(o => o.role !== 'COLLECTOR' && !markedPh[o.phone]);
+    const absent = officers.filter(o => o.role !== 'COLLECTOR' && !markedPh[o.phone])
+      .map(o => { const lf = lastFix[o.phone];
+        return lf ? Object.assign({}, o, { lat: lf.lat, lng: lf.lng, lastDate: lf.d }) : o; });
 
     /* officer × day over the same fortnight — the comparative record the
        console exports. P present, L on leave, '-' no row that day; the

@@ -119,5 +119,19 @@ module.exports = {
       photo: { b64: Buffer.from('jpeg-bytes').toString('base64'), name: 'mark.jpg' } });
     t.eq(withPhoto.ok, true, 'a PS marks attendance like everyone — attendance is required of every role');
     t.contains(withPhoto.url, 'drive.mock', 'the photograph landed in the attendance folder');
+
+    /* the unmarked on the map: tagged at their LAST located mark, said as
+       history — and an officer who never marked with a location is never
+       given one the register does not hold */
+    env.mark('9000000014', '2026-08-13', '2026-08-13T09:00:00+05:30', null, { lat: 17.71, lng: 79.12 });
+    env.addRow('Users', { Phone: '9000000022', Name: 'Y. NeverMarked', Role: 'MPO', Mandal: 'Chilpur', Active: 'TRUE' });
+    Object.keys(env.cacheStore).filter(k => k.indexOf('dash_') === 0).forEach(k => { delete env.cacheStore[k]; });
+    const d2 = env.get('dashboard', { token: cdm });
+    const dAbs = d2.today.absent.find(r => r.name === 'D. TwoCharges');
+    t.ok(!!dAbs, 'D, silent today, stands on the absent list');
+    t.eq(dAbs.lat, 17.71, 'tagged at the place he last marked');
+    t.eq(dAbs.lastDate, '2026-08-13', 'with the date the register actually holds');
+    const yAbs = d2.today.absent.find(r => r.name === 'Y. NeverMarked');
+    t.ok(!!yAbs && yAbs.lat === undefined, 'no located mark on record, no location invented');
   }
 };
