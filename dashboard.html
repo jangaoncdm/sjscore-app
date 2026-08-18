@@ -623,6 +623,53 @@ function trendHeat(j){
         <text class="axis" x="${lx+14}" y="${H-7.5}">${b[0]}</text>`;lx+=76;});
   return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
 }
+/* The village heat map. One tile per village — every village in the
+   district on one screen, solid grade colours, a hollow tile where no
+   evaluation has been filed yet and a red ring where a red flag stands.
+   The Collector reads three things at once: how each mandal is doing,
+   where the coverage gaps are, and which villages are on fire. */
+function villageHeat(j){
+  const rowsBy={};(j.month.rows||[]).forEach(r=>{(rowsBy[r.mandal]=rowsBy[r.mandal]||[]).push(r);});
+  const mandals=(j.coverage||[]).map(c=>({mandal:c.mandal,total:c.total,pending:c.pending||[],
+    rows:(rowsBy[c.mandal]||[]).slice().sort((a,b)=>b.score-a.score)}));
+  Object.keys(rowsBy).forEach(m=>{if(!mandals.some(x=>x.mandal===m))
+    mandals.push({mandal:m,total:rowsBy[m].length,pending:[],rows:rowsBy[m].slice().sort((a,b)=>b.score-a.score)});});
+  if(!mandals.length) return '<div class="empty">Nothing filed yet this month.</div>';
+  mandals.forEach(m=>{m.avg=m.rows.length?Math.round(m.rows.reduce((s,r)=>s+r.score,0)/m.rows.length):null;});
+  mandals.sort((a,b)=>((b.avg==null?-1:b.avg)-(a.avg==null?-1:a.avg)));
+  const W=460,LBL=112,TS=14,GAP=3,perLine=Math.max(1,Math.floor((W-LBL-4+GAP)/(TS+GAP)));
+  let y=8,g='';
+  mandals.forEach(m=>{
+    const tiles=m.rows.map(r=>({f:1,r:r})).concat(m.pending.map(p=>({f:0,name:p})));
+    const lines=Math.max(1,Math.ceil(tiles.length/perLine));
+    g+=`<g><title>${esc(m.mandal)} — ${m.rows.length} of ${m.total} evaluated${m.avg!=null?' · average '+m.avg:''}</title>
+      <text class="axis" x="${LBL-8}" y="${y+9}" text-anchor="end" fill="var(--tx-2)">${esc(m.mandal.length>15?m.mandal.slice(0,14)+'…':m.mandal)}</text>
+      <text class="axis" x="${LBL-8}" y="${y+21}" text-anchor="end" style="font-size:8.5px">${m.rows.length}/${m.total}${m.avg!=null?' · avg '+m.avg:''}</text></g>`;
+    tiles.forEach((tl,i)=>{
+      const x=LBL+(i%perLine)*(TS+GAP), ty=y+Math.floor(i/perLine)*(TS+GAP);
+      if(tl.f){
+        const rf=String(tl.r.rf||'').trim();
+        g+=`<g><title>${esc(tl.r.gp+' · '+tl.r.score+' · Grade '+(tl.r.grade||'')+(rf?' · RED FLAG: '+rf:''))}</title>
+          <rect x="${x}" y="${ty}" width="${TS}" height="${TS}" rx="3.5" fill="${BAND(tl.r.score)}" opacity=".85"${rf?' stroke="var(--red)" stroke-width="1.6"':''}/></g>`;
+      } else {
+        g+=`<g><title>${esc(tl.name+' · not yet evaluated this month')}</title>
+          <rect x="${x+.6}" y="${ty+.6}" width="${TS-1.2}" height="${TS-1.2}" rx="3.5" fill="none" stroke="var(--line)" stroke-width="1.2"/></g>`;
+      }
+    });
+    y+=Math.max(lines*(TS+GAP)-GAP,24)+10;
+  });
+  y+=2;
+  let lx=LBL;
+  [['A ≥85','#16A34A'],['B ≥70','#65A30D'],['C ≥55','#D97706'],['D <55','#DC2626']].forEach(b=>{
+    g+=`<rect x="${lx}" y="${y}" width="10" height="10" rx="3" fill="${b[1]}" opacity=".85"/>
+        <text class="axis" x="${lx+14}" y="${y+8.5}">${b[0]}</text>`;lx+=74;});
+  y+=17;lx=LBL;
+  g+=`<rect x="${lx}" y="${y}" width="10" height="10" rx="3" fill="none" stroke="var(--line)" stroke-width="1.2"/>
+      <text class="axis" x="${lx+14}" y="${y+8.5}">not yet evaluated</text>
+      <rect x="${lx+118}" y="${y}" width="10" height="10" rx="3" fill="#DC2626" opacity=".85" stroke="var(--red)" stroke-width="1.6"/>
+      <text class="axis" x="${lx+132}" y="${y+8.5}">red flag on the file</text>`;
+  return `<svg viewBox="0 0 ${W} ${y+16}">${g}</svg>`;
+}
 /* The villages that moved. Month-on-month, name by name — the trend a
    district average buries. The grey dot is last month, the coloured dot is
    now; only villages evaluated in both months can appear. */
@@ -1285,14 +1332,15 @@ function vVillages(j,A){
   h+=kpi('Grade A + B',IC.s,j.month.grades.A+j.month.grades.B,'',A.filed?pct(j.month.grades.A+j.month.grades.B,A.filed)+'% of filings':'—');
   h+=kpi('Needed per day',IC.h,A.needPerDay,'',A.wdLeft+' working days left');
   h+='</div>';
-  h+=panel('c7','Score heat · mandal by month','grade colours · district row last',trendHeat(j));
+  h+=panel('c7','Village heat · '+monName(j.ym),'one tile per village · hover for the name',villageHeat(j));
   h+=panel('c5','Evaluation outcomes',j.ym,
     donut([{k:'Grade A',v:j.month.grades.A,c:'#16A34A'},{k:'Grade B',v:j.month.grades.B,c:'#65A30D'},
            {k:'Grade C',v:j.month.grades.C,c:'#D97706'},{k:'Grade D',v:j.month.grades.D,c:'#DC2626'}],A.filed,'filed'));
+  h+=panel('c6','Score trend · mandal by month','grade colours · district row last',trendHeat(j));
   h+=panel('c6','Villages that moved',(j.prev&&j.prev.rows&&j.prev.rows.length?monName(j.prev.ym)+' → '+monName(j.ym):'month on month'),movers(j));
-  h+=panel('c6','Score distribution','villages by ten-mark band', scoreDist(j.month.rows));
   h+=panel('c12','Day by day · filings and attendance','tap a day', dayTable(j),'dayd2');
-  h+=panel('c12','Officer ledger · '+j.ym,'who files, and how well', officerTable(j.month.rows));
+  h+=panel('c6','Score distribution','villages by ten-mark band', scoreDist(j.month.rows));
+  h+=panel('c6','Officer ledger · '+j.ym,'who files, and how well', officerTable(j.month.rows));
   const mr=[...j.month.rows].sort((a,b)=>SORTD?(b.score-a.score):(a.score-b.score)); window.__ROWS.ins=mr;
   h+=panel('c12','Inspections filed · '+(SORTD?'highest score first':'lowest score first'),
     '<button class="fchip" id="insSort" style="min-height:36px">Flip order</button> · '+mr.length+' villages',
