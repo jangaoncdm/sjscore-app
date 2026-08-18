@@ -194,6 +194,11 @@ const DEBIT_FROM_MISS = 3;   /* and the 3rd is where the leave account starts to
                                 Set to 4 to make the first notice a pure warning. */
 const CUTOFF_HOUR     = 11;  /* attendance is due by 11:00 from the place of duty */
 const R_HEAD = ['id','date','phone','name','role','mandal','miss','kind','reason','sentAt','emailedAt'];
+/* Seen pings: an officer who OPENED the app on a working day without having
+   marked. The app says so on its screen — nothing here is collected quietly —
+   and a ping is never a mark: it neither cures a miss nor counts attendance.
+   One row per officer per day, the latest ping winning. */
+const SEEN_HEAD = ['date','phone','name','role','mandal','at','lat','lng','accuracy','receivedAt'];
 const NOTICE_GRACE = SCN_FROM_MISS;  /* kept: older code and the console read this name */
 const NOTICE_SERIES_START = 55;  /* the signed pack closed at 54 */
 /* THE CUTOFF. 6.7 proposed at 11:15 and that was wrong: a mark is written on
@@ -1069,8 +1074,23 @@ function doGet(e){
       att14.push({date:key, present:(daily[key]||{}).present||0, leave:(daily[key]||{}).leave||0});
     }
     const markedPh = {}; todayRows.forEach(r => markedPh[r.phone] = true);
+    /* today's seen pings, for the unmarked: fresher than any old mark */
+    const ssh = sheet_('Seen', SEEN_HEAD), sm = headMap_(ssh, SEEN_HEAD);
+    const sLast = ssh.getLastRow(), seenToday = {};
+    if(sLast >= 2){
+      const sv = ssh.getRange(Math.max(2, sLast - 1500), 1, sLast - Math.max(2, sLast - 1500) + 1, ssh.getLastColumn()).getValues();
+      sv.forEach(r => {
+        if(dateText_(r[sm.ix.date]) !== today) return;
+        const ph = phone10_(r[sm.ix.phone]); if(!ph) return;
+        const la = Number(r[sm.ix.lat]), ln = Number(r[sm.ix.lng]); if(!la || !ln) return;
+        seenToday[ph] = { lat: la, lng: ln, at: effMarkAt_(String(r[sm.ix.at] || ''), String(r[sm.ix.receivedAt] || '')) };
+      });
+    }
     const absent = officers.filter(o => o.role !== 'COLLECTOR' && !markedPh[o.phone])
-      .map(o => { const lf = lastFix[o.phone];
+      .map(o => {
+        const sp = seenToday[o.phone];
+        if(sp) return Object.assign({}, o, { lat: sp.lat, lng: sp.lng, seenAt: sp.at, lastDate: today });
+        const lf = lastFix[o.phone];
         return lf ? Object.assign({}, o, { lat: lf.lat, lng: lf.lng, lastDate: lf.d }) : o; });
 
     /* officer × day over the same fortnight — the comparative record the
@@ -1283,6 +1303,10 @@ function doPost(e){
 
   /* attendance is required of every role, including the Secretary */
   if(b.kind === 'attendance') return saveAttendance_(b, u);
+
+  /* the seen ping — where an officer who opened the app without marking
+     stood at that moment. Receipt only; never attendance. */
+  if(b.kind === 'seen') return saveSeen_(b, u);
 
   /* Acknowledging a show-cause notice. Receipt, not excuse: it lifts the
      app's lock and carries the officer's explanation to the register, but
@@ -1504,6 +1528,34 @@ function saveAttendance_(b, u){
   if(at) return json_({ ok:true, url:url, duplicate:!sameMark, resent:sameMark, skew:skewNow,
                         firstAt:firstAt, marks:sameMark ? Math.max(1, prevCount) : prevCount + 1 });
   return json_({ ok:true, url:url, skew:skewNow });
+}
+
+/* ---------------- the seen ping ---------------- */
+function saveSeen_(b, u){
+  if(attExempt_(u.role)) return json_({ ok:true, noted:false });
+  const p = b.ping || {};
+  const lat = Number(p.lat), lng = Number(p.lng);
+  if(!lat || !lng) return json_({ ok:false, error:'no location in the ping' });
+  const sh = sheet_('Seen', SEEN_HEAD), m = headMap_(sh, SEEN_HEAD);
+  const date = today_();                        /* the server's day, not the phone's */
+  const last = sh.getLastRow(), start = Math.max(2, last - 1500);
+  let at = 0;
+  if(last >= 2){
+    const v = sh.getRange(start, 1, last - start + 1, sh.getLastColumn()).getValues();
+    for(let i = 0; i < v.length; i++)
+      if(phone10_(v[i][m.ix.phone]) === u.phone && dateText_(v[i][m.ix.date]) === date) at = start + i;
+  }
+  const row = new Array(m.width).fill('');
+  const put = (k, val) => { if(m.ix[k] >= 0) row[m.ix[k]] = val; };
+  put('date', "'" + date); put('phone', "'" + u.phone);
+  put('name', u.name); put('role', u.role); put('mandal', u.mandal || '');
+  put('at', String(p.ts || new Date().toISOString()));
+  put('lat', lat); put('lng', lng);
+  put('accuracy', p.acc == null ? '' : Math.round(Number(p.acc)));
+  put('receivedAt', new Date().toISOString());
+  if(at) sh.getRange(at, 1, 1, m.width).setValues([row]);
+  else sh.appendRow(row);
+  return json_({ ok:true, noted:true });
 }
 
 /* ---------------- inspection ---------------- */

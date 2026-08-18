@@ -133,5 +133,22 @@ module.exports = {
     t.eq(dAbs.lastDate, '2026-08-13', 'with the date the register actually holds');
     const yAbs = d2.today.absent.find(r => r.name === 'Y. NeverMarked');
     t.ok(!!yAbs && yAbs.lat === undefined, 'no located mark on record, no location invented');
+
+    /* the seen ping: D opens the app today without marking, and the district
+       may know where — fresher than any old mark, and never attendance */
+    const dTok = env.post({ kind: 'login', u: '9000000014', p: '1111' }).token;
+    t.eq(env.post({ kind: 'seen', token: dTok, ping: {} }).ok, false, 'a ping without a location says nothing and is refused');
+    t.eq(env.post({ kind: 'seen', token: dTok, ping: { ts: '2026-08-14T10:20:00+05:30', lat: 17.80, lng: 79.20, acc: 35 } }).noted, true, 'the ping is noted');
+    env.post({ kind: 'seen', token: dTok, ping: { ts: '2026-08-14T10:40:00+05:30', lat: 17.81, lng: 79.21, acc: 20 } });
+    t.eq(env.sheets['Seen'].rows.length - 1, 1, 'one row per officer per day — a second ping updates, never doubles');
+    t.eq(env.post({ kind: 'seen', token: cdm, ping: { lat: 17.7, lng: 79.1 } }).noted, false, 'the Collector, not asked to mark, is not tracked either');
+    t.eq(env.sheets['Seen'].rows.length - 1, 1, 'and no row was written for him');
+    Object.keys(env.cacheStore).filter(k => k.indexOf('dash_') === 0).forEach(k => { delete env.cacheStore[k]; });
+    const d3 = env.get('dashboard', { token: cdm });
+    const dSeen = d3.today.absent.find(r => r.name === 'D. TwoCharges');
+    t.eq(dSeen.lat, 17.81, 'the map takes today’s ping over last week’s mark');
+    t.ok(!!dSeen.seenAt, 'and says it is a fresh sighting, not history');
+    t.eq(dSeen.lastDate, '2026-08-14', 'dated today');
+    t.ok(!d3.today.present.some(r => r.name === 'D. TwoCharges'), 'a ping never turns into attendance — D is still absent');
   }
 };

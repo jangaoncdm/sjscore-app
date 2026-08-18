@@ -1381,10 +1381,15 @@ function marker(p){
       .bindPopup(`<b>${esc(p.gp)}</b> &middot; village<br>${esc(p.mandal)}<br>Score ${p.score} &middot; grade ${esc(p.grade)}${String(p.rf||'').trim()?' &middot; <span style="color:#DC2626">RF '+esc(p.rf)+'</span>':''}<br>${esc(String(p.officer||''))}${p.album?'<br><a target="_blank" rel="noopener" href="'+esc(p.album)+'">View the evidence</a>':''}`); }
   if(p._s==='L') return L.circleMarker([p.lat,p.lng],{radius:7,color:'#fff',weight:2,fillColor:'#8B99AF',fillOpacity:.9})
       .bindPopup(`<b>${esc(p.name)}</b><br>on sanctioned leave`);
-  /* not marked today: a dashed ring at the place he LAST marked — history
-     shown as history, never dressed up as where he stands now */
-  if(p._s==='A') return L.circleMarker([p.lat,p.lng],{radius:8.5,color:'#DC2626',weight:2.2,dashArray:'4 3',fillColor:'#DC2626',fillOpacity:.12})
-      .bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.role)} · ${esc(p.mandal||'—')}<br><span style="color:#DC2626;font-weight:700">not marked today</span><br>last marked here on ${esc(dm(p.lastDate||''))}`);
+  /* not marked today. A SOLID ring is fresh — the app was opened here today
+     (the seen ping, which the officer is told about on screen). A DASHED
+     ring is history — the place he LAST marked, on the date shown. Neither
+     is ever dressed up as attendance. */
+  if(p._s==='A'){
+    const fresh=!!p.seenAt;
+    return L.circleMarker([p.lat,p.lng],{radius:8.5,color:'#DC2626',weight:2.2,dashArray:fresh?null:'4 3',fillColor:'#DC2626',fillOpacity:fresh?.2:.1})
+      .bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.role)} · ${esc(p.mandal||'—')}<br><span style="color:#DC2626;font-weight:700">not marked today</span><br>${fresh?'app opened here at '+esc(hm(p.seenAt))+' today':'last marked here on '+esc(dm(p.lastDate||''))}`);
+  }
   const col=suspect(p)?'#DC2626':p.verified?'#16A34A':'#D97706';
   return L.circleMarker([p.lat,p.lng],{radius:(p.marks||1)>1?9:7,color:'#fff',weight:2,fillColor:col,fillOpacity:.95})
     .bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.role)} · ${esc(p.mandal||'—')}<br>${esc(hm(p.at))} · ${suspect(p)?'<span style="color:#DC2626">location not trustworthy</span>':p.verified?'verified':'no fix'}${p.acc?' · ±'+Math.round(p.acc)+' m':''}${(p.marks||1)>1?' · <span style="color:#DC2626">'+p.marks+'×</span>':''}<br><a target="_blank" rel="noopener" href="https://maps.google.com/?q=${p.lat},${p.lng}">Open in Google Maps</a>`);}
@@ -2053,7 +2058,7 @@ function vNotices(j,A){
 }
 function vMap(j,A){
   return panel('c12','District map · everything located',
-    'green verified &middot; amber no fix &middot; red not trustworthy &middot; grey on leave &middot; dashed ring not marked, at last known place &middot; villages by grade',
+    'green verified &middot; amber no fix &middot; red not trustworthy &middot; grey on leave &middot; red ring not marked (solid: app opened today &middot; dashed: last known) &middot; villages by grade',
     mapTools()+'<div id="map2"></div>');
 }
 
