@@ -600,17 +600,32 @@ function histMarkIn(rows){
         <text class="axis" x="${x+bw/2}" y="${H-7}" text-anchor="middle">${i+6}</text>`;});
   return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
 }
+/* The monthly average, drawn the way the 14-day activity chart is drawn —
+   a smooth line over a soft area — with the multi-accent treatment: the
+   line rides the house indigo→teal gradient, and each month's point wears
+   the grade colour its average earned, so level and movement read together. */
 function trendLine(rows){
   const W=460,H=210,P=30;
   if(!rows.length) return '<div class="empty">No months on record yet.</div>';
-  let g='';[0,50,100].forEach(v=>{const y=H-24-(H-44)*v/100;
-    g+=`<line class="gridln" x1="${P}" x2="${W-6}" y1="${y}" y2="${y}"/><text class="axis" x="${P-6}" y="${y+3.5}" text-anchor="end">${v}</text>`;});
-  const step=(W-P-18)/Math.max(1,rows.length-1);
-  const pts=rows.map((r,i)=>[P+9+i*step,H-24-(H-44)*Math.min(100,r.avg)/100]);
-  g+=`<path d="${smooth(pts)}" fill="none" stroke="var(--blue)" stroke-width="2.4"/>`;
-  pts.forEach((p,i)=>{g+=`<circle cx="${p[0]}" cy="${p[1]}" r="3.4" fill="var(--blue)"/>
-    <text class="axis" x="${p[0]}" y="${p[1]-9}" text-anchor="middle" fill="var(--tx)">${rows[i].avg}</text>
-    <text class="axis" x="${p[0]}" y="${H-7}" text-anchor="middle">${rows[i].ym.slice(5)}/${rows[i].ym.slice(2,4)}</text>`;});
+  const band=s=>s>=85?'#16A34A':s>=70?'#65A30D':s>=55?'#D97706':'#DC2626';
+  let g=`<defs>
+    <linearGradient id="tgLine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4A40CE"/><stop offset="1" stop-color="#0F766E"/></linearGradient>
+    <linearGradient id="tgFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4A40CE" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#0F766E" stop-opacity="0"/></linearGradient></defs>`;
+  [0,25,50,75,100].forEach(v=>{const y=H-26-(H-50)*v/100;
+    g+=`<line class="gridln" x1="${P}" x2="${W-8}" y1="${y}" y2="${y}"/><text class="axis" x="${P-7}" y="${y+3.5}" text-anchor="end">${v}</text>`;});
+  const step=(W-P-22)/Math.max(1,rows.length-1);
+  const pts=rows.map((r,i)=>[P+10+i*step,H-26-(H-50)*Math.min(100,r.avg)/100]);
+  const line=smooth(pts);
+  g+=`<path d="${line} L ${pts[pts.length-1][0]} ${H-26} L ${pts[0][0]} ${H-26} Z" fill="url(#tgFill)"/>`;
+  g+=`<path d="${line}" fill="none" stroke="url(#tgLine)" stroke-width="2.6"/>`;
+  pts.forEach((p,i)=>{const r=rows[i];
+    g+=`<g><title>${esc(monName(r.ym)+' · average '+r.avg+' over '+r.n+' village'+(r.n===1?'':'s'))}</title>
+    <circle cx="${p[0]}" cy="${p[1]}" r="${i===pts.length-1?5.5:4.5}" fill="${band(r.avg)}" stroke="#fff" stroke-width="2"/>
+    <text class="axis" x="${Math.min(p[0],W-16)}" y="${p[1]-11}" text-anchor="middle" style="font-weight:700" fill="var(--tx)">${r.avg}</text>
+    <text class="axis" x="${Math.max(P+16,Math.min(p[0],W-18))}" y="${H-8}" text-anchor="middle">${r.ym.slice(5)}/${r.ym.slice(2,4)}</text></g>`;});
   return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
 }
 
@@ -624,15 +639,22 @@ function mandalAtt(j){
   const rows=Object.entries(m).map(([k,v])=>({k,...v,t:v.p+v.l+v.a}))
     .filter(r=>r.t).sort((a,b)=>(b.a/b.t)-(a.a/a.t));
   if(!rows.length) return '<div class="empty">No officers on the roll yet.</div>';
-  const W=460,H=Math.max(150,rows.length*26+26),BW=W-160;
+  /* the bars stop short of the right label column, and the segments keep a
+     hairline of ground between them — the "12 missing" text used to land on
+     the bar it described */
+  const W=460,LBL=104,RGT=64,H=Math.max(150,rows.length*26+18),BW=W-LBL-8-RGT-8;
   let g='';
-  rows.forEach((r,i)=>{const y=14+i*26;
+  const seg=(x,y,w,c,first,last)=>{ if(w<=0) return '';
+    const gap=last?0:2;
+    return `<rect x="${x}" y="${y}" width="${Math.max(1,w-gap)}" height="15" rx="${first||last?2.5:0}" fill="${c}"/>`; };
+  rows.forEach((r,i)=>{const y=8+i*26, x0=LBL+8;
     const wp=BW*r.p/r.t, wl=BW*r.l/r.t, wa=BW*r.a/r.t;
-    g+=`<text class="axis" x="0" y="${y+11}" font-size="11" fill="var(--tx)">${esc(r.k.slice(0,16))}</text>`;
-    g+=`<rect x="108" y="${y}" width="${wp}" height="15" fill="#16A34A" rx="2"/>`;
-    g+=`<rect x="${108+wp}" y="${y}" width="${wl}" height="15" fill="#D97706"/>`;
-    g+=`<rect x="${108+wp+wl}" y="${y}" width="${wa}" height="15" fill="#DC2626" rx="2"/>`;
-    g+=`<text class="axis" x="${W-4}" y="${y+11}" text-anchor="end">${r.a?r.a+' missing':'all in'}</text>`;});
+    g+=`<g><title>${esc(r.k+' — '+r.p+' present · '+r.l+' on leave · '+r.a+' not marked, of '+r.t)}</title>
+    <text class="axis" x="${LBL}" y="${y+11.5}" text-anchor="end" fill="var(--tx-2)">${esc(r.k.length>15?r.k.slice(0,14)+'…':r.k)}</text>`;
+    g+=seg(x0,y,wp,'#16A34A',true,!wl&&!wa);
+    g+=seg(x0+wp,y,wl,'#D97706',false,!wa);
+    g+=seg(x0+wp+wl,y,wa,'#DC2626',false,true);
+    g+=`<text class="axis" x="${W-4}" y="${y+11.5}" text-anchor="end" style="font-weight:${r.a?700:400}" fill="${r.a?'var(--red)':'var(--green)'}">${r.a?r.a+' missing':'all in'}</text></g>`;});
   return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
 }
 /* where the scores actually sit — ten-mark bands */
