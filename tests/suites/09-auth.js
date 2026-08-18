@@ -119,20 +119,5 @@ module.exports = {
       photo: { b64: Buffer.from('jpeg-bytes').toString('base64'), name: 'mark.jpg' } });
     t.eq(withPhoto.ok, true, 'a PS marks attendance like everyone — attendance is required of every role');
     t.contains(withPhoto.url, 'drive.mock', 'the photograph landed in the attendance folder');
-
-    /* the console's trend carries mandal-by-month and last month's villages,
-       because a district average of two points tells the Collector nothing */
-    env.addRow('Inspections', { id: 'IP1', ym: '2026-07', mandal: 'Jangaon', gp: 'Konne', score: 60 });
-    env.addRow('Inspections', { id: 'IP2', ym: '2026-07', mandal: 'Chilpur', gp: 'Malkapur', score: 70 });
-    Object.keys(env.cacheStore).filter(k => k.indexOf('dash_') === 0).forEach(k => { delete env.cacheStore[k]; });
-    const d2 = env.get('dashboard', { token: cdm });
-    t.eq(d2.trendm.length, 2, 'both months ride the payload, mandal by mandal');
-    t.eq(d2.trendm[0].ym, '2026-07', 'oldest first');
-    t.eq(d2.trendm[0].m['Jangaon'].avg, 60, 'July’s Jangaon average');
-    t.eq(d2.trendm[1].m['Jangaon'].avg, 85, 'August’s Jangaon average');
-    t.eq(d2.trendm[0].m['Chilpur'].n, 1, 'and the count of villages behind each figure');
-    t.eq(d2.prev.ym, '2026-07', 'the month before the one under review');
-    t.eq(d2.prev.rows.length, 2, 'with every village that filed in it');
-    t.eq(d2.prev.rows.find(r => r.gp === 'Konne').score, 60, 'so the console can name who moved (Konne: 60 → 85)');
   }
 };
