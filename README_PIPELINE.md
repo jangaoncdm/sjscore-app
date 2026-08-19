@@ -9,7 +9,7 @@ live and what is waiting.
 
 ## The loop
 
-    npm test                 # 367 assertions against the real backend files
+    npm test                 # 369 assertions against the real backend files
     git add -A
     git commit -m "..."
     git push

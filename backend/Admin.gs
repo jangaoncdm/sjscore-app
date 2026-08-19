@@ -892,7 +892,11 @@ var FIELD_FIXES_2 = [
   /* 12 — the app shows her as MPDO because her number sits on a senior row
      too, and one number folds into one login with the senior rank winning */
   {why:'Issue 12: Thandra Swapna (PS Kothapally) shown as "MPDO Lingala Ghanpur" — 9133467909 also sits on that MPDO row and the senior rank wins the login. Her PS row claims the number; the MPDO row is blanked and NEEDS A REAL NUMBER from the office',
-   find:{role:'PS', gp:'Kothapal'}, claimPhone:'9133467909'}
+   find:{role:'PS', gp:'Kothapal'}, claimPhone:'9133467909'},
+
+  /* roll hygiene, 19.08 — the console greeted the Collector as "Collector &" */
+  {why:'Roll hygiene 19.08: the Collector’s own row carries a designation where the name belongs — the console was greeting him with "Collector &…". Name set; number and PIN untouched',
+   find:{role:'COLLECTOR'}, setName:'Sandeep Kumar Jha'}
 ];
 
 /* What the tracker asks for but the record contradicts. Nothing here is
@@ -900,7 +904,8 @@ var FIELD_FIXES_2 = [
    and delete the entry. */
 var CONTESTED_2 = [
   {issue:8, name:'Ramrajupalle charge', q:'The tracker says "give login to 9912383087" for Rajashekar — but 28.07 already gave J. Rajashekar (Neermala) the village in charge, and if his existing sign-in works, moving him to a new number would lock him out. WHOSE number is 9912383087, and does his current login work?'},
-  {issue:9, name:'Dharavath Thanda', q:'Once Santhoshini’s row moves to Dharmagadda Thanda, nobody holds Dharavath Thanda — and 28.07 put 7675827928 on a Dharmagadda Thanda row, so that village may now be held twice. Who actually holds Dharavath Thanda, and is 7675827928 a real officer?'}
+  {issue:9, name:'Dharavath Thanda', q:'Once Santhoshini’s row moves to Dharmagadda Thanda, nobody holds Dharavath Thanda — and 28.07 put 7675827928 on a Dharmagadda Thanda row, so that village may now be held twice. Who actually holds Dharavath Thanda, and is 7675827928 a real officer?'},
+  {issue:'roll', name:'MSO names', q:'Rows named "MSO Lingalaghanpur", "MSO Tharigoppula" and "MSO Zaffergadh" carry a designation where the officer’s name belongs — notices of 11–13.08 went out so addressed (all since withdrawn). Which officers hold these posts? Their names go on the rows the moment the office says.'}
 ];
 
 /* ============================================================================

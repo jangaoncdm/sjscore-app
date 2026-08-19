@@ -26,7 +26,9 @@ function seedRoll(env){
     /* the shared number, as the 17.08 run actually found it: on BOTH rows —
        her own sign-in works, but the senior rank wins the folded login */
     { Phone: '9133467909', Name: 'MPDO L. Ghanpur',    Role: 'MPDO', Mandal: 'Lingala Ghanpur', GP: '',                               Hash: 'H12', Active: 'TRUE' },
-    { Phone: '9133467909', Name: 'Thandra Swapna',     Role: 'PS',   Mandal: 'Ghanpur (Stn)',   GP: 'Kothapalle',                     Hash: 'H13', Active: 'TRUE' }
+    { Phone: '9133467909', Name: 'Thandra Swapna',     Role: 'PS',   Mandal: 'Ghanpur (Stn)',   GP: 'Kothapalle',                     Hash: 'H13', Active: 'TRUE' },
+    /* the roll's greeting defect: a designation where the name belongs */
+    { Phone: '9111111199', Name: 'Collector & District Magistrate', Role: 'COLLECTOR', Mandal: '', GP: '',                            Hash: 'H14', Active: 'TRUE' }
   ]);
 }
 const rowOf = (env, phone) => {
@@ -65,7 +67,12 @@ module.exports = {
 
     c.applyFieldFixes2();
     const rows = env.sheets['Users'].rows;
-    t.eq(rows.length - 1, 16, 'three officers registered: Madhavi, Shashi Kumar and Srinivas Reddy — and nobody else');
+    t.eq(rows.length - 1, 17, 'three officers registered: Madhavi, Shashi Kumar and Srinivas Reddy — and nobody else');
+
+    /* the Collector's row: name set, nothing else touched */
+    const cdm = rowOf(env, '9111111199');
+    t.eq(cdm.Name, 'Sandeep Kumar Jha', 'the Collector’s row reads his name, not his designation');
+    t.eq(cdm.Hash, 'H14', 'his PIN was never touched');
 
     /* issue 1 — Madhavi registered, the in-charge released */
     const madhavi = rowOf(env, '9553399695');
