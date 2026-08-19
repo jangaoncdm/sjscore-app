@@ -66,12 +66,13 @@ module.exports = {
     t.ok(!remKind['9000000011'], 'A, marked in time, draws nothing');
     t.ok(!remKind['9000000016'], 'F, on sanctioned leave, draws nothing');
     t.ok(!remKind['9000000015'], 'E draws no reminder — the third miss escalates instead');
+    t.ok(!remKind['9000000010'], 'M, the MSO, unmarked all month, draws nothing — his attendance is voluntary');
 
     const nsh = env.sheets['Notices'];
     const nHead = nsh.rows[0].map(String);
     const notices = nsh.rows.slice(1).map(r => { const o = {}; nHead.forEach((h, i) => { o[h] = r[i]; }); return o; });
     log('Notices proposed: ' + notices.map(n => n.name + ' seq ' + n.seq + ' status ' + n.status).join(', '));
-    t.eq(notices.length, 1, 'one show-cause notice, and only one');
+    t.eq(notices.length, 1, 'one show-cause notice, and only one — the MSO’s empty month raises none');
     t.eq(String(notices[0].phone), '9000000015', 'it is E’s');
     t.eq(String(notices[0].status), 'PROPOSED', 'proposed — nothing is served without the Collector’s approval');
     t.eq(Number(notices[0].seq), 3, 'the standing is the third miss');

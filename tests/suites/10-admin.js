@@ -67,5 +67,48 @@ module.exports = {
     t.ok(envA.ctx.hash_('9000000011', '1234') !== envB.ctx.hash_('9000000011', '1234'), 'different salt, different hash');
     t.ok(envC.ctx.hash_('9000000011', '1234') !== envA.ctx.hash_('9000000011', '1234'), 'the placeholder fallback is not any real salt');
     t.eq(envA.ctx.hash_('9000000011', '1234'), envA.ctx.hash_('9000000011', '1234'), 'and the same salt always agrees with itself');
+
+    /* ---- MSO relief: every instrument standing against an MSO, taken back ---- */
+    const env3 = mock.load({ admin: true, now: '2026-08-19T11:00:00+05:30' });
+    env3.mkSheet('Users', ['Phone','Name','Role','Mandal','GP','Email','InitPin','Hash','Active'], [
+      { Phone: '9000000031', Name: 'S. Sanitation', Role: 'MSO', Mandal: 'Jangaon', Active: 'TRUE' },
+      { Phone: '9000000032', Name: 'P. Bound',      Role: 'MPO', Mandal: 'Jangaon', Active: 'TRUE' }
+    ]);
+    env3.mkSheet('Notices', env3.eval('N_HEAD'), [
+      { id:'NM1', no:'',                 date:'2026-08-12', phone:'9000000031', name:'S. Sanitation', role:'MSO', mandal:'Jangaon', seq:3, status:'PROPOSED' },
+      { id:'NM2', no:'61/SJSP-SCN/2026', date:'2026-08-13', phone:'9000000031', name:'S. Sanitation', role:'MSO', mandal:'Jangaon', seq:3, status:'PENDING', clDebited:'TRUE', leaveId:'SYSCL-2026-08-13-9000000031' },
+      { id:'NM3', no:'62/SJSP-SCN/2026', date:'2026-08-14', phone:'9000000031', name:'S. Sanitation', role:'MSO', mandal:'Jangaon', seq:4, status:'ACK' },
+      { id:'NM4', no:'63/SJSP-SCN/2026', date:'2026-08-14', phone:'9000000032', name:'P. Bound',      role:'MPO', mandal:'Jangaon', seq:3, status:'PENDING' }
+    ]);
+    env3.mkSheet('Leave', env3.eval('L_HEAD'), [
+      { id:'SYSCL-2026-08-13-9000000031', phone:'9000000031', name:'S. Sanitation', role:'MSO', mandal:'Jangaon',
+        type:'CL', fromDate:'2026-08-13', toDate:'2026-08-13', days:1, status:'APPROVED' }
+    ]);
+    const state3 = () => JSON.stringify([env3.sheets['Notices'].rows, env3.sheets['Leave'].rows]);
+    const before3 = state3();
+    env3.ctx.showMsoRelief();
+    t.eq(state3(), before3, 'the relief dry run writes nothing');
+    t.ok(env3.logs.some(l => /DRY RUN, nothing written/.test(l)), 'and says so');
+
+    env3.ctx.applyMsoRelief();
+    const nHead3 = env3.sheets['Notices'].rows[0].map(String);
+    const nBy = {}; env3.sheets['Notices'].rows.slice(1).forEach(r => {
+      const o = {}; nHead3.forEach((h, i) => { o[h] = r[i]; }); nBy[String(o.id)] = o; });
+    t.eq(String(nBy['NM1'].status), 'DROPPED', 'the proposal dies unnumbered');
+    t.eq(String(nBy['NM2'].status), 'WITHDRAWN', 'the served notice is withdrawn');
+    t.eq(String(nBy['NM2'].no), '61/SJSP-SCN/2026', 'its number is kept — nothing is destroyed');
+    t.eq(String(nBy['NM2'].clDebited), 'REVERSED', 'the debit flag reads REVERSED');
+    t.eq(String(nBy['NM3'].status), 'WITHDRAWN', 'the acknowledged notice is withdrawn too — receipt was never guilt');
+    t.eq(String(nBy['NM4'].status), 'PENDING', 'the MPO’s notice stands — the order names the MSOs alone');
+    const lHead3 = env3.sheets['Leave'].rows[0].map(String);
+    const lRow = env3.sheets['Leave'].rows[1];
+    t.eq(String(lRow[lHead3.indexOf('status')]), 'CANCELLED', 'the debited day comes back as CANCELLED');
+    t.contains(String(lRow[lHead3.indexOf('remarks')]), '19.08.2026', 'with the order named in the remarks');
+    t.ok(env3.sheets['Audit'].rows.length >= 4, 'every action is on the Audit register');
+
+    const after3 = state3(), audit3 = env3.sheets['Audit'].rows.length;
+    env3.ctx.applyMsoRelief();
+    t.eq(state3(), after3, 'a second apply changes nothing');
+    t.eq(env3.sheets['Audit'].rows.length, audit3, 'and writes no second audit line');
   }
 };

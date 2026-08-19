@@ -12,7 +12,7 @@ module.exports = {
     env.seedUsers();
     const a = c.issueToken_(c.findByPhone_('9000000011'));         /* MPO — may apply */
     const b = c.issueToken_(c.findByPhone_('9000000012'));         /* MPDO — may apply */
-    const g = c.issueToken_(c.findByPhone_('9000000017'));         /* MSO — may NOT */
+    const g = c.issueToken_(c.findByPhone_('9000000010'));         /* MSO — may NOT */
     const cdm = c.issueToken_(c.findByPhone_('9000000001'));
 
     /* who may apply is the server's decision, not the app's */

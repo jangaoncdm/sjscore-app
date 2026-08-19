@@ -225,8 +225,11 @@ function entitlement_(type, year){
 const LEAVE_APPLY   = ['MPO','PS','MPDO'];
 const canApplyLeave_   = r => LEAVE_APPLY.indexOf(r) >= 0;
 const canApproveLeave_ = r => r === 'COLLECTOR';
-/* the Collector is not asked to mark in, so is not counted as a gap */
-const attExempt_ = r => r === 'COLLECTOR';
+/* Not asked to mark in, so never counted as a gap: the Collector — and,
+   by the Collector's order of 19.08.2026, the MSOs, whose attendance is
+   VOLUNTARY. An MSO's mark is welcome and recorded; an MSO's silence
+   draws nothing — no reminder, no notice, no debit, no seen ping. */
+const attExempt_ = r => r === 'COLLECTOR' || r === 'MSO';
 const U_HEAD = ['Phone','Name','Role','Mandal','GP','Email','InitPin','Hash','Active'];
 const RANK = {PS:1, MPO:2, MSO:3, MPDO:4, DLPO:5, DPO:6, COLLECTOR:7};
 
@@ -1086,7 +1089,7 @@ function doGet(e){
         seenToday[ph] = { lat: la, lng: ln, at: effMarkAt_(String(r[sm.ix.at] || ''), String(r[sm.ix.receivedAt] || '')) };
       });
     }
-    const absent = officers.filter(o => o.role !== 'COLLECTOR' && !markedPh[o.phone])
+    const absent = officers.filter(o => !attExempt_(o.role) && !markedPh[o.phone])
       .map(o => {
         const sp = seenToday[o.phone];
         if(sp) return Object.assign({}, o, { lat: sp.lat, lng: sp.lng, seenAt: sp.at, lastDate: today });
@@ -1098,7 +1101,7 @@ function doGet(e){
        console reads Sundays for itself from the date. Compact arrays keep
        ~280 officers × 14 days inside the cache ceiling. */
     const mDates = att14.map(a => a.date);
-    const attMatrix = officers.filter(o => o.role !== 'COLLECTOR').map(o => {
+    const attMatrix = officers.filter(o => !attExempt_(o.role)).map(o => {
       const days = mDates.map(d => { const st = (dailyPh[d] || {})[o.phone];
         return st ? (st === 'LEAVE' ? 'L' : 'P') : '-'; }).join('');
       return [o.name, o.role, o.mandal, days];

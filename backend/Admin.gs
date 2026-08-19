@@ -903,6 +903,76 @@ var CONTESTED_2 = [
   {issue:9, name:'Dharavath Thanda', q:'Once Santhoshini’s row moves to Dharmagadda Thanda, nobody holds Dharavath Thanda — and 28.07 put 7675827928 on a Dharmagadda Thanda row, so that village may now be held twice. Who actually holds Dharavath Thanda, and is 7675827928 a real officer?'}
 ];
 
+/* ============================================================================
+ * 10. MSO RELIEF · 19.08.2026
+ * ----------------------------------------------------------------------------
+ * By the Collector's order, MSO attendance is VOLUNTARY from 19.08.2026:
+ * attExempt_ in Code.gs now carries the rule going forward — no reminder,
+ * no notice, no debit can be raised against an MSO. This job settles the
+ * PAST: every instrument already standing against an MSO on the register
+ * is taken back, in the house manner — nothing deleted, everything audited.
+ *   - a PROPOSED notice dies unnumbered: DROPPED
+ *   - a served notice (PENDING or ACK) is WITHDRAWN, its number kept
+ *   - a leave day debited under one is reversed: the SYSCL row goes
+ *     CANCELLED and the notice's flag reads REVERSED
+ * Reminders stand as the history they are — they never counted, never
+ * locked, never debited. Run showMsoRelief() first, read, then apply.
+ * ========================================================================== */
+function showMsoRelief(){ msoRelief_(false); }
+function applyMsoRelief(){ msoRelief_(true); }
+function msoRelief_(commit){
+  const t = uidx_(), uv = t.sh.getDataRange().getValues(), mso = {};
+  for(let i = 1; i < uv.length; i++)
+    if(String(uv[i][t.ix.role]).trim().toUpperCase() === 'MSO'){
+      const p = phone10_(uv[i][t.ix.phone]); if(p) mso[p] = cell_(uv[i], t.ix.name);
+    }
+  const sh = sheet_('Notices', N_HEAD), m = headMap_(sh, N_HEAD);
+  const v = sh.getDataRange().getValues();
+  const lsh = sheet_('Leave', L_HEAD), lm = headMap_(lsh, L_HEAD);
+  const now = new Date().toISOString();
+  const WHY = 'MSO attendance made voluntary by the Collector’s order of 19.08.2026';
+  const out = []; let dropped = 0, withdrawn = 0, reversed = 0;
+  for(let i = 1; i < v.length; i++){
+    const ph = phone10_(v[i][m.ix.phone]); if(!(ph in mso)) continue;
+    const st = String(v[i][m.ix.status] || '');
+    if(st !== 'PROPOSED' && st !== 'PENDING' && st !== 'ACK') continue;
+    const no = cell_(v[i], m.ix.no) || '(unnumbered)', d = dateText_(v[i][m.ix.date]);
+    const debited = String(v[i][m.ix.clDebited]).toUpperCase() === 'TRUE';
+    const lid = cell_(v[i], m.ix.leaveId);
+    const newSt = st === 'PROPOSED' ? 'DROPPED' : 'WITHDRAWN';
+    if(commit){
+      sh.getRange(i + 1, m.ix.status + 1).setValue(newSt);
+      sh.getRange(i + 1, m.ix.decidedBy + 1).setValue(newSt + ' · ' + WHY);
+      sh.getRange(i + 1, m.ix.decidedAt + 1).setValue(now);
+      if(debited && lid){
+        const lv = lsh.getDataRange().getValues();
+        for(let j = 1; j < lv.length; j++){
+          if(cell_(lv[j], lm.ix.id) !== lid) continue;
+          lsh.getRange(j + 1, lm.ix.status + 1).setValue('CANCELLED');
+          lsh.getRange(j + 1, lm.ix.remarks + 1).setValue('Reversed — ' + WHY + '; the notice for ' + dmy_(d) + ' stands withdrawn.');
+          lsh.getRange(j + 1, lm.ix.decidedBy + 1).setValue(ADMIN_BY);
+          lsh.getRange(j + 1, lm.ix.decidedAt + 1).setValue(now);
+          reversed++; break;
+        }
+        sh.getRange(i + 1, m.ix.clDebited + 1).setValue('REVERSED');
+      }
+      admLog_('MSO RELIEF', (mso[ph] || '') + ' (' + ph + ')',
+        no + ' for ' + d + ' — ' + newSt.toLowerCase() + (debited ? '; one day of leave reversed' : ''));
+    }
+    if(st === 'PROPOSED') dropped++; else withdrawn++;
+    out.push('  ' + (commit ? '' : 'would ') + (st === 'PROPOSED' ? 'DROP ' : 'WITHDRAW ') + no + ' · ' +
+      (mso[ph] || ph) + ' · ' + d + ' (' + st + (debited ? ' · leave debit to reverse' : '') + ')');
+  }
+  Logger.log((commit ? 'MSO RELIEF — APPLIED\n\n' : 'MSO RELIEF — DRY RUN, nothing written\n\n') +
+    Object.keys(mso).length + ' MSO(s) on the roll.\n' +
+    (out.length ? out.join('\n') : '  nothing stands against any MSO — the register is already clear') +
+    '\n\n' + dropped + ' proposal(s) ' + (commit ? 'dropped' : 'to drop') + ', ' + withdrawn + ' served notice(s) ' +
+    (commit ? 'withdrawn' : 'to withdraw') + (commit ? ', ' + reversed + ' leave debit(s) reversed to CANCELLED' : '') + '.' +
+    '\nReminders stand as history — they never counted, locked, or debited.' +
+    (commit ? '\nEvery action is on the Audit tab. Those officers’ apps unlock at their next refresh.'
+            : '\nRun applyMsoRelief() to write it.'));
+}
+
 /* the PIN a fix hands out — derived from the number AND the batch date, so
    running the batch again yields the same PIN and re-runs change nothing */
 function fix2Pin_(phone){

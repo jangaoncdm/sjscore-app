@@ -150,5 +150,16 @@ module.exports = {
     t.ok(!!dSeen.seenAt, 'and says it is a fresh sighting, not history');
     t.eq(dSeen.lastDate, '2026-08-14', 'dated today');
     t.ok(!d3.today.present.some(r => r.name === 'D. TwoCharges'), 'a ping never turns into attendance — D is still absent');
+
+    /* the MSO, exempt end to end: never absent on the console, never pinged */
+    env.addRow('Users', { Phone: '9000000023', Name: 'M. Vol', Role: 'MSO', Mandal: 'Jangaon', Active: 'TRUE' });
+    setPin('9000000023', '4444');
+    const msoTok = env.post({ kind: 'login', u: '9000000023', p: '4444' }).token;
+    t.eq(env.post({ kind: 'seen', token: msoTok, ping: { lat: 17.7, lng: 79.1 } }).noted, false,
+      'an MSO is never pinged — his attendance is voluntary');
+    Object.keys(env.cacheStore).filter(k => k.indexOf('dash_') === 0).forEach(k => { delete env.cacheStore[k]; });
+    const d4 = env.get('dashboard', { token: cdm });
+    t.ok(!d4.today.absent.some(r => r.name === 'M. Vol'), 'an unmarked MSO is not absent — the console does not count him');
+    t.ok(d4.today.absent.some(r => r.name === 'Y. NeverMarked'), 'while a bound officer still is');
   }
 };

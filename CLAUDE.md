@@ -16,7 +16,7 @@ the rules below exist because exactly that happened in production.
 ## Run this before you finish anything
 
 ```bash
-npm test              # 348 assertions, 11 suites, against the real backend files
+npm test              # 367 assertions, 11 suites, against the real backend files
 node tests/ladder     # one suite, with its detail
 ```
 
@@ -118,6 +118,10 @@ Working days only — Sundays and the `Holidays` tab are never counted.
 - Acknowledgement is receipt, not excuse. Only attendance cures.
 - A late mark, or one received late, draws an advisory reminder and is **never
   a miss** — the officer did his part.
+- **MSO attendance is voluntary** (Collector's order, 19.08.2026). An MSO may
+  mark and the mark is recorded; an MSO's silence draws nothing — no reminder,
+  no notice, no debit, no seen ping. `attExempt_` carries the rule;
+  `applyMsoRelief()` in Admin.gs took back what stood against MSOs before it.
 
 Misses are counted from the **attendance record**, over days the district was
 demonstrably running (`activeDaysUpto_`), not from reminders sent. So a late

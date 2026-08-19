@@ -19,7 +19,7 @@
    pasted back by hand after every publish. The empty string below is only a
    fallback for the case where config.js is missing. */
 const SERVER_URL = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
-const APP_VERSION = '6.9.3';
+const APP_VERSION = '6.9.4';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -2225,7 +2225,9 @@ const canApplyLeave   = r => ['MPO','PS','MPDO'].includes(r);
 /* The Collector is not asked to mark in. The office is not one that reports
    its own presence to itself — though it may still mark a day voluntarily
    from More, which is useful as proof of a field visit. */
-const attExempt = r => r === 'COLLECTOR';
+/* attendance is voluntary for the Collector and — order of 19.08.2026 —
+   the MSOs: the gate offers them "Not now" instead of standing in the way */
+const attExempt = r => r === 'COLLECTOR' || r === 'MSO';
 const canApproveLeave = r => r === 'COLLECTOR';
 const leaveVisible    = r => canApplyLeave(r) || canApproveLeave(r);
 

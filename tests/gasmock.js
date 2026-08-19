@@ -238,11 +238,13 @@ function load(opts){
       { Phone: '9000000001', Name: 'Sandeep Kumar Jha', Role: 'COLLECTOR', Mandal: '', GP: '', Email: 'cdm@mock.example', Active: 'TRUE' },
       { Phone: '9000000011', Name: 'A. Punctual',  Role: 'MPO',  Mandal: 'Jangaon', GP: '', Email: 'a@mock.example', Active: 'TRUE' },
       { Phone: '9000000012', Name: 'B. LateMark',  Role: 'MPDO', Mandal: 'Jangaon', GP: '', Email: 'b@mock.example', Active: 'TRUE' },
-      { Phone: '9000000013', Name: 'C. LateSync',  Role: 'MSO',  Mandal: 'Chilpur', GP: '', Email: 'c@mock.example', Active: 'TRUE' },
+      { Phone: '9000000013', Name: 'C. LateSync',  Role: 'MPO',  Mandal: 'Chilpur', GP: '', Email: 'c@mock.example', Active: 'TRUE' },
       { Phone: '9000000014', Name: 'D. FirstMiss', Role: 'PS',   Mandal: 'Jangaon', GP: 'Konne', Email: 'd@mock.example', Active: 'TRUE' },
       { Phone: '9000000015', Name: 'E. ThirdMiss', Role: 'MPO',  Mandal: 'Chilpur', GP: '', Email: 'e@mock.example', Active: 'TRUE' },
       { Phone: '9000000016', Name: 'F. OnLeave',   Role: 'MPDO', Mandal: 'Chilpur', GP: '', Email: 'f@mock.example', Active: 'TRUE' },
-      { Phone: '9000000017', Name: 'G. SecondMiss',Role: 'MSO',  Mandal: 'Jangaon', GP: '', Email: 'g@mock.example', Active: 'TRUE' }
+      { Phone: '9000000017', Name: 'G. SecondMiss',Role: 'MPDO', Mandal: 'Jangaon', GP: '', Email: 'g@mock.example', Active: 'TRUE' },
+      /* attendance is voluntary for the MSO — order of 19.08.2026 */
+      { Phone: '9000000010', Name: 'M. Voluntary', Role: 'MSO',  Mandal: 'Jangaon', GP: '', Email: 'm@mock.example', Active: 'TRUE' }
     ].concat(extra || []));
   };
   env.mark = (phone, date, markedAt, receivedAt, more) => {

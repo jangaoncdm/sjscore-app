@@ -32,7 +32,9 @@ module.exports = {
     t.ok(k.canApplyLeave_('MPO') && k.canApplyLeave_('PS') && k.canApplyLeave_('MPDO'), 'MPO, PS and MPDO apply');
     t.ok(!k.canApplyLeave_('COLLECTOR') && !k.canApplyLeave_('MSO'), 'nobody else applies through the app');
     t.ok(k.canApproveLeave_('COLLECTOR') && !k.canApproveLeave_('MPDO'), 'the Collector alone sanctions');
-    t.ok(k.attExempt_('COLLECTOR') && !k.attExempt_('MPO'), 'only the Collector is not asked to mark in');
+    t.ok(k.attExempt_('COLLECTOR') && !k.attExempt_('MPO'), 'the Collector is not asked to mark in');
+    t.ok(k.attExempt_('MSO'), 'nor, since 19.08.2026, is the MSO — attendance is voluntary for him');
+    t.ok(!k.attExempt_('MPDO') && !k.attExempt_('PS'), 'everyone else remains bound');
     t.ok(k.viewerRole_('PS'), 'the Secretary reads and never writes');
 
     /* columns are matched by header name; these names are load-bearing */
