@@ -102,9 +102,17 @@ jobs:
         run: |
           clasp deploy -i "${{ vars.SJGP_DEPLOYMENT_ID }}" -d "auto ${{ github.run_number }}: $(printf '%s' "$MSG" | head -n 1 | cut -c1-120)"
       - name: Confirm the district is answering on the new code
+        # Six attempts over ~two minutes, because Google's /exec endpoint can
+        # serve a transient "unable to open the file" page for a short while
+        # after a fresh deployment — one such page once failed a run whose
+        # deploy had in fact fully landed.
         run: |
-          sleep 15
           URL="${{ vars.SJGP_EXEC_URL }}?op=diag"
-          OUT=$(curl -sL --max-time 45 "$URL" || true)
-          echo "$OUT"
-          echo "$OUT" | grep -q '"ok":true' || { echo "::error::The district did not answer with ok:true after deploying."; exit 1; }
+          for i in 1 2 3 4 5 6; do
+            sleep 15
+            OUT=$(curl -sL --max-time 45 "$URL" || true)
+            if echo "$OUT" | grep -q '"ok":true'; then echo "The district answered on attempt $i."; exit 0; fi
+            echo "attempt $i: not yet — $(echo "$OUT" | tr -d '\n' | head -c 100)"
+          done
+          echo "::error::The district did not answer with ok:true after deploying (6 attempts over ~2 minutes)."
+          exit 1
