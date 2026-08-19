@@ -1209,7 +1209,11 @@ function doGet(e){
                reminders:{today:remToday, month:remMonth, lateToday:remLate, rows:remRows}},
       leave:{pending:lp, recent:lr.slice(0,40)} };
     const body = JSON.stringify(out);
-    if(body.length < 95000) try{ cache.put(ck, body, 25); }catch(err){}
+    /* 50 seconds: a console polling every minute then almost always reads
+       the cache, so however many consoles are open, the sheets are rebuilt
+       at most about once a minute — gentler on the quota when Google's own
+       weather is rough, at a freshness cost nobody can perceive */
+    if(body.length < 95000) try{ cache.put(ck, body, 50); }catch(err){}
     return ContentService.createTextOutput(body).setMimeType(ContentService.MimeType.JSON);
     }catch(err){
       return json_({ ok:false, error:'console builder failed: ' + String((err && err.message) || err) +

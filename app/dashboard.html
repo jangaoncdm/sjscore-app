@@ -1027,8 +1027,23 @@ function tick(){
 async function pull(){
   if(!ST||INFLIGHT) return; INFLIGHT=true;
   try{
-    const res=await fetch(ST.url+'?op=dashboard&token='+encodeURIComponent(ST.token)+(MONTH?'&ym='+encodeURIComponent(MONTH):''));
-    const j=await res.json();
+    /* A request Google sits on must not wedge the console: 45 seconds and it
+       is abandoned, so the retry clock actually runs. "LINK LOST · showing
+       never" was a fetch that hung for minutes while INFLIGHT stood true. */
+    const ctl=new AbortController(); const tmo=setTimeout(()=>ctl.abort(),45000);
+    let res, body;
+    try{
+      res=await fetch(ST.url+'?op=dashboard&token='+encodeURIComponent(ST.token)+(MONTH?'&ym='+encodeURIComponent(MONTH):''),{signal:ctl.signal});
+      body=await res.text();
+    }finally{ clearTimeout(tmo); }
+    let j;
+    try{ j=JSON.parse(body); }
+    catch(pe){
+      /* the reply was not the district's JSON — SAY what it was, because
+         Google's error page and a network's block page need different cures */
+      throw new Error('the reply was not the district’s own (HTTP '+(res?res.status:'?')+'): “'+
+        String(body||'').slice(0,110).replace(/\s+/g,' ')+'…”');
+    }
     if(!j.ok) throw new Error(j.error||'refused');
     LASTOK=Date.now(); NEXT=Date.now()+EVERY; DOWN=false; DATA=j;
     $('#err').style.display='none'; $('#g').classList.remove('dim');
@@ -1041,14 +1056,15 @@ async function pull(){
     whatsNew(j);
     render(j);
   }catch(e){
-    if(/alone/i.test(e.message)){ $('#app').hidden=true; $('#gate').style.display='grid'; gate('<span class="rd">'+esc(e.message)+'</span>',true); clearInterval(TIMER); }
-    else{ DOWN=true; NEXT=Date.now()+Math.min(EVERY,30000);
+    const msg = (e&&e.name==='AbortError') ? 'no answer within 45 seconds' : ((e&&e.message)||String(e));
+    if(/alone/i.test(msg)){ $('#app').hidden=true; $('#gate').style.display='grid'; gate('<span class="rd">'+esc(msg)+'</span>',true); clearInterval(TIMER); }
+    else{ DOWN=true; NEXT=Date.now()+Math.min(EVERY,30000)+Math.floor(Math.random()*8000);   /* jitter, so many consoles do not knock together */
       if(!DATA){ $('#gate').style.display='none'; $('#app').hidden=false;
         $('#g').innerHTML='<div class="panel bigerr"><div style="font-size:40px">\u26a0</div>'+
         '<h2 style="margin:8px 0 4px">The district could not be reached</h2>'+
-        '<p style="color:var(--tx-2);font-size:13.5px">'+esc(e.message)+' \u2014 it will retry by itself, or press Refresh.</p>'+
+        '<p style="color:var(--tx-2);font-size:13.5px">'+esc(msg)+' \u2014 it will retry by itself, or press Refresh.</p>'+
         '<button class="tbtn pri" onclick="pull()">Try again now</button></div>'; }
-      $('#err').textContent='Could not reach the district ('+esc(e.message)+') — showing the last picture; retrying.';
+      $('#err').textContent='Could not reach the district ('+msg+') — showing the last picture; retrying.';
       $('#err').style.display='block'; $('#g').classList.add('dim');
       $('#live').className='live down'; $('#liveTx').textContent='LINK LOST'; }
   }finally{ INFLIGHT=false; }
