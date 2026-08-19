@@ -1471,9 +1471,25 @@ function saveAttendance_(b, u){
   const sh = sheet_('Attendance', A_HEAD);
   const m = headMap_(sh, A_HEAD);
 
+  /* THE PHOTOGRAPH GOES TO DRIVE BEFORE THE LOCK IS TAKEN. It touches no
+     sheet, so it never belonged inside — and during the Drive outage of
+     19.08.2026 one hung upload held the global lock for minutes, every
+     other officer's mark queued behind it, and the whole district's
+     endpoint starved. Drive may be slow; the register must not wait on it. */
+  let url = '';
+  if(b.photo && b.photo.b64){
+    try{
+      const root = getFolder_(DriveApp.getRootFolder(), ATT_FOLDER);
+      const f = getFolder_(getFolder_(getFolder_(root, date.slice(0,7)), clean_(u.mandal) || 'Unassigned'), date);
+      const file = f.createFile(Utilities.newBlob(Utilities.base64Decode(b.photo.b64), 'image/jpeg', b.photo.name || (u.phone + '.jpg')));
+      url = file.getUrl();
+      try{ file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); }catch(err){}
+    }catch(err){ url = ''; }
+  }
+
   /* One row per officer per day. The scan-then-append below is a race when
      two syncs land together — which is exactly how the duplicate rows got
-     in — so the whole read-decide-write is held under a script lock. */
+     in — so the read-decide-write alone is held under the script lock. */
   const lock = LockService.getScriptLock();
   try{ lock.waitLock(20000); }catch(err){ return json_({ ok:false, error:'busy — try again' }); }
   const data = sh.getDataRange().getValues();
@@ -1492,17 +1508,6 @@ function saveAttendance_(b, u){
      it again — every attempt carries the same client-side id and the same
      markedAt. Only a genuinely new mark-in (a fresh id) raises the count. */
   const sameMark = !!at && !!prevId && String(a.id || '') === prevId;
-
-  let url = '';
-  if(b.photo && b.photo.b64){
-    try{
-      const root = getFolder_(DriveApp.getRootFolder(), ATT_FOLDER);
-      const f = getFolder_(getFolder_(getFolder_(root, date.slice(0,7)), clean_(u.mandal) || 'Unassigned'), date);
-      const file = f.createFile(Utilities.newBlob(Utilities.base64Decode(b.photo.b64), 'image/jpeg', b.photo.name || (u.phone + '.jpg')));
-      url = file.getUrl();
-      try{ file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); }catch(err){}
-    }catch(err){ url = ''; }
-  }
 
   const row = new Array(m.width).fill('');
   const put = (k, v) => { if(m.ix[k] >= 0) row[m.ix[k]] = v; };
