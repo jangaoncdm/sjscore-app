@@ -1394,7 +1394,7 @@ function suspect(p){ return (p.lat!=null&&(p.lat<16.4||p.lat>19.2||p.lng<77.6||p
 function marker(p){
   if(p._s==='V'){ const c=p.grade==='A'?'#16A34A':p.grade==='B'?'#65A30D':p.grade==='C'?'#D97706':'#DC2626';
     return L.circleMarker([p.lat,p.lng],{radius:8,color:'#fff',weight:2,fillColor:c,fillOpacity:.9})
-      .bindPopup(`<b>${esc(p.gp)}</b> &middot; village<br>${esc(p.mandal)}<br>Score ${p.score} &middot; grade ${esc(p.grade)}${String(p.rf||'').trim()?' &middot; <span style="color:#DC2626">RF '+esc(p.rf)+'</span>':''}<br>${esc(String(p.officer||''))}${p.album?'<br><a target="_blank" rel="noopener" href="'+esc(p.album)+'">View the evidence</a>':''}`); }
+      .bindPopup(`<b>${esc(p.gp)}</b> &middot; village<br>${esc(p.mandal)}<br>Score ${p.score} &middot; grade ${esc(p.grade)}${String(p.rf||'').trim()?' &middot; <span style="color:#DC2626">RF '+esc(p.rf)+'</span>':''}<br>${esc(String(p.officer||''))}${photoLink(p)?'<br><a target="_blank" rel="noopener" href="'+esc(photoLink(p))+'">View the evidence</a>':''}`); }
   if(p._s==='L') return L.circleMarker([p.lat,p.lng],{radius:7,color:'#fff',weight:2,fillColor:'#8B99AF',fillOpacity:.9})
       .bindPopup(`<b>${esc(p.name)}</b><br>on sanctioned leave`);
   /* not marked today. A SOLID ring is fresh — the app was opened here today
@@ -2199,21 +2199,28 @@ document.addEventListener('click',e=>{
       `<dl><dt>Score</dt><dd>${r.score} · grade ${esc(r.grade)}</dd><dt>Red flags</dt><dd>${String(r.rf||'').trim()?esc(r.rf):'none'}</dd>
        <dt>Filed by</dt><dd>${esc(String(r.officer||''))}</dd>
        ${r.photos?`<dt>Photographs</dt><dd>${r.photos}</dd>`:''}</dl>
-       ${r.album?`<a class="mapsbtn" target="_blank" rel="noopener" href="${esc(r.album)}">View the evidence photographs</a>`:''}
-       ${r.folder&&!r.album?`<a class="mapsbtn" target="_blank" rel="noopener" href="https://drive.google.com/drive/folders/${esc(r.folder)}">Open the evidence folder</a>`:''}
+       ${photoLink(r)?`<a class="mapsbtn" target="_blank" rel="noopener" href="${esc(photoLink(r))}">View the evidence photographs</a>`:''}
        ${r.lat&&r.lng?`<a class="mapsbtn" target="_blank" rel="noopener" href="https://maps.google.com/?q=${r.lat},${r.lng}">Where it was inspected</a>`:''}
        <p style="font-size:12.5px;color:var(--tx-2);margin-top:12px">The clause-by-clause scorecard is on the district Sheet against this village and month.</p>`);
     return; }
 });
+/* The way to a filing's photographs: the album where one was made, else the
+   Drive folder. The register stores the folder as a FULL url — building
+   drive.google.com/drive/folders/<url> on top of it made a dead link, and
+   the app never fills `album` at all, so the Villages drawer showed a
+   photograph COUNT with nothing to press. */
+const photoLink=r=>{const a=String(r.album||'').trim(); if(a) return a;
+  const f=String(r.folder||r.photoFolder||'').trim(); if(!f) return '';
+  return /^https?:/i.test(f)?f:'https://drive.google.com/drive/folders/'+f;};
 /* The whole filed record: every clause with the mark it carried, the
    evidence notes, the photographs and the red flags. */
 async function openVillage(r){
-  const head=`${r.album?`<a class="mapsbtn" target="_blank" rel="noopener" href="${esc(r.album)}" style="display:block;text-align:center;font-weight:700;background:linear-gradient(145deg,#1B7A40,#14532D);color:#fff;border:0;margin:0 0 14px">Open the photographs (${r.photos||'all'})</a>`:''}
+  const pl=photoLink(r);
+  const head=`${pl?`<a class="mapsbtn" target="_blank" rel="noopener" href="${esc(pl)}" style="display:block;text-align:center;font-weight:700;background:var(--pri);color:#fff;border:0;margin:0 0 14px">Open the photographs${r.photos?' ('+r.photos+')':''}</a>`:''}
   <dl><dt>Score</dt><dd>${r.score} of 100 · grade <span class="gr gr${esc(r.grade)}">${esc(r.grade)}</span></dd>
     <dt>Red flags</dt><dd>${String(r.rf||'').trim()?'<span class="pill bad">RF '+esc(r.rf)+'</span>':'none'}</dd>
     <dt>Filed by</dt><dd>${esc(String(r.officer||''))}</dd><dt>Date</dt><dd>${esc(dm(r.date))}</dd>
-    ${r.photos?`<dt>Photographs</dt><dd>${r.photos}</dd>`:''}</dl>
-    ${r.album?`<a class="mapsbtn" target="_blank" rel="noopener" href="${esc(r.album)}">Open the photographs</a> `:''}
+    ${r.photos?`<dt>Photographs</dt><dd>${r.photos}${pl?'':' — the folder link has not reached the register yet'}</dd>`:''}</dl>
     ${r.lat&&r.lng?`<a class="mapsbtn" target="_blank" rel="noopener" href="https://maps.google.com/?q=${r.lat},${r.lng}">Where it was inspected</a>`:''}`;
   openDrawer(r.gp, r.mandal+' · '+dm(r.date), head+'<p style="margin-top:14px;color:var(--tx-3);font-size:13px">Reading the clause-by-clause record…</p>');
   const key=r.gp+'|'+DATA.ym;
