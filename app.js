@@ -19,7 +19,7 @@
    pasted back by hand after every publish. The empty string below is only a
    fallback for the case where config.js is missing. */
 const SERVER_URL = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
-const APP_VERSION = '6.9.7';
+const APP_VERSION = '6.9.8';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -2185,7 +2185,7 @@ const ICON={
 const LEAVE_TYPES = [
   ['CL', 'Casual Leave',                     {year:15, counts:true }],
   ['EL', 'Earned Leave',                     {year:30, counts:true }],
-  ['OH', 'Optional Holiday (5 a year)',      {year:5,  counts:true, pick:true}],
+  ['OH', 'Optional Holiday',                 {year:5,  counts:true, pick:true}],
   ['HQ', 'Permission to leave Headquarters', {year:0,  counts:false}],
   ['ML', 'Medical Leave',                    {year:0,  counts:false, cert:true}]
 ];
