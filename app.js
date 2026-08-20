@@ -19,7 +19,7 @@
    pasted back by hand after every publish. The empty string below is only a
    fallback for the case where config.js is missing. */
 const SERVER_URL = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
-const APP_VERSION = '6.9.4';
+const APP_VERSION = '6.9.5';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -2185,8 +2185,24 @@ const ICON={
 const LEAVE_TYPES = [
   ['CL', 'Casual Leave',                     {year:15, counts:true }],
   ['EL', 'Earned Leave',                     {year:30, counts:true }],
+  ['OH', 'Optional Holiday (5 a year)',      {year:5,  counts:true, pick:true}],
   ['HQ', 'Permission to leave Headquarters', {year:0,  counts:false}],
   ['ML', 'Medical Leave',                    {year:0,  counts:false, cert:true}]
+];
+/* Annexure-II of G.O.Rt.No.1715 dt. 06.12.2025 — an Optional Holiday may
+   name only these dates. The district refuses any other; this list is the
+   dropdown, the server's copy is the law. Next year's G.O. replaces both. */
+const OPTIONAL_HOLIDAYS = [
+  ['2026-01-01','New Year Day'], ['2026-01-03','Birthday of Hazrath Ali (R.A)'], ['2026-01-16','Kanumu'],
+  ['2026-01-17','Shab-e-Meraj'], ['2026-01-23','Sri Panchami'], ['2026-02-04','Shab-e-Barat'],
+  ['2026-03-10','Shahadat Hzt Ali (R.A.)'], ['2026-03-13','Jumuatul Wada'], ['2026-03-17','Shab-e-Qader'],
+  ['2026-03-31','Mahaveer Jayanthi'], ['2026-04-14','Tamil New Year’s Day'], ['2026-04-20','Basava Jayanthi'],
+  ['2026-05-01','Buddha Purnima'], ['2026-06-04','Eid-e-Ghadeer'], ['2026-06-25','9th Moharram'],
+  ['2026-07-16','Ratha Yathra'], ['2026-08-04','Arbayeen'], ['2026-08-15','Parsi New Year’s Day'],
+  ['2026-08-21','Varalakshmi Vratham'], ['2026-08-28','Sravana Purnima / Rakhi Purnima'],
+  ['2026-09-23','Yaz Dahum Shareef'], ['2026-10-19','Maharnavami'],
+  ['2026-10-26','Birthday of Hzt. Syed Mohammed Juvanpuri Mahdi Ma’ud (A.S.)'],
+  ['2026-11-08','Naraka Chaturdhi'], ['2026-12-24','Christmas Eve'], ['2026-12-26','Birthday of Hazrath Ali']
 ];
 const leaveMeta = t => (LEAVE_TYPES.find(x => x[0] === t) || [t, t, {year:0, counts:false}])[2];
 const leaveName = t => (LEAVE_TYPES.find(x => x[0] === t) || [t, t])[1];
@@ -2347,9 +2363,14 @@ function openLeaveForm(){
     <div class="group" style="margin-top:8px"><div class="card">
       <div class="field"><label for="lvType">Kind of leave</label>
         <select id="lvType">${LEAVE_TYPES.map(([k,n]) => `<option value="${k}">${esc(n)}</option>`).join('')}</select></div>
-      <div class="field split">
+      <div class="field split" id="lvDates">
         <div><label for="lvFrom">From</label><input type="date" id="lvFrom" value="${t}"></div>
         <div><label for="lvTo">To</label><input type="date" id="lvTo" value="${t}"></div></div>
+      <div class="field" id="lvOhBox" hidden><label for="lvOh">Which optional holiday</label>
+        <select id="lvOh">${OPTIONAL_HOLIDAYS.filter(([d]) => d >= t)
+          .map(([d,n]) => `<option value="${d}">${esc(dayName(d).split(',')[0])} ${esc(d.slice(8))}.${esc(d.slice(5,7))} — ${esc(n)}</option>`).join('')
+          || '<option value="">No optional holidays remain this year</option>'}</select>
+        <p style="font-size:12px;color:var(--ink-3);margin-top:5px;line-height:1.45">Five a calendar year, from the Government’s notified list, one day each. Apply in advance; the day is yours once the Collector sanctions it.</p></div>
       <div class="field"><label for="lvReason">Reason</label>
         <textarea id="lvReason" rows="3" placeholder="Briefly, in your own words"></textarea></div>
       <div class="field" id="lvCertBox" hidden><label for="lvCert">Medical certificate</label>
@@ -2365,12 +2386,21 @@ function openLeaveForm(){
     <div class="group" style="margin-top:14px"><button class="btn" id="lvSend">Send to the Collector</button>
       <button class="btn quiet" id="lvCancelForm" style="margin-top:9px">Not now</button></div>`);
 
+  /* NOT the hidden attribute: .field carries display:block, and an author
+     rule beats the browser's [hidden] — which is why the medical-certificate
+     box had been showing under every kind of leave since the form was built */
+  const show = (id, on) => { const el = $(id); if(el) el.style.display = on ? '' : 'none'; };
   const count = () => {
-    const d = leaveDays($('#lvFrom').value, $('#lvTo').value);
     const k = $('#lvType').value, meta = leaveMeta(k);
-    $('#lvCertBox').hidden = !meta.cert;
-    $('#lvHqRow').hidden = (k === 'HQ');            // the whole application is that permission
+    /* an Optional Holiday is picked from the notified list, never typed */
+    show('#lvDates', !meta.pick);
+    show('#lvOhBox', !!meta.pick);
+    if(meta.pick && $('#lvOh').value){ $('#lvFrom').value = $('#lvOh').value; $('#lvTo').value = $('#lvOh').value; }
+    const d = leaveDays($('#lvFrom').value, $('#lvTo').value);
+    show('#lvCertBox', !!meta.cert);
+    show('#lvHqRow', k !== 'HQ');                   // the whole application is that permission
     const box = $('#lvCount');
+    if(meta.pick && !$('#lvOh').value){ box.textContent = 'No optional holidays remain this year.'; box.style.color=''; return; }
     if(!d){ box.textContent = 'The last day cannot fall before the first.'; box.style.color=''; return; }
     const word = d + (d === 1 ? ' day' : ' days');
     if(!meta.counts){ box.textContent = word; box.style.color=''; return; }
@@ -2384,6 +2414,7 @@ function openLeaveForm(){
     }
   };
   $('#lvType').addEventListener('change', count);
+  $('#lvOh').addEventListener('change', count);
   $('#lvFrom').addEventListener('change', () => {
     if($('#lvTo').value < $('#lvFrom').value) $('#lvTo').value = $('#lvFrom').value;
     count();
@@ -2400,10 +2431,20 @@ function openLeaveForm(){
 
 async function submitLeave(){
   const u = user();
-  const from = $('#lvFrom').value, to = $('#lvTo').value;
-  const days = leaveDays(from, to);
-  const reason = $('#lvReason').value.trim();
   const type = $('#lvType').value, meta = leaveMeta(type);
+  let from = $('#lvFrom').value, to = $('#lvTo').value;
+  if(meta.pick){
+    const pickDate = $('#lvOh').value;
+    if(!pickDate){ toast('No optional holidays remain this year.'); return; }
+    from = pickDate; to = pickDate;
+  }
+  const days = meta.pick ? 1 : leaveDays(from, to);
+  /* the occasion is its own reason — the officer may add words but need not */
+  let reason = $('#lvReason').value.trim();
+  if(meta.pick && !reason){
+    const occ = (OPTIONAL_HOLIDAYS.find(([d]) => d === from) || [])[1] || '';
+    reason = 'Optional holiday: ' + occ;
+  }
   const cert = ($('#lvCert').value || '').trim();
   if(!days){ toast('Check the dates — the last day falls before the first.'); return; }
   if(!reason){ toast('A reason is needed.'); $('#lvReason').focus(); return; }
