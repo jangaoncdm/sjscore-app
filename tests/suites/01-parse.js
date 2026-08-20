@@ -27,6 +27,7 @@ module.exports = {
     t.eq(c.entitlement_('EL', 2026), 30, 'EL is not prorated');
     t.eq(c.entitlement_('ML', 2026), 0, 'ML is on certificate, never a yearly figure');
     t.eq(c.entitlement_('HQ', 2026), 0, 'HQ is a permission, never a yearly figure');
+    t.eq(c.entitlement_('OH', 2026), 5, 'five optional holidays a calendar year, per the G.O. — never prorated');
 
     /* roles: who may apply, who may sanction, who is exempt */
     t.ok(k.canApplyLeave_('MPO') && k.canApplyLeave_('PS') && k.canApplyLeave_('MPDO'), 'MPO, PS and MPDO apply');

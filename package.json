@@ -1,6 +1,6 @@
 {
   "name": "sjgp",
-  "version": "6.9.4",
+  "version": "6.9.5",
   "private": true,
   "description": "Swachh Jangaon Gram Panchayat — district sanitation register. Apps Script backend, offline-first PWA, Collector's console.",
   "scripts": {

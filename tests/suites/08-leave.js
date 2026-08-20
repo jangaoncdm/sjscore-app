@@ -86,11 +86,36 @@ module.exports = {
     t.eq(wdGhost.ok, true, 'withdrawing an application that never reached the district is quietly fine');
     t.eq(wdGhost.local, true, 'and marked as local-only, so the phone can clean up');
 
+    /* the Optional Holiday: one NOTIFIED day, five a year, the list is law */
+    const oh1 = env.post({ kind: 'leave', token: b, leave: { id: 'OH1', from: '2026-09-23', to: '2026-09-23', days: 3, type: 'OH' } });
+    t.eq(oh1.ok, true, 'a notified optional date is taken');
+    const ohRow = env.sheets['Leave'].rows.find(r => String(r[0]) === 'OH1');
+    const lHead = env.sheets['Leave'].rows[0].map(String);
+    t.eq(Number(ohRow[lHead.indexOf('days')]), 1, 'and it is one day whatever the client claimed');
+    t.contains(String(ohRow[lHead.indexOf('reason')]), 'Yaz Dahum Shareef', 'the occasion names itself on the register');
+    const ohBad = env.post({ kind: 'leave', token: b, leave: { id: 'OH2', from: '2026-09-24', to: '2026-09-24', days: 1, type: 'OH' } });
+    t.eq(ohBad.ok, false, 'a date off the notified list is refused');
+    t.contains(ohBad.error, 'notified optional-holiday list', 'in words');
+    const ohSpan = env.post({ kind: 'leave', token: b, leave: { id: 'OH3', from: '2026-10-19', to: '2026-10-26', days: 8, type: 'OH' } });
+    t.contains(ohSpan.error, 'single day', 'an optional holiday cannot span');
+    /* the five-a-year cap falls at sanction, like CL's */
+    ['2026-10-19', '2026-10-26', '2026-11-08', '2026-12-24'].forEach((d2, i2) =>
+      env.post({ kind: 'leave', token: b, leave: { id: 'OHm' + i2, from: d2, to: d2, days: 1, type: 'OH' } }));
+    ['OH1', 'OHm0', 'OHm1', 'OHm2', 'OHm3'].forEach(id2 =>
+      env.post({ kind: 'leaveDecision', token: cdm, id: id2, status: 'APPROVED' }));
+    env.post({ kind: 'leave', token: b, leave: { id: 'OH6', from: '2026-12-26', to: '2026-12-26', days: 1, type: 'OH' } });
+    const ohOver = env.post({ kind: 'leaveDecision', token: cdm, id: 'OH6', status: 'APPROVED' });
+    t.eq(ohOver.ok, false, 'the sixth optional holiday of the year is refused');
+    t.contains(ohOver.error, 'OH: 5', 'with the arithmetic shown');
+    /* a sanctioned optional holiday answers for the day, like any leave */
+    t.ok(c.sanctionedSet_('2026-09-23')['9000000012'], 'the day is covered — no notice can arise on it');
+
     /* Rule 4 — the register an applicant reads is his own */
     const mine = env.get('leave', { token: a });
     t.ok(mine.rows.every(r => r.phone === '9000000011'), 'an applicant sees his file and nobody else’s');
     const theirs = env.get('leave', { token: b });
-    t.eq(theirs.rows.length, 1, 'B sees exactly his one application');
+    t.eq(theirs.rows.length, 7, 'B sees exactly his own: one CL and six optional-holiday applications');
+    t.ok(theirs.rows.every(r => r.phone === '9000000012'), 'and nobody else’s');
     const allRows = env.get('leave', { token: cdm });
     t.ok(allRows.rows.length >= 5, 'the Collector sees the whole register');
   }

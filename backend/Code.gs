@@ -214,7 +214,25 @@ const SETTLE_HOUR = 9;           /* and settled the NEXT morning, for the day be
 /* CL 15 a year, EL 30 a year, HQ a permission and ML on certificate — neither
    of the last two is counted against a yearly figure. 2026 opens in August,
    so casual leave that year is five months' worth: 15 x 5/12, taken as 6. */
-const LEAVE_ENTITLEMENT = {CL:15, EL:30, HQ:0, ML:0};
+/* OH — the G.O.'s Optional Holidays: FIVE a calendar year, each a single
+   notified date, sanctioned like any leave. Not prorated: the G.O. grants
+   five for the year, whichever months the register covers. */
+const LEAVE_ENTITLEMENT = {CL:15, EL:30, HQ:0, ML:0, OH:5};
+/* Annexure-II of G.O.Rt.No.1715 dt. 06.12.2025 — the only dates an OH
+   application may name. Next year's G.O. replaces this map (and the app's
+   copy of it) together. */
+const TS_OPTIONAL_2026 = {
+  '2026-01-01':'New Year Day', '2026-01-03':'Birthday of Hazrath Ali (R.A)', '2026-01-16':'Kanumu',
+  '2026-01-17':'Shab-e-Meraj', '2026-01-23':'Sri Panchami', '2026-02-04':'Shab-e-Barat',
+  '2026-03-10':'Shahadat Hzt Ali (R.A.)', '2026-03-13':'Jumuatul Wada', '2026-03-17':'Shab-e-Qader',
+  '2026-03-31':'Mahaveer Jayanthi', '2026-04-14':'Tamil New Year’s Day', '2026-04-20':'Basava Jayanthi',
+  '2026-05-01':'Buddha Purnima', '2026-06-04':'Eid-e-Ghadeer', '2026-06-25':'9th Moharram',
+  '2026-07-16':'Ratha Yathra', '2026-08-04':'Arbayeen', '2026-08-15':'Parsi New Year’s Day',
+  '2026-08-21':'Varalakshmi Vratham', '2026-08-28':'Sravana Purnima / Rakhi Purnima',
+  '2026-09-23':'Yaz Dahum Shareef', '2026-10-19':'Maharnavami',
+  '2026-10-26':'Birthday of Hzt. Syed Mohammed Juvanpuri Mahdi Ma’ud (A.S.)',
+  '2026-11-08':'Naraka Chaturdhi', '2026-12-24':'Christmas Eve', '2026-12-26':'Birthday of Hazrath Ali'
+};
 const LEAVE_OPENING_YEAR = 2026;
 const CL_OPENING_BALANCE = 6;
 function entitlement_(type, year){
@@ -1654,6 +1672,13 @@ function saveLeave_(b, u){
   if(!from || !to) return json_({ ok:false, error:'The dates are not readable.' });
   if(to < from) return json_({ ok:false, error:'The last day falls before the first.' });
 
+  /* an Optional Holiday is one NOTIFIED day — the G.O.'s list, nothing else */
+  const isOH = String(l.type || '') === 'OH';
+  if(isOH){
+    if(from !== to) return json_({ ok:false, error:'An optional holiday is a single day — apply for each occasion separately.' });
+    if(!TS_OPTIONAL_2026[from]) return json_({ ok:false, error:'That date is not on the notified optional-holiday list. Pick one of the G.O.’s dates.' });
+  }
+
   const sh = sheet_('Leave', L_HEAD);
   const m = headMap_(sh, L_HEAD);
   const found = leaveRow_(sh, m, l.id);
@@ -1698,8 +1723,8 @@ function saveLeave_(b, u){
   put('type', String(l.type || 'CL').slice(0, 8));
   put('fromDate', "'" + from);
   put('toDate', "'" + to);
-  put('days', Number(l.days || 0));
-  put('reason', String(l.reason || '').slice(0, 1000));
+  put('days', isOH ? 1 : Number(l.days || 0));
+  put('reason', String(l.reason || (isOH ? 'Optional holiday: ' + TS_OPTIONAL_2026[from] : '')).slice(0, 1000));
   put('address', String(l.address || '').slice(0, 300));
   put('leaveHq', l.hq === true || String(l.hq) === 'true' ? 'true' : 'false');
   put('certificate', String(l.cert || '').slice(0, 300));
@@ -2081,7 +2106,7 @@ function leaveLedger(year){
   const out = [];
   Object.keys(by).sort().forEach(who => {
     const bits = [];
-    ['CL','EL','ML','HQ'].forEach(t => {
+    ['CL','EL','OH','ML','HQ'].forEach(t => {
       const r = by[who][t]; if(!r) return;
       const ent = entitlement_(t, yr);
       bits.push(t + ' ' + r.taken + (ent ? '/' + ent : '') + (r.held ? ' (+' + r.held + ' awaiting)' : ''));
