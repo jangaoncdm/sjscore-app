@@ -19,7 +19,7 @@
    pasted back by hand after every publish. The empty string below is only a
    fallback for the case where config.js is missing. */
 const SERVER_URL = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
-const APP_VERSION = '6.9.6';
+const APP_VERSION = '6.9.7';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -2301,6 +2301,10 @@ function renderLeave(){
       <button data-lvf="APPROVED" aria-pressed="${LVFILTER==='APPROVED'}">Sanctioned</button>
       <button data-lvf="REJECTED" aria-pressed="${LVFILTER==='REJECTED'}">Refused</button>
       <button data-lvf="ALL"      aria-pressed="${LVFILTER==='ALL'}">All</button></div>`;
+    const pendN = pendingLeave().length;
+    if(pendN > 1) h += `<div class="group" style="margin-top:12px">
+      <button class="btn" id="lvAll">Sanction all ${pendN} waiting</button>
+      <p class="lvnote" style="margin-top:8px">Each application still answers its own checks — anything that cannot be sanctioned is refused by name and stays waiting for your single order.</p></div>`;
   }
   if(mine){
     const yr = new Date().getFullYear();
@@ -2351,7 +2355,8 @@ function renderLeave(){
 }
 
 function wireLeave(){
-  const nb = $('#lvNew'); if(nb) nb.addEventListener('click', openLeaveForm);
+  const nb = $('#lvNew'); if(nb) nb.addEventListener('click', () => openLeaveForm());
+  const la = $('#lvAll'); if(la) la.addEventListener('click', sanctionAll);
   $$('#lvBody [data-lvf]').forEach(b => b.addEventListener('click', () => { LVFILTER = b.dataset.lvf; renderLeave(); }));
   $$('#lvBody [data-lv]').forEach(b => b.addEventListener('click', () => openLeaveOne(b.dataset.lv)));
 }
@@ -2583,6 +2588,41 @@ async function withdrawLeave(id, sanctioned){
       l.status = 'CANCELLED'; l.decidedBy = ''; l.decidedAt = new Date().toISOString();
       saveNow(); hideSheet(); renderLeave(); toast(sanctioned ? 'Cancelled — the days are back, and duty resumes as usual' : 'Withdrawn — the days are back in your account');
     }catch(e){ toast('No signal — try again when the phone is online'); }
+  });
+}
+
+/* the whole waiting list, one order — the server applies each application's
+   own checks and names what it refuses; nothing is sanctioned blind */
+async function sanctionAll(){
+  const ids = pendingLeave().map(l => l.id);
+  if(!ids.length) return;
+  confirmSheet('Sanction all ' + ids.length + ' waiting?',
+    'Each application still answers its own checks. Anything that cannot be sanctioned — balance exceeded, orders already passed — is refused by name and stays waiting.', false, async () => {
+    try{
+      const r = await post({kind:'leaveDecision', token: DB.session.token, ids, status:'APPROVED'});
+      if(!r || !r.ok){ toast((r && r.error) || 'Could not send the orders'); return; }
+      const bad = {}; (r.refused || []).forEach(x => { bad[x.id] = x.error; });
+      const when = new Date().toISOString();
+      (DB.leave || []).forEach(l => {
+        if(ids.includes(l.id) && !bad[l.id] && l.status === 'PENDING'){
+          l.status = 'APPROVED'; l.decidedBy = user().name + ' (' + user().role + ')'; l.decidedAt = when;
+        }
+      });
+      saveNow(); hideSheet(); renderLeave(); renderHome();
+      if(r.refused && r.refused.length){
+        const lines = r.refused.map(x => {
+          const l = (DB.leave || []).find(y => y.id === x.id);
+          return (l ? esc(l.name) + ' · ' + esc(leaveName(l.type)) + ' · ' + esc(lvSpan(l)) : esc(x.id)) +
+            '<br><span style="color:var(--flag)">' + esc(x.error) + '</span>';
+        });
+        showSheet(`<div style="padding:6px 20px 16px"><h2>${r.done} sanctioned · ${r.refused.length} still waiting</h2>
+          <p style="font-size:13px;color:var(--ink-2);margin-top:8px;line-height:1.8">${lines.join('<br><br>')}</p>
+          <button class="btn" id="lvAllShut" style="margin-top:14px">Close</button></div>`);
+        $('#lvAllShut').addEventListener('click', hideSheet);
+      } else {
+        toast(r.done + ' application' + (r.done === 1 ? '' : 's') + ' sanctioned');
+      }
+    }catch(e){ toast('No signal — the orders go when the phone is back online'); }
   });
 }
 
