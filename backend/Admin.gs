@@ -978,6 +978,95 @@ function msoRelief_(commit){
             : '\nRun applyMsoRelief() to write it.'));
 }
 
+/* ============================================================================
+ * 11. THE TELANGANA HOLIDAY LIST · 2026
+ * ----------------------------------------------------------------------------
+ * G.O.Rt.No.1715, General Administration (SPL.E) Dept., dt. 06.12.2025:
+ * Annexure-I's 27 General Holidays, and para 2's direction that all offices
+ * remain closed on second Saturdays. On every date written here the app's
+ * gate turns voluntary and no reminder, notice or debit can arise — the
+ * Holidays tab is the one switch the whole engine already obeys.
+ *
+ * Annexure-II's OPTIONAL holidays are deliberately NOT here: the G.O. keeps
+ * offices open on those days; they are an individual's choice of five, to
+ * be taken as leave, not a closure of the district.
+ *
+ * Dates are written as PLAIN TEXT yyyy-mm-dd, which no locale or timezone
+ * can reinterpret — the tab has paid for that lesson once already. Dates
+ * already on the tab are skipped, so the job runs twice without harm.
+ * Run showTsHolidays() first, read, then applyTsHolidays().
+ * ========================================================================== */
+var TS_HOLIDAYS_2026 = [
+  ['2026-01-14','Bhogi'],
+  ['2026-01-15','Sankranti / Pongal'],
+  ['2026-01-26','Republic Day'],
+  ['2026-02-15','Maha Shivaratri'],
+  ['2026-03-03','Holi'],
+  ['2026-03-19','Ugadi'],
+  ['2026-03-21','Eidul Fitr (Ramzan)'],
+  ['2026-03-22','Following day of Ramzan'],
+  ['2026-03-27','Sri Rama Navami'],
+  ['2026-04-03','Good Friday'],
+  ['2026-04-05','Babu Jagjivan Ram’s Birthday'],
+  ['2026-04-14','Dr. B.R. Ambedkar’s Birthday'],
+  ['2026-05-27','Eidul Azha (Bakrid)'],
+  ['2026-06-26','Shahadat Imam Hussain (R.A) 10th Moharam'],
+  ['2026-08-10','Bonalu'],
+  ['2026-08-15','Independence Day'],
+  ['2026-08-26','Eid Miladun Nabi'],
+  ['2026-09-04','Sri Krishna Astami'],
+  ['2026-09-14','Vinayaka Chavithi'],
+  ['2026-10-02','Mahatma Gandhi Jayanthi'],
+  ['2026-10-18','Saddula Bathukamma'],
+  ['2026-10-20','Vijaya Dasami / Dushera'],
+  ['2026-10-21','Following day of Vijaya Dasami'],
+  ['2026-11-08','Deepavali'],
+  ['2026-11-24','Kartika Purnima / Guru Nanak’s Jayanthi'],
+  ['2026-12-25','Christmas'],
+  ['2026-12-26','Following day of Christmas (Boxing Day)']
+];
+/* para 2 of the G.O.: every second Saturday of 2026 */
+var TS_SECOND_SATURDAYS_2026 = ['2026-01-10','2026-02-14','2026-03-14','2026-04-11','2026-05-09','2026-06-13',
+  '2026-07-11','2026-08-08','2026-09-12','2026-10-10','2026-11-14','2026-12-12'];
+
+function showTsHolidays(){ tsHolidays_(false); }
+function applyTsHolidays(){ tsHolidays_(true); }
+function tsHolidays_(commit){
+  const sh = sheet_('Holidays', H_HEAD);
+  const have = holidaySet_();                       /* read the tab as the engine reads it */
+  const want = TS_HOLIDAYS_2026.concat(TS_SECOND_SATURDAYS_2026.map(d => [d, 'Second Saturday']));
+  const out = []; let added = 0, skipped = 0;
+  want.forEach(w => {
+    const d = w[0], occ = w[1];
+    if(have[d]){ skipped++; out.push('  already on the tab: ' + d + ' · ' + (have[d] === occ ? occ : have[d] + ' (list says: ' + occ + ')')); return; }
+    /* the second-Saturday cross-check the tab proves on itself */
+    if(occ === 'Second Saturday' && occasionFits_(d, occ) !== true){ out.push('  ✗ REFUSED ' + d + ' — it is not a second Saturday; check the list'); return; }
+    if(commit) sh.appendRow(["'" + d, occ]);
+    added++; out.push('  ' + (commit ? 'added: ' : 'would add: ') + d + ' · ' + occ);
+  });
+  if(commit && added) admLog_('HOLIDAYS LOADED', 'G.O.Rt.No.1715 dt. 06.12.2025', added + ' date(s) written as plain text; ' + skipped + ' already stood');
+
+  /* days now declared off on which an instrument already stands — reported,
+     never touched: whether those are withdrawn is the Collector's word */
+  const offSet = {}; want.forEach(w => { offSet[w[0]] = w[1]; });
+  const nsh = sheet_('Notices', N_HEAD), nm = headMap_(nsh, N_HEAD);
+  const nv = nsh.getDataRange().getValues();
+  const standing = [];
+  for(let i = 1; i < nv.length; i++){
+    const st = String(nv[i][nm.ix.status] || '');
+    if(st !== 'PROPOSED' && st !== 'PENDING' && st !== 'ACK') continue;
+    const d = dateText_(nv[i][nm.ix.date]);
+    if(offSet[d]) standing.push('  ' + (cell_(nv[i], nm.ix.no) || '(unnumbered)') + ' · ' + cell_(nv[i], nm.ix.name) + ' · ' + d + ' (' + offSet[d] + ') · ' + st);
+  }
+  Logger.log((commit ? 'TELANGANA HOLIDAYS 2026 — APPLIED\n\n' : 'TELANGANA HOLIDAYS 2026 — DRY RUN, nothing written\n\n') +
+    out.join('\n') + '\n\n' + added + ' date(s) ' + (commit ? 'added' : 'to add') + ', ' + skipped + ' already on the tab.' +
+    '\nOn every listed date attendance is voluntary: the app’s gate stands open, and no reminder, notice or debit can arise.' +
+    '\nAnnexure-II’s optional holidays are NOT loaded — the G.O. keeps offices open on those days.' +
+    (standing.length ? '\n\n✗ INSTRUMENTS STANDING ON DAYS NOW DECLARED OFF — say the word and they are withdrawn like the MSO relief:\n' + standing.join('\n')
+                     : '\n\nNo notice stands against any of these dates.') +
+    (commit ? '' : '\n\nRun applyTsHolidays() to write it.'));
+}
+
 /* the PIN a fix hands out — derived from the number AND the batch date, so
    running the batch again yields the same PIN and re-runs change nothing */
 function fix2Pin_(phone){

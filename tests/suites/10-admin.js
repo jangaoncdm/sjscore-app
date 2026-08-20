@@ -110,5 +110,30 @@ module.exports = {
     env3.ctx.applyMsoRelief();
     t.eq(state3(), after3, 'a second apply changes nothing');
     t.eq(env3.sheets['Audit'].rows.length, audit3, 'and writes no second audit line');
+
+    /* ---- the Telangana holiday list: G.O.Rt.No.1715, loaded once ---- */
+    const env4 = mock.load({ admin: true, now: '2026-08-20T11:00:00+05:30' });
+    env4.mkSheet('Holidays', ['Date', 'Occasion'], [{ Date: '2026-08-15', Occasion: 'Independence Day' }]);
+    env4.mkSheet('Notices', env4.eval('N_HEAD'), [
+      { id: 'NH1', no: '77/SJSP-SCN/2026', date: '2026-08-08', phone: '9000000041', name: 'Q. Officer', role: 'MPO', mandal: 'Jangaon', seq: 3, status: 'PENDING' }
+    ]);
+    const hRows = () => env4.sheets['Holidays'].rows.length - 1;
+    env4.ctx.showTsHolidays();
+    t.eq(hRows(), 1, 'the dry run writes no date');
+    t.ok(env4.logs.some(l => /INSTRUMENTS STANDING ON DAYS NOW DECLARED OFF/.test(l) && /2026-08-08/.test(l)),
+      'the notice standing on the second Saturday is reported, not touched');
+
+    env4.ctx.applyTsHolidays();
+    t.eq(hRows(), 1 + 38, '27 general holidays and 12 second Saturdays, less the one already on the tab');
+    t.eq(env4.sheets['Holidays'].rows.find(r => String(r[0]) === '2026-10-20')[1], 'Vijaya Dasami / Dushera', 'written as plain text, engine-readable');
+    t.ok(!env4.ctx.isWorkingDay_('2026-10-20'), 'Dushera is off');
+    t.ok(!env4.ctx.isWorkingDay_('2026-09-12'), 'the second Saturday of September is off');
+    t.ok(!env4.ctx.isWorkingDay_('2026-08-08'), 'and August’s, retrospectively');
+    t.eq(env4.ctx.occasionFits_('2026-12-12', 'Second Saturday'), true, 'every second-Saturday date proves itself');
+    t.ok(env4.ctx.isWorkingDay_('2026-05-01'), 'Annexure-II’s optional days stay working — Buddha Purnima is a choice, not a closure');
+    t.ok(env4.sheets['Audit'].rows.some(r => r.join(' ').indexOf('G.O.Rt.No.1715') >= 0), 'the G.O. is named on the Audit register');
+
+    env4.ctx.applyTsHolidays();
+    t.eq(hRows(), 1 + 38, 'a second apply adds nothing — every date already stands');
   }
 };

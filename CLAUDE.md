@@ -16,7 +16,7 @@ the rules below exist because exactly that happened in production.
 ## Run this before you finish anything
 
 ```bash
-npm test              # 369 assertions, 11 suites, against the real backend files
+npm test              # 380 assertions, 11 suites, against the real backend files
 node tests/ladder     # one suite, with its detail
 ```
 
@@ -105,7 +105,10 @@ official.
 
 ## Doctrine of the notice ladder
 
-Working days only — Sundays and the `Holidays` tab are never counted.
+Working days only — Sundays and the `Holidays` tab are never counted. The
+2026 tab carries G.O.Rt.No.1715 (dt. 06.12.2025): the 27 General Holidays and
+every second Saturday, loaded by `applyTsHolidays()`; Annexure-II's optional
+holidays are an individual's choice of five and are deliberately not on it.
 
 - Misses **1 and 2** of a calendar month → a **reminder**. Pushed at once,
   unnumbered, off the register, no lock, no debit.
