@@ -19,7 +19,7 @@
    pasted back by hand after every publish. The empty string below is only a
    fallback for the case where config.js is missing. */
 const SERVER_URL = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
-const APP_VERSION = '6.9.5';
+const APP_VERSION = '6.9.6';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -2258,7 +2258,8 @@ function approvedLeaveToday(){
 }
 function pendingLeave(){ return (DB.leave || []).filter(l => l.status === 'PENDING'); }
 const LV_PILL = {PENDING:['p-warn','Pending'], APPROVED:['p-ok','Sanctioned'],
-                 REJECTED:['p-bad','Refused'], CANCELLED:['p-mut','Withdrawn']};
+                 REJECTED:['p-bad','Refused'], CANCELLED:['p-mut','Withdrawn'],
+                 RETURNED:['p-warn','Sent back — correct and resend']};
 function lvPill(st){ const [c,l] = LV_PILL[st] || ['p-mut', st]; return `<span class="pill ${c}">${esc(l)}</span>`; }
 function lvSpan(l){
   return l.from === l.to ? niceDate(l.from) : niceDate(l.from) + ' to ' + niceDate(l.to);
@@ -2356,10 +2357,16 @@ function wireLeave(){
 }
 
 /* ---------------- applying ---------------- */
-function openLeaveForm(){
+/* When the Collector sends an application back, the corrected copy goes in
+   under the SAME id — LV_EDIT carries which one, and null means fresh. */
+let LV_EDIT = null;
+function openLeaveForm(edit){
+  LV_EDIT = (edit && edit.id) ? edit : null;
   const t = todayStr();
-  showSheet(`<div style="padding:6px 20px 4px"><h2>Apply for leave</h2>
-    <p style="font-size:13.5px;color:var(--ink-2);margin-top:4px">The application goes to the Collector. You will see the orders here.</p></div>
+  showSheet(`<div style="padding:6px 20px 4px"><h2>${LV_EDIT ? 'Correct and resend' : 'Apply for leave'}</h2>
+    <p style="font-size:13.5px;color:var(--ink-2);margin-top:4px">${LV_EDIT
+      ? 'The Collector’s remarks: “' + esc(LV_EDIT.remarks || '') + '”'
+      : 'The application goes to the Collector. You will see the orders here.'}</p></div>
     <div class="group" style="margin-top:8px"><div class="card">
       <div class="field"><label for="lvType">Kind of leave</label>
         <select id="lvType">${LEAVE_TYPES.map(([k,n]) => `<option value="${k}">${esc(n)}</option>`).join('')}</select></div>
@@ -2424,8 +2431,19 @@ function openLeaveForm(){
   const flip = () => hq.setAttribute('aria-checked', hq.getAttribute('aria-checked') === 'true' ? 'false' : 'true');
   hq.addEventListener('click', flip);
   hq.addEventListener('keydown', e => { if(e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); flip(); } });
-  $('#lvCancelForm').addEventListener('click', hideSheet);
+  $('#lvCancelForm').addEventListener('click', () => { LV_EDIT = null; hideSheet(); });
   $('#lvSend').addEventListener('click', submitLeave);
+  if(LV_EDIT){
+    $('#lvType').value = LV_EDIT.type || 'CL';
+    $('#lvFrom').value = LV_EDIT.from || t; $('#lvTo').value = LV_EDIT.to || t;
+    $('#lvReason').value = LV_EDIT.reason || '';
+    $('#lvAddr').value = LV_EDIT.address || '';
+    if(LV_EDIT.cert) $('#lvCert').value = LV_EDIT.cert;
+    if(LV_EDIT.hq) $('#lvHq').setAttribute('aria-checked', 'true');
+    const ohSel = $('#lvOh');
+    if(leaveMeta(LV_EDIT.type || '').pick && ohSel) ohSel.value = LV_EDIT.from || '';
+    $('#lvSend').textContent = 'Resend to the Collector';
+  }
   count();
 }
 
@@ -2471,7 +2489,7 @@ async function submitLeave(){
   }
   const btn = $('#lvSend'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Sending';
   const l = {
-    id: 'LV' + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    id: (LV_EDIT && LV_EDIT.id) || ('LV' + Date.now().toString(36) + Math.random().toString(36).slice(2,6)),
     appliedAt: new Date().toISOString(),
     phone: u.phone, name: u.name, role: u.role, mandal: u.mandal || '',
     type, from, to, days, reason, cert,
@@ -2479,7 +2497,9 @@ async function submitLeave(){
     hq: type === 'HQ' || $('#lvHq').getAttribute('aria-checked') === 'true',
     status: 'PENDING', decidedBy: '', decidedAt: '', remarks: '', sync: 'local'
   };
-  DB.leave = DB.leave || []; DB.leave.unshift(l); saveNow();
+  DB.leave = DB.leave || [];
+  if(LV_EDIT){ DB.leave = DB.leave.filter(x => x.id !== l.id); LV_EDIT = null; }
+  DB.leave.unshift(l); saveNow();
   hideSheet(); renderLeave();
   const sent = await syncLeave();
   if(l.rejected){                        /* the district refused it as a duplicate */
@@ -2518,38 +2538,57 @@ function openLeaveOne(id){
         <textarea id="lvRem" rows="2" placeholder="Anything to record with the orders"></textarea></div></div></div>
       <div class="group" style="margin-top:12px">
         <button class="btn" id="lvOk">Sanction</button>
+        <button class="btn quiet" id="lvBack" style="margin-top:9px">Send back for correction</button>
         <button class="btn danger" id="lvNo" style="margin-top:9px">Refuse</button>
         <button class="btn quiet" id="lvShut" style="margin-top:9px">Close</button></div>` : `
-      ${mine && l.status === 'PENDING' ? `<div class="group" style="margin-top:12px">
+      ${mine && l.status === 'RETURNED' ? `<div class="group" style="margin-top:12px">
+        <button class="btn" id="lvFix">Correct and resend</button>
+        <button class="btn quiet" id="lvShut" style="margin-top:9px">Close</button>
+        <p class="lvnote" style="margin-top:9px">The Collector sent this back — the remarks above say what to correct. Your corrected copy goes in under the same application.</p></div>`
+      : mine && l.status === 'PENDING' ? `<div class="group" style="margin-top:12px">
         <button class="btn danger" id="lvWithdraw">Withdraw the application</button>
         <button class="btn quiet" id="lvShut" style="margin-top:9px">Close</button></div>`
+      : mine && l.status === 'APPROVED' && String(l.from || '') > todayStr() ? `<div class="group" style="margin-top:12px">
+        <button class="btn danger" id="lvCancelOk">Cancel this sanctioned leave</button>
+        <button class="btn quiet" id="lvShut" style="margin-top:9px">Close</button>
+        <p class="lvnote" style="margin-top:9px">It has not begun, so it can be given back whole — the days return to your account and you report for duty as usual. Once leave has started, only the Collector’s office can rule on it.</p></div>`
       : `<div class="group" style="margin-top:12px"><button class="btn quiet" id="lvShut">Close</button></div>`}`}`);
 
   const shut = $('#lvShut'); if(shut) shut.addEventListener('click', hideSheet);
-  const ok = $('#lvOk'), no = $('#lvNo'), wd = $('#lvWithdraw');
+  const ok = $('#lvOk'), no = $('#lvNo'), wd = $('#lvWithdraw'), co = $('#lvCancelOk'), bk = $('#lvBack'), fx = $('#lvFix');
   if(ok) ok.addEventListener('click', () => decideLeave(l.id, 'APPROVED', ($('#lvRem').value || '').trim()));
   if(no) no.addEventListener('click', () => decideLeave(l.id, 'REJECTED', ($('#lvRem').value || '').trim()));
-  if(wd) wd.addEventListener('click', () => withdrawLeave(l.id));
+  if(bk) bk.addEventListener('click', () => {
+    const rem = ($('#lvRem').value || '').trim();
+    if(!rem){ toast('Say what needs correcting — the remarks travel back to the officer.'); $('#lvRem').focus(); return; }
+    decideLeave(l.id, 'RETURNED', rem);
+  });
+  if(wd) wd.addEventListener('click', () => withdrawLeave(l.id, false));
+  if(co) co.addEventListener('click', () => withdrawLeave(l.id, true));
+  if(fx) fx.addEventListener('click', () => { hideSheet(); openLeaveForm(l); });
 }
 
-async function withdrawLeave(id){
+async function withdrawLeave(id, sanctioned){
   const l = (DB.leave || []).find(x => x.id === id); if(!l) return;
-  confirmSheet('Withdraw this application?',
-    leaveName(l.type) + ' · ' + lvSpan(l) + '. The days come back to your account at once.', true, async () => {
+  confirmSheet(sanctioned ? 'Cancel this sanctioned leave?' : 'Withdraw this application?',
+    leaveName(l.type) + ' · ' + lvSpan(l) + '. The days come back to your account at once.' +
+    (sanctioned ? ' You will be expected to mark attendance on those days as usual.' : ''), true, async () => {
     try{
-      if(l.sync === 'synced'){
+      /* a sanctioned spell exists only on the district's word — the district
+         must take it back; there is no local-only path for it */
+      if(l.sync === 'synced' || sanctioned){
         const r = await post({kind:'leaveWithdraw', token: DB.session.token, id});
         if(!r || !r.ok){ toast((r && r.error) || 'Could not withdraw'); return; }
       }
       l.status = 'CANCELLED'; l.decidedBy = ''; l.decidedAt = new Date().toISOString();
-      saveNow(); hideSheet(); renderLeave(); toast('Withdrawn — the days are back in your account');
+      saveNow(); hideSheet(); renderLeave(); toast(sanctioned ? 'Cancelled — the days are back, and duty resumes as usual' : 'Withdrawn — the days are back in your account');
     }catch(e){ toast('No signal — try again when the phone is online'); }
   });
 }
 
 async function decideLeave(id, status, remarks){
   const l = (DB.leave || []).find(x => x.id === id); if(!l) return;
-  const word = status === 'APPROVED' ? 'Sanctioned' : status === 'REJECTED' ? 'Refused' : 'Withdrawn';
+  const word = status === 'APPROVED' ? 'Sanctioned' : status === 'REJECTED' ? 'Refused' : status === 'RETURNED' ? 'Sent back for correction' : 'Withdrawn';
   try{
     const r = await post({kind:'leaveDecision', token: DB.session.token, id, status, remarks: remarks || ''});
     if(!r || !r.ok){ toast((r && r.error) || 'Could not send the orders'); return; }

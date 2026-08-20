@@ -1464,11 +1464,23 @@ function doPost(e){
     if(phone10_(found.row[m.ix.phone]) !== u.phone)
       return json_({ ok:false, error:'Only the officer who applied can withdraw an application.' });
     const st = String(found.row[m.ix.status] || 'PENDING');
-    if(st !== 'PENDING')
+    /* A sanctioned spell may be given back — but only WHOLE and only BEFORE
+       it begins: the officer simply reports for duty and the days return to
+       the account by themselves (CANCELLED never counts). Once it has
+       begun, what was availed is a fact, and only the Collector's office
+       can rule on it. */
+    let by = 'Withdrawn by the applicant';
+    if(st === 'APPROVED'){
+      const from = dateText_(found.row[m.ix.fromDate]);
+      if(!(from > today_()))
+        return json_({ ok:false, error:'This leave has already begun (' + dmy_(from) + '). Ask the Collector’s office to rule on what was not availed.' });
+      by = 'Sanctioned leave cancelled by the applicant before it began';
+    } else if(st !== 'PENDING'){
       return json_({ ok:false, error:'Orders have already been passed (' + st + '). It can no longer be withdrawn.' });
+    }
     const when = new Date().toISOString();
     sh.getRange(found.at, m.ix.status + 1).setValue('CANCELLED');
-    sh.getRange(found.at, m.ix.decidedBy + 1).setValue('Withdrawn by the applicant');
+    sh.getRange(found.at, m.ix.decidedBy + 1).setValue(by);
     sh.getRange(found.at, m.ix.decidedAt + 1).setValue(when);
     return json_({ ok:true, id:String(b.id||''), status:'CANCELLED', decidedAt:when });
   }
@@ -1683,10 +1695,14 @@ function saveLeave_(b, u){
   const m = headMap_(sh, L_HEAD);
   const found = leaveRow_(sh, m, l.id);
 
-  /* an application already decided is closed — it cannot be edited from the field */
+  /* an application already decided is closed — it cannot be edited from the
+     field. RETURNED is the one exception: the Collector sent it back for
+     correction, and the corrected copy comes in under the SAME id. */
+  let resubmit = false;
   if(found){
     const st = String(found.row[m.ix.status] || 'PENDING');
-    if(st !== 'PENDING') return json_({ ok:true, id:l.id, status:st, closed:true });
+    if(st === 'RETURNED') resubmit = true;
+    else if(st !== 'PENDING') return json_({ ok:true, id:l.id, status:st, closed:true });
     if(phone10_(found.row[m.ix.phone]) !== u.phone) return json_({ ok:false, error:'auth' });
   }
 
@@ -1728,7 +1744,7 @@ function saveLeave_(b, u){
   put('address', String(l.address || '').slice(0, 300));
   put('leaveHq', l.hq === true || String(l.hq) === 'true' ? 'true' : 'false');
   put('certificate', String(l.cert || '').slice(0, 300));
-  if(!found){ put('status', 'PENDING'); put('decidedBy', ''); put('decidedAt', ''); put('remarks', ''); }
+  if(!found || resubmit){ put('status', 'PENDING'); put('decidedBy', ''); put('decidedAt', ''); put('remarks', ''); }
   put('receivedAt', new Date().toISOString());
 
   if(found) sh.getRange(found.at, 1, 1, m.width).setValues([row]);
@@ -1739,7 +1755,11 @@ function saveLeave_(b, u){
 function decideLeave_(b, u){
   const id = String(b.id || ''), want = String(b.status || '').toUpperCase();
   if(!id) return json_({ ok:false, error:'bad request' });
-  if(['APPROVED','REJECTED','CANCELLED'].indexOf(want) < 0) return json_({ ok:false, error:'bad request' });
+  if(['APPROVED','REJECTED','CANCELLED','RETURNED'].indexOf(want) < 0) return json_({ ok:false, error:'bad request' });
+  /* sent back for correction: neither refused nor sanctioned — the remarks
+     ARE the instruction, so they cannot be empty */
+  if(want === 'RETURNED' && !String(b.remarks || '').trim())
+    return json_({ ok:false, error:'Say what needs correcting — the remarks travel back to the officer.' });
 
   const sh = sheet_('Leave', L_HEAD);
   const m = headMap_(sh, L_HEAD);

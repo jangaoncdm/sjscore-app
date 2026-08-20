@@ -80,8 +80,36 @@ module.exports = {
     t.eq(notMine.ok, false, 'nobody withdraws another officer’s application');
     const wd = env.post({ kind: 'leaveWithdraw', token: a, id: 'L5' });
     t.eq(wd.status, 'CANCELLED', 'the applicant takes his own back');
+
+    /* a sanctioned spell can be given back — WHOLE, and only BEFORE it begins */
     const wdDecided = env.post({ kind: 'leaveWithdraw', token: a, id: 'L1' });
-    t.eq(wdDecided.ok, false, 'a sanctioned spell is beyond withdrawal');
+    t.eq(wdDecided.status, 'CANCELLED', 'sanctioned leave not yet begun comes back whole');
+    const lHead2 = env.sheets['Leave'].rows[0].map(String);
+    const l1Row = env.sheets['Leave'].rows.find(r => String(r[0]) === 'L1');
+    t.contains(String(l1Row[lHead2.indexOf('decidedBy')]), 'before it began', 'the register says how it ended');
+    t.ok(!c.sanctionedSet_('2026-08-20')['9000000011'], 'the day no longer covers him — attendance is due again');
+    t.eq(c.clUsed_('9000000011', 2026), 2, 'the days return to the account (only L3 still counts)');
+    const started = env.post({ kind: 'leave', token: b, leave: { id: 'LC2', from: '2026-08-14', to: '2026-08-15', days: 2, type: 'EL' } });
+    t.eq(started.ok, true, 'B takes leave from today');
+    env.post({ kind: 'leaveDecision', token: cdm, id: 'LC2', status: 'APPROVED' });
+    const cs = env.post({ kind: 'leaveWithdraw', token: b, id: 'LC2' });
+    t.eq(cs.ok, false, 'leave that has begun is a fact');
+    t.contains(cs.error, 'already begun', 'and only the Collector’s office can rule on it');
+
+    /* sent back for correction: neither refused nor sanctioned */
+    env.post({ kind: 'leave', token: a, leave: { id: 'L6', from: '2026-11-10', to: '2026-11-12', days: 3, type: 'EL', reason: 'inspection tour' } });
+    const noRem = env.post({ kind: 'leaveDecision', token: cdm, id: 'L6', status: 'RETURNED' });
+    t.eq(noRem.ok, false, 'sending back without remarks says nothing');
+    t.contains(noRem.error, 'what needs correcting', 'and is refused in words');
+    const back = env.post({ kind: 'leaveDecision', token: cdm, id: 'L6', status: 'RETURNED', remarks: 'Dates clash with the review — shift by a week.' });
+    t.eq(back.status, 'RETURNED', 'with remarks, it travels back');
+    const fix = env.post({ kind: 'leave', token: a, leave: { id: 'L6', from: '2026-11-17', to: '2026-11-19', days: 3, type: 'EL', reason: 'inspection tour, shifted' } });
+    t.eq(fix.status, 'PENDING', 'the corrected copy goes in under the SAME application and waits again');
+    const l6Row = env.sheets['Leave'].rows.find(r => String(r[0]) === 'L6');
+    t.eq(String(l6Row[lHead2.indexOf('fromDate')]), '2026-11-17', 'with the corrected dates');
+    t.eq(String(l6Row[lHead2.indexOf('remarks')]), '', 'the return remarks stand cleared for fresh orders');
+    t.eq(env.sheets['Leave'].rows.filter(r => String(r[0]) === 'L6').length, 1, 'one row, not two');
+    t.eq(env.post({ kind: 'leaveDecision', token: cdm, id: 'L6', status: 'APPROVED' }).ok, true, 'and can now be sanctioned');
     const wdGhost = env.post({ kind: 'leaveWithdraw', token: a, id: 'NEVER-SENT' });
     t.eq(wdGhost.ok, true, 'withdrawing an application that never reached the district is quietly fine');
     t.eq(wdGhost.local, true, 'and marked as local-only, so the phone can clean up');
@@ -114,7 +142,7 @@ module.exports = {
     const mine = env.get('leave', { token: a });
     t.ok(mine.rows.every(r => r.phone === '9000000011'), 'an applicant sees his file and nobody else’s');
     const theirs = env.get('leave', { token: b });
-    t.eq(theirs.rows.length, 7, 'B sees exactly his own: one CL and six optional-holiday applications');
+    t.eq(theirs.rows.length, 8, 'B sees exactly his own: one CL, six optional-holiday applications, one begun-and-standing EL');
     t.ok(theirs.rows.every(r => r.phone === '9000000012'), 'and nobody else’s');
     const allRows = env.get('leave', { token: cdm });
     t.ok(allRows.rows.length >= 5, 'the Collector sees the whole register');
