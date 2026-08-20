@@ -138,6 +138,24 @@ module.exports = {
     /* a sanctioned optional holiday answers for the day, like any leave */
     t.ok(c.sanctionedSet_('2026-09-23')['9000000012'], 'the day is covered — no notice can arise on it');
 
+    /* the whole waiting list in one order — each application still answers
+       its own checks, and a refusal is named, never silent */
+    [['2026-12-07','2026-12-08'], ['2026-12-14','2026-12-15'], ['2026-12-21','2026-12-22']].forEach((p3, i3) =>
+      env.post({ kind: 'leave', token: a, leave: { id: 'LB' + i3, from: p3[0], to: p3[1], days: 2, type: 'CL' } }));
+    const bulkBad = env.post({ kind: 'leaveDecision', token: cdm, ids: ['LB0'], status: 'REJECTED' });
+    t.eq(bulkBad.ok, false, 'only sanction passes in bulk');
+    t.contains(bulkBad.error, 'their own words', 'refusals and returns are per-case');
+    const bulk = env.post({ kind: 'leaveDecision', token: cdm, ids: ['LB0', 'LB1', 'LB2', 'L6'], status: 'APPROVED' });
+    t.eq(bulk.ok, true, 'the batch is taken');
+    t.eq(bulk.done, 2, 'two sanction — the third would breach the year’s CL');
+    t.eq(bulk.refused.length, 2, 'two are refused by name');
+    t.contains(bulk.refused.find(x => x.id === 'LB2').error, 'exceed', 'the fifth and sixth CL day count the four sanctioned just before them');
+    t.contains(bulk.refused.find(x => x.id === 'L6').error, 'already been passed', 'the already-decided one says so');
+    const lbHead = env.sheets['Leave'].rows[0].map(String);
+    t.eq(String(env.sheets['Leave'].rows.find(r => String(r[0]) === 'LB2')[lbHead.indexOf('status')]), 'PENDING',
+      'the refused application stays waiting for the single-order look');
+    t.eq(c.clUsed_('9000000011', 2026), 6, 'the register closes the year’s CL at exactly its entitlement');
+
     /* Rule 4 — the register an applicant reads is his own */
     const mine = env.get('leave', { token: a });
     t.ok(mine.rows.every(r => r.phone === '9000000011'), 'an applicant sees his file and nobody else’s');

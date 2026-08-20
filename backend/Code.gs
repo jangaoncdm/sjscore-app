@@ -1753,21 +1753,47 @@ function saveLeave_(b, u){
 }
 
 function decideLeave_(b, u){
-  const id = String(b.id || ''), want = String(b.status || '').toUpperCase();
-  if(!id) return json_({ ok:false, error:'bad request' });
+  const want = String(b.status || '').toUpperCase();
   if(['APPROVED','REJECTED','CANCELLED','RETURNED'].indexOf(want) < 0) return json_({ ok:false, error:'bad request' });
   /* sent back for correction: neither refused nor sanctioned — the remarks
      ARE the instruction, so they cannot be empty */
   if(want === 'RETURNED' && !String(b.remarks || '').trim())
     return json_({ ok:false, error:'Say what needs correcting — the remarks travel back to the officer.' });
 
+  /* THE WHOLE WAITING LIST IN ONE ORDER — sanction alone: a refusal or a
+     return carries its own words per case and is never passed in bulk.
+     Every application still answers its own checks in turn, so the fifth
+     CL of a batch is counted against the four sanctioned just before it,
+     and anything that cannot be sanctioned is refused BY NAME, never
+     silently — it stays waiting for the Collector's single-order look. */
+  if(Array.isArray(b.ids)){
+    if(want !== 'APPROVED')
+      return json_({ ok:false, error:'Only sanction is passed in bulk — refusals and returns carry their own words.' });
+    const ids = b.ids.slice(0, 200);
+    let done = 0; const refused = [];
+    ids.forEach(id => {
+      const r = decideOneLeave_(String(id || ''), 'APPROVED', '', u);
+      if(r.ok) done++; else refused.push({ id: String(id || ''), error: r.error || 'refused' });
+    });
+    return json_({ ok:true, done:done, refused:refused });
+  }
+
+  const id = String(b.id || '');
+  if(!id) return json_({ ok:false, error:'bad request' });
+  const r = decideOneLeave_(id, want, String(b.remarks || ''), u);
+  return json_(r.ok ? { ok:true, id:id, status:want, decidedBy:r.decidedBy, decidedAt:r.decidedAt }
+                    : { ok:false, error:r.error });
+}
+/* one application, one order — the checks live here so a bulk sanction
+   obeys exactly the same law as a single one */
+function decideOneLeave_(id, want, remarks, u){
   const sh = sheet_('Leave', L_HEAD);
   const m = headMap_(sh, L_HEAD);
   const found = leaveRow_(sh, m, id);
-  if(!found) return json_({ ok:false, error:'That application is not on the district record yet.' });
+  if(!found) return { ok:false, error:'That application is not on the district record yet.' };
 
   const st = String(found.row[m.ix.status] || 'PENDING');
-  if(st !== 'PENDING') return json_({ ok:false, error:'Orders have already been passed on this application (' + st + ').' });
+  if(st !== 'PENDING') return { ok:false, error:'Orders have already been passed on this application (' + st + ').' };
 
   if(want === 'APPROVED'){
     const type = String(found.row[m.ix.type] || '');
@@ -1787,16 +1813,16 @@ function decideLeave_(b, u){
       }
       const want_ = Number(found.row[m.ix.days]) || 0;
       if(used + want_ > ent)
-        return json_({ ok:false, error:'That would exceed the year\'s ' + type + ': ' + ent +
-          ' for ' + yr + ', ' + used + ' already sanctioned, ' + want_ + ' now sought.' });
+        return { ok:false, error:'That would exceed the year\'s ' + type + ': ' + ent +
+          ' for ' + yr + ', ' + used + ' already sanctioned, ' + want_ + ' now sought.' };
     }
   }
   const when = new Date().toISOString();
   sh.getRange(found.at, m.ix.status + 1).setValue(want);
   sh.getRange(found.at, m.ix.decidedBy + 1).setValue(u.name + ' (' + u.role + ')');
   sh.getRange(found.at, m.ix.decidedAt + 1).setValue(when);
-  sh.getRange(found.at, m.ix.remarks + 1).setValue(String(b.remarks || '').slice(0, 1000));
-  return json_({ ok:true, id:id, status:want, decidedBy:u.name + ' (' + u.role + ')', decidedAt:when });
+  sh.getRange(found.at, m.ix.remarks + 1).setValue(String(remarks || '').slice(0, 1000));
+  return { ok:true, decidedBy:u.name + ' (' + u.role + ')', decidedAt:when };
 }
 
 /* ================== FIELD ISSUE REGISTER · 28.07.2026 ==================
