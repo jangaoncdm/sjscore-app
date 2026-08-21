@@ -1778,12 +1778,16 @@ function mandalCompare(j){
     return [k,t,v.p,v.l,v.a,t?Math.round((v.p+v.l)*100/t)+'%':'—',v.w14?Math.round(v.p14*100/v.w14)+'%':'—'];});
 }
 function loadXLSX(){
+  /* the Excel writer ships WITH the app and loads from our own address —
+     the cdnjs copy is only a fallback. A government line that blocks CDN
+     hosts left the Collector pressing a button that did nothing. */
   if(window.XLSX) return Promise.resolve();
   if(XLSXP) return XLSXP;
-  XLSXP=new Promise((res,rej)=>{const s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-    s.onload=()=>res(); s.onerror=()=>{XLSXP=null; rej(new Error('Could not load the Excel writer — check the connection and press again.'));};
-    document.head.appendChild(s);});
+  const tryScript=src=>new Promise((res,rej)=>{const s=document.createElement('script');
+    s.src=src; s.onload=()=>res(); s.onerror=()=>{s.remove(); rej();}; document.head.appendChild(s);});
+  XLSXP=tryScript('xlsx.full.min.js')
+    .catch(()=>tryScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'))
+    .catch(()=>{XLSXP=null; throw new Error('Could not load the Excel writer — check the connection and press again.');});
   return XLSXP;
 }
 function expNote(t){ const el=$('#expNote'); if(el) el.textContent=t; }
