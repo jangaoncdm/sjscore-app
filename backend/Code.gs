@@ -1272,6 +1272,18 @@ function dailyCollectorReport(){
 }
 /* Run ONCE from the editor. Installs both daily report triggers, removing
    any older copies first, so running it again cannot double them. */
+/* A test copy on demand, from the editor. The report proper is guarded to
+   once a day; a plain manual run would spend that guard and swallow the
+   evening's mail. This clears the guard, sends, and clears it again — the
+   19:00 trigger still fires, and the copy is marked as a check. */
+function sendDailyReportNow(){
+  const props = PropertiesService.getScriptProperties();
+  props.deleteProperty('LAST_DAILY_REPORT');
+  dailyCollectorReport();
+  props.deleteProperty('LAST_DAILY_REPORT');
+  Logger.log('That was a check copy — the guard is clear again, so the 19:00 report will still go.');
+}
+
 function installReportTriggers(){
   ScriptApp.getProjectTriggers().forEach(t => {
     const f = t.getHandlerFunction();

@@ -81,5 +81,10 @@ module.exports = {
     const mails = env.outbox.length;
     c.dailyCollectorReport();
     t.eq(env.outbox.length, mails, 'a re-fired trigger cannot send it twice');
+
+    /* the check copy: sends despite the guard, and leaves it clear */
+    c.sendDailyReportNow();
+    t.eq(env.outbox.length, mails + 1, 'sendDailyReportNow sends a copy even after the day’s report has gone');
+    t.eq(env.props['LAST_DAILY_REPORT'], undefined, 'and leaves the guard clear, so the evening trigger still fires');
   }
 };
