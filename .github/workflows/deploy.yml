@@ -55,7 +55,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Copy app/ to the site root, leaving config.js alone
         run: |
-          for f in index.html app.js sw.js dashboard.html manifest.webmanifest privacy.html; do
+          for f in index.html app.js sw.js dashboard.html manifest.webmanifest privacy.html xlsx.full.min.js; do
             [ -f "app/$f" ] && cp "app/$f" "./$f" && echo "published $f"
           done
           [ -d app/icons ] && cp -r app/icons ./ || true
