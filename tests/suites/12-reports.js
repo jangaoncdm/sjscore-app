@@ -70,6 +70,13 @@ module.exports = {
     t.ok(!!rep, 'the report goes to the Collector’s own address off the roll');
     t.contains(rep.subject, '19.08.2026', 'dated the district’s way');
     t.contains(rep.body, 'villages', 'and carries the filing figures');
+    /* the dashboard panel inside the mail: six stat tiles, then the Gantt */
+    t.contains(rep.htmlBody, 'The district at 19.08.2026', 'the stat tiles lead the mail');
+    t.contains(rep.htmlBody, 'Villages done', 'a tile counts villages done');
+    t.contains(rep.htmlBody, 'Filing progress', 'the Gantt panel follows');
+    t.contains(rep.htmlBody, 'wd 16 of', 'with the day marker at the sixteenth working day of August');
+    t.contains(rep.htmlBody, 'DISTRICT', 'and the district total as its last bar');
+    t.contains(rep.htmlBody, '1 of 3</b> villages evaluated', 'the prose counts villages, not filings');
     t.eq(env.props['LAST_DAILY_REPORT'], '2026-08-19', 'the guard remembers the day');
     const mails = env.outbox.length;
     c.dailyCollectorReport();
