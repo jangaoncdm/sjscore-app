@@ -16,7 +16,7 @@ the rules below exist because exactly that happened in production.
 ## Run this before you finish anything
 
 ```bash
-npm test              # 414 assertions, 11 suites, against the real backend files
+npm test              # 433 assertions, 12 suites, against the real backend files
 node tests/ladder     # one suite, with its detail
 ```
 

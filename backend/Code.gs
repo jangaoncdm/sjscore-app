@@ -923,6 +923,282 @@ function installNoticeTriggers(){
     'Any older copy of these, and the old notifyAttendanceGaps trigger, was removed.');
 }
 
+/* ================== REPORTS & FILING REMINDERS · 21.08.2026 ==================
+   Two daily jobs, installed once by installReportTriggers():
+     villageFilingReminders ~10:00 — from the 16th of the month, and every
+       third day after it, each officer whose village stands unevaluated is
+       told: the MSO and the MPDO for ACTION, the Panchayat Secretary for
+       INFORMATION (the Secretary cannot file). One consolidated message per
+       officer — in the app as a reminder row, and by mail. Never a notice,
+       never a debit: filing discipline is the mandal chain's to manage.
+     dailyCollectorReport   ~19:00 — one structured mail to the Collector
+       with the day whole: attendance, filing progress and the forecast at
+       the current rate, grades, notices and leave. Guarded so a re-fired
+       trigger cannot send it twice.
+   Every mail wears the same shell: header, layered sections, footer. */
+function emailShell_(title, subtitle, sectionsHtml){
+  return '<!DOCTYPE html><html><body style="margin:0;padding:0;background:#F0F2F7;font-family:Segoe UI,Arial,Helvetica,sans-serif">' +
+    '<div style="max-width:640px;margin:0 auto;padding:18px 12px">' +
+    '<div style="background:#4A40CE;background:linear-gradient(135deg,#4A40CE,#0F766E);border-radius:10px 10px 0 0;padding:16px 22px">' +
+    '<div style="color:#DDD9F6;font-size:11px;letter-spacing:.12em;text-transform:uppercase">Government of Telangana &middot; Collectorate Jangaon &middot; SJSP</div>' +
+    '<div style="color:#ffffff;font-size:19px;font-weight:700;margin-top:4px">' + title + '</div>' +
+    (subtitle ? '<div style="color:#CFEAE6;font-size:12.5px;margin-top:3px">' + subtitle + '</div>' : '') +
+    '</div>' +
+    '<div style="background:#ffffff;border:1px solid #DFE3EE;border-top:0;border-radius:0 0 10px 10px;padding:6px 22px 18px">' + sectionsHtml + '</div>' +
+    '<div style="color:#8A93A6;font-size:11px;padding:12px 8px;line-height:1.6">Swachh Jangaon Sanitation Programme &middot; issued through the SJSP system.<br>' +
+    'Office of the Collector &amp; District Magistrate, Jangaon. Automated message; the register copy is on the district Sheet.</div>' +
+    '</div></body></html>';
+}
+function emailSec_(head, bodyHtml){
+  return '<div style="margin-top:16px"><div style="font-size:11px;font-weight:700;letter-spacing:.09em;color:#57647D;text-transform:uppercase;border-bottom:2px solid #E7E5F9;padding-bottom:5px">' + head + '</div>' +
+    '<div style="font-size:13.5px;color:#1A2437;line-height:1.65;margin-top:8px">' + bodyHtml + '</div></div>';
+}
+function emailTable_(heads, rows){
+  return '<table style="border-collapse:collapse;width:100%;font-size:12.5px;margin-top:4px">' +
+    '<tr>' + heads.map(h => '<th style="text-align:left;padding:6px 8px;background:#F3F5FA;border:1px solid #E7EAF2;color:#46536B;font-size:11px;text-transform:uppercase;letter-spacing:.05em">' + h + '</th>').join('') + '</tr>' +
+    rows.map(r => '<tr>' + r.map(c => '<td style="padding:6px 8px;border:1px solid #EDF0F6">' + c + '</td>').join('') + '</tr>').join('') + '</table>';
+}
+/* the GPs master, read by its own headers — the tab has been created with
+   the columns both ways round over the versions, so the header decides */
+function gpRoll_(){
+  const sh = sheet_('GPs', ['Mandal','GP']);
+  const v = sh.getDataRange().getValues();
+  if(v.length < 2) return [];
+  const head = v[0].map(h => String(h).toLowerCase().trim());
+  let mi = -1, gi = -1;
+  head.forEach((h, i) => { if(h.indexOf('mandal') >= 0) mi = i; else if(h === 'gp' || h.indexOf('village') >= 0 || h.indexOf('panchayat') >= 0) gi = i; });
+  if(mi < 0 || gi < 0){ mi = 0; gi = 1; }
+  const out = [];
+  for(let i = 1; i < v.length; i++){
+    const m2 = String(v[i][mi] || '').trim(), g = String(v[i][gi] || '').trim();
+    if(m2 && g) out.push({ mandal: m2, gp: g });
+  }
+  return out;
+}
+function unfiledVillages_(ym){
+  const filed = {};
+  const ish = sheet_('Inspections', HEADERS), im = headMap_(ish, HEADERS);
+  const iv = ish.getDataRange().getValues();
+  for(let i = 1; i < iv.length; i++){
+    if(ymText_(iv[i][im.ix.ym]) !== ym) continue;
+    filed[String(iv[i][im.ix.mandal]).trim().toLowerCase() + '|' + String(iv[i][im.ix.gp]).trim().toLowerCase()] = true;
+  }
+  return gpRoll_().filter(r => !filed[r.mandal.toLowerCase() + '|' + r.gp.toLowerCase()]);
+}
+/* working days of the month around a date — Sundays and the Holidays tab out */
+function monthWd_(dStr){
+  const ym = String(dStr).slice(0, 7), hs = holidaySet_(), day = Number(String(dStr).slice(8, 10));
+  const last = new Date(Number(ym.slice(0,4)), Number(ym.slice(5,7)), 0).getDate();
+  let gone = 0, left = 0;
+  for(let i = 1; i <= last; i++){
+    const key = ym + '-' + (i < 10 ? '0' + i : String(i));
+    if(new Date(key + 'T00:00:00').getDay() === 0 || hs[key]) continue;
+    if(i <= day) gone++; else left++;
+  }
+  return { gone: Math.max(1, gone), left: left, total: gone + left };
+}
+function villageFilingReminders(){
+  const today = today_();
+  const d = Number(today.slice(8, 10));
+  if(d <= 15){ Logger.log('Before the 16th — the mandals have the month to themselves.'); return; }
+  if((d - 16) % 3 !== 0){ Logger.log('Not a reminder day (the 16th, then every third day).'); return; }
+  if(!isWorkingDay_(today)){ Logger.log('Off day — no reminders.'); return; }
+  const ym = today.slice(0, 7);
+  const unfiled = unfiledVillages_(ym);
+  if(!unfiled.length){ Logger.log('Every village is filed for ' + ym + '. Nothing to remind.'); return; }
+  const wd = monthWd_(today);
+  const totalGps = gpRoll_().length;
+  const need = Math.ceil(unfiled.length / Math.max(1, wd.left));
+
+  /* the chain for each village: PS by village (information), the mandal's
+     MSO and MPDO (action). The MPO already files; he is not chased twice. */
+  const t = uidx_(), uv = t.sh.getDataRange().getValues();
+  const psByGp = {}, roleByMandal = {};
+  const seenPh = {};
+  for(let i = 1; i < uv.length; i++){
+    const ph = phone10_(uv[i][t.ix.phone]); if(!ph || seenPh[ph]) continue; seenPh[ph] = true;
+    if(String(uv[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
+    const role = cell_(uv[i], t.ix.role).toUpperCase();
+    const off = { phone: ph, name: cell_(uv[i], t.ix.name), role: role,
+                  mandal: cell_(uv[i], t.ix.mandal), email: String(uv[i][t.ix.email] || '').trim() };
+    if(role === 'PS')
+      String(uv[i][t.ix.gp] || '').split(',').map(s => s.trim().toLowerCase()).filter(String)
+        .forEach(g => { (psByGp[g] = psByGp[g] || []).push(off); });
+    if(role === 'MSO' || role === 'MPDO')
+      roleByMandal[off.mandal.trim().toLowerCase() + '|' + role] = off;
+  }
+  const recip = {};   /* phone -> {off, action, villages[]} */
+  const addTo = (off, action, village) => {
+    if(!off) return;
+    const r = recip[off.phone] = recip[off.phone] || { off: off, action: action, villages: [] };
+    if(r.villages.indexOf(village) < 0) r.villages.push(village);
+  };
+  unfiled.forEach(vg => {
+    const mk = vg.mandal.trim().toLowerCase();
+    addTo(roleByMandal[mk + '|MSO'],  true,  vg.gp + ' (' + vg.mandal + ')');
+    addTo(roleByMandal[mk + '|MPDO'], true,  vg.gp + ' (' + vg.mandal + ')');
+    (psByGp[vg.gp.trim().toLowerCase()] || []).forEach(ps => addTo(ps, false, vg.gp + ' (' + vg.mandal + ')'));
+  });
+
+  const rsh = sheet_('Reminders', R_HEAD), rm = headMap_(rsh, R_HEAD);
+  const rv = rsh.getDataRange().getValues();
+  const already = {};
+  for(let i = 1; i < rv.length; i++)
+    if(dateText_(rv[i][rm.ix.date]) === today && String(rv[i][rm.ix.kind]) === 'FILING')
+      already[phone10_(rv[i][rm.ix.phone])] = true;
+
+  let sent = 0, mailed = 0;
+  Object.keys(recip).forEach(ph => {
+    if(already[ph]) return;
+    const r = recip[ph], n = r.villages.length;
+    const why = 'Village evaluation pending — ' + n + ' village' + (n > 1 ? 's' : '') +
+      (r.action ? ' awaiting your task force' : ' (for your information)');
+    const row = new Array(rm.width).fill('');
+    const put = (k, val) => { if(rm.ix[k] >= 0) row[rm.ix[k]] = val; };
+    put('id', 'REM-F-' + today + '-' + ph);
+    put('date', "'" + today); put('phone', "'" + ph);
+    put('name', r.off.name); put('role', r.off.role); put('mandal', r.off.mandal);
+    put('miss', n); put('kind', 'FILING'); put('reason', why);
+    put('sentAt', new Date().toISOString());
+    if(r.off.email && r.off.email.indexOf('@') > 0){
+      try{
+        const list = r.villages.slice(0, 60);
+        const secs =
+          emailSec_(r.action ? 'Villages awaiting your task force' : 'Your villages, for your information',
+            '<ul style="margin:4px 0 0 18px;padding:0">' + list.map(v2 => '<li style="margin-top:3px">' + v2 + '</li>').join('') + '</ul>' +
+            (r.villages.length > 60 ? '<div style="margin-top:6px;color:#57647D">…and ' + (r.villages.length - 60) + ' more.</div>' : '')) +
+          emailSec_('The month’s clock',
+            'District: <b>' + (totalGps - unfiled.length) + ' of ' + totalGps + '</b> villages evaluated for ' + ym + '.<br>' +
+            '<b>' + wd.left + '</b> working day' + (wd.left === 1 ? '' : 's') + ' remain; the month closes only if about <b>' + need + '</b> evaluation' + (need === 1 ? ' is' : 's are') + ' filed each remaining day.') +
+          emailSec_('What is asked', r.action
+            ? 'See that the 100-mark evaluation is filed in the SJSP App for each village above before month-end. The Mandal Sanitation Task Force files; the register reads only what is filed.'
+            : 'No action is required of you. The evaluation of your village is filed by the Mandal Sanitation Task Force; this is to keep you informed of its pendency.');
+        MailApp.sendEmail(r.off.email,
+          'SJSP · ' + n + ' village' + (n > 1 ? 's' : '') + ' pending evaluation · ' + dmy_(today) + (r.action ? '' : ' (information)'),
+          'Villages pending evaluation for ' + ym + ': ' + r.villages.join('; '),
+          { htmlBody: emailShell_(r.action ? 'Village evaluations pending — action' : 'Village evaluations pending — information',
+              r.off.name + ' · ' + r.off.role + (r.off.mandal ? ' · ' + r.off.mandal : ''), secs) });
+        put('emailedAt', new Date().toISOString()); mailed++;
+      }catch(err){}
+    }
+    rsh.appendRow(row); sent++;
+  });
+  try{
+    const me = Session.getEffectiveUser().getEmail();
+    const byMandal = {};
+    unfiled.forEach(v2 => { byMandal[v2.mandal] = (byMandal[v2.mandal] || 0) + 1; });
+    if(me) MailApp.sendEmail(me, 'SJSP · filing reminders sent · ' + dmy_(today),
+      unfiled.length + ' village(s) unevaluated; ' + sent + ' officer(s) reminded.',
+      { htmlBody: emailShell_('Filing reminders — dispatched', dmy_(today) + ' · ' + ym,
+          emailSec_('Standing', '<b>' + unfiled.length + '</b> of ' + totalGps + ' villages unevaluated · <b>' + sent + '</b> officer(s) reminded (' + mailed + ' by mail).') +
+          emailSec_('Unevaluated, mandal by mandal', emailTable_(['Mandal', 'Villages pending'],
+            Object.keys(byMandal).sort().map(m2 => [m2, String(byMandal[m2])])))) });
+  }catch(err){}
+  Logger.log(unfiled.length + ' village(s) unevaluated; ' + sent + ' officer(s) reminded, ' + mailed + ' mailed.');
+}
+function dailyCollectorReport(){
+  const today = today_();
+  const props = PropertiesService.getScriptProperties();
+  if(props.getProperty('LAST_DAILY_REPORT') === today){ Logger.log('The ' + today + ' report has already gone.'); return; }
+  const ym = today.slice(0, 7), wd = monthWd_(today);
+
+  /* the roll, and the day's attendance against it */
+  const t = uidx_(), uv = t.sh.getDataRange().getValues();
+  const roll = [], seenPh = {};
+  let collectorEmail = '';
+  for(let i = 1; i < uv.length; i++){
+    const ph = phone10_(uv[i][t.ix.phone]); if(!ph || seenPh[ph]) continue; seenPh[ph] = true;
+    if(String(uv[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
+    const role = cell_(uv[i], t.ix.role).toUpperCase();
+    if(role === 'COLLECTOR'){ collectorEmail = String(uv[i][t.ix.email] || '').trim(); continue; }
+    if(attExempt_(role)) continue;
+    roll.push({ phone: ph, name: cell_(uv[i], t.ix.name), role: role, mandal: cell_(uv[i], t.ix.mandal) });
+  }
+  const marked = markedSet_(today), onLeave = sanctionedSet_(today);
+  const absent = roll.filter(o => !marked[o.phone] && !onLeave[o.phone]);
+  const present = roll.length - absent.length - roll.filter(o => !marked[o.phone] && onLeave[o.phone]).length;
+  const leaveN = roll.filter(o => !marked[o.phone] && onLeave[o.phone]).length;
+  const gapByMandal = {};
+  absent.forEach(o => { gapByMandal[o.mandal || '—'] = (gapByMandal[o.mandal || '—'] || 0) + 1; });
+
+  /* the month's filings, and the forecast at the present rate */
+  const ish = sheet_('Inspections', HEADERS), im = headMap_(ish, HEADERS);
+  const iv = ish.getDataRange().getValues();
+  let filed = 0, filedToday = 0, scoreSum = 0, rfN = 0;
+  const grades = { A:0, B:0, C:0, D:0 };
+  for(let i = 1; i < iv.length; i++){
+    if(ymText_(iv[i][im.ix.ym]) !== ym) continue;
+    filed++;
+    scoreSum += Number(iv[i][im.ix.score]) || 0;
+    const g = cell_(iv[i], im.ix.grade); if(grades[g] != null) grades[g]++;
+    if(cell_(iv[i], im.ix.rf).trim()) rfN++;
+    if(dateText_(iv[i][im.ix.date]) === today) filedToday++;
+  }
+  const totalGps = gpRoll_().length;
+  const rate = filed / wd.gone;
+  const remaining = Math.max(0, totalGps - filed);
+  const needPerDay = wd.left ? Math.ceil(remaining / wd.left) : remaining;
+  const wdToFinish = rate > 0 ? Math.ceil(remaining / rate) : null;
+  const forecast = remaining === 0 ? 'complete'
+    : wdToFinish == null ? 'no rate yet'
+    : wdToFinish <= wd.left ? ('on pace — about ' + wdToFinish + ' working day' + (wdToFinish === 1 ? '' : 's') + ' to finish')
+    : ('BEHIND — at the present rate the month ends ' + (wdToFinish - wd.left) + ' working day' + (wdToFinish - wd.left === 1 ? '' : 's') + ' short');
+
+  /* notices and leave standing */
+  const nsh = sheet_('Notices', N_HEAD), nm = headMap_(nsh, N_HEAD);
+  const nv = nsh.getDataRange().getValues();
+  let nProp = 0, nServedToday = 0;
+  for(let i = 1; i < nv.length; i++){
+    const st = String(nv[i][nm.ix.status] || '');
+    if(st === 'PROPOSED') nProp++;
+    if((st === 'PENDING' || st === 'ACK') && String(nv[i][nm.ix.decidedAt] || '').slice(0, 10) === today) nServedToday++;
+  }
+  const lsh = sheet_('Leave', L_HEAD), lm = headMap_(lsh, L_HEAD);
+  const lv = lsh.getDataRange().getValues();
+  let lvPend = 0;
+  for(let i = 1; i < lv.length; i++) if(String(lv[i][lm.ix.status] || 'PENDING') === 'PENDING') lvPend++;
+
+  const gapRows = Object.keys(gapByMandal).sort((a, b) => gapByMandal[b] - gapByMandal[a])
+    .map(m2 => [m2, String(gapByMandal[m2])]);
+  const secs =
+    emailSec_('Attendance · ' + dmy_(today),
+      '<b>' + present + '</b> marked · <b>' + leaveN + '</b> on sanctioned leave · <b style="color:' + (absent.length ? '#B91C1C' : '#15803D') + '">' + absent.length + '</b> not marked, of ' + roll.length + ' due.' +
+      (gapRows.length ? emailTable_(['Mandal', 'Not marked'], gapRows.slice(0, 12)) : '') +
+      (absent.length ? '<div style="margin-top:8px;color:#57647D;font-size:12px">' +
+        absent.slice(0, 40).map(o => o.name + ' (' + o.role + ', ' + (o.mandal || '—') + ')').join(' · ') +
+        (absent.length > 40 ? ' · and ' + (absent.length - 40) + ' more' : '') + '</div>' : '')) +
+    emailSec_('Village evaluations · ' + ym,
+      '<b>' + filed + ' of ' + totalGps + '</b> filed (' + filedToday + ' today) · average score <b>' + (filed ? Math.round(scoreSum / filed) : '—') + '</b> · red flags <b>' + rfN + '</b>.<br>' +
+      'Grades — A ' + grades.A + ' · B ' + grades.B + ' · C ' + grades.C + ' · D ' + grades.D + '.<br>' +
+      'Rate <b>' + rate.toFixed(1) + '/working day</b> over ' + wd.gone + ' gone · ' + wd.left + ' left · needed <b>' + needPerDay + '/day</b>.<br>' +
+      'Forecast at the present rate: <b>' + forecast + '</b>.') +
+    emailSec_('Awaiting your orders',
+      '<b>' + nProp + '</b> notice proposal' + (nProp === 1 ? '' : 's') + ' (Console ▸ Notices)' +
+      (nServedToday ? ' · ' + nServedToday + ' served today' : '') +
+      ' · <b>' + lvPend + '</b> leave application' + (lvPend === 1 ? '' : 's') + ' waiting.');
+  const to = collectorEmail || Session.getEffectiveUser().getEmail();
+  if(to){
+    MailApp.sendEmail(to, 'SJSP daily report · ' + dmy_(today) + ' · ' + present + ' marked · ' + filed + '/' + totalGps + ' villages',
+      'Attendance ' + present + ' marked, ' + absent.length + ' not; villages ' + filed + '/' + totalGps + '; ' + forecast + '.',
+      { htmlBody: emailShell_('The district, end of day', dmy_(today) + ' · Jangaon', secs) });
+    props.setProperty('LAST_DAILY_REPORT', today);
+    Logger.log('Daily report sent to ' + to + '.');
+  } else Logger.log('No address to send the daily report to.');
+}
+/* Run ONCE from the editor. Installs both daily report triggers, removing
+   any older copies first, so running it again cannot double them. */
+function installReportTriggers(){
+  ScriptApp.getProjectTriggers().forEach(t => {
+    const f = t.getHandlerFunction();
+    if(f === 'villageFilingReminders' || f === 'dailyCollectorReport') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('villageFilingReminders').timeBased().everyDays(1).atHour(10).create();
+  ScriptApp.newTrigger('dailyCollectorReport').timeBased().everyDays(1).atHour(19).create();
+  Logger.log('Report triggers installed (Asia/Calcutta):\n' +
+    '  villageFilingReminders ~10:00 — from the 16th, every third day, on working days.\n' +
+    '  dailyCollectorReport   ~19:00 — one structured mail, once a day, guarded against double sends.');
+}
+
 /* ---------------- GET ---------------- */
 function doGet(e){
   const p = e.parameter || {};
