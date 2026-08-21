@@ -101,6 +101,15 @@ Triggers, settlements, migrations and repairs all run twice without changing
 anything the second time. Assume every job will be re-run by a nervous
 official.
 
+**9 — Silence under sanction is leave, not absence.**
+An officer whose leave the Collector approved rightly writes no attendance
+row. The console once read that silence as absence and showed ninety
+sanctioned officers as unmarked on a festival day. Anything that counts the
+unmarked consults the Leave register first, as the notice engine always did.
+And the village roll counts **villages, never rows** — duplicate GPs rows and
+exact-string matching once showed filed-plus-pending overshooting the
+district. Read the roll through `gpRoll_`, match names case-blind.
+
 ---
 
 ## Doctrine of the notice ladder
