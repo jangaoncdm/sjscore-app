@@ -951,32 +951,43 @@ function emailShell_(title, subtitle, sectionsHtml){
     'Office of the Collector &amp; District Magistrate, Jangaon. Automated message; the register copy is on the district Sheet.</div>' +
     '</div></body></html>';
 }
-function emailSec_(head, bodyHtml){
-  return '<div style="margin-top:16px"><div style="font-size:11px;font-weight:700;letter-spacing:.09em;color:#57647D;text-transform:uppercase;border-bottom:2px solid #E7E5F9;padding-bottom:5px">' + head + '</div>' +
+/* the mail wears the console's palette: cool paper, one mild accent per
+   section — indigo, teal, violet, amber, rose — never loud, never dark */
+function emailSec_(head, bodyHtml, fg, tint){
+  fg = fg || '#57647D'; tint = tint || '#E7E5F9';
+  return '<div style="margin-top:16px"><div style="font-size:11px;font-weight:700;letter-spacing:.09em;color:' + fg + ';text-transform:uppercase;border-bottom:2px solid ' + tint + ';padding-bottom:5px">' + head + '</div>' +
     '<div style="font-size:13.5px;color:#1A2437;line-height:1.65;margin-top:8px">' + bodyHtml + '</div></div>';
 }
-function emailTable_(heads, rows){
+function emailTable_(heads, rows, tint){
   return '<table style="border-collapse:collapse;width:100%;font-size:12.5px;margin-top:4px">' +
-    '<tr>' + heads.map(h => '<th style="text-align:left;padding:6px 8px;background:#F3F5FA;border:1px solid #E7EAF2;color:#46536B;font-size:11px;text-transform:uppercase;letter-spacing:.05em">' + h + '</th>').join('') + '</tr>' +
+    '<tr>' + heads.map(h => '<th style="text-align:left;padding:6px 8px;background:' + (tint || '#F3F5FA') + ';border:1px solid #E7EAF2;color:#46536B;font-size:11px;text-transform:uppercase;letter-spacing:.05em">' + h + '</th>').join('') + '</tr>' +
     rows.map(r => '<tr>' + r.map(c => '<td style="padding:6px 8px;border:1px solid #EDF0F6">' + c + '</td>').join('') + '</tr>').join('') + '</table>';
 }
 /* The dashboard panel, in a mail. Everything below is built of tables and
    inline styles only — mail clients run no script, load no sheet, and the
    Word engine in Outlook ignores widths on a div, so the bars are tables.
-   The palette is the one every monitoring screen has taught officials to
-   read at a glance: dark panel, big number, green/amber/red by threshold. */
-function emailPanel_(title, inner){
-  return '<div style="background:#111217;border:1px solid #23262B;border-radius:8px;padding:12px 12px 10px;margin-top:14px">' +
-    (title ? '<div style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#9DA5B8;padding:0 2px 8px">' + title + '</div>' : '') +
+   Big number, green/amber/red by threshold — but on cool paper with mild
+   tints, the console's own light multi-accent idiom, by order of 22.08. */
+var EMAIL_TONES_ = {
+  good:  { fg: '#15803D', bg: '#EAF7EF', bd: '#CDE9D8' },
+  warn:  { fg: '#B45309', bg: '#FFF7E8', bd: '#F1E2C2' },
+  bad:   { fg: '#B91C1C', bg: '#FDF0EF', bd: '#F4D6D3' },
+  info:  { fg: '#1D4ED8', bg: '#EEF4FE', bd: '#D6E3F8' },
+  accent:{ fg: '#6D28D9', bg: '#F4F1FD', bd: '#E2DAF6' }
+};
+function emailPanel_(title, inner, accent){
+  return '<div style="background:#FAFBFE;border:1px solid #E4E8F2;border-radius:8px;padding:12px 12px 10px;margin-top:14px">' +
+    (title ? '<div style="font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:' + (accent || '#4A40CE') + ';padding:0 2px 8px">' + title + '</div>' : '') +
     inner + '</div>';
 }
 function emailStats_(tiles){
-  const cell = t =>
-    '<td style="background:#181B1F;border:1px solid #23262B;border-radius:6px;padding:12px 6px 10px;text-align:center;width:33%">' +
-      '<div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#9DA5B8">' + t.label + '</div>' +
-      '<div style="font-size:30px;font-weight:800;line-height:1.2;color:' + t.color + '">' + t.value + '</div>' +
-      (t.sub ? '<div style="font-size:11px;color:#7B8493">' + t.sub + '</div>' : '') +
-    '</td>';
+  const cell = t => {
+    const tone = EMAIL_TONES_[t.tone] || EMAIL_TONES_.info;
+    return '<td style="background:' + tone.bg + ';border:1px solid ' + tone.bd + ';border-radius:6px;padding:12px 6px 10px;text-align:center;width:33%">' +
+      '<div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#57647D">' + t.label + '</div>' +
+      '<div style="font-size:30px;font-weight:800;line-height:1.2;color:' + tone.fg + '">' + t.value + '</div>' +
+      (t.sub ? '<div style="font-size:11px;color:#7A8496">' + t.sub + '</div>' : '') +
+    '</td>'; };
   let h = '<table cellspacing="5" cellpadding="0" style="width:100%;border-collapse:separate">';
   for(let i = 0; i < tiles.length; i += 3) h += '<tr>' + tiles.slice(i, i + 3).map(cell).join('') + '</tr>';
   return h + '</table>';
@@ -985,7 +996,7 @@ function emailBar_(pct, color){
   const p = Math.max(0, Math.min(100, Math.round(pct)));
   return '<table cellspacing="0" cellpadding="0" width="100%" style="border-collapse:collapse"><tr>' +
     (p > 0 ? '<td width="' + p + '%" bgcolor="' + color + '" style="height:13px;font-size:1px;line-height:1px;border-radius:3px">&nbsp;</td>' : '') +
-    (p < 100 ? '<td width="' + (100 - p) + '%" bgcolor="#26292E" style="height:13px;font-size:1px;line-height:1px">&nbsp;</td>' : '') +
+    (p < 100 ? '<td width="' + (100 - p) + '%" bgcolor="#E8EBF3" style="height:13px;font-size:1px;line-height:1px">&nbsp;</td>' : '') +
     '</tr></table>';
 }
 /* one bar per mandal against the day marker: a mandal level with the grey
@@ -993,19 +1004,19 @@ function emailBar_(pct, color){
 function emailGantt_(rows, wdGone, wdAll){
   const todayPct = wdAll ? 100 * wdGone / wdAll : 0;
   const line = (label, bar, right, labelColor) =>
-    '<tr><td style="width:104px;font-size:11.5px;color:' + (labelColor || '#C7CCD6') + ';padding:3px 8px 3px 2px;white-space:nowrap">' + label + '</td>' +
+    '<tr><td style="width:104px;font-size:11.5px;color:' + (labelColor || '#33415C') + ';padding:3px 8px 3px 2px;white-space:nowrap">' + label + '</td>' +
     '<td style="padding:3px 0">' + bar + '</td>' +
-    '<td style="width:74px;font-size:11px;color:#9DA5B8;padding:3px 2px 3px 8px;text-align:right;white-space:nowrap">' + right + '</td></tr>';
+    '<td style="width:74px;font-size:11px;color:#7A8496;padding:3px 2px 3px 8px;text-align:right;white-space:nowrap">' + right + '</td></tr>';
   let h = '<table cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse">';
-  h += line('TODAY', emailBar_(todayPct, '#6E7683'), 'wd ' + wdGone + ' of ' + wdAll, '#9DA5B8');
+  h += line('TODAY', emailBar_(todayPct, '#9AA4B8'), 'wd ' + wdGone + ' of ' + wdAll, '#7A8496');
   rows.forEach(r => {
     const pct = r.total ? 100 * r.done / r.total : 0;
-    const color = pct >= 100 || pct >= todayPct ? '#73BF69' : pct >= todayPct - 12 ? '#FF9830' : '#F2495C';
+    const color = pct >= 100 || pct >= todayPct ? '#2F9E68' : pct >= todayPct - 12 ? '#E39A2D' : '#DE5A5A';
     h += line(r.label, emailBar_(pct, color), r.done + ' / ' + r.total);
   });
   return h + '</table>' +
-    '<div style="font-size:10.5px;color:#7B8493;padding:7px 2px 0">A mandal level with the grey bar is on pace; ' +
-    '<span style="color:#FF9830">amber</span> is slipping, <span style="color:#F2495C">red</span> is well behind.</div>';
+    '<div style="font-size:10.5px;color:#7A8496;padding:7px 2px 0">A mandal level with the grey bar is on pace; ' +
+    '<span style="color:#E39A2D">amber</span> is slipping, <span style="color:#DE5A5A">red</span> is well behind.</div>';
 }
 /* the GPs master, read by its own headers — the tab has been created with
    the columns both ways round over the versions, so the header decides */
@@ -1182,7 +1193,7 @@ function dailyCollectorReport(){
   const ish = sheet_('Inspections', HEADERS), im = headMap_(ish, HEADERS);
   const iv = ish.getDataRange().getValues();
   let filed = 0, filedToday = 0, scoreSum = 0, rfN = 0;
-  const grades = { A:0, B:0, C:0, D:0 }, doneKeys = {}, mAgg = {};
+  const grades = { A:0, B:0, C:0, D:0 }, doneKeys = {}, mAgg = {}, vDone = [];
   const nrm = s => String(s || '').trim().toLowerCase();
   for(let i = 1; i < iv.length; i++){
     if(ymText_(iv[i][im.ix.ym]) !== ym) continue;
@@ -1196,6 +1207,8 @@ function dailyCollectorReport(){
     const g = cell_(iv[i], im.ix.grade); if(grades[g] != null) grades[g]++;
     if(cell_(iv[i], im.ix.rf).trim()){ rfN++; mAgg[mk].rf++; }
     if(dateText_(iv[i][im.ix.date]) === today) filedToday++;
+    vDone.push([cell_(iv[i], im.ix.mandal), cell_(iv[i], im.ix.gp), sc, cell_(iv[i], im.ix.grade),
+      cell_(iv[i], im.ix.rf), cell_(iv[i], im.ix.officer).replace(/\s*\(\d+\)$/, ''), dateText_(iv[i][im.ix.date])]);
   }
   /* the pace is measured in VILLAGES evaluated, never in filings — a
      village inspected twice is still one village done */
@@ -1237,13 +1250,13 @@ function dailyCollectorReport(){
   const behindBy = wdToFinish != null && wdToFinish > wd.left ? wdToFinish - wd.left : 0;
   const tiles = emailStats_([
     { label: 'Present', value: present, sub: 'of ' + roll.length + ' due',
-      color: attPct >= 90 ? '#73BF69' : attPct >= 75 ? '#FF9830' : '#F2495C' },
-    { label: 'On leave', value: leaveN, sub: 'sanctioned', color: '#5794F2' },
-    { label: 'Not marked', value: absent.length, sub: 'today', color: absent.length ? '#F2495C' : '#73BF69' },
+      tone: attPct >= 90 ? 'good' : attPct >= 75 ? 'warn' : 'bad' },
+    { label: 'On leave', value: leaveN, sub: 'sanctioned', tone: 'info' },
+    { label: 'Not marked', value: absent.length, sub: 'today', tone: absent.length ? 'bad' : 'good' },
     { label: 'Villages done', value: dDone, sub: 'of ' + totalGps + ' · ' + ym,
-      color: remaining === 0 || behindBy === 0 ? '#73BF69' : behindBy <= 3 ? '#FF9830' : '#F2495C' },
-    { label: 'Filed today', value: filedToday, sub: 'evaluations', color: '#B877D9' },
-    { label: 'Red flags', value: rfN, sub: 'this month', color: rfN ? '#FF9830' : '#73BF69' }
+      tone: remaining === 0 || behindBy === 0 ? 'good' : behindBy <= 3 ? 'warn' : 'bad' },
+    { label: 'Filed today', value: filedToday, sub: 'evaluations', tone: 'accent' },
+    { label: 'Red flags', value: rfN, sub: 'this month', tone: rfN ? 'warn' : 'good' }
   ]);
   const ganttRows = Object.keys(covM)
     .map(m2 => ({ label: m2, done: covM[m2].done, total: covM[m2].total }))
@@ -1282,29 +1295,45 @@ function dailyCollectorReport(){
       !marked[o.phone] && onLeave[o.phone] ? String(onLeave[o.phone]) : '']));
   const attCsv = attRows.map(r => r.map(csvCell).join(',')).join('\r\n');
 
+  /* the village register rides beside it — the pending first, then every
+     filing of the month with its score and officer */
+  const vRows = [['Status', 'Mandal', 'Village', 'Score', 'Grade', 'Red flags', 'Filed by', 'Date']];
+  gRoll.filter(r => !doneKeys[nrm(r.mandal) + '|' + nrm(r.gp)])
+    .sort((a, b) => String(a.mandal).localeCompare(String(b.mandal)) || String(a.gp).localeCompare(String(b.gp)))
+    .forEach(r => vRows.push(['PENDING', r.mandal, r.gp, '', '', '', '', '']));
+  vDone.sort((a, b) => String(a[0]).localeCompare(String(b[0])) || String(a[1]).localeCompare(String(b[1])))
+    .forEach(r => vRows.push(['Evaluated', r[0], r[1], r[2], r[3], r[4], r[5], r[6]]));
+  const vCsv = vRows.map(r => r.map(csvCell).join(',')).join('\r\n');
+
   const secs =
-    emailPanel_('The district at ' + dmy_(today), tiles) +
-    emailPanel_('Filing progress · ' + ym, emailGantt_(ganttRows, wd.gone, wdAll)) +
+    emailPanel_('The district at ' + dmy_(today), tiles, '#4A40CE') +
+    emailPanel_('Filing progress · ' + ym, emailGantt_(ganttRows, wd.gone, wdAll), '#0F766E') +
     emailSec_('Village evaluations · ' + ym,
       '<b>' + dDone + ' of ' + totalGps + '</b> villages evaluated (' + filed + ' filing' + (filed === 1 ? '' : 's') + ', ' + filedToday + ' today) · grades A ' + grades.A + ' · B ' + grades.B + ' · C ' + grades.C + ' · D ' + grades.D + '.' +
-      emailTable_(['Mandal', 'Evaluated', 'Pending', 'Avg score', 'Red flags', 'Pace'], mandalRows) +
+      emailTable_(['Mandal', 'Evaluated', 'Pending', 'Avg score', 'Red flags', 'Pace'], mandalRows, '#F4F1FD') +
       '<div style="margin-top:8px">Rate <b>' + rate.toFixed(1) + '/working day</b> over ' + wd.gone + ' gone · ' + wd.left + ' left · needed <b>' + needPerDay + '/day</b>.<br>' +
-      'Forecast at the present rate: <b>' + forecast + '</b>.</div>') +
+      'Forecast at the present rate: <b>' + forecast + '</b>.<br>' +
+      '<span style="color:#57647D;font-size:12px">The village-by-village register — pending first, then every filing — is attached and opens in Excel.</span></div>',
+      '#6D28D9', '#E9E2F8') +
     emailSec_('Attendance · ' + dmy_(today),
       '<b>' + present + '</b> marked · <b>' + leaveN + '</b> on sanctioned leave · <b style="color:' + (absent.length ? '#B91C1C' : '#15803D') + '">' + absent.length + '</b> not marked, of ' + roll.length + ' due.' +
-      (gapRows.length ? emailTable_(['Mandal', 'Not marked'], gapRows.slice(0, 12)) : '') +
-      '<div style="margin-top:8px;color:#57647D;font-size:12px">The officer-by-officer register — every name with its status — is attached and opens in Excel.</div>') +
+      (gapRows.length ? emailTable_(['Mandal', 'Not marked'], gapRows.slice(0, 12), '#FFF7E8') : '') +
+      '<div style="margin-top:8px;color:#57647D;font-size:12px">The officer-by-officer register — every name with its status — is attached and opens in Excel.</div>',
+      '#B45309', '#F1E2C2') +
     emailSec_('Awaiting your orders',
       '<b>' + nProp + '</b> notice proposal' + (nProp === 1 ? '' : 's') + ' (Console ▸ Notices)' +
       (nServedToday ? ' · ' + nServedToday + ' served today' : '') +
-      ' · <b>' + lvPend + '</b> leave application' + (lvPend === 1 ? '' : 's') + ' waiting.');
+      ' · <b>' + lvPend + '</b> leave application' + (lvPend === 1 ? '' : 's') + ' waiting.',
+      '#BE123C', '#F6D3DB');
   const to = collectorEmail || Session.getEffectiveUser().getEmail();
   if(to){
     MailApp.sendEmail(to, 'SJSP daily report · ' + dmy_(today) + ' · ' + present + ' marked · ' + dDone + '/' + totalGps + ' villages',
       'Attendance ' + present + ' marked, ' + absent.length + ' not; villages ' + dDone + '/' + totalGps + '; ' + forecast + '.',
       { htmlBody: emailShell_('The district, end of day', dmy_(today) + ' · Jangaon', secs),
-        /* the BOM keeps Telugu names readable when Excel opens the file */
-        attachments: [Utilities.newBlob('﻿' + attCsv, 'text/csv', 'SJGP_attendance_' + today + '.csv')] });
+        /* the BOM keeps Telugu names readable when Excel opens the files */
+        attachments: [
+          Utilities.newBlob('﻿' + attCsv, 'text/csv', 'SJGP_attendance_' + today + '.csv'),
+          Utilities.newBlob('﻿' + vCsv, 'text/csv', 'SJGP_villages_' + ym + '.csv')] });
     props.setProperty('LAST_DAILY_REPORT', today);
     Logger.log('Daily report sent to ' + to + '.');
   } else Logger.log('No address to send the daily report to.');

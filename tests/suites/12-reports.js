@@ -84,10 +84,13 @@ module.exports = {
     t.contains(rep.htmlBody, '<b>DISTRICT</b>', 'and closes with the district row');
     /* names travel in the attachment, never in the body */
     t.ok(rep.htmlBody.indexOf('P. Sec Konne') < 0, 'no officer is named in the mail body');
-    t.eq(rep.attachments.length, 1, 'one attachment rides along');
-    t.eq(rep.attachments[0].name, 'SJGP_attendance_2026-08-19.csv', 'named for the day');
+    t.eq(rep.attachments.length, 2, 'both registers ride along — the officers and the villages');
+    t.eq(rep.attachments[0].name, 'SJGP_attendance_2026-08-19.csv', 'the attendance register, named for the day');
     t.contains(rep.attachments[0].data, 'NOT MARKED,Jangaon,P. Sec Konne,PS,9000000031',
       'the register names the unmarked, mandal and number against each');
+    t.eq(rep.attachments[1].name, 'SJGP_villages_2026-08.csv', 'the village register, named for the month');
+    t.contains(rep.attachments[1].data, 'PENDING,Jangaon,Konne', 'a pending village leads with its mandal');
+    t.contains(rep.attachments[1].data, 'Evaluated,Jangaon,Malkapur,80,B', 'a filed village carries score and grade');
     t.eq(env.props['LAST_DAILY_REPORT'], '2026-08-19', 'the guard remembers the day');
     const mails = env.outbox.length;
     c.dailyCollectorReport();
