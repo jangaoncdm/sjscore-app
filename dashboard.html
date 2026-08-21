@@ -1346,56 +1346,6 @@ function mandalAtt(j){
     g+=`<text class="axis" x="${W-4}" y="${y+11.5}" text-anchor="end" style="font-weight:${r.a?700:400}" fill="${r.a?'var(--red)':'var(--green)'}">${r.a?r.a+' missing':'all in'}</text></g>`;});
   return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
 }
-/* FILING PROGRESS AS A GANTT. Each mandal a bar across the month's working
-   days: solid to where its filings stand, the dotted vertical line is today,
-   and the dashed tail runs to where the mandal FINISHES at its own rate — a
-   tail past the month's right edge is the month being lost, said in red.
-   Working days exclude Sundays; the register's holidays refine the server's
-   own forecast in the Collector's daily mail. */
-function ganttChart(j){
-  const cov=j.coverage||[];
-  if(!cov.length) return '<div class="empty">No villages on the roll yet.</div>';
-  const now=new Date();
-  const wdN=(a,b)=>{let n=0;for(let d2=a;d2<=b;d2++){if(new Date(now.getFullYear(),now.getMonth(),d2).getDay()!==0)n++;}return n;};
-  const lastD=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
-  const wdGone=Math.max(1,wdN(1,now.getDate())), wdAll=Math.max(1,wdN(1,lastD));
-  const rows=cov.map(c2=>({m:c2.mandal,done:c2.done,total:c2.total}))
-    .sort((a,b)=>(b.done/Math.max(1,b.total))-(a.done/Math.max(1,a.total)));
-  const dTot=rows.reduce((s,r)=>s+r.total,0), dDone=rows.reduce((s,r)=>s+r.done,0);
-  rows.push({m:'DISTRICT',done:dDone,total:dTot,strong:true});
-  const W=940,LBL=118,RGT=150,X0=LBL+8,X1=W-RGT,rowH=26,gap=6,top=22;
-  const H=top+rows.length*(rowH+gap)+22;
-  const px=f=>X0+(X1-X0)*Math.min(1.18,Math.max(0,f));
-  let g='';
-  [0,.25,.5,.75,1].forEach(f=>{const x=X0+(X1-X0)*f;
-    g+=`<line class="gridln" x1="${x}" x2="${x}" y1="${top-6}" y2="${H-18}"/>`;});
-  g+=`<text class="axis" x="${X0}" y="11">working day 1</text><text class="axis" x="${X1}" y="11" text-anchor="end">day ${wdAll} · month ends</text>`;
-  const todayX=px(wdGone/wdAll);
-  rows.forEach((r,i)=>{
-    const y=top+i*(rowH+gap);
-    const frac=r.total?r.done/r.total:0;
-    const rate=r.done/wdGone;
-    const wdNeed=r.done>0?r.total/rate:Infinity;
-    const lateWd=isFinite(wdNeed)?Math.ceil(wdNeed-wdAll):null;
-    /* the tail stops at the month's edge — the words carry the overshoot */
-    const fx=px(frac), fcx=px(isFinite(wdNeed)?Math.min(1,wdNeed/wdAll):1);
-    const col=r.strong?'var(--pri)':r.done===0?'#B91C1C':lateWd>0?'#B45309':'#15803D';
-    const verdict=r.done===0?'no filings yet'
-      :lateWd>0?('+'+lateWd+' wd late'):('done ~wd '+Math.ceil(wdNeed));
-    g+=`<g><title>${esc(r.m)} — ${r.done} of ${r.total} filed · ${(rate).toFixed(1)}/working day · ${
-        r.done===0?'no rate to forecast from yet'
-        :lateWd>0?('at this rate the month falls '+lateWd+' working day(s) short')
-        :('at this rate complete by working day '+Math.ceil(wdNeed)+' of '+wdAll)}</title>
-      <text class="axis" x="${LBL}" y="${y+rowH/2+3.5}" text-anchor="end" fill="var(--tx-2)"${r.strong?' font-weight="700"':''}>${esc(r.m.length>15?r.m.slice(0,14)+'…':r.m)}</text>
-      <rect x="${X0}" y="${y+4}" width="${X1-X0}" height="${rowH-8}" rx="5" fill="var(--well)"/>
-      <rect x="${X0}" y="${y+4}" width="${Math.max(2,fx-X0)}" height="${rowH-8}" rx="5" fill="${col}" opacity=".9"/>
-      ${r.done>0&&fcx>fx?`<line x1="${fx}" x2="${fcx}" y1="${y+rowH/2}" y2="${y+rowH/2}" stroke="${col}" stroke-width="2.5" stroke-dasharray="4 4" opacity=".6"/><circle cx="${fcx}" cy="${y+rowH/2}" r="3.5" fill="${col}" opacity=".85"/>`:''}
-      <text class="axis" x="${W-4}" y="${y+rowH/2+3.5}" text-anchor="end" style="font-weight:${(lateWd>0||r.done===0)?700:400}" fill="${r.done===0?'var(--red)':lateWd>0?'var(--amber)':'var(--tx-2)'}">${r.done}/${r.total} · ${verdict}</text></g>`;
-  });
-  g+=`<line x1="${todayX}" x2="${todayX}" y1="${top-6}" y2="${H-18}" stroke="var(--pri)" stroke-width="1.6" stroke-dasharray="2 3"/>
-      <text class="axis" x="${Math.min(todayX,X1-40)}" y="${H-5}" text-anchor="middle" fill="var(--pri)">today · wd ${wdGone}</text>`;
-  return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
-}
 /* where the scores actually sit — ten-mark bands */
 function scoreDist(rows){
   if(!rows.length) return '<div class="empty">Nothing filed yet.</div>';
@@ -1840,6 +1790,63 @@ function expNote(t){ const el=$('#expNote'); if(el) el.textContent=t; }
 async function doExport(kind){
   if(!DATA){ expNote('Nothing to export yet — the figures have not arrived.'); return; }
   const day=new Date().toISOString().slice(0,10), j=DATA;
+  if(kind==='vxlsx'){
+    expNote('Preparing the villages workbook…');
+    try{ await loadXLSX(); }catch(e){ expNote(e.message); return; }
+    const now=new Date();
+    const wdN=(a,b)=>{let n=0;for(let d2=a;d2<=b;d2++){if(new Date(now.getFullYear(),now.getMonth(),d2).getDay()!==0)n++;}return n;};
+    const lastD=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+    const wdGone=Math.max(1,wdN(1,now.getDate())), wdAll=Math.max(1,wdN(1,lastD)), wdLeft=Math.max(0,wdAll-wdGone);
+    const cov=(j.coverage||[]), dTot=cov.reduce((s,c2)=>s+c2.total,0), dDone=cov.reduce((s,c2)=>s+c2.done,0);
+    const dRate=dDone/wdGone, dRem=Math.max(0,dTot-dDone);
+    const dNeedWd=dDone>0?dTot/dRate:null;
+    const verdictOf=(done,total)=>{ const rem=total-done;
+      if(rem<=0) return 'complete';
+      if(done===0) return 'no filings yet';
+      const need=total/(done/wdGone);
+      return need>wdAll?('at this rate, '+Math.ceil(need-wdAll)+' working day(s) short'):('on pace — done ~working day '+Math.ceil(need)+' of '+wdAll); };
+    /* the Gantt, drawn in text: 20 blocks = the mandal's villages; the
+       marker row below the header shows where today stands in the month */
+    const bar=(done,total)=>{ const k=total?Math.round(20*done/total):0; return '█'.repeat(k)+'░'.repeat(20-k); };
+    const wb=XLSX.utils.book_new();
+    const summary=[
+      ['SJGP · Village evaluations','Jangaon district'],
+      ['Generated', new Date().toLocaleString('en-IN')],
+      ['Month under review', j.ym],
+      [],
+      ['Villages on the roll', dTot],
+      ['Evaluated', dDone],['Pending', dRem],
+      ['District average score', j.month.avg==null?'—':j.month.avg],
+      ['Red flags', j.month.rfCount],
+      ['Grades', 'A '+j.month.grades.A+' · B '+j.month.grades.B+' · C '+j.month.grades.C+' · D '+j.month.grades.D],
+      [],
+      ['Working days gone', wdGone, 'left', wdLeft, 'of', wdAll, '(Sundays excluded)'],
+      ['Rate per working day', dRate.toFixed(2)],
+      ['Needed per remaining day', wdLeft?Math.ceil(dRem/wdLeft):dRem],
+      ['Forecast at the present rate', verdictOf(dDone,dTot)]
+    ];
+    const shS=XLSX.utils.aoa_to_sheet(summary); shS['!cols']=[{wch:26},{wch:16},{wch:8},{wch:8},{wch:6},{wch:8},{wch:20}];
+    XLSX.utils.book_append_sheet(wb,shS,'Summary');
+    const gantt=[['Mandal','Progress · each █ is 5% of the mandal’s villages','Filed','Of','Rate/wd','Needed/day','Forecast at own rate'],
+                 ['(today)', ' '.repeat(Math.round(20*wdGone/wdAll))+'▼ working day '+wdGone+' of '+wdAll,'','','','','']]
+      .concat([...cov].sort((a,b)=>(b.done/Math.max(1,b.total))-(a.done/Math.max(1,a.total)))
+        .map(c2=>[c2.mandal, bar(c2.done,c2.total), c2.done, c2.total,
+          (c2.done/wdGone).toFixed(2), wdLeft?Math.ceil(Math.max(0,c2.total-c2.done)/wdLeft):c2.total-c2.done, verdictOf(c2.done,c2.total)]))
+      .concat([['DISTRICT', bar(dDone,dTot), dDone, dTot, dRate.toFixed(2), wdLeft?Math.ceil(dRem/wdLeft):dRem, verdictOf(dDone,dTot)]]);
+    const shG=XLSX.utils.aoa_to_sheet(gantt); shG['!cols']=[{wch:17},{wch:34},{wch:7},{wch:6},{wch:8},{wch:11},{wch:40}];
+    XLSX.utils.book_append_sheet(wb,shG,'Gantt & forecast');
+    const done=[...j.month.rows].sort((a,b)=>String(a.mandal).localeCompare(String(b.mandal))||String(a.gp).localeCompare(String(b.gp)))
+      .map(r=>[r.gp,r.mandal,r.score,r.grade,String(r.rf||''),String(r.officer||'').replace(/\s*\(\d+\)$/,''),r.date]);
+    const shC=XLSX.utils.aoa_to_sheet([['Village','Mandal','Score','Grade','Red flags','Filed by','Date']].concat(done));
+    shC['!cols']=[{wch:22},{wch:16},{wch:7},{wch:7},{wch:10},{wch:22},{wch:11}];
+    XLSX.utils.book_append_sheet(wb,shC,'Completed');
+    const pend=[]; cov.forEach(c2=>(c2.pending||[]).forEach(g2=>pend.push([c2.mandal,g2])));
+    const shP=XLSX.utils.aoa_to_sheet([['Mandal','Village pending']].concat(pend.length?pend:[['Every village is filed.','']]));
+    shP['!cols']=[{wch:16},{wch:26}];
+    XLSX.utils.book_append_sheet(wb,shP,'Pending');
+    XLSX.writeFile(wb,'SJGP_Villages_'+j.ym+'.xlsx');
+    expNote('Saved: SJGP_Villages_'+j.ym+'.xlsx — summary, the Gantt with forecasts, completed and pending.');
+    return; }
   if(kind==='vdone'){
     const rows=[...j.month.rows].sort((a,b)=>String(a.mandal).localeCompare(String(b.mandal))||String(a.gp).localeCompare(String(b.gp)))
       .map(r=>[r.gp,r.mandal,r.score,r.grade,String(r.rf||''),String(r.officer||'').replace(/\s*\(\d+\)$/,''),r.date]);
@@ -2058,16 +2065,14 @@ function vVillages(j,A){
   h+=panel('c5','Evaluation outcomes',j.ym,
     donut([{k:'Grade A',v:j.month.grades.A,c:'#16A34A'},{k:'Grade B',v:j.month.grades.B,c:'#65A30D'},
            {k:'Grade C',v:j.month.grades.C,c:'#D97706'},{k:'Grade D',v:j.month.grades.D,c:'#DC2626'}],A.filed,'filed'));
-  h+=panel('c12','Filing progress · '+monName(j.ym)+' as a Gantt',
-    'solid = filed share · dotted line = today · dashed tail = finish at the mandal’s own rate · Sundays excluded',
-    ganttChart(j));
   const pendAll=[]; (j.coverage||[]).forEach(c2=>(c2.pending||[]).forEach(g2=>pendAll.push([c2.mandal,g2])));
   h+=panel('c12','Reports · villages','opens in Excel',
     `<div class="expbar">
-      <button class="tbtn pri" data-exp="vdone">CSV · villages completed (${j.month.rows.length})</button>
+      <button class="tbtn pri" data-exp="vxlsx">Excel workbook · villages (.xlsx)</button>
+      <button class="tbtn" data-exp="vdone">CSV · villages completed (${j.month.rows.length})</button>
       <button class="tbtn" data-exp="vpend">CSV · villages pending (${pendAll.length})</button>
       <button class="tbtn" data-exp="vprog">CSV · mandal progress &amp; forecast</button>
-      <span class="expnote" id="expNote">Completed carries score, grade, red flags, officer and date; pending is mandal by mandal; progress carries the rate, the need per day and the forecast.</span>
+      <span class="expnote" id="expNote">The workbook carries the summary, the month’s Gantt with the forecast at each mandal’s rate, completed and pending village by village.</span>
     </div>`);
   h+=panel('c12','Day by day · filings and attendance','tap a day', dayTable(j),'dayd2');
   h+=panel('c6','Score distribution','villages by ten-mark band', scoreDist(j.month.rows));
