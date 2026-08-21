@@ -724,6 +724,129 @@ function closeDuplicateLeave(commit){
   Logger.log(n + ' duplicate application(s) marked WITHDRAWN. The Waiting count should now be right.');
 }
 
+/* ----------------------------------------------------------------------------
+ * TWIN ROWS UNDER ONE ID. Before 6.9.9 the leave register was written
+ * without a lock: a retry racing its original could scan, find nothing,
+ * and append — the same id twice. The app reads the FIRST row with an id,
+ * so every decision lands there; a later twin sits PENDING for ever,
+ * unreachable from any screen, padding the Waiting count. 6.9.9 closed the
+ * race; this register closes the twins it left behind. The first row is
+ * the record and is never touched. A later twin that is merely PENDING is
+ * marked WITHDRAWN; one that somehow carries a decision of its own is only
+ * reported — that wants the office's eye, not a script's.
+ * ------------------------------------------------------------------------- */
+function findTwinLeaveRows(){ admTwinLeave_(false); }
+function closeTwinLeaveRows(commit){ admTwinLeave_(commit === true); }
+function admTwinLeave_(commit){
+  const sh = sheet_('Leave', L_HEAD), m = headMap_(sh, L_HEAD);
+  const v = sh.getDataRange().getValues();
+  const first = {}, twins = [];
+  for(let i = 1; i < v.length; i++){
+    const id = cell_(v[i], m.ix.id); if(!id) continue;
+    if(first[id] === undefined){ first[id] = i; continue; }
+    twins.push({ at: i + 1, id: id, keeperAt: first[id] + 1,
+      name: cell_(v[i], m.ix.name), phone: phone10_(v[i][m.ix.phone]),
+      st: String(v[i][m.ix.status] || 'PENDING'),
+      keeperSt: String(v[first[id]][m.ix.status] || 'PENDING'),
+      f: dateText_(v[i][m.ix.fromDate]) });
+  }
+  if(!twins.length){ Logger.log('No id appears twice on the Leave register. Nothing to close.'); return; }
+  const now = new Date().toISOString();
+  const L = [twins.length + ' twin row(s) — the same id written twice by the pre-6.9.9 race:\n'];
+  let closed = 0;
+  twins.forEach(t => {
+    const act = t.st === 'PENDING' ? (commit ? 'CLOSED' : 'would close') : 'LEFT ALONE (carries a decision — settle by hand)';
+    L.push('  row ' + t.at + '  ' + t.id + '  ' + t.name + ' (' + t.phone + ')  ' + dmy_(t.f) +
+           '  twin is ' + t.st + ', the record (row ' + t.keeperAt + ') is ' + t.keeperSt + '  → ' + act);
+    if(t.st !== 'PENDING' || !commit) return;
+    sh.getRange(t.at, m.ix.status + 1).setValue('WITHDRAWN');
+    sh.getRange(t.at, m.ix.decidedBy + 1).setValue(ADMIN_BY);
+    sh.getRange(t.at, m.ix.decidedAt + 1).setValue(now);
+    sh.getRange(t.at, m.ix.remarks + 1).setValue(
+      'Twin row from a sync race — the first row with this id is the record. ' +
+      'Closed by the office, not refused; no default by the officer.');
+    admLog_('CLOSE TWIN LEAVE ROW', t.name + ' (' + t.phone + ')',
+            t.id + ' row ' + t.at + ' closed; row ' + t.keeperAt + ' (' + t.keeperSt + ') is the record');
+    closed++;
+  });
+  L.push('');
+  L.push(commit ? closed + ' twin row(s) marked WITHDRAWN; each is on the Audit tab.'
+                : 'DRY RUN — nothing written. Run closeTwinLeaveRows(true) to close the PENDING twins.');
+  Logger.log(L.join('\n'));
+}
+
+/* ----------------------------------------------------------------------------
+ * THE VILLAGE ROLL, AUDITED. The GPs tab is the denominator of every
+ * filing figure — the console, the workbook, the reminders. Duplicate rows
+ * inflate it silently: the district showed 102 filed and 275 pending at
+ * once. The code now collapses duplicates when it reads (gpRoll_), so the
+ * counts are right either way; this pair cleans the tab itself, and shows
+ * the things a script must not decide — one village name under two
+ * mandals, and this month's filings whose spelling matches no roll row.
+ * ------------------------------------------------------------------------- */
+function gpRollAudit(){ admGpRoll_(false); }
+function applyGpDedupe(){ admGpRoll_(true); }
+function admGpRoll_(commit){
+  const sh = sheet_('GPs', ['Mandal','GP']);
+  const v = sh.getDataRange().getValues();
+  const head = v[0].map(h => String(h).toLowerCase().trim());
+  let mi = -1, gi = -1;
+  head.forEach((h, i) => { if(h.indexOf('mandal') >= 0) mi = i; else if(h === 'gp' || h.indexOf('village') >= 0 || h.indexOf('panchayat') >= 0) gi = i; });
+  if(mi < 0 || gi < 0){ mi = 0; gi = 1; }
+  const nrm = s => String(s || '').trim().toLowerCase();
+  const seen = {}, dupRows = [], byGp = {};
+  let named = 0;
+  for(let i = 1; i < v.length; i++){
+    const m2 = String(v[i][mi] || '').trim(), g = String(v[i][gi] || '').trim();
+    if(!m2 || !g) continue;
+    named++;
+    const k = nrm(m2) + '|' + nrm(g);
+    if(seen[k]) dupRows.push({ at: i + 1, mandal: m2, gp: g, firstAt: seen[k] });
+    else { seen[k] = i + 1; (byGp[nrm(g)] = byGp[nrm(g)] || []).push(m2); }
+  }
+  const L = ['THE VILLAGE ROLL — ' + named + ' named row(s), ' + Object.keys(seen).length +
+             ' distinct village(s), ' + dupRows.length + ' duplicate row(s).\n'];
+  if(dupRows.length){
+    L.push('Duplicate rows (the first stays, these ' + (commit ? 'are deleted' : 'would be deleted') + '):');
+    dupRows.forEach(d => L.push('  row ' + d.at + '  ' + d.mandal + ' / ' + d.gp + '  (first at row ' + d.firstAt + ')'));
+    L.push('');
+  }
+  const straddle = Object.keys(byGp).filter(g => byGp[g].length > 1);
+  if(straddle.length){
+    L.push('One name under more than one mandal — possibly right, possibly a mis-keyed row; the office decides:');
+    straddle.forEach(g => L.push('  ' + g + ': ' + byGp[g].join(' / ')));
+    L.push('');
+  }
+  /* filings this month whose spelling matches no roll row */
+  const ym = today_().slice(0, 7);
+  const ish = sheet_('Inspections', HEADERS), im = headMap_(ish, HEADERS);
+  const iv = ish.getDataRange().getValues();
+  const stray = {};
+  for(let i = 1; i < iv.length; i++){
+    if(ymText_(iv[i][im.ix.ym]) !== ym) continue;
+    const k = nrm(iv[i][im.ix.mandal]) + '|' + nrm(iv[i][im.ix.gp]);
+    if(!seen[k]) stray[cell_(iv[i], im.ix.mandal) + ' / ' + cell_(iv[i], im.ix.gp)] = true;
+  }
+  const strayL = Object.keys(stray);
+  if(strayL.length){
+    L.push('Filed this month but matching no roll row — a spelling to reconcile, not a fault:');
+    strayL.forEach(s => L.push('  ' + s));
+    L.push('');
+  }
+  if(commit && dupRows.length){
+    for(let i = dupRows.length - 1; i >= 0; i--){    /* bottom-up, so rows keep their numbers */
+      sh.deleteRow(dupRows[i].at);
+      admLog_('GP ROLL DEDUPE', dupRows[i].mandal + ' / ' + dupRows[i].gp,
+              'duplicate row ' + dupRows[i].at + ' removed; first row ' + dupRows[i].firstAt + ' stays');
+    }
+    L.push(dupRows.length + ' duplicate row(s) removed; each is on the Audit tab. Run gpRollAudit() again — it should find none.');
+  } else if(!commit){
+    L.push(dupRows.length ? 'DRY RUN — nothing written. Run applyGpDedupe() to remove the duplicate rows.'
+                          : 'Nothing to remove.');
+  }
+  Logger.log(L.join('\n'));
+}
+
 /* ============================================================================
  * 8. THE PIPELINE — moving the two hand-edited things out of the source
  * ----------------------------------------------------------------------------

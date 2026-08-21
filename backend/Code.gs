@@ -968,10 +968,18 @@ function gpRoll_(){
   let mi = -1, gi = -1;
   head.forEach((h, i) => { if(h.indexOf('mandal') >= 0) mi = i; else if(h === 'gp' || h.indexOf('village') >= 0 || h.indexOf('panchayat') >= 0) gi = i; });
   if(mi < 0 || gi < 0){ mi = 0; gi = 1; }
-  const out = [];
+  /* one village, one row — the tab has carried duplicate rows, and every
+     count downstream (the console, the workbook, the reminders) inflated
+     with them: 102 filed plus 275 pending against a district of fewer
+     villages. The roll collapses them here, keeping the first spelling. */
+  const out = [], had = {};
   for(let i = 1; i < v.length; i++){
     const m2 = String(v[i][mi] || '').trim(), g = String(v[i][gi] || '').trim();
-    if(m2 && g) out.push({ mandal: m2, gp: g });
+    if(!m2 || !g) continue;
+    const k = m2.toLowerCase() + '|' + g.toLowerCase();
+    if(had[k]) continue;
+    had[k] = true;
+    out.push({ mandal: m2, gp: g });
   }
   return out;
 }
@@ -1359,18 +1367,52 @@ function doGet(e){
       }
     }
     const todayRows = Object.keys(todayByPh).map(k => todayByPh[k]);
+
+    /* SANCTIONED LEAVE STANDS IN FOR THE MISSING ROW. An officer whose
+       leave the Collector approved rightly stays home and writes nothing —
+       and this screen used to read that silence as absence. On Varalakshmi
+       Vratham 2026 it showed ninety sanctioned officers as not marked.
+       The notice engine always consulted the Leave register; the console
+       now does the same. */
+    const lsh = sheet_('Leave', L_HEAD), lm = headMap_(lsh, L_HEAD);
+    const lv = lsh.getDataRange().getValues();
+    const d14 = [];
+    for(let k = 13; k >= 0; k--){
+      const d = new Date(); d.setDate(d.getDate() - k);
+      d14.push(Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd'));
+    }
+    const leaveCover = {};   /* 'date|phone' -> leave type, APPROVED spells only */
+    for(let i = 1; i < lv.length; i++){
+      if(String(lv[i][lm.ix.status]) !== 'APPROVED') continue;
+      const f = dateText_(lv[i][lm.ix.fromDate]), t = dateText_(lv[i][lm.ix.toDate]);
+      const p = phone10_(lv[i][lm.ix.phone]);
+      if(!f || !t || !p) continue;
+      d14.forEach(d2 => { if(f <= d2 && d2 <= t) leaveCover[d2 + '|' + p] = String(lv[i][lm.ix.type] || 'CL'); });
+    }
+
     const daily = {};
     Object.keys(dailyPh).forEach(d => {
       daily[d] = {present:0, leave:0};
       Object.keys(dailyPh[d]).forEach(ph => daily[d][dailyPh[d][ph]==='LEAVE'?'leave':'present']++);
     });
-    const att14 = [];
-    for(let k = 13; k >= 0; k--){
-      const d = new Date(); d.setDate(d.getDate() - k);
-      const key = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      att14.push({date:key, present:(daily[key]||{}).present||0, leave:(daily[key]||{}).leave||0});
-    }
+    /* an officer covered by sanctioned leave who wrote no row still counts
+       as on leave that day, not as nothing */
+    Object.keys(leaveCover).forEach(k => {
+      const d2 = k.slice(0, 10), p = k.slice(11);
+      if((dailyPh[d2] || {})[p]) return;
+      daily[d2] = daily[d2] || {present:0, leave:0};
+      daily[d2].leave++;
+    });
+    const att14 = d14.map(key => ({date:key, present:(daily[key]||{}).present||0, leave:(daily[key]||{}).leave||0}));
     const markedPh = {}; todayRows.forEach(r => markedPh[r.phone] = true);
+    officers.forEach(o => {
+      if(attExempt_(o.role) || markedPh[o.phone]) return;
+      const tp = leaveCover[today + '|' + o.phone]; if(!tp) return;
+      todayRows.push({phone:o.phone, name:o.name, role:o.role, mandal:o.mandal,
+        at:'', claimedAt:'', skew:0, verified:false, lat:null, lng:null, acc:null, tz:'',
+        status:'LEAVE', leaveType:tp, marks:0, firstAt:'', sanctioned:true});
+      markedPh[o.phone] = true;
+    });
     /* today's seen pings, for the unmarked: fresher than any old mark */
     const ssh = sheet_('Seen', SEEN_HEAD), sm = headMap_(ssh, SEEN_HEAD);
     const sLast = ssh.getLastRow(), seenToday = {};
@@ -1397,7 +1439,7 @@ function doGet(e){
     const mDates = att14.map(a => a.date);
     const attMatrix = officers.filter(o => !attExempt_(o.role)).map(o => {
       const days = mDates.map(d => { const st = (dailyPh[d] || {})[o.phone];
-        return st ? (st === 'LEAVE' ? 'L' : 'P') : '-'; }).join('');
+        return st ? (st === 'LEAVE' ? 'L' : 'P') : (leaveCover[d + '|' + o.phone] ? 'L' : '-'); }).join('');
       return [o.name, o.role, o.mandal, days];
     });
 
@@ -1420,23 +1462,27 @@ function doGet(e){
     const months = Object.keys(trend).sort().slice(-6)
       .map(k => ({ym:k, avg:Math.round(trend[k].sum/trend[k].n), n:trend[k].n}));
 
-    /* coverage: reported against the roll, mandal by mandal */
-    const gsh = sheet_('GPs', ['GP','Mandal']), gv = gsh.getDataRange().getValues();
+    /* coverage: reported against the roll, mandal by mandal. The roll comes
+       from gpRoll_ — columns found by header, duplicates collapsed — and the
+       match is case-blind and trimmed, because an officer's filing spells the
+       village as he types it, not as the tab does. This block once read the
+       tab by position and matched by exact string; the same village then
+       counted as both filed and pending, and filed-plus-pending overshot the
+       district. */
+    const gRoll = gpRoll_();
+    const nrm = s => String(s || '').trim().toLowerCase();
     const roll = {};
-    for(let i = 1; i < gv.length; i++){ const m = cell_(gv[i],1)||'—'; roll[m] = roll[m]||{total:0, done:0}; roll[m].total++; }
-    const doneSet = {}; monthRows.forEach(r => doneSet[r.mandal+'|'+r.gp] = r.mandal);
-    Object.keys(doneSet).forEach(k => { const m = doneSet[k]; if(roll[m]) roll[m].done++; });
+    gRoll.forEach(r => { roll[r.mandal] = roll[r.mandal] || {total:0, done:0}; roll[r.mandal].total++; });
+    const doneSet = {}; monthRows.forEach(r => doneSet[nrm(r.mandal) + '|' + nrm(r.gp)] = true);
     /* pending village names ride along, so a mandal can be opened in full */
     const pendByM = {};
-    for(let i = 1; i < gv.length; i++){
-      const g = cell_(gv[i], 0), mm = cell_(gv[i], 1) || '—';
-      if(!doneSet[mm + '|' + g]){ pendByM[mm] = pendByM[mm] || []; if(pendByM[mm].length < 80) pendByM[mm].push(g); }
-    }
+    gRoll.forEach(r => {
+      if(doneSet[nrm(r.mandal) + '|' + nrm(r.gp)]) roll[r.mandal].done++;
+      else { pendByM[r.mandal] = pendByM[r.mandal] || []; if(pendByM[r.mandal].length < 80) pendByM[r.mandal].push(r.gp); }
+    });
     const coverage = Object.keys(roll).sort().map(m => ({mandal:m, total:roll[m].total, done:roll[m].done, pending:pendByM[m] || []}));
 
-    /* leave */
-    const lsh = sheet_('Leave', L_HEAD), lm = headMap_(lsh, L_HEAD);
-    const lv = lsh.getDataRange().getValues();
+    /* leave — the sheet was already read above for the cover map */
     const lp = [], lr = [];
     for(let i = 1; i < lv.length; i++){
       const row = {name:cell_(lv[i], lm.ix.name), role:cell_(lv[i], lm.ix.role), mandal:cell_(lv[i], lm.ix.mandal),
@@ -1490,7 +1536,7 @@ function doGet(e){
     }
 
     const out = { ok:true, at:new Date().toISOString(), today:today, tz:Session.getScriptTimeZone(), ym:ymN,
-      totals:{officers:officers.length, gps:Math.max(0, gv.length-1)},
+      totals:{officers:officers.length, gps:gRoll.length},
       today:{present:todayRows.filter(r=>r.status!=='LEAVE'), onLeave:todayRows.filter(r=>r.status==='LEAVE'), absent:absent},
       att14:att14, month:{rows:monthRows, grades:gradeCount,
         avg: monthRows.length ? Math.round(monthRows.reduce((s,r)=>s+r.score,0)/monthRows.length) : null,
@@ -1967,6 +2013,14 @@ function saveLeave_(b, u){
     if(!TS_OPTIONAL_2026[from]) return json_({ ok:false, error:'That date is not on the notified optional-holiday list. Pick one of the G.O.’s dates.' });
   }
 
+  /* THE REGISTER IS WRITTEN UNDER LOCK. Two copies of the same application
+     arriving seconds apart — a retry racing its original — each scanned the
+     sheet, each found nothing, and both appended: the same id twice, one row
+     decided and its twin PENDING for ever. The scan and the write are one
+     act now, as attendance learned before it. */
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
   const sh = sheet_('Leave', L_HEAD);
   const m = headMap_(sh, L_HEAD);
   const found = leaveRow_(sh, m, l.id);
@@ -2026,6 +2080,7 @@ function saveLeave_(b, u){
   if(found) sh.getRange(found.at, 1, 1, m.width).setValues([row]);
   else sh.appendRow(row);
   return json_({ ok:true, id:l.id, status:'PENDING' });
+  } finally { lock.releaseLock(); }
 }
 
 function decideLeave_(b, u){

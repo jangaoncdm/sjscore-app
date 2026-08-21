@@ -2055,7 +2055,7 @@ function attRow(r,i){
 }
 function vVillages(j,A){
   let h='<div class="kpirow">';
-  h+=kpi('Filed',IC.h,A.filed,'','of '+A.cov.t+' · '+j.ym);
+  h+=kpi('Villages evaluated',IC.h,A.cov.d,'','of '+A.cov.t+' · '+j.ym+(A.filed>A.cov.d?' · '+A.filed+' filings':''));
   h+=kpi('District average',IC.s,A.avg==null?'—':A.avg,delta(A.avg,A.prevAvg,true),'vs last month');
   h+=kpi('Red flags',IC.f,j.month.rfCount,'',A.filed?pct(j.month.rfCount,A.filed)+'% of filings':'—');
   h+=kpi('Grade A + B',IC.s,j.month.grades.A+j.month.grades.B,'',A.filed?pct(j.month.grades.A+j.month.grades.B,A.filed)+'% of filings':'—');
