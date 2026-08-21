@@ -496,7 +496,9 @@ function sanctionedSet_(dStr){
   for(let i = 1; i < v.length; i++){
     if(String(v[i][m.ix.status]) !== 'APPROVED') continue;
     const f = dateText_(v[i][m.ix.fromDate]), t = dateText_(v[i][m.ix.toDate]);
-    if(f && t && f <= dStr && dStr <= t){ const p = phone10_(v[i][m.ix.phone]); if(p) set[p] = true; }
+    /* the value is the leave TYPE — still truthy for every caller that
+       only asks "is he covered?", and the daily report can name it */
+    if(f && t && f <= dStr && dStr <= t){ const p = phone10_(v[i][m.ix.phone]); if(p) set[p] = String(v[i][m.ix.type] || 'CL'); }
   }
   return set;
 }
@@ -1180,15 +1182,19 @@ function dailyCollectorReport(){
   const ish = sheet_('Inspections', HEADERS), im = headMap_(ish, HEADERS);
   const iv = ish.getDataRange().getValues();
   let filed = 0, filedToday = 0, scoreSum = 0, rfN = 0;
-  const grades = { A:0, B:0, C:0, D:0 }, doneKeys = {};
+  const grades = { A:0, B:0, C:0, D:0 }, doneKeys = {}, mAgg = {};
   const nrm = s => String(s || '').trim().toLowerCase();
   for(let i = 1; i < iv.length; i++){
     if(ymText_(iv[i][im.ix.ym]) !== ym) continue;
     filed++;
     doneKeys[nrm(iv[i][im.ix.mandal]) + '|' + nrm(iv[i][im.ix.gp])] = true;
-    scoreSum += Number(iv[i][im.ix.score]) || 0;
+    const sc = Number(iv[i][im.ix.score]) || 0;
+    scoreSum += sc;
+    const mk = nrm(iv[i][im.ix.mandal]);
+    mAgg[mk] = mAgg[mk] || { n: 0, score: 0, rf: 0 };
+    mAgg[mk].n++; mAgg[mk].score += sc;
     const g = cell_(iv[i], im.ix.grade); if(grades[g] != null) grades[g]++;
-    if(cell_(iv[i], im.ix.rf).trim()) rfN++;
+    if(cell_(iv[i], im.ix.rf).trim()){ rfN++; mAgg[mk].rf++; }
     if(dateText_(iv[i][im.ix.date]) === today) filedToday++;
   }
   /* the pace is measured in VILLAGES evaluated, never in filings — a
@@ -1243,20 +1249,51 @@ function dailyCollectorReport(){
     .map(m2 => ({ label: m2, done: covM[m2].done, total: covM[m2].total }))
     .sort((a, b) => (b.done / Math.max(1, b.total)) - (a.done / Math.max(1, a.total)));
   ganttRows.push({ label: 'DISTRICT', done: dDone, total: totalGps });
+  /* the evaluations, mandal by mandal, in a table — pace judged against the
+     month each mandal has actually had */
+  const wdAll = wd.gone + wd.left;
+  const paceOf = (done, total) => {
+    if(total - done <= 0) return 'complete';
+    if(done === 0) return 'nothing yet';
+    const need = total / (done / wd.gone);
+    if(need <= wdAll) return 'on pace';
+    const short = Math.ceil(need - wdAll);
+    /* past a point the number stops meaning anything — say so instead */
+    return short > 45 ? 'far behind' : short + ' wd short';
+  };
+  const mandalRows = Object.keys(covM).sort().map(m2 => {
+    const a = mAgg[nrm(m2)] || { n: 0, score: 0, rf: 0 }, cM = covM[m2];
+    return [m2, cM.done + ' / ' + cM.total, String(cM.total - cM.done),
+      a.n ? String(Math.round(a.score / a.n)) : '—', String(a.rf), paceOf(cM.done, cM.total)];
+  });
+  mandalRows.push(['<b>DISTRICT</b>', '<b>' + dDone + ' / ' + totalGps + '</b>', '<b>' + remaining + '</b>',
+    '<b>' + (filed ? Math.round(scoreSum / filed) : '—') + '</b>', '<b>' + rfN + '</b>', '<b>' + paceOf(dDone, totalGps) + '</b>']);
+
+  /* the officer-by-officer register travels as an attachment, never as a
+     wall of names in the body — the unmarked first, then the sanctioned,
+     then the marked */
+  const csvCell = s => { s = String(s == null ? '' : s); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const attRows = [['Status', 'Mandal', 'Name', 'Role', 'Phone', 'Leave type']];
+  const stOf = o => marked[o.phone] ? 2 : onLeave[o.phone] ? 1 : 0;
+  roll.slice().sort((a, b) => stOf(a) - stOf(b) || String(a.mandal).localeCompare(String(b.mandal)) || String(a.name).localeCompare(String(b.name)))
+    .forEach(o => attRows.push([
+      marked[o.phone] ? 'Present' : onLeave[o.phone] ? 'On sanctioned leave' : 'NOT MARKED',
+      o.mandal || '', o.name, o.role, o.phone,
+      !marked[o.phone] && onLeave[o.phone] ? String(onLeave[o.phone]) : '']));
+  const attCsv = attRows.map(r => r.map(csvCell).join(',')).join('\r\n');
+
   const secs =
     emailPanel_('The district at ' + dmy_(today), tiles) +
-    emailPanel_('Filing progress · ' + ym, emailGantt_(ganttRows, wd.gone, wd.gone + wd.left)) +
+    emailPanel_('Filing progress · ' + ym, emailGantt_(ganttRows, wd.gone, wdAll)) +
+    emailSec_('Village evaluations · ' + ym,
+      '<b>' + dDone + ' of ' + totalGps + '</b> villages evaluated (' + filed + ' filing' + (filed === 1 ? '' : 's') + ', ' + filedToday + ' today) · grades A ' + grades.A + ' · B ' + grades.B + ' · C ' + grades.C + ' · D ' + grades.D + '.' +
+      emailTable_(['Mandal', 'Evaluated', 'Pending', 'Avg score', 'Red flags', 'Pace'], mandalRows) +
+      '<div style="margin-top:8px">Rate <b>' + rate.toFixed(1) + '/working day</b> over ' + wd.gone + ' gone · ' + wd.left + ' left · needed <b>' + needPerDay + '/day</b>.<br>' +
+      'Forecast at the present rate: <b>' + forecast + '</b>.</div>') +
     emailSec_('Attendance · ' + dmy_(today),
       '<b>' + present + '</b> marked · <b>' + leaveN + '</b> on sanctioned leave · <b style="color:' + (absent.length ? '#B91C1C' : '#15803D') + '">' + absent.length + '</b> not marked, of ' + roll.length + ' due.' +
       (gapRows.length ? emailTable_(['Mandal', 'Not marked'], gapRows.slice(0, 12)) : '') +
-      (absent.length ? '<div style="margin-top:8px;color:#57647D;font-size:12px">' +
-        absent.slice(0, 40).map(o => o.name + ' (' + o.role + ', ' + (o.mandal || '—') + ')').join(' · ') +
-        (absent.length > 40 ? ' · and ' + (absent.length - 40) + ' more' : '') + '</div>' : '')) +
-    emailSec_('Village evaluations · ' + ym,
-      '<b>' + dDone + ' of ' + totalGps + '</b> villages evaluated (' + filed + ' filing' + (filed === 1 ? '' : 's') + ', ' + filedToday + ' today) · average score <b>' + (filed ? Math.round(scoreSum / filed) : '—') + '</b> · red flags <b>' + rfN + '</b>.<br>' +
-      'Grades — A ' + grades.A + ' · B ' + grades.B + ' · C ' + grades.C + ' · D ' + grades.D + '.<br>' +
-      'Rate <b>' + rate.toFixed(1) + '/working day</b> over ' + wd.gone + ' gone · ' + wd.left + ' left · needed <b>' + needPerDay + '/day</b>.<br>' +
-      'Forecast at the present rate: <b>' + forecast + '</b>.') +
+      '<div style="margin-top:8px;color:#57647D;font-size:12px">The officer-by-officer register — every name with its status — is attached and opens in Excel.</div>') +
     emailSec_('Awaiting your orders',
       '<b>' + nProp + '</b> notice proposal' + (nProp === 1 ? '' : 's') + ' (Console ▸ Notices)' +
       (nServedToday ? ' · ' + nServedToday + ' served today' : '') +
@@ -1265,7 +1302,9 @@ function dailyCollectorReport(){
   if(to){
     MailApp.sendEmail(to, 'SJSP daily report · ' + dmy_(today) + ' · ' + present + ' marked · ' + dDone + '/' + totalGps + ' villages',
       'Attendance ' + present + ' marked, ' + absent.length + ' not; villages ' + dDone + '/' + totalGps + '; ' + forecast + '.',
-      { htmlBody: emailShell_('The district, end of day', dmy_(today) + ' · Jangaon', secs) });
+      { htmlBody: emailShell_('The district, end of day', dmy_(today) + ' · Jangaon', secs),
+        /* the BOM keeps Telugu names readable when Excel opens the file */
+        attachments: [Utilities.newBlob('﻿' + attCsv, 'text/csv', 'SJGP_attendance_' + today + '.csv')] });
     props.setProperty('LAST_DAILY_REPORT', today);
     Logger.log('Daily report sent to ' + to + '.');
   } else Logger.log('No address to send the daily report to.');

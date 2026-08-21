@@ -177,8 +177,8 @@ function load(opts){
       MimeType: { JSON: 'application/json' }
     },
     LockService: { getScriptLock: () => ({ waitLock(){}, releaseLock(){}, tryLock(){ return true; } }) },
-    MailApp: { sendEmail: (to, subject, body, options) => { env.outbox.push({ to: to, subject: subject, body: body, htmlBody: options && options.htmlBody }); } },
-    GmailApp: { sendEmail: (to, subject, body, options) => { env.outbox.push({ to: to, subject: subject, body: body, htmlBody: options && options.htmlBody }); } },
+    MailApp: { sendEmail: (to, subject, body, options) => { env.outbox.push({ to: to, subject: subject, body: body, htmlBody: options && options.htmlBody, attachments: (options && options.attachments) || [] }); } },
+    GmailApp: { sendEmail: (to, subject, body, options) => { env.outbox.push({ to: to, subject: subject, body: body, htmlBody: options && options.htmlBody, attachments: (options && options.attachments) || [] }); } },
     DriveApp: {
       getRootFolder: () => env.driveRoot,
       Access: { ANYONE_WITH_LINK: 'ANYONE_WITH_LINK' },
