@@ -1521,7 +1521,7 @@ function wireInspect(){
      stack a second copy of it. Stacked copies made every tap fire twice —
      set the mark, then toggle it straight back to nought. */
   const body=$('#inspBody');
-  $('#ipClose').onclick = ()=>{ saveNow(); CUR=null; go('home'); };
+  $('#ipClose').onclick = ()=>{ saveNow(); stopEvalWatch(); CUR=null; go('home'); };
   $('#ipFile').onclick = openFileSheet;
   $('#inspStrip').querySelectorAll('[data-goto]').forEach(el => el.addEventListener('click', () => {
     const t=document.getElementById(el.dataset.goto); if(!t) return;
@@ -1597,7 +1597,7 @@ function wireInspect(){
       return; }
 
     if(e.target.closest('#gpsRow')) return captureFix();
-    if(e.target.closest('#btnDone')){ saveNow(); CUR=null; go('home'); toast('Saved on this phone'); return; }
+    if(e.target.closest('#btnDone')){ saveNow(); stopEvalWatch(); CUR=null; go('home'); toast('Saved on this phone'); return; }
     if(e.target.closest('#btnFile')){ openFileSheet(); return; }
   };
 
@@ -1657,7 +1657,10 @@ async function shoot(file, kind, meta){
   const r=CUR; if(!r) return;
   toast('Preparing the photograph…', 4000);
   let fix=null;
-  try{ fix = await getFix({timeout:9000, maximumAge:45000}); }catch(e){ fix = r.gpsFix || null; }
+  /* the better of the snap reading and whatever the watch has settled on —
+     a photograph stamped with the coarser of two known fixes helps nobody */
+  try{ fix = await getFix({timeout:9000, maximumAge:45000}); }catch(e){ fix = null; }
+  if(r.gpsFix && (!fix || r.gpsFix.acc < fix.acc)) fix = r.gpsFix;
   const ts=new Date().toISOString();
   const label = kind==='point' ? PHOTO_POINTS[meta.idx]
                                : (meta.clause.replace(/^\d+:/,'').replace(/^p/,'').toUpperCase() + ' — ' + (CLAUSE_TEXT[meta.clause.replace(/^\d+:/,'')]||'').slice(0,54));
@@ -1688,13 +1691,48 @@ $('#camPoint').addEventListener('change', ev=>{ const f=ev.target.files[0]; ev.t
 $('#camItem').addEventListener('change', ev=>{ const f=ev.target.files[0]; ev.target.value='';
   if(f && PENDING && PENDING.kind==='item') shoot(f, 'item', PENDING); PENDING=null; });
 
+/* THE SLOW SATELLITE, ON THIS SCREEN TOO. Attendance has kept listening for
+   a better fix since the change of 18.08; the evaluation still took one snap
+   reading. So a Secretary standing in his own village with a cold GPS filed
+   the network's ±2000 m guess and the console marked the evaluation
+   unverified through no fault of his — reported from Chandruthanda on
+   22.08.2026, and the same complaint, differently worded, from Chowdur.
+   The rule is the attendance rule: the fix can only improve, never worsen. */
+let EV_WATCH = null;
+function stopEvalWatch(){
+  if(EV_WATCH != null){ try{ navigator.geolocation.clearWatch(EV_WATCH); }catch(e){} EV_WATCH = null; }
+}
+function refineEvalFix(){
+  if(!navigator.geolocation || EV_WATCH != null) return;
+  const t0 = Date.now(), r0 = CUR;
+  EV_WATCH = navigator.geolocation.watchPosition(p => {
+    if(!CUR || CUR !== r0){ stopEvalWatch(); return; }   /* he closed the evaluation */
+    const f = {lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy, at:new Date().toISOString()};
+    if(!CUR.gpsFix || f.acc < CUR.gpsFix.acc){
+      CUR.gpsFix = f;
+      const t = $('#gpsTxt');
+      if(t) t.innerHTML = esc(fixText(f)) +
+        (f.acc > ACC_LIMIT ? '<br>Still coarse — the phone is listening for a better fix. Open sky helps.' : '');
+      const ico = $('#gpsRow .ico');
+      if(ico) ico.style.background = f.acc > ACC_LIMIT ? 'var(--warn)' : 'var(--ok)';
+      touch(); refreshStrip();
+    }
+    if(f.acc <= 50 || Date.now() - t0 > 150000) stopEvalWatch();
+  }, ()=>{}, {enableHighAccuracy:true, maximumAge:0});
+}
 function captureFix(){
   const t=$('#gpsTxt'); t.textContent='Reading the location…';
   getFixTwice().then(f=>{
     CUR.gpsFix=f; t.innerHTML=esc(fixText(f));
-    const ico=$('#gpsRow .ico'); if(ico) ico.style.background='var(--ok)';
-    touch(); refreshStrip(); toast('Location recorded');
-  }).catch(e=>{ t.textContent=e.message; });
+    const ico=$('#gpsRow .ico');
+    if(ico) ico.style.background = f.acc > ACC_LIMIT ? 'var(--warn)' : 'var(--ok)';
+    touch(); refreshStrip();
+    if(f.acc > ACC_LIMIT){
+      t.innerHTML = esc(fixText(f)) + '<br>The fix is coarse — the phone keeps listening while you fill the form. Open sky helps.';
+      toast('Location recorded — still coarse, the phone is listening for a better one', 5000);
+    } else toast('Location recorded');
+    if(f.acc > 100) refineEvalFix();       /* the satellite may still beat the network's guess */
+  }).catch(e=>{ t.textContent=e.message; refineEvalFix(); });
 }
 function quorum(){
   const r=CUR, el=$('#quorum'); if(!r||!el) return;
@@ -1795,7 +1833,7 @@ function openFileSheet(){
 function openView(id){
   const row=(DB.cache||[]).find(r=>String(r.id)===String(id));
   if(!row){ toast('That record is not loaded. Tap Refresh from district.'); return; }
-  VIEWROW=row; CUR=null; renderView(); showScreen('inspect');
+  VIEWROW=row; stopEvalWatch(); CUR=null; renderView(); showScreen('inspect');
 }
 function renderView(){
   const row=VIEWROW; if(!row) return;
