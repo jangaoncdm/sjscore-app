@@ -704,7 +704,81 @@ svg.leaflet-image-layer.leaflet-interactive path {
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
   --sh:var(--nm-out-sm); --r:14px;
+  /* -------- surfaces that used to be written as literal hex --------
+     Every one of these was a hardcoded colour somewhere below. They are
+     tokens now for one reason: a hardcoded #F8FAFC is invisible on a dark
+     card, and nobody notices until the console is opened in a dark room
+     in front of the district. */
+  --row-hover:#F8FAFC; --row-hover-2:#E9EDF6; --chat-a:#F1F4F8; --chat-err-line:#F0C6C6;
+  --pill-ok-ink:#14532D; --pill-warn-ink:#7C3E06; --pill-bad-ink:#8F1D1D; --pill-info-ink:#1E3A8A;
+  --grade-b:#65A30D;
+  --scrim:rgba(23,35,59,.38); --shine:rgba(255,255,255,.55);
+  --drawer-sh:-14px 0 34px rgba(100,116,139,.4);
+  --grad-a:#4A40CE; --grad-b:#0F766E;
+
+  /* ================= CHART SYSTEM =================
+     Series colours are TOKENS, never literals, so the theme toggle recolours
+     every chart without a re-render — and so an SVG can pick them up through
+     style="" (a presentation attribute cannot resolve a var()).
+
+     WHY THEY ARE NAMED --cs*, NOT --s*. The reference implementation calls
+     them --s1…--s8; in this console --s1…--s6 have meant the 8px spacing
+     grid since the first screen was drawn. Taking those names would have
+     silently rewritten every margin in the building.
+
+     THE PALETTE WAS COMPUTED, NOT CHOSEN. The obvious move — build the
+     series from the district's own accents — was tried first and FAILED the
+     validator on three counts: the house teal #0F766E and cyan #0E7490 fall
+     under the chroma floor and render grey, and the house red and amber sit
+     ΔE 9.1 apart for NORMAL vision, well under the floor of 15. Two of the
+     five figures on the attendance screen would have been a colour most
+     readers cannot separate. The full run is in prompt/palette-validation.txt.
+     Slot order is fixed and never cycled: violet sits between amber and red
+     because that adjacency is what the colourblind check measures. */
+  --ch-ink:#1A2437; --ch-muted:#57647D; --ch-grid:#E9EDF4; --ch-axis:#DFE3EE;
+  --ch-surface:#FFFFFF;
+  --cs1:#4f5ce5; --cs2:#0ca38a; --cs3:#e8a020; --cs4:#8b5cf6;
+  --cs5:#d13438; --cs6:#2aa7d8; --cs7:#7c8a12; --cs8:#a62b52;
+  /* ordinal: ONE hue, least → most. Ordered bands (hours of the morning,
+     ten-mark score bands) are one axis, not eight identities. */
+  --co1:#a3aaf1; --co2:#8b93ee; --co3:#6f7ae9; --co4:#5462d8; --co5:#3a46c4;
+  /* reserved. These mean good / warning / bad and are never series 4. */
+  --st-ok:#15803D; --st-warn:#B45309; --st-bad:#B91C1C; --st-idle:#8E97AE;
 }
+
+/* ================= DARK: A SECOND PALETTE, NOT AN INVERSION =================
+   Every series step below was validated against THIS card (#171B2D), not
+   flipped from the light set — the light steps measure outside the dark
+   lightness band. The ordinal ramp inverts with the surface: on a dark card
+   the least value is the darkest step. */
+body.dark{
+  --bg:#0E1120; --panel:#171B2D; --well:#1E2338; --line:#2B3149; --line-2:#242A3F;
+  --nm-out:0 0 0 1px var(--line), 0 8px 22px rgba(0,0,0,.45);
+  --nm-out-sm:0 0 0 1px var(--line), 0 2px 6px rgba(0,0,0,.35);
+  --tx:#E6E9F2; --tx-2:#B3BACD; --tx-3:#8E97AE;
+  --pri:#9AA0F5; --pri-strong:#B4B8F9; --pri-2:#232748;
+  --teal:#3EC5AC; --teal-2:#10352F;
+  --blue:#89A9F7; --blue-2:#16244A; --seal:#7FD4A0;
+  --green:#5BD68A; --green-2:#123726; --amber:#E9A93C; --amber-2:#3A2A10;
+  --red:#F1737A; --red-2:#3B1A1E; --gold:#D9B25C; --violet:#A98BF2; --violet-2:#271B44;
+  --row-hover:#1E2338; --row-hover-2:#262C42; --chat-a:#1E2338; --chat-err-line:#5A2A2E;
+  --pill-ok-ink:#A7F3C6; --pill-warn-ink:#F5CE8E; --pill-bad-ink:#FBB6BA; --pill-info-ink:#B9CDFA;
+  --grade-b:#9BCB3A;
+  --scrim:rgba(3,6,16,.62); --shine:rgba(255,255,255,.06);
+  --drawer-sh:-14px 0 34px rgba(0,0,0,.55);
+  --grad-a:#6B78EA; --grad-b:#17A98F;
+  --ch-ink:#E6E9F2; --ch-muted:#9AA1B8; --ch-grid:#242A3F; --ch-axis:#2F3654;
+  --ch-surface:#171B2D;
+  --cs1:#6b78ea; --cs2:#17a98f; --cs3:#bf8718; --cs4:#8f6ff0;
+  --cs5:#d9484c; --cs6:#2f9fce; --cs7:#8a9a20; --cs8:#b8446a;
+  --co1:#3a46c4; --co2:#5866e0; --co3:#7b87ec; --co4:#a0a9f3; --co5:#c3c9f9;
+  --st-ok:#5BD68A; --st-warn:#E9A93C; --st-bad:#F1737A; --st-idle:#8B93AB;
+}
+body.dark .msg.q{color:#0E1120}
+/* The tiles come from OpenStreetMap and are drawn light. Dimming them keeps
+   the map from glaring out of a dark console; the pins are drawn by us and
+   are deliberately left at full strength on top. */
+body.dark .leaflet-tile-pane{filter:brightness(.72) contrast(1.06) saturate(.85)}
 /* one focus language everywhere: visible ring, never removed */
 :focus{outline:none}
 :focus-visible{outline:3px solid var(--pri);outline-offset:2px;border-radius:10px}
@@ -736,7 +810,9 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 
 /* ---------- top ---------- */
 .main{min-width:0;padding:0 26px 44px}
-.top{display:flex;align-items:center;gap:14px;padding:18px 0 14px;position:sticky;top:0;background:var(--bg);z-index:8}
+.top{display:flex;align-items:center;gap:14px;padding:18px 0 14px;position:sticky;top:0;background:var(--bg);z-index:8;flex-wrap:wrap}
+.top>div:first-child{flex:1 1 210px;min-width:0}
+@media(max-width:760px){.top{gap:9px}.top .sp{display:none}.top .rsel,.top .tbtn{min-height:40px;padding:0 12px}}
 .top h1{font-size:21px;letter-spacing:-.015em}
 .top .sub{font-size:12.5px;color:var(--tx-3)}
 .top .sp{flex:1}
@@ -746,7 +822,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .rsel,.tbtn{background:var(--panel);border:0;border-radius:12px;min-height:44px;padding:0 var(--s2);font-size:13px;color:var(--tx-2);box-shadow:var(--nm-out-sm)}
 .rsel:active,.tbtn:active{box-shadow:var(--nm-in-sm)}
 /* the one indigo→teal gradient this screen is allowed */
-.tbtn.pri{background:linear-gradient(135deg,#4A40CE,#0F766E);color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(74,64,206,.3)}
+.tbtn.pri{background:linear-gradient(135deg,var(--grad-a),var(--grad-b));color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(74,64,206,.3)}
 .rsel:hover,.tbtn:hover{color:var(--tx)} .tbtn.pri:hover{color:#fff;filter:brightness(1.06)}
 
 /* ---------- grid & panels ---------- */
@@ -815,19 +891,19 @@ th:first-child{text-align:left}
 td{padding:7.5px 10px;border:1px solid var(--line-2);white-space:nowrap;text-align:center}
 td:first-child{text-align:left}
 td.mut{color:var(--tx-2)} td.num{font-family:var(--mono);text-align:center}
-tr[data-di]{cursor:pointer} tr:hover td{background:#F8FAFC}
+tr[data-di]{cursor:pointer} tr:hover td{background:var(--row-hover)}
 .twrap{overflow:auto;max-height:352px;border-radius:14px;box-shadow:var(--nm-in-sm);background:var(--well)}
 th{background:var(--well)}
-tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:#E9EDF6}
+tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--row-hover-2)}
 .pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:1.5px 8px;border-radius:9px}
 /* pill ink darkened for AA on tinted grounds */
 .pill{box-shadow:var(--nm-in-sm)}
-.pill.ok{color:#14532D;background:var(--green-2)} .pill.warn{color:#7C3E06;background:var(--amber-2)}
-.pill.bad{color:#8F1D1D;background:var(--red-2)} .pill.mut{color:var(--tx-2);background:var(--line-2)}
+.pill.ok{color:var(--pill-ok-ink);background:var(--green-2)} .pill.warn{color:var(--pill-warn-ink);background:var(--amber-2)}
+.pill.bad{color:var(--pill-bad-ink);background:var(--red-2)} .pill.mut{color:var(--tx-2);background:var(--line-2)}
 .bar{height:7px;border-radius:4px;background:var(--line-2);overflow:hidden;min-width:80px}
 .bar i{display:block;height:100%}
 .gr{font-family:var(--mono);font-weight:750}
-.grA{color:var(--green)} .grB{color:#65A30D} .grC{color:var(--amber)} .grD{color:var(--red)}
+.grA{color:var(--green)} .grB{color:var(--grade-b)} .grC{color:var(--amber)} .grD{color:var(--red)}
 /* -------- EMPTY state: an inset well that says what absence means -------- */
 .empty{margin:var(--s1);padding:var(--s4) var(--s2);color:var(--tx-2);font-size:13px;text-align:center;
   border-radius:14px;box-shadow:var(--nm-in-sm);background:var(--well)}
@@ -842,7 +918,7 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:#E9EDF
 .iss:last-child{border-bottom:0}
 .sev{flex:none;font-family:var(--mono);font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 7px;height:fit-content;margin-top:2px}
 .sev{min-width:44px;text-align:center;box-shadow:var(--nm-in-sm)}
-.sev.p1{background:var(--red-2);color:#8F1D1D} .sev.p2{background:var(--amber-2);color:#7C3E06} .sev.p3{background:var(--blue-2);color:#1E3A8A}
+.sev.p1{background:var(--red-2);color:var(--pill-bad-ink)} .sev.p2{background:var(--amber-2);color:var(--pill-warn-ink)} .sev.p3{background:var(--blue-2);color:var(--pill-info-ink)}
 .iss b{display:block;font-size:13px;font-weight:650}
 .iss span{display:block;font-size:12px;color:var(--tx-2);margin-top:2px;line-height:1.5}
 .iss .act{color:var(--seal);font-weight:600} .iss .act::before{content:"→ ";color:var(--gold)}
@@ -872,8 +948,8 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:#E9EDF
 .chatlog{max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:2px 2px 6px}
 .msg{max-width:88%;padding:9px 13px;border-radius:14px;font-size:13.5px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
 .msg.q{align-self:flex-end;background:var(--pri);color:#fff;border-bottom-right-radius:4px}
-.msg.a{align-self:flex-start;background:#F1F4F8;border:1px solid var(--line);border-bottom-left-radius:4px}
-.msg.err{align-self:flex-start;background:var(--red-2);border:1px solid #F0C6C6;color:#8F1D1D;border-bottom-left-radius:4px}
+.msg.a{align-self:flex-start;background:var(--chat-a);border:1px solid var(--line);border-bottom-left-radius:4px}
+.msg.err{align-self:flex-start;background:var(--red-2);border:1px solid var(--chat-err-line);color:var(--pill-bad-ink);border-bottom-left-radius:4px}
 .msg.wait{align-self:flex-start;background:transparent;color:var(--tx-3);padding:2px 4px}
 .askrow{display:flex;gap:8px;margin-top:10px}
 .askrow input{flex:1;min-width:0;border:1px solid var(--line);border-radius:12px;padding:11px 13px;font:inherit;font-size:13.5px;background:var(--panel);color:var(--tx)}
@@ -887,9 +963,9 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:#E9EDF
 .briefbar{display:flex;gap:9px;align-items:center;padding-bottom:9px;flex-wrap:wrap}
 /* drawer */
 #drawer{position:fixed;inset:0;z-index:60}
-#drawer .scrim{position:absolute;inset:0;background:rgba(23,35,59,.38)}
+#drawer .scrim{position:absolute;inset:0;background:var(--scrim)}
 #drawer .sheet{position:absolute;right:0;top:0;bottom:0;width:min(440px,100%);background:var(--panel);
-  padding:var(--s3);overflow:auto;box-shadow:-14px 0 34px rgba(100,116,139,.4)}
+  padding:var(--s3);overflow:auto;box-shadow:var(--drawer-sh)}
 #drawer h2{font-size:17px;margin-bottom:3px} #drawer .sub{color:var(--tx-3);font-size:12.5px;margin-bottom:13px}
 #drawer dl{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:13px}
 #drawer dt{color:var(--tx-3)} #drawer dd{font-weight:600;word-break:break-word}
@@ -912,13 +988,13 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:#E9EDF
 /* -------- LOADING state: same surfaces, breathing -------- */
 .skel{position:relative;overflow:hidden}
 .skel::after{content:'';position:absolute;inset:0;border-radius:inherit;
-  background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.55) 50%,transparent 70%);
+  background:linear-gradient(100deg,transparent 30%,var(--shine) 50%,transparent 70%);
   animation:shine 1.6s infinite}
 @keyframes shine{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
 /* -------- ERROR states -------- */
 #err{position:fixed;left:var(--s2);right:var(--s2);bottom:var(--s2);z-index:50;background:var(--panel);
   border:0;border-left:6px solid var(--red);border-radius:14px;box-shadow:var(--nm-out);
-  color:#8F1D1D;font-size:13px;padding:var(--s2);font-family:var(--mono);display:none}
+  color:var(--pill-bad-ink);font-size:13px;padding:var(--s2);font-family:var(--mono);display:none}
 .bigerr{grid-column:span 12;text-align:center;padding:var(--s6) var(--s3)}
 .bigerr .tbtn{margin-top:var(--s2)}
 
@@ -930,6 +1006,101 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:#E9EDF
 .gate p{color:var(--tx-2);font-size:13.5px;line-height:1.6}
 .gate .rd{color:var(--red)}
 .gate a.tbtn{display:inline-block;margin-top:18px}
+
+/* ================= CHART LAYER =================
+   WHY THE MAGNITUDE CHARTS ARE HTML AND NOT SVG. A bar chart drawn into a
+   scaled viewBox ties its row height to its row COUNT: the mandal chart with
+   twelve rows and the score chart with ten ended up with visibly different
+   bar thicknesses and baselines, side by side, because each was stretched to
+   the same card width and took its height from its own aspect ratio. That is
+   what made this console read as ragged. Laid out in HTML at exact pixel
+   sizes, a row is 22px whether there are three of them or thirty.
+   SVG is kept for arcs and lines, where the geometry actually needs it.
+
+   The 12-column editorial grid is NOT replaced — the map beside the marks
+   list, the briefing running full width, are deliberate and stay. The
+   alignment rule is applied INSIDE it: every chart sits in a .plot box of
+   the same minimum height, centred, so two charts in neighbouring panels sit
+   on the same optical line and a panel showing "nothing filed yet" is
+   exactly as tall as the chart beside it. */
+.plot{
+  display:flex; align-items:center; justify-content:center;
+  min-height:212px; min-width:0; width:100%;
+}
+.plot>*{width:100%}
+.plot .chart-empty{
+  color:var(--tx-2); font-size:13px; text-align:center; width:100%;
+  padding:var(--s3) var(--s2); border-radius:14px;
+  box-shadow:var(--nm-in-sm); background:var(--well);
+}
+
+/* ---- SVG ink: classes, never hardcoded hex, or dark mode renders the
+        axis labels at near-invisible contrast ---- */
+.c-grid{stroke:var(--ch-grid);stroke-width:1}
+.c-tick{fill:var(--ch-muted);font-size:10.5px;font-family:var(--mono)}
+.c-endlab{fill:var(--ch-ink);font-size:11.5px;font-weight:700;font-family:var(--mono)}
+.c-enddot{stroke:var(--ch-surface);stroke-width:2}
+.c-line{width:100%;height:auto;max-height:248px;display:block}
+.c-linewrap{width:100%}
+
+/* ---- columns ---- */
+.c-cols{display:flex;align-items:flex-end;justify-content:center;gap:12px;height:200px;width:100%;padding:0 4px}
+.c-col{flex:1 1 0;max-width:88px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-width:0}
+/* cap the MARK at 24px; the BAND stays wide so the labels below never collide */
+.c-colbar{width:24px;max-width:100%;border-radius:4px 4px 0 0;min-height:2px;display:block}
+.c-colv{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ch-ink);margin-bottom:4px;white-space:nowrap}
+.c-collab{font-size:10.5px;color:var(--ch-muted);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;text-align:center}
+
+/* ---- horizontal rows: 22px each, whatever the row count ---- */
+.c-rowswrap{width:100%}
+.c-rows{width:100%;display:flex;flex-direction:column;gap:5px}
+.c-row{display:grid;grid-template-columns:104px 1fr 68px;align-items:center;gap:9px;height:22px}
+.c-rowlab{font-size:11.5px;color:var(--ch-muted);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-track{background:var(--ch-grid);border-radius:4px;height:13px;overflow:hidden;display:flex}
+.c-fill{display:block;height:100%;border-radius:4px}
+.c-rowv{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ch-ink);text-align:right;font-variant-numeric:tabular-nums}
+/* stacked rows: segments parted by a 2px gap in the SURFACE, never by a
+   border drawn round the mark — a stroke there is ink that isn't data */
+.c-seg{display:block;min-width:0}
+.c-track .c-seg+.c-seg{margin-left:2px}
+.c-rowv.ok{color:var(--st-ok)} .c-rowv.bad{color:var(--st-bad);font-weight:800}
+
+/* ---- meter: the honest form for one ratio against a limit ---- */
+.c-meter{width:100%}
+.c-meterhead{display:flex;align-items:baseline;gap:11px;margin-bottom:11px;flex-wrap:wrap}
+.c-meterv{font-family:var(--mono);font-size:42px;font-weight:750;color:var(--ch-ink);line-height:1;letter-spacing:-.02em}
+.c-metersub{font-size:12.5px;color:var(--ch-muted)}
+.c-metertrack{background:var(--ch-grid);border-radius:999px;height:14px;overflow:hidden}
+.c-meterfill{height:100%;border-radius:999px;min-width:3px}
+.c-meterfoot{margin-top:11px;font-size:12.5px;color:var(--ch-muted);line-height:1.55}
+
+/* ---- stacked share ---- */
+.c-stackwrap{width:100%}
+.c-stacktotal{font-family:var(--mono);font-size:34px;font-weight:750;color:var(--ch-ink);line-height:1.1;margin-bottom:11px}
+.c-stacktotal span{display:block;font-family:var(--sans);font-size:11px;font-weight:400;color:var(--ch-muted);letter-spacing:.06em;text-transform:uppercase}
+.c-stack{display:flex;height:19px;border-radius:5px;overflow:hidden;gap:2px}
+.c-stacklegend{margin-top:13px}
+
+/* ---- donut ---- */
+.c-donutwrap{display:flex;align-items:center;gap:18px;flex-wrap:wrap;justify-content:center}
+.c-donut{width:150px;height:150px;flex:0 0 auto}
+.c-donutv{fill:var(--ch-ink);font-size:24px;font-weight:750;font-family:var(--mono)}
+.c-donutk{fill:var(--ch-muted);font-size:8px;letter-spacing:.1em;text-transform:uppercase}
+
+/* ---- legend. Identity comes from the swatch; the TEXT never wears the
+        data colour, or the label starts encoding a value it doesn't hold ---- */
+.legend{font-size:12.5px;color:var(--ch-muted);flex:1;min-width:170px}
+.legend div{display:flex;align-items:center;gap:8px;margin:5px 0}
+.legend b{color:var(--ch-ink);font-family:var(--mono);margin-left:auto}
+.legend .pc{color:var(--ch-muted);font-family:var(--mono);width:38px;text-align:right}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;flex:none}
+.legend-row{display:flex;gap:14px;flex-wrap:wrap;margin-top:9px}
+.legend-row div{margin:0}
+.c-spark{width:90px;height:22px;display:inline-block;vertical-align:middle}
+
+/* ---- the theme switch ---- */
+.tbtn.thm{min-width:44px;padding:0 12px}
+.tbtn.thm svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;display:inline-block}
 </style>
 </head>
 <body>
@@ -960,6 +1131,7 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:#E9EDF
       <span class="live" id="live"><i></i><span id="liveTx">connecting</span></span>
       <select class="rsel" id="monPick" title="Month under review"></select>
       <select class="rsel" id="every"><option value="30000">30s</option><option value="60000" selected>1m</option><option value="300000">5m</option></select>
+      <button class="tbtn thm" id="thm" title="Light or dark" aria-label="Switch between light and dark"></button>
       <button class="tbtn" id="now">Refresh</button>
       <a class="tbtn pri" href="./">Open the app</a>
     </div>
@@ -999,7 +1171,32 @@ let MAP=null,MLAYER=null,MAP2=null,M2LAYER=null,GEO=[],MARKERS=[],MFILTER='all',
 let CHAT=[],ASKING=false,XLSXP=null,NTC_UNCHK={},NTC_DECIDING=false;
 
 /* ---------------- session ---------------- */
+/* LIGHT OR DARK. Default is the light console the district already knows —
+   a Collector who has never asked for anything sees exactly what he saw
+   yesterday. The choice is remembered on the device, and the charts follow it
+   with no re-render because every series colour is a custom property. */
+const SUN='<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.4M12 19.6V22M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2 12h2.4M19.6 12H22M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"/></svg>';
+const MOON='<svg viewBox="0 0 24 24"><path d="M20 14.4A8.5 8.5 0 0 1 9.6 4a8.5 8.5 0 1 0 10.4 10.4z"/></svg>';
+function paintTheme(){
+  const dark=document.body.classList.contains('dark');
+  const b=$('#thm'); if(b) b.innerHTML=dark?SUN:MOON;
+  if(MAP) setTimeout(()=>{try{MAP.invalidateSize();}catch(e){}},60);
+  if(MAP2) setTimeout(()=>{try{MAP2.invalidateSize();}catch(e){}},60);
+}
+function initTheme(){
+  let t=null; try{ t=localStorage.getItem('sjgp-theme'); }catch(e){}
+  document.body.classList.toggle('dark', t==='dark');
+  paintTheme();
+}
 function boot(){
+  initTheme();
+  const tb=$('#thm');
+  if(tb) tb.onclick=()=>{
+    const dark=!document.body.classList.contains('dark');
+    document.body.classList.toggle('dark',dark);
+    try{ localStorage.setItem('sjgp-theme',dark?'dark':'light'); }catch(e){}
+    paintTheme();
+  };
   let d=null; try{ d=JSON.parse(localStorage.getItem('sjf5')||'null'); }catch(e){}
   if(!d||!d.session||!d.session.token||!d.url){ gate('Sign in once in the SJGP app on this device, then open this page again. The console uses that sign-in.',true); return; }
   if((d.session.user||{}).role!=='COLLECTOR'){ gate('<span class="rd">The monitoring console is available to the Collector alone.</span> This device is signed in as '+esc((d.session.user||{}).name||'another officer')+'.',true); return; }
@@ -1240,127 +1437,354 @@ function analyse(j){
 }
 
 /* ---------------- charts ---------------- */
-function smooth(pts){ if(pts.length<3) return pts.map((p,i)=>(i?'L':'M')+p[0]+' '+p[1]).join(' ');
-  let d='M'+pts[0][0]+' '+pts[0][1];
-  for(let i=0;i<pts.length-1;i++){ const p0=pts[Math.max(0,i-1)],p1=pts[i],p2=pts[i+1],p3=pts[Math.min(pts.length-1,i+2)];
-    d+=' C'+(p1[0]+(p2[0]-p0[0])/6)+' '+(p1[1]+(p2[1]-p0[1])/6)+' '+(p2[0]-(p3[0]-p1[0])/6)+' '+(p2[1]-(p3[1]-p1[1])/6)+' '+p2[0]+' '+p2[1];}
-  return d;}
-function areaChart(rows,key,color){
-  const W=980,H=250,P=38;
-  const val=r=> key==='present'?r.present : key==='leave'?r.leave : key==='absent'?Math.max(0,(DATA.totals.officers-1)-r.present-r.leave) : (r.filedN||0);
-  const mx=Math.max(4,...rows.map(val));
-  let g=''; [0,.25,.5,.75,1].forEach(f=>{const y=H-26-(H-48)*f;
-    g+=`<line class="gridln" x1="${P}" x2="${W-8}" y1="${y}" y2="${y}"/><text class="axis" x="${P-7}" y="${y+3.5}" text-anchor="end">${Math.round(mx*f)}</text>`;});
-  const step=(W-P-22)/Math.max(1,rows.length-1);
-  const pts=rows.map((r,i)=>[P+10+i*step, H-26-(H-48)*val(r)/mx]);
-  const line=smooth(pts);
-  g+=`<path d="${line} L ${pts[pts.length-1][0]} ${H-26} L ${pts[0][0]} ${H-26} Z" fill="${color}" opacity=".14"/>`;
-  g+=`<path d="${line}" fill="none" stroke="${color}" stroke-width="2.4"/>`;
-  pts.forEach((p,i)=>{ g+=`<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="${color}"/>`;
-    if(i%2===0||i===pts.length-1) g+=`<text class="axis" x="${p[0]}" y="${H-8}" text-anchor="middle">${rows[i].date.slice(8)}</text>`;});
-  return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
-}
-function donut(segs,center,sub){
-  const total=segs.reduce((s,x)=>s+x.v,0);
-  if(!total) return '<div class="empty">Nothing yet.</div>';
-  const C=2*Math.PI*56; let off=0, g='';
-  segs.forEach(x=>{const f=x.v/total, len=C*f;
-    g+=`<circle cx="86" cy="86" r="56" fill="none" stroke="${x.c}" stroke-width="19"
-      stroke-dasharray="${len-2} ${C-len+2}" stroke-dashoffset="${-off}" transform="rotate(-90 86 86)"/>`; off+=len;});
-  const leg=segs.map(x=>`<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin:5px 0">
-    <i style="width:10px;height:10px;border-radius:3px;background:${x.c}"></i>${esc(x.k)}
-    <b style="margin-left:auto;font-family:var(--mono)">${x.v}</b>
-    <span style="color:var(--tx-3);font-family:var(--mono);width:38px;text-align:right">${pct(x.v,total)}%</span></div>`).join('');
-  return `<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">
-    <svg viewBox="0 0 172 172" style="max-width:172px">${g}
-      <text x="86" y="82" text-anchor="middle" font-family="var(--mono)" font-size="27" font-weight="750" fill="var(--tx)">${center}</text>
-      <text x="86" y="101" text-anchor="middle" class="axis">${esc(sub)}</text></svg>
-    <div style="flex:1;min-width:170px">${leg}</div></div>`;
-}
-function histMarkIn(rows){
-  const W=460,H=210,P=30,buckets=Array(13).fill(0);
-  rows.forEach(r=>{const h2=new Date(r.at).getHours(); if(h2>=6&&h2<=18) buckets[h2-6]++;});
-  const mx=Math.max(1,...buckets);
-  let g='';[0,.5,1].forEach(f=>{const y=H-24-(H-44)*f;
-    g+=`<line class="gridln" x1="${P}" x2="${W-6}" y1="${y}" y2="${y}"/><text class="axis" x="${P-6}" y="${y+3.5}" text-anchor="end">${Math.round(mx*f)}</text>`;});
-  const bw=Math.floor((W-P-12)/13)-5;
-  buckets.forEach((v,i)=>{const x=P+7+i*(bw+5),hh=(H-44)*v/mx;
-    g+=`<rect x="${x}" y="${H-24-hh}" width="${bw}" height="${hh}" rx="3" fill="${i+6<10?'var(--green)':i+6<12?'#65A30D':'var(--amber)'}" opacity=".85"/>
-        <text class="axis" x="${x+bw/2}" y="${H-7}" text-anchor="middle">${i+6}</text>`;});
-  return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
-}
-/* The monthly average, drawn the way the 14-day activity chart is drawn —
-   a smooth line over a soft area — with the multi-accent treatment: the
-   line rides the house indigo→teal gradient, and each month's point wears
-   the grade colour its average earned, so level and movement read together. */
-function trendLine(rows){
-  const W=460,H=210,P=30;
-  if(!rows.length) return '<div class="empty">No months on record yet.</div>';
-  const band=s=>s>=85?'#16A34A':s>=70?'#65A30D':s>=55?'#D97706':'#DC2626';
-  let g=`<defs>
-    <linearGradient id="tgLine" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#4A40CE"/><stop offset="1" stop-color="#0F766E"/></linearGradient>
-    <linearGradient id="tgFill" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#4A40CE" stop-opacity=".18"/>
-      <stop offset="1" stop-color="#0F766E" stop-opacity="0"/></linearGradient></defs>`;
-  [0,25,50,75,100].forEach(v=>{const y=H-26-(H-50)*v/100;
-    g+=`<line class="gridln" x1="${P}" x2="${W-8}" y1="${y}" y2="${y}"/><text class="axis" x="${P-7}" y="${y+3.5}" text-anchor="end">${v}</text>`;});
-  const step=(W-P-22)/Math.max(1,rows.length-1);
-  const pts=rows.map((r,i)=>[P+10+i*step,H-26-(H-50)*Math.min(100,r.avg)/100]);
-  const line=smooth(pts);
-  g+=`<path d="${line} L ${pts[pts.length-1][0]} ${H-26} L ${pts[0][0]} ${H-26} Z" fill="url(#tgFill)"/>`;
-  g+=`<path d="${line}" fill="none" stroke="url(#tgLine)" stroke-width="2.6"/>`;
-  pts.forEach((p,i)=>{const r=rows[i];
-    g+=`<g><title>${esc(monName(r.ym)+' · average '+r.avg+' over '+r.n+' village'+(r.n===1?'':'s'))}</title>
-    <circle cx="${p[0]}" cy="${p[1]}" r="${i===pts.length-1?5.5:4.5}" fill="${band(r.avg)}" stroke="#fff" stroke-width="2"/>
-    <text class="axis" x="${Math.min(p[0],W-16)}" y="${p[1]-11}" text-anchor="middle" style="font-weight:700" fill="var(--tx)">${r.avg}</text>
-    <text class="axis" x="${Math.max(P+16,Math.min(p[0],W-18))}" y="${H-8}" text-anchor="middle">${r.ym.slice(5)}/${r.ym.slice(2,4)}</text></g>`;});
-  return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
+/* ================= THE CHART TOOLKIT =================
+   Dependency-free, no CDN, no build step — the console has to open on a
+   filtered government network.
+
+   Rule 0, in order: pick the form for the data's JOB, assign colour by the
+   job that colour is doing, validate the palette, apply the mark specs, then
+   render it and look at it. Colour comes last. The palette here was run
+   through the validator against this console's own two surfaces; the record,
+   including the palette that FAILED, is in prompt/palette-validation.txt.
+
+   Every colour below is a CSS custom property, so the theme switch recolours
+   every chart with no re-render and no redraw. */
+const Charts = (() => {
+  /* Categorical — identity. Fixed order, assigned by slot, never cycled and
+     never generated. Past slot 8 the tail folds into "Other". */
+  const PAL = ['var(--cs1)','var(--cs2)','var(--cs3)','var(--cs4)',
+               'var(--cs5)','var(--cs6)','var(--cs7)','var(--cs8)'];
+  /* Ordinal — magnitude or rank on ONE axis: hours of the morning, ten-mark
+     score bands. One hue, least → most. A rainbow here would claim these are
+     eight different things when they are one thing at eight levels. */
+  const ORD = ['var(--co1)','var(--co2)','var(--co3)','var(--co4)','var(--co5)'];
+  /* Reserved. Good / warning / bad, never re-used as "series 4", and always
+     shipped with a word beside them so colour never carries the meaning. */
+  const ST = {ok:'var(--st-ok)', warn:'var(--st-warn)', bad:'var(--st-bad)', idle:'var(--st-idle)'};
+
+  let uid = 0; const nextId = () => 'cg' + (++uid);
+  const fmt = n => (typeof n === 'number' && isFinite(n))
+    ? (Math.abs(n) >= 1000 ? n.toLocaleString('en-IN') : String(n)) : String(n);
+  const empty = m => '<div class="chart-empty">' + esc(m || 'Nothing yet.') + '</div>';
+  function niceMax(v){
+    if(v <= 5) return 5;
+    const p = Math.pow(10, Math.floor(Math.log10(v)));
+    for(const m of [1,2,5,10]) if(m*p >= v) return m*p;
+    return 10*p;
+  }
+  /* A gradient must never introduce a SECOND hue, or the fill starts implying
+     a value the data does not hold — which is exactly what the old score
+     trend did, running indigo to teal across a single series. This is one
+     colour fading toward the surface. Declared twice so a browser without
+     color-mix() still gets the right solid hue instead of no fill at all. */
+  const grad = (c, dir) => {
+    const d = dir || '180deg';
+    return 'background:linear-gradient(' + d + ',' + c + ' 0%,' + c + ' 100%);' +
+           'background:linear-gradient(' + d + ',' + c + ' 0%,color-mix(in srgb,' + c + ' 62%,transparent) 100%)';
+  };
+
+  /* ---- columns (HTML) ----
+     One series gets ONE colour. Colouring each bar of a single series by its
+     own height encodes height twice and spends the only free channel saying
+     nothing — pass ord:true only when the bars are an ordered scale. */
+  function bar(items, opts){
+    opts = opts || {};
+    if(!items || !items.length) return empty(opts.emptyMsg);
+    const max = opts.pct ? 100 : niceMax(Math.max(1, ...items.map(i => i.value)));
+    const base = opts.color || PAL[0];
+    return '<div class="c-cols">' + items.map((it, i) => {
+      const c = it.color || (opts.ord ? ORD[Math.min(ORD.length - 1, Math.floor(i * ORD.length / items.length))] : base);
+      const pc = Math.max(0, Math.min(100, (it.value / max) * 100));
+      return '<div class="c-col" title="' + esc(it.title || (it.label + ': ' + it.value)) + '">' +
+        '<span class="c-colv">' + esc(fmt(it.value) + (opts.pct ? '%' : '')) + '</span>' +
+        '<span class="c-colbar" style="height:' + pc.toFixed(1) + '%;' + grad(c) + '"></span>' +
+        '<span class="c-collab">' + esc(it.label) + '</span></div>';
+    }).join('') + '</div>';
+  }
+
+  /* ---- stacked rows (HTML) ----
+     One row per item, each row parted into status segments. Every row is
+     exactly 22px, so this lines up with any other chart beside it however
+     many mandals the district has. */
+  function stackRows(rows, opts){
+    opts = opts || {};
+    if(!rows || !rows.length) return empty(opts.emptyMsg);
+    return '<div class="c-rowswrap"><div class="c-rows">' + rows.map(r => {
+      const total = r.parts.reduce((s, p) => s + p.value, 0) || 1;
+      const segs = r.parts.filter(p => p.value > 0).map(p =>
+        '<span class="c-seg" style="flex:' + p.value + ';' + grad(p.color, '90deg') + '"></span>').join('');
+      return '<div class="c-row" title="' + esc(r.title || r.label) + '">' +
+        '<span class="c-rowlab">' + esc(r.label) + '</span>' +
+        '<span class="c-track">' + segs + '</span>' +
+        '<span class="c-rowv ' + esc(r.tone || '') + '">' + esc(r.right == null ? total : r.right) + '</span></div>';
+    }).join('') + '</div>' + (opts.legend ? legendRow(opts.legend) : '') + '</div>';
+  }
+
+  /* ---- meter (HTML) ----
+     One ratio against a limit. This replaces the gauge donut the health panel
+     carried: a two-slice ring is a stat tile in a costume, and it reads worse
+     than the number it is hiding. */
+  function meter(value, total, opts){
+    opts = opts || {};
+    if(!total) return empty(opts.emptyMsg);
+    const pc = Math.max(0, Math.min(100, (value / total) * 100));
+    const c = opts.color || PAL[0];
+    return '<div class="c-meter">' +
+      '<div class="c-meterhead"><b class="c-meterv">' + Math.round(opts.show == null ? pc : opts.show) +
+        (opts.unit === '' ? '' : esc(opts.unit || '%')) + '</b>' +
+        '<span class="c-metersub">' + esc(opts.sub || (fmt(value) + ' of ' + fmt(total))) + '</span></div>' +
+      '<div class="c-metertrack" title="' + esc(fmt(value) + ' of ' + fmt(total)) + '">' +
+        '<div class="c-meterfill" style="width:' + pc.toFixed(1) + '%;' + grad(c, '90deg') + '"></div></div>' +
+      (opts.foot ? '<div class="c-meterfoot">' + opts.foot + '</div>' : '') + '</div>';
+  }
+
+  /* ---- stacked share (HTML) ----
+     Part-to-whole, <= 6 parts, as one bar with the total as the hero number.
+     Segments are parted by a 2px gap in the surface, never by a stroke. */
+  function stack(parts, opts){
+    opts = opts || {};
+    const live = parts.filter(p => p.value > 0);
+    const total = parts.reduce((s, p) => s + p.value, 0);
+    if(!total) return empty(opts.emptyMsg);
+    const segs = live.map((p, i) => '<span class="c-seg" style="flex:' + p.value + ';' +
+      grad(p.color || PAL[i % PAL.length], '90deg') + '" title="' + esc(p.label + ': ' + fmt(p.value) +
+      ' (' + Math.round(p.value / total * 100) + '%)') + '"></span>').join('');
+    return '<div class="c-stackwrap">' +
+      (opts.center != null ? '<div class="c-stacktotal">' + esc(fmt(opts.center)) +
+        (opts.centerLabel ? '<span>' + esc(opts.centerLabel) + '</span>' : '') + '</div>' : '') +
+      '<div class="c-stack">' + segs + '</div>' +
+      '<div class="legend c-stacklegend">' + parts.map((p, i) =>
+        '<div><i style="background:' + (p.color || PAL[i % PAL.length]) + '"></i>' + esc(p.label) +
+        '<b>' + esc(fmt(p.value)) + '</b><span class="pc">' + Math.round(p.value / total * 100) + '%</span></div>').join('') +
+      '</div></div>';
+  }
+
+  /* ---- donut (SVG) ---- part-to-whole at a glance, <= 6 segments. */
+  function donut(parts, opts){
+    opts = opts || {};
+    const live = parts.filter(p => p.value > 0);
+    const total = parts.reduce((s, p) => s + p.value, 0);
+    if(!total) return empty(opts.emptyMsg);
+    const R = 46, SW = 17, C = 2 * Math.PI * R, GAP = live.length > 1 ? 3 : 0;
+    let off = 0, s = '', defs = '';
+    live.forEach((p, i) => {
+      const col = p.color || PAL[i % PAL.length], arc = (p.value / total) * C, gid = nextId();
+      defs += '<linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0%" style="stop-color:' + col + '"/>' +
+        '<stop offset="100%" style="stop-color:' + col + ';stop-opacity:.72"/></linearGradient>';
+      s += '<circle r="' + R + '" cx="60" cy="60" fill="none" stroke="url(#' + gid + ')" stroke-width="' + SW +
+        '" stroke-dasharray="' + Math.max(0.5, arc - GAP).toFixed(2) + ' ' + C.toFixed(2) +
+        '" stroke-dashoffset="' + (-off).toFixed(2) + '" transform="rotate(-90 60 60)"><title>' +
+        esc(p.label + ': ' + fmt(p.value) + ' (' + Math.round(p.value / total * 100) + '%)') + '</title></circle>';
+      off += arc;
+    });
+    return '<div class="c-donutwrap"><svg class="c-donut" viewBox="0 0 120 120" role="img"><defs>' + defs + '</defs>' + s +
+      '<text class="c-donutv" x="60" y="' + (opts.centerLabel ? 58 : 66) + '" text-anchor="middle">' +
+        esc(fmt(opts.center != null ? opts.center : total)) + '</text>' +
+      (opts.centerLabel ? '<text class="c-donutk" x="60" y="74" text-anchor="middle">' + esc(opts.centerLabel) + '</text>' : '') +
+      '</svg><div class="legend">' + parts.map((p, i) =>
+        '<div><i style="background:' + (p.color || PAL[i % PAL.length]) + '"></i>' + esc(p.label) +
+        '<b>' + esc(fmt(p.value)) + '</b><span class="pc">' + Math.round(p.value / total * 100) + '%</span></div>').join('') +
+      '</div></div>';
+  }
+
+  /* ---- line / area (SVG) ----
+     A value is direct-labelled at the END, not on every point; every point
+     still carries a hover title, so nothing the reader could ask for is lost.
+     The end dot wears a 2px ring in the surface colour so it stays legible
+     wherever it lands. */
+  function line(labels, series, opts){
+    opts = opts || {};
+    const n = labels.length;
+    if(!n || !series.length) return empty(opts.emptyMsg);
+    const W = opts.w || 720, H = opts.h || 232, PB = 26, PT = 20, PL = 40;
+    const max = opts.max || niceMax(Math.max(1, ...series.flatMap(s => s.values.filter(v => v != null))));
+    const x = i => PL + (n === 1 ? 0 : (i / (n - 1)) * (W - PL - 16));
+    const y = v => PT + (1 - v / max) * (H - PB - PT);
+    let s = '', defs = '';
+    [0, .25, .5, .75, 1].forEach(f => {
+      const vy = PT + f * (H - PB - PT);
+      /* solid, hairline, recessive — a DASHED gridline reads as a threshold */
+      s += '<line class="c-grid" x1="' + PL + '" y1="' + vy.toFixed(1) + '" x2="' + (W - 8) + '" y2="' + vy.toFixed(1) + '"/>' +
+        '<text class="c-tick" x="' + (PL - 7) + '" y="' + (vy + 3.5).toFixed(1) + '" text-anchor="end">' +
+        esc(fmt(Math.round(max * (1 - f))) + (opts.unit || '')) + '</text>';
+    });
+    series.forEach((sr, si) => {
+      const col = sr.color || PAL[si % PAL.length];
+      let d = '', open = false;
+      sr.values.forEach((v, i) => {
+        if(v == null){ open = false; return; }
+        d += (open ? ' L' : ' M') + x(i).toFixed(1) + ',' + y(v).toFixed(1); open = true;
+      });
+      if(sr.area){
+        let firstI = sr.values.findIndex(v => v != null), lastI = -1;
+        sr.values.forEach((v, i) => { if(v != null) lastI = i; });
+        if(firstI >= 0){
+          const gid = nextId();
+          defs += '<linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0%" style="stop-color:' + col + ';stop-opacity:.30"/>' +
+            '<stop offset="100%" style="stop-color:' + col + ';stop-opacity:0"/></linearGradient>';
+          s += '<path d="' + d + ' L' + x(lastI).toFixed(1) + ',' + y(0).toFixed(1) + ' L' +
+            x(firstI).toFixed(1) + ',' + y(0).toFixed(1) + ' Z" fill="url(#' + gid + ')"/>';
+        }
+      }
+      s += '<path d="' + d + '" fill="none" style="stroke:' + col + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+      sr.values.forEach((v, i) => {
+        if(v == null) return;
+        s += '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(v).toFixed(1) + '" r="10" fill="transparent"><title>' +
+          esc(labels[i] + ' — ' + sr.name + ': ' + fmt(v) + (opts.unit || '')) + '</title></circle>';
+      });
+      let lastI = -1;
+      sr.values.forEach((v, i) => { if(v != null) lastI = i; });
+      if(lastI >= 0){
+        s += '<circle class="c-enddot" cx="' + x(lastI).toFixed(1) + '" cy="' + y(sr.values[lastI]).toFixed(1) +
+          '" r="4.5" style="fill:' + col + '"/>';
+        if(series.length === 1){
+          const lx = x(lastI), anchor = lx > W - 64 ? 'end' : 'start';
+          /* flip the label below the point when it has run to the top of the
+             plot, or it renders outside the viewBox and simply vanishes */
+          const ly = y(sr.values[lastI]), above = ly - 11 > PT + 4;
+          s += '<text class="c-endlab" x="' + (lx + (anchor === 'end' ? -8 : 8)).toFixed(1) + '" y="' +
+            (above ? ly - 11 : ly + 16).toFixed(1) + '" text-anchor="' + anchor + '">' +
+            esc(fmt(sr.values[lastI]) + (opts.unit || '')) + '</text>';
+        }
+      }
+    });
+    /* first and last ticks anchor start/end — anchored middle, the last one
+       is clipped at the viewBox edge */
+    const step = Math.max(1, Math.ceil(n / 9));
+    labels.forEach((l, i) => {
+      if(i % step && i !== n - 1) return;
+      const a = i === 0 ? 'start' : (i === n - 1 ? 'end' : 'middle');
+      s += '<text class="c-tick" x="' + x(i).toFixed(1) + '" y="' + (H - 7) + '" text-anchor="' + a + '">' + esc(l) + '</text>';
+    });
+    /* one series is already named by the card title; a one-swatch legend
+       only restates it */
+    const leg = series.length < 2 ? '' : legendRow(series.map((sr, si) =>
+      ({label: sr.name, color: sr.color || PAL[si % PAL.length]})));
+    return '<div class="c-linewrap"><svg class="c-line" viewBox="0 0 ' + W + ' ' + H + '" role="img"><defs>' +
+      defs + '</defs>' + s + '</svg>' + leg + '</div>';
+  }
+
+  function legendRow(items){
+    return '<div class="legend legend-row">' + items.map(i =>
+      '<div><i style="background:' + i.color + '"></i>' + esc(i.label) + '</div>').join('') + '</div>';
+  }
+
+  function spark(values, color){
+    const W = 90, H = 22, vals = values.map(v => v == null ? 0 : v);
+    const max = Math.max(1, ...vals);
+    const x = i => 2 + (i / Math.max(1, vals.length - 1)) * (W - 4);
+    const y = v => H - 3 - (v / max) * (H - 6);
+    let d = '';
+    vals.forEach((v, i) => { d += (i ? ' L' : 'M') + x(i).toFixed(1) + ',' + y(v).toFixed(1); });
+    return '<svg class="c-spark" viewBox="0 0 ' + W + ' ' + H + '"><path d="' + d +
+      '" fill="none" style="stroke:' + (color || PAL[0]) + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+  }
+
+  return {bar, stackRows, meter, stack, donut, line, spark, legendRow, empty, fmt, grad, PAL, ORD, ST};
+})();
+
+/* ================= THE CHARTS THIS CONSOLE DRAWS =================
+   Each keeps the name and the signature it had, so every call site and every
+   behaviour that hung off it — the metric tabs, the tap-through, the export —
+   is untouched. What changed is the FORM, and only where the form was wrong. */
+
+/* The activity chart shows ONE measure at a time, named by the tab above it.
+   Three of the four are states of an officer's day, so they wear the reserved
+   status colours; villages filed is not a state and takes the lead series
+   slot. Nothing here is a rank, so nothing is coloured by one. */
+function metColor(met){
+  return met === 'absent' ? Charts.ST.bad
+    : met === 'leave' ? Charts.ST.warn
+    : met === 'filed' ? 'var(--cs1)'
+    : Charts.ST.ok;
 }
 
-/* attendance by mandal — where the gaps actually are */
+/* District activity over the fortnight. Was a smooth spline whose curve
+   invented values between the days it had; a working day is a reading, not a
+   continuum, so the line is straight between readings now. */
+function areaChart(rows, key, color){
+  const due = () => Math.max(0, (DATA.totals.officers - 1));
+  const val = r => key === 'present' ? r.present
+    : key === 'leave' ? r.leave
+    : key === 'absent' ? Math.max(0, due() - r.present - r.leave)
+    : (r.filedN || 0);
+  const name = key === 'present' ? 'Present' : key === 'leave' ? 'On leave'
+    : key === 'absent' ? 'Not marked' : 'Villages filed';
+  return Charts.line(rows.map(r => dm(r.date)),
+    [{name: name, values: rows.map(val), color: color, area: true}],
+    {emptyMsg: 'No days on record yet.'});
+}
+
+/* Grades and the like: part-to-whole, four parts, total in the hole. */
+function donut(segs, center, sub){
+  return Charts.donut(segs.map(x => ({label: x.k, value: x.v, color: x.c})),
+    {center: center, centerLabel: sub});
+}
+
+/* WHEN THE DISTRICT MARKS IN. Thirteen hours of one morning are an ORDERED
+   scale, not thirteen identities — so they get one hue running least to most,
+   not the green/olive/amber ramp they wore, which coloured a single series by
+   its own height and said nothing twice. */
+function histMarkIn(rows){
+  const buckets = Array(13).fill(0);
+  rows.forEach(r => { const h2 = new Date(r.at).getHours(); if(h2 >= 6 && h2 <= 18) buckets[h2 - 6]++; });
+  if(!buckets.some(Boolean)) return Charts.empty('No officer has marked yet today.');
+  return Charts.bar(buckets.map((v, i) => ({
+    label: String(i + 6), value: v,
+    title: v + ' mark' + (v === 1 ? '' : 's') + ' between ' + (i + 6) + ':00 and ' + (i + 7) + ':00'
+  })), {ord: true});
+}
+
+/* The district average, month by month. The line used to run indigo→teal —
+   a gradient carrying a SECOND hue across a single series, which implies a
+   change the numbers do not hold — and every point wore its grade colour,
+   which is colour assigned by rank. One hue now; the grade of each month is
+   in its tooltip and in the villages table below. */
+function trendLine(rows){
+  if(!rows.length) return Charts.empty('No months on record yet.');
+  return Charts.line(rows.map(r => r.ym.slice(5) + '/' + r.ym.slice(2, 4)),
+    [{name: 'District average', values: rows.map(r => Math.min(100, r.avg)),
+      color: 'var(--cs1)', area: true}],
+    {max: 100, emptyMsg: 'No months on record yet.',
+     labels: rows.map(r => monName(r.ym))});
+}
+
+/* Attendance by mandal — where the gaps actually are. Was an SVG whose height
+   followed its row count, so it never lined up with anything beside it. Rows
+   are 22px in HTML now. The three parts are STATUS, which is the one job that
+   licenses these colours, and each row carries the count in words. */
 function mandalAtt(j){
-  const m={};
-  j.coverage.forEach(c=>m[c.mandal]={p:0,l:0,a:0});
-  j.today.present.forEach(r=>{if(m[r.mandal])m[r.mandal].p++;});
-  j.today.onLeave.forEach(r=>{if(m[r.mandal])m[r.mandal].l++;});
-  j.today.absent.forEach(r=>{if(m[r.mandal])m[r.mandal].a++;});
-  const rows=Object.entries(m).map(([k,v])=>({k,...v,t:v.p+v.l+v.a}))
-    .filter(r=>r.t).sort((a,b)=>(b.a/b.t)-(a.a/a.t));
-  if(!rows.length) return '<div class="empty">No officers on the roll yet.</div>';
-  /* the bars stop short of the right label column, and the segments keep a
-     hairline of ground between them — the "12 missing" text used to land on
-     the bar it described */
-  const W=460,LBL=104,RGT=64,H=Math.max(150,rows.length*26+18),BW=W-LBL-8-RGT-8;
-  let g='';
-  const seg=(x,y,w,c,first,last)=>{ if(w<=0) return '';
-    const gap=last?0:2;
-    return `<rect x="${x}" y="${y}" width="${Math.max(1,w-gap)}" height="15" rx="${first||last?2.5:0}" fill="${c}"/>`; };
-  rows.forEach((r,i)=>{const y=8+i*26, x0=LBL+8;
-    const wp=BW*r.p/r.t, wl=BW*r.l/r.t, wa=BW*r.a/r.t;
-    g+=`<g><title>${esc(r.k+' — '+r.p+' present · '+r.l+' on leave · '+r.a+' not marked, of '+r.t)}</title>
-    <text class="axis" x="${LBL}" y="${y+11.5}" text-anchor="end" fill="var(--tx-2)">${esc(r.k.length>15?r.k.slice(0,14)+'…':r.k)}</text>`;
-    g+=seg(x0,y,wp,'#16A34A',true,!wl&&!wa);
-    g+=seg(x0+wp,y,wl,'#D97706',false,!wa);
-    g+=seg(x0+wp+wl,y,wa,'#DC2626',false,true);
-    g+=`<text class="axis" x="${W-4}" y="${y+11.5}" text-anchor="end" style="font-weight:${r.a?700:400}" fill="${r.a?'var(--red)':'var(--green)'}">${r.a?r.a+' missing':'all in'}</text></g>`;});
-  return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
+  const m = {};
+  j.coverage.forEach(c => m[c.mandal] = {p: 0, l: 0, a: 0});
+  j.today.present.forEach(r => { if(m[r.mandal]) m[r.mandal].p++; });
+  j.today.onLeave.forEach(r => { if(m[r.mandal]) m[r.mandal].l++; });
+  j.today.absent.forEach(r => { if(m[r.mandal]) m[r.mandal].a++; });
+  const rows = Object.entries(m).map(([k, v]) => ({k, ...v, t: v.p + v.l + v.a}))
+    .filter(r => r.t).sort((a, b) => (b.a / b.t) - (a.a / a.t));
+  if(!rows.length) return Charts.empty('No officers on the roll yet.');
+  return Charts.stackRows(rows.map(r => ({
+    label: r.k.length > 16 ? r.k.slice(0, 15) + '…' : r.k,
+    title: r.k + ' — ' + r.p + ' present · ' + r.l + ' on leave · ' + r.a + ' not marked, of ' + r.t,
+    parts: [{value: r.p, color: Charts.ST.ok}, {value: r.l, color: Charts.ST.warn},
+            {value: r.a, color: Charts.ST.bad}],
+    right: r.a ? r.a + ' missing' : 'all in',
+    tone: r.a ? 'bad' : 'ok'
+  })));
 }
-/* where the scores actually sit — ten-mark bands */
+
+/* Where the scores sit. Ten-mark bands are an ordered scale — one hue. */
 function scoreDist(rows){
-  if(!rows.length) return '<div class="empty">Nothing filed yet.</div>';
-  const W=460,H=210,P=30,b=Array(10).fill(0);
-  rows.forEach(r=>{b[clamp(Math.floor(r.score/10),0,9)]++;});
-  const mx=Math.max(1,...b), bw=Math.floor((W-P-12)/10)-5;
-  let g='';[0,.5,1].forEach(f=>{const y=H-24-(H-44)*f;
-    g+=`<line class="gridln" x1="${P}" x2="${W-6}" y1="${y}" y2="${y}"/><text class="axis" x="${P-6}" y="${y+3.5}" text-anchor="end">${Math.round(mx*f)}</text>`;});
-  b.forEach((v,i)=>{const x=P+7+i*(bw+5),hh=(H-44)*v/mx;
-    const c=i>=7?'#16A34A':i>=5?'#65A30D':i>=3?'#D97706':'#DC2626';
-    g+=`<rect x="${x}" y="${H-24-hh}" width="${bw}" height="${hh}" rx="3" fill="${c}" opacity=".9"/>`;
-    if(v) g+=`<text class="axis" x="${x+bw/2}" y="${H-28-hh}" text-anchor="middle" fill="var(--tx)">${v}</text>`;
-    g+=`<text class="axis" x="${x+bw/2}" y="${H-7}" text-anchor="middle">${i*10}</text>`;});
-  return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
+  if(!rows.length) return Charts.empty('Nothing filed yet.');
+  const b = Array(10).fill(0);
+  rows.forEach(r => { b[clamp(Math.floor(r.score / 10), 0, 9)]++; });
+  return Charts.bar(b.map((v, i) => ({
+    label: String(i * 10), value: v,
+    title: v + ' village' + (v === 1 ? '' : 's') + ' scored ' + (i * 10) + '–' + (i * 10 + 9)
+  })), {ord: true});
 }
+
 /* who files, and how well — the officer ledger */
 function officerTable(rows){
   const by={};
@@ -1529,17 +1953,17 @@ function vOverview(j,A){
     `<div class="mtabs" id="mtabs">`+
     [['present','Present',A.present],['leave','On leave',A.onLeave],['absent','Not marked',A.absent],['filed','Villages filed',A.filed]]
       .map(([k,n,v])=>`<button class="mtab" data-met="${k}" aria-selected="${MET===k}"><b>${v}</b>${n}</button>`).join('')+
-    `</div><div id="area">${areaChart(j.att14x, MET, MET==='absent'?'var(--red)':MET==='leave'?'var(--amber)':MET==='filed'?'var(--blue)':'var(--seal)')}</div>`);
+    `</div><div id="area" class="plot">${areaChart(j.att14x, MET, metColor(MET))}</div>`);
   h+=panel('c4','Evaluation outcomes',j.ym,
-    donut([{k:'Grade A',v:j.month.grades.A,c:'#16A34A'},{k:'Grade B',v:j.month.grades.B,c:'#65A30D'},
-           {k:'Grade C',v:j.month.grades.C,c:'#D97706'},{k:'Grade D',v:j.month.grades.D,c:'#DC2626'}],A.filed,'filed')
+    '<div class="plot">'+donut([{k:'Grade A',v:j.month.grades.A,c:'var(--st-ok)'},{k:'Grade B',v:j.month.grades.B,c:'var(--grade-b)'},
+           {k:'Grade C',v:j.month.grades.C,c:'var(--st-warn)'},{k:'Grade D',v:j.month.grades.D,c:'var(--st-bad)'}],A.filed,'filed')+'</div>'
     + bestWorst(j));
 
   h+=panel('c6','District health · '+j.ym,(A.wSum<100?A.wSum+'% of the index in play':'weighted of five parts'),
     `<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-     ${A.health==null?'<div class="empty" style="max-width:150px">Too little measured to publish a score.</div>':donutHealth(A.health)}
-     <div style="flex:1;min-width:230px">`+
-    A.parts.map(p=>{const na=p.v==null;const col=na?'var(--line)':p.v>=80?'var(--green)':p.v>=60?'var(--amber)':'var(--red)';
+     <div style="flex:1 1 250px;min-width:230px">${A.health==null?Charts.empty('Too little measured to publish a score.'):donutHealth(A.health)}</div>
+     <div style="flex:1 1 250px;min-width:230px">`+
+    A.parts.map(p=>{const na=p.v==null;const col=na?'var(--line)':p.v>=80?'var(--st-ok)':p.v>=60?'var(--st-warn)':'var(--st-bad)';
       return `<div style="display:flex;align-items:center;gap:9px;margin:7px 0;font-size:12px;color:var(--tx-2)">
         <b style="width:96px;color:var(--tx)">${p.k}</b>
         <div class="bar" style="flex:1"><i style="width:${na?0:clamp(p.v,0,100)}%;background:${col}"></i></div>
@@ -1575,8 +1999,8 @@ function vOverview(j,A){
 }
 function briefHTML(t){
   const SEC={'THE DAY IN ONE LINE':['#2563EB','var(--blue-2)'],'THE TREND':['#5B6B84','#F1F4F8'],
-    'DOING WELL':['#16A34A','var(--green-2)'],'NEEDS FOCUS':['#DC2626','var(--red-2)'],
-    'ORDERS TO PASS':['#B8860B','#FBF6E7'],'WATCH':['#D97706','var(--amber-2)']};
+    'DOING WELL':['var(--st-ok)','var(--green-2)'],'NEEDS FOCUS':['var(--st-bad)','var(--red-2)'],
+    'ORDERS TO PASS':['var(--gold)','var(--amber-2)'],'WATCH':['var(--st-warn)','var(--amber-2)']};
   const names=Object.keys(SEC);
   const lines=String(t).split(/\r?\n/);
   let html='', cur=null, buf=[];
@@ -1985,13 +2409,17 @@ function bestWorst(j){
     ${flagged.length?' · '+flagged.length+' flagged':''}</div></div>`;
   return h;
 }
-function donutHealth(v){ const col=v>=80?'var(--green)':v>=60?'var(--amber)':'var(--red)';
-  const C=2*Math.PI*54,f=C*clamp(v,0,100)/100;
-  return `<svg viewBox="0 0 150 150" style="max-width:138px">
-    <circle cx="75" cy="75" r="54" fill="none" stroke="var(--line-2)" stroke-width="13"/>
-    <circle cx="75" cy="75" r="54" fill="none" stroke="${col}" stroke-width="13" stroke-dasharray="${f} ${C-f}" stroke-linecap="round" transform="rotate(-90 75 75)"/>
-    <text x="75" y="72" text-anchor="middle" font-family="var(--mono)" font-size="32" font-weight="750" fill="var(--tx)">${v}</text>
-    <text x="75" y="93" text-anchor="middle" class="axis">HEALTH</text></svg>`;}
+/* DISTRICT HEALTH. This was a ring with a number in the hole — a two-slice
+   donut, which is a stat tile in a costume: it spends a whole card drawing
+   one figure worse than the figure would read on its own. A meter says the
+   same thing plainly, and has room to name what the score is out of. */
+function donutHealth(v){
+  const col = v >= 80 ? Charts.ST.ok : v >= 60 ? Charts.ST.warn : Charts.ST.bad;
+  return Charts.meter(clamp(v, 0, 100), 100, {
+    color: col, show: v, unit: '',
+    sub: 'out of 100 · ' + (v >= 80 ? 'sound' : v >= 60 ? 'needs watching' : 'needs orders')
+  });
+}
 
 function vTables(j,A,short){
   const worst=[...j.month.rows].sort((a,b)=>a.score-b.score).slice(0,short?5:1000);
@@ -2008,7 +2436,7 @@ function vTables(j,A,short){
     `<div class="twrap"><table><thead><tr><th>Mandal</th><th>Done</th><th style="width:44%">Progress</th><th>%</th></tr></thead><tbody>`+
     covRows.map((c,i)=>{const p2=pct(c.done,c.total);
       return `<tr data-md="${i}"><td>${esc(c.mandal)}</td><td class="num">${c.done}/${c.total}</td>
-      <td><div class="bar"><i style="width:${p2}%;background:${p2>=100?'var(--green)':p2>=50?'#65A30D':'var(--amber)'}"></i></div></td>
+      <td><div class="bar"><i style="width:${p2}%;background:${p2>=100?'var(--st-ok)':p2>=50?'var(--grade-b)':'var(--st-warn)'}"></i></div></td>
       <td class="num mut">${p2}%</td></tr>`;}).join('')+`</tbody></table></div>`,'cov');
   return h;
 }
@@ -2033,15 +2461,18 @@ function vAttendance(j,A){
       <span class="expnote" id="expNote">The workbook carries every sheet: today, the gaps, officer × day, mandal comparison, daily counts.</span>
     </div>`);
   h+=panel('c7','Attendance rate · last 14 days','accounted of '+A.officersDue,
-    areaChart(j.att14x,'present','var(--seal)'));
-  h+=panel('c5','Mark-in time today','by hour', histMarkIn(j.today.present));
+    '<div class="plot">'+areaChart(j.att14x,'present',metColor('present'))+'</div>');
+  h+=panel('c5','Mark-in time today','by hour','<div class="plot">'+histMarkIn(j.today.present)+'</div>');
   h+=panel('c6','Attendance by mandal · worst first',
-    '<span style="color:#16A34A">■</span> present <span style="color:#D97706">■</span> leave <span style="color:#DC2626">■</span> missing',
-    mandalAtt(j));
+    '<span style="color:var(--st-ok)">■</span> present <span style="color:var(--st-warn)">■</span> leave <span style="color:var(--st-bad)">■</span> missing',
+    '<div class="plot">'+mandalAtt(j)+'</div>');
   h+=panel('c6','Location quality today','of '+A.present+' marks',
-    donut([{k:'Verified',v:j.today.present.filter(r=>r.verified&&!suspect(r)).length,c:'#16A34A'},
-           {k:'No fix',v:j.today.present.filter(r=>!r.verified&&!suspect(r)).length,c:'#D97706'},
-           {k:'Not trustworthy',v:j.today.present.filter(suspect).length,c:'#DC2626'}],A.present,'marks'));
+    /* three STATUS classes of one total, read against each other: a ring of
+       three close values is the exact form the method rules out. */
+    '<div class="plot">'+Charts.stack([{label:'Verified',value:j.today.present.filter(r=>r.verified&&!suspect(r)).length,color:Charts.ST.ok},
+      {label:'No fix',value:j.today.present.filter(r=>!r.verified&&!suspect(r)).length,color:Charts.ST.warn},
+      {label:'Not trustworthy',value:j.today.present.filter(suspect).length,color:Charts.ST.bad}],
+      {center:A.present,centerLabel:'marks today',emptyMsg:'No officer has marked yet today.'})+'</div>');
   const attRows=[].concat(j.today.present.map(r=>({...r,_s:'P'})),j.today.onLeave.map(r=>({...r,_s:'L'})),j.today.absent.map(r=>({...r,_s:'A'})));
   window.__ROWS.att=attRows;
   h+=panel('c12','Officer by officer',A.present+' present · '+A.onLeave+' leave · '+A.absent+' not marked',
@@ -2065,10 +2496,10 @@ function vVillages(j,A){
   h+=kpi('Grade A + B',IC.s,j.month.grades.A+j.month.grades.B,'',A.filed?pct(j.month.grades.A+j.month.grades.B,A.filed)+'% of filings':'—');
   h+=kpi('Needed per day',IC.h,A.needPerDay,'',A.wdLeft+' working days left');
   h+='</div>';
-  h+=panel('c7','Score trend · district average','month by month',trendLine(j.trend));
+  h+=panel('c7','Score trend · district average','month by month','<div class="plot">'+trendLine(j.trend)+'</div>');
   h+=panel('c5','Evaluation outcomes',j.ym,
-    donut([{k:'Grade A',v:j.month.grades.A,c:'#16A34A'},{k:'Grade B',v:j.month.grades.B,c:'#65A30D'},
-           {k:'Grade C',v:j.month.grades.C,c:'#D97706'},{k:'Grade D',v:j.month.grades.D,c:'#DC2626'}],A.filed,'filed'));
+    '<div class="plot">'+donut([{k:'Grade A',v:j.month.grades.A,c:'var(--st-ok)'},{k:'Grade B',v:j.month.grades.B,c:'var(--grade-b)'},
+           {k:'Grade C',v:j.month.grades.C,c:'var(--st-warn)'},{k:'Grade D',v:j.month.grades.D,c:'var(--st-bad)'}],A.filed,'filed')+'</div>');
   const pendAll=[]; (j.coverage||[]).forEach(c2=>(c2.pending||[]).forEach(g2=>pendAll.push([c2.mandal,g2])));
   h+=panel('c12','Reports · villages','opens in Excel',
     `<div class="expbar">
@@ -2079,7 +2510,7 @@ function vVillages(j,A){
       <span class="expnote" id="expNote">The workbook carries the summary, the month’s Gantt with the forecast at each mandal’s rate, completed and pending village by village.</span>
     </div>`);
   h+=panel('c12','Day by day · filings and attendance','tap a day', dayTable(j),'dayd2');
-  h+=panel('c6','Score distribution','villages by ten-mark band', scoreDist(j.month.rows));
+  h+=panel('c6','Score distribution','villages by ten-mark band','<div class="plot">'+scoreDist(j.month.rows)+'</div>');
   h+=panel('c6','Officer ledger · '+j.ym,'who files, and how well', officerTable(j.month.rows));
   h+=panel('c12','Villages pending · '+j.ym, pendAll.length+' of '+A.cov.t+' still to file',
     pendAll.length?`<div class="twrap" style="max-height:380px"><table><thead><tr><th>Mandal</th><th>Village</th></tr></thead><tbody>${
@@ -2221,7 +2652,7 @@ document.addEventListener('click',e=>{
   const mt=e.target.closest('.mtab');
   if(mt){ MET=mt.dataset.met;
     document.querySelectorAll('.mtab').forEach(x=>x.setAttribute('aria-selected',x===mt));
-    $('#area').innerHTML=areaChart(DATA.att14x,MET,MET==='absent'?'var(--red)':MET==='leave'?'var(--amber)':MET==='filed'?'var(--blue)':'var(--seal)');
+    $('#area').innerHTML=areaChart(DATA.att14x,MET,metColor(MET));
     return; }
   const kp=e.target.closest('[data-act]');
   if(kp){ const [kind,arg]=kp.dataset.act.split(':');
