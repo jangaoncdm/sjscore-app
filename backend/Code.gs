@@ -480,6 +480,55 @@ function offInfo_(dStr){
   return h ? { today:true, why:h } : { today:false, why:'' };
 }
 /* phones with any Attendance row on the date — a LEAVE row counts as marked */
+/* WHERE A MARK CANNOT BE TRUSTED AS PROOF OF PRESENCE. One rule, stated once,
+   so the evening mail and the console cannot quote different figures for the
+   same day — which they did: the console counted the twelve MSOs among the
+   officers due while the mail, correctly, did not, and the same morning read
+   "91 of 114" on screen and "91 of 102" on paper.
+   A reading fails if it falls outside the district's box, if it is an area
+   rather than a place, or if the handset says it is in another timezone. */
+const FIX_BOX_ = { latMin:16.4, latMax:19.2, lngMin:77.6, lngMax:80.9 };
+const FIX_ACC_LIMIT_ = 250;
+function suspectMark_(lat, lng, acc, tz){
+  if(lat != null && lat !== '' && (Number(lat) < FIX_BOX_.latMin || Number(lat) > FIX_BOX_.latMax ||
+     Number(lng) < FIX_BOX_.lngMin || Number(lng) > FIX_BOX_.lngMax)) return true;
+  if(acc && Number(acc) > FIX_ACC_LIMIT_) return true;
+  if(tz && !/Calcutta|Kolkata/i.test(String(tz))) return true;
+  return false;
+}
+/* the day's marks with enough detail to judge them — the district's reading of
+   when each was made (rule 1), never the handset's unchecked claim */
+function markedDetail_(dStr){
+  const sh = sheet_('Attendance', A_HEAD), m = headMap_(sh, A_HEAD);
+  const last = sh.getLastRow(); if(last < 2) return {};
+  const start = Math.max(2, last - 4000);
+  const v = sh.getRange(start, 1, last - start + 1, sh.getLastColumn()).getValues();
+  const out = {};
+  v.forEach(r => {
+    if(dateText_(r[m.ix.date]) !== dStr) return;
+    const p = phone10_(r[m.ix.phone]); if(!p) return;
+    if(String(r[m.ix.status] || 'PRESENT') === 'LEAVE') return;
+    out[p] = {
+      at: effMarkAt_(String(r[m.ix.markedAt] || ''), String(r[m.ix.receivedAt] || '')),
+      suspect: suspectMark_(r[m.ix.lat], r[m.ix.lng], r[m.ix.accuracy], r[m.ix.timezone])
+    };
+  });
+  return out;
+}
+/* How many of the day's marks were in before the 10:00 cutoff.
+   ONLY the officers passed in are counted. An MSO may mark and his mark is
+   recorded, but he is not among the officers due, and letting his mark into
+   this figure made a district of two look like a district of three. */
+function markedBy10_(detail, phones){
+  return (phones || Object.keys(detail)).filter(p => {
+    const at = detail[p] && detail[p].at; if(!at) return false;
+    const d = new Date(at); if(isNaN(d)) return false;
+    /* HH, not H: the hour is read in the DISTRICT's timezone, never the
+       runtime's, and the two-digit pattern is the one both Apps Script and
+       the suites' clock agree on. */
+    return Number(Utilities.formatDate(d, Session.getScriptTimeZone(), 'HH')) < 10;
+  }).length;
+}
 function markedSet_(dStr){
   const sh = sheet_('Attendance', A_HEAD), m = headMap_(sh, A_HEAD);
   const last = sh.getLastRow(); if(last < 2) return {};
@@ -1182,9 +1231,16 @@ function dailyCollectorReport(){
     if(attExempt_(role)) continue;
     roll.push({ phone: ph, name: cell_(uv[i], t.ix.name), role: role, mandal: cell_(uv[i], t.ix.mandal) });
   }
+  const markDetail = markedDetail_(today);
   const marked = markedSet_(today), onLeave = sanctionedSet_(today);
   const absent = roll.filter(o => !marked[o.phone] && !onLeave[o.phone]);
   const present = roll.length - absent.length - roll.filter(o => !marked[o.phone] && onLeave[o.phone]).length;
+  /* the same two readings the console puts on its attendance screen, so the
+     mail and the screen never disagree about the same morning */
+  const rollPh = {}; roll.forEach(o => rollPh[o.phone] = true);
+  const onRoll = Object.keys(markDetail).filter(p => rollPh[p]);
+  const by10 = markedBy10_(markDetail, onRoll);
+  const notTrust = onRoll.filter(p => markDetail[p].suspect).length;
   const leaveN = roll.filter(o => !marked[o.phone] && onLeave[o.phone]).length;
   const gapByMandal = {};
   absent.forEach(o => { gapByMandal[o.mandal || '—'] = (gapByMandal[o.mandal || '—'] || 0) + 1; });
@@ -1248,14 +1304,26 @@ function dailyCollectorReport(){
      threshold, and the month's Gantt under them */
   const attPct = roll.length ? 100 * (present + leaveN) / roll.length : 100;
   const behindBy = wdToFinish != null && wdToFinish > wd.left ? wdToFinish - wd.left : 0;
+  /* THE SAME SUMMARY THE CONSOLE SHOWS, IN THE SAME ORDER. The mail used to
+     carry six figures and the console nine, computed apart; the Collector had
+     to hold two versions of one morning in his head. Every number below is
+     read the way the console reads it, from the same rules. */
+  const avgScore = filed ? Math.round(scoreSum / filed) : null;
   const tiles = emailStats_([
     { label: 'Present', value: present, sub: 'of ' + roll.length + ' due',
       tone: attPct >= 90 ? 'good' : attPct >= 75 ? 'warn' : 'bad' },
     { label: 'On leave', value: leaveN, sub: 'sanctioned', tone: 'info' },
     { label: 'Not marked', value: absent.length, sub: 'today', tone: absent.length ? 'bad' : 'good' },
+    { label: 'Marked by 10:00', value: present ? Math.round(by10 * 100 / present) + '%' : '—',
+      sub: by10 + ' of ' + present, tone: present && by10 * 100 / present >= 75 ? 'good' : 'warn' },
+    { label: 'Not trustworthy', value: notTrust, sub: 'of ' + present + ' marks',
+      tone: notTrust ? 'bad' : 'good' },
     { label: 'Villages done', value: dDone, sub: 'of ' + totalGps + ' · ' + ym,
       tone: remaining === 0 || behindBy === 0 ? 'good' : behindBy <= 3 ? 'warn' : 'bad' },
     { label: 'Filed today', value: filedToday, sub: 'evaluations', tone: 'accent' },
+    { label: 'District average', value: avgScore == null ? '—' : avgScore,
+      sub: filed + ' filed · ' + ym,
+      tone: avgScore == null ? 'info' : avgScore >= 70 ? 'good' : avgScore >= 55 ? 'warn' : 'bad' },
     { label: 'Red flags', value: rfN, sub: 'this month', tone: rfN ? 'warn' : 'good' }
   ]);
   const ganttRows = Object.keys(covM)
@@ -1693,7 +1761,14 @@ function doGet(e){
     }
 
     const out = { ok:true, at:new Date().toISOString(), today:today, tz:Session.getScriptTimeZone(), ym:ymN,
-      totals:{officers:officers.length, gps:gRoll.length},
+      /* officers = every active row. due = those the register actually expects
+         a mark from: not the Collector, and not a role whose attendance is
+         voluntary. The console divided by officers-1 and so counted the MSOs
+         among the due, understating the district against the Collector's own
+         order of 19.08.2026. */
+      totals:{officers:officers.length, gps:gRoll.length,
+              due:officers.filter(o => String(o.role).toUpperCase() !== 'COLLECTOR' &&
+                                       !attExempt_(o.role)).length},
       today:{present:todayRows.filter(r=>r.status!=='LEAVE'), onLeave:todayRows.filter(r=>r.status==='LEAVE'), absent:absent},
       att14:att14, month:{rows:monthRows, grades:gradeCount,
         avg: monthRows.length ? Math.round(monthRows.reduce((s,r)=>s+r.score,0)/monthRows.length) : null,

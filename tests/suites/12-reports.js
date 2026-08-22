@@ -65,6 +65,12 @@ module.exports = {
 
     /* ---- the Collector's daily mail ---- */
     env.mark('9000000032', '2026-08-19', '2026-08-19T09:10:00+05:30');
+    /* one clean early mark and one late one whose fix is an area, not a place —
+       so the summary tiles the mail now carries have something real to count */
+    env.mark('9000000033', '2026-08-19', '2026-08-19T09:12:00+05:30', null,
+      { lat: 17.72, lng: 79.15, accuracy: 18, verified: 'true', timezone: 'Asia/Calcutta' });
+    env.mark('9000000034', '2026-08-19', '2026-08-19T10:40:00+05:30', null,
+      { lat: 17.72, lng: 79.15, accuracy: 900, verified: 'false', timezone: 'Asia/Calcutta' });
     c.dailyCollectorReport();
     const rep = env.outbox.find(m => m.to === 'cdm@mock.example' && /daily report/.test(m.subject));
     t.ok(!!rep, 'the report goes to the Collector’s own address off the roll');
@@ -73,6 +79,20 @@ module.exports = {
     /* the dashboard panel inside the mail: six stat tiles, then the Gantt */
     t.contains(rep.htmlBody, 'The district at 19.08.2026', 'the stat tiles lead the mail');
     t.contains(rep.htmlBody, 'Villages done', 'a tile counts villages done');
+
+    /* THE MAIL AND THE CONSOLE MUST QUOTE ONE MORNING, NOT TWO. The summary
+       carries the same nine figures the console shows, read by the same rules.
+       The MSO is on the roll but attendance is voluntary for him, so he is not
+       among the officers due — three are, and the mail says so. */
+    t.contains(rep.htmlBody, 'of 3 due', 'the denominator excludes the Collector and the exempt MSO');
+    t.contains(rep.htmlBody, 'Marked by 10:00', 'the mail carries the cutoff figure the console shows');
+    t.contains(rep.htmlBody, '1 of 2', 'one of the two marks on the roll was in before 10:00');
+    t.contains(rep.htmlBody, 'Not trustworthy', 'and the location-quality figure');
+    t.contains(rep.htmlBody, 'of 2 marks', 'counted against the marks actually made');
+    t.contains(rep.htmlBody, 'District average', 'and the month’s average score');
+    t.ok(rep.htmlBody.indexOf('>80<') > 0, 'which is the 80 the single filing scored');
+    /* the MSO marked at 09:10 and his mark must not swell the count of the due */
+    t.ok(rep.htmlBody.indexOf('of 4 due') < 0, 'the exempt officer is never counted among the due');
     t.contains(rep.htmlBody, 'Filing progress', 'the Gantt panel follows');
     t.contains(rep.htmlBody, 'wd 16 of', 'with the day marker at the sixteenth working day of August');
     t.contains(rep.htmlBody, 'DISTRICT', 'and the district total as its last bar');
@@ -100,5 +120,19 @@ module.exports = {
     c.sendDailyReportNow();
     t.eq(env.outbox.length, mails + 1, 'sendDailyReportNow sends a copy even after the day’s report has gone');
     t.eq(env.props['LAST_DAILY_REPORT'], undefined, 'and leaves the guard clear, so the evening trigger still fires');
+
+    /* ---- and the console is told the same number, by the server ----
+       The console used to work the denominator out for itself as
+       officers-1, which counted the MSO among the due. The morning of
+       22.08.2026 it read "of 114" on screen while the mail read "of 102". */
+    const uh = env.sheets['Users'].rows[0].map(String).indexOf('Hash');
+    env.sheets['Users'].rows.slice(1).forEach(r => {
+      if(c.phone10_(r[0]) === '9000000001') r[uh] = c.hash_('9000000001', '9999');
+    });
+    const tok = env.post({ kind: 'login', u: '9000000001', p: '9999' }).token;
+    const d = env.get('dashboard', { token: tok });
+    t.eq(d.totals.officers, 5, 'the roll carries five active rows');
+    t.eq(d.totals.due, 3, 'but only three are due a mark — not the Collector, not the exempt MSO');
+    t.ok(d.totals.due < d.totals.officers - 1, 'which is fewer than the subtraction the console used to make');
   }
 };
