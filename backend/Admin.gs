@@ -1605,7 +1605,13 @@ var FIELD_FIXES_3 = [
    claimPhone:'9550923619', setName:'Pogaku Ramajyothi', setGp:'Mallampally', setMandal:'Raghunathpalle', pinIfNone:true},
 
   {why:'Issue 19: Gummadi Rajula Manjula deputed from Theegaram (Zaffergadh) to Iravennu (Palakurthy) — leaves Theegaram unheld. The tracker leaves this row’s Action column blank; it is read as the deputation the Remarks describe',
-   find:{role:'PS', gp:'Theegaram'}, orFind:{phone:'9959972132'},
+   /* THE RUN OF 22.08 FOUND THEEGARAM HELD BY BAKKA MAHENDER, not by her, so
+      the name guard stopped the line and nothing was written — which is what
+      it is for. Either she had already left Theegaram or the tracker names
+      the wrong village, so her own number is the surer key and the village is
+      only the fallback. The guard still stands: if 9959972132 turns out to
+      sit on somebody else's row, this reports again rather than writing. */
+   find:{phone:'9959972132'}, orFind:{role:'PS', gp:'Theegaram'},
    claimPhone:'9959972132', setName:'Gummadi Rajula Manjula', setGp:'Iravennu', setMandal:'Palakurthy', pinIfNone:true}
 ];
 
