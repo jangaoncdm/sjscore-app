@@ -158,6 +158,47 @@ Palette: cool paper `#F3F4F9`, indigo `#4A40CE`, a single indigo→teal gradient
 used **once** per screen. Mono uppercase eyebrows. No webfonts, ever — the app
 must open with no signal.
 
+**Charts are a separate, validated palette — do not pick chart colours by eye.**
+The console's series live in `--cs1…--cs8` (categorical, fixed order, never
+cycled), `--co1…--co5` (ordinal, one hue) and `--st-*` (reserved status). They
+are *not* the house accents: building the series from `--pri`/`--teal` was
+tried and failed the validator — the house teal falls under the chroma floor
+and renders grey, and house red against house amber measures ΔE 9.1 for
+**normal** vision against a floor of 15. The record, including that failure, is
+`prompt/palette-validation.txt`. Re-run it before changing any series colour:
+
+```bash
+node <dataviz-skill>/scripts/validate_palette.js "<hex,…>" --mode light --surface "#FFFFFF"
+node <dataviz-skill>/scripts/validate_palette.js "<hex,…>" --mode dark  --surface "#171B2D"
+```
+
+The console has a **dark theme** — a second validated palette, not an
+inversion — remembered per device and defaulting to light. Every colour the
+charts draw is a custom property, so the switch recolours them with no
+re-render. A hardcoded hex in a chart is a defect: it is invisible on the dark
+card and nobody notices until the console is opened in front of the district.
+
+Chart forms follow the data's job, not habit: a ratio against a limit is a
+**meter**, never a two-slice ring; an ordered scale (hours, ten-mark bands) is
+**one hue light→dark**, never a rainbow; magnitude charts are laid out in
+**HTML at exact pixel sizes**, never in a scaled `viewBox`, so a ten-row chart
+and a three-row chart line up side by side. `prompt/dashboard-charts-prompt.md`
+carries the full method.
+
+Before shipping a console change, run the render pass — it measures what
+looking cannot:
+
+```bash
+node tests/fixture-dashboard.js     # a real payload from the real backend
+node tests/render-console.js        # 6 views × 3 widths × both themes
+```
+
+It fails on sideways scroll, on cards in one row that differ in height, on a
+hardcoded colour inside a chart, and on any script error, and leaves the
+screenshots in `Info/console-render/`. Playwright is deliberately **not** a
+dependency — install it with `npm i playwright --no-save` when you need it, so
+the deploy Action stays light.
+
 ---
 
 ## Never
