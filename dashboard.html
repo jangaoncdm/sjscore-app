@@ -1316,6 +1316,13 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 const hm=iso=>{const d=new Date(iso);return isNaN(d)?'':d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});};
 const dm=s=>{const d=new Date(String(s).length>10?s:s+'T00:00:00');return isNaN(d)?String(s||''):d.toLocaleDateString('en-IN',{day:'numeric',month:'short'});};
 const pct=(a,b)=>b?Math.round(a*100/b):0;
+/* the hour of a mark as the district reads it — the same hour Code.gs uses
+   when it writes the evening mail */
+function istHour(iso){
+  const d=new Date(iso); if(isNaN(d)) return -1;
+  try{ return Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',hour:'2-digit',hour12:false}).format(d)); }
+  catch(e){ return d.getHours(); }
+}
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const inits=n=>String(n||'').split(/\s+/).slice(0,2).map(x=>x[0]||'').join('').toUpperCase();
 function delta(now,prev,goodUp,suffix){
@@ -1337,7 +1344,13 @@ function skewPill(r){
     '. The district\u2019s own clock has been used.">clock '+m+'m '+(s>0?'fast':'slow')+'</span>';
 }
 function analyse(j){
-  const officersDue=j.totals.officers-1;
+  /* THE DISTRICT DECIDES WHO IS DUE, NOT THIS SCREEN. officers-1 counted every
+     active row bar the Collector — including the MSOs, whose attendance is
+     voluntary by the order of 19.08.2026. The console therefore read "of 114"
+     while the evening mail, correctly, read "of 102", and the same morning
+     carried two different figures. The server sends the number now; the
+     subtraction is kept only so an older deployment still renders. */
+  const officersDue=(j.totals&&j.totals.due!=null)?j.totals.due:j.totals.officers-1;
   const present=j.today.present.length,onLeave=j.today.onLeave.length,absent=j.today.absent.length;
   const accounted=present+onLeave, attPct=pct(accounted,Math.max(1,officersDue));
   const cov=j.coverage.reduce((s,c)=>({t:s.t+c.total,d:s.d+c.done}),{t:0,d:0});
@@ -1354,7 +1367,11 @@ function analyse(j){
   const oldestH=j.leave.pending.length?Math.max(...j.leave.pending.map(l=>(Date.now()-new Date(l.appliedAt).getTime())/36e5)):0;
   const y=j.att14[j.att14.length-2]||{present:0,leave:0};
   const attY=y.present+y.leave;
-  const by10=j.today.present.filter(r=>new Date(r.at).getHours()<10).length;
+  /* THE CUTOFF IS THE DISTRICT'S HOUR, NOT THE BROWSER'S. getHours() reads
+     the machine the console happens to be open on; the evening mail reads
+     Asia/Kolkata, and a Collector opening this from anywhere else would have
+     been shown a different figure from the one on paper for the same morning. */
+  const by10=j.today.present.filter(r=>istHour(r.at)<10).length;
   const parts=[
     {k:'Attendance',w:25,v:off?null:attPct,why:off?off+' — not counted':accounted+' of '+officersDue+' accounted'},
     {k:'Coverage',w:25,v:expected===0?null:clamp(Math.round(cov.d*100/Math.max(1,expected)),0,100),
