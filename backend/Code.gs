@@ -2484,7 +2484,11 @@ function rosterAudit(){
     out.push('SHARED NUMBER ' + ph + ' — only the FIRST can ever sign in: ' + byPhone[ph].join(' | ')); });
   Object.keys(byGp).forEach(function(g){ if(byGp[g].length > 1)
     out.push('VILLAGE HELD TWICE "' + g + '": ' + byGp[g].join(' | ')); });
-  Logger.log(out.length ? out.join('\n') : 'The roll is clean.');
+  /* returned as well as logged, so the Sheet's District maintenance menu can
+     put it in a dialog — a finding nobody reads is a finding nobody acts on */
+  const text = out.length ? out.join('\n') : 'The roll is clean.';
+  Logger.log(text);
+  return text;
 }
 
 /* Editor utility — THE EASY WAY TO SET THE BRIEFING KEY.

@@ -19,6 +19,76 @@
 const ADMIN_BY = 'Collector & District Magistrate, Jangaon (Admin.gs)';
 
 /* ---------------------------------------------------------------------------
+ * THE MENU ON THE SHEET
+ * The Collector works in a browser, not in a script editor, and the function
+ * dropdown is the wrong place to keep a district's maintenance. This puts
+ * every job that matters on the Sheet's own menu bar, one click each, with
+ * what it did shown in a dialog he can read and copy — a PIN printed into an
+ * execution log is a PIN nobody circulates.
+ *
+ * NOTHING HERE RUNS BY ITSELF. Every writing item asks first and names what
+ * it is about to change. No trigger calls any of it; that is the standing
+ * rule of this file and it is not relaxed by putting the buttons in reach.
+ * ------------------------------------------------------------------------- */
+function onOpen(){
+  SpreadsheetApp.getUi().createMenu('District maintenance')
+    .addItem('1 · Read the plan (22.08 field register)', 'menuShowFixes3')
+    .addItem('2 · Apply the plan (asks first)',          'menuApplyFixes3')
+    .addSeparator()
+    .addItem('Why can an officer not sign in?',          'menuWhySignIn')
+    .addItem('Check the village roll',                   'menuGpSpellCheck')
+    .addItem('Check the officer roll',                   'menuRosterAudit')
+    .addToUi();
+}
+
+/* Collect lines, log them, and hand them back for a dialog. */
+function admSay_(lines){
+  const text = (lines || []).join('\n');
+  Logger.log(text);
+  return text;
+}
+
+/* A dialog wide enough to read a register in, and selectable so the PINs can
+   be copied out in one go. Falls back to the log when there is no UI — a
+   function run from the editor must not die for want of a window. */
+function admShow_(title, text){
+  let ui;
+  try{ ui = SpreadsheetApp.getUi(); }catch(err){ Logger.log(text); return; }
+  const esc = String(text || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const html = HtmlService.createHtmlOutput(
+    '<div style="font:13px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;padding:4px 2px">' +
+    '<textarea readonly style="width:100%;height:430px;font:12px/1.55 ui-monospace,Consolas,monospace;' +
+    'border:1px solid #D7DAE3;border-radius:8px;padding:12px;resize:vertical;white-space:pre-wrap">' +
+    esc + '</textarea>' +
+    '<p style="color:#5B6B84;margin:8px 2px 0">Select all and copy before closing. A PIN is shown once.</p></div>')
+    .setWidth(880).setHeight(520);
+  ui.showModalDialog(html, title);
+}
+
+function menuShowFixes3(){
+  admShow_('The plan — nothing has been written', showFieldFixes3());
+}
+function menuApplyFixes3(){
+  const ui = SpreadsheetApp.getUi();
+  const ok = ui.alert('Apply the 22.08 field register?',
+    'This writes to the Users tab: it registers officers, re-maps villages, releases numbers ' +
+    'held on two rows, and issues PINs. Every change is written to Audit.\n\n' +
+    'Read item 1 first if you have not. Running it twice changes nothing the second time.\n\n' +
+    'Apply it now?', ui.ButtonSet.YES_NO);
+  if(ok !== ui.Button.YES){ ui.alert('Nothing was written.'); return; }
+  admShow_('Applied — copy the PINs now, they are shown once', applyFieldFixes3());
+}
+function menuWhySignIn(){
+  const ui = SpreadsheetApp.getUi();
+  const res = ui.prompt('Which number?', 'The officer’s mobile number.', ui.ButtonSet.OK_CANCEL);
+  if(res.getSelectedButton() !== ui.Button.OK) return;
+  admShow_('Why that number cannot sign in', whyCannotSignIn(res.getResponseText()));
+}
+function menuGpSpellCheck(){ admShow_('The village roll', gpSpellCheck()); }
+function menuRosterAudit(){  admShow_('The officer roll', rosterAudit()); }
+
+/* ---------------------------------------------------------------------------
  * 1. REGISTRATION — officers whose number is not on the roll
  * Fill the table, run showRegistrations() to check, then registerOfficers().
  * PIN: leave blank and a four-digit one is generated and shown in the log.
@@ -1387,7 +1457,9 @@ function fieldBatch_(BATCH, LIST, CONTESTED, commit, doerName, tailNote, guardNa
   out.push(commit === true
     ? 'Applied. The PINs above are shown ONCE — circulate each to that officer alone. ' + (tailNote || '')
     : 'DRY RUN — nothing was written. Read the plan above, then run ' + doerName + '().');
-  Logger.log(out.join('\n'));
+  const text = out.join('\n');
+  Logger.log(text);
+  return text;      /* so the Sheet menu can put it in front of the Collector */
 }
 
 /* ============================================================================
@@ -1559,10 +1631,10 @@ var CONTESTED_3 = [
    q:'Rows named "MSO Lingalaghanpur", "MSO Tharigoppula" and "MSO Zaffergadh" carry a designation where the officer’s name belongs. Standing since 17.08. Which officers hold these posts?'}
 ];
 
-function showFieldFixes3(){ fieldFixes3_(false); }
-function applyFieldFixes3(){ fieldFixes3_(true); }
+function showFieldFixes3(){ return fieldFixes3_(false); }
+function applyFieldFixes3(){ return fieldFixes3_(true); }
 function fieldFixes3_(commit){
-  fieldBatch_(FIX3_BATCH, FIELD_FIXES_3, CONTESTED_3, commit, 'applyFieldFixes3',
+  return fieldBatch_(FIX3_BATCH, FIELD_FIXES_3, CONTESTED_3, commit, 'applyFieldFixes3',
     'Now run rosterAudit() and gpSpellCheck(): between them they show every shared number, every village held twice, ' +
     'and every village left unheld by the six deputations above. Anything logged CONFLICT was NOT applied and needs the office.',
     true);   /* the name guard stands on this batch */
@@ -1588,7 +1660,7 @@ function whyCannotSignIn(phone){
   for(let i = 1; i < v.length; i++) if(phone10_(v[i][t.ix.phone]) === p) rows.push(i);
   if(!rows.length){
     out.push('✗ NOT ON THE ROLL. The app tells him "This number is not registered. Contact the District Panchayat Office." — register him with a line in FIELD_FIXES_3.');
-    Logger.log(out.join('\n')); return;
+    return admSay_(out);
   }
 
   out.push(rows.length === 1 ? '✓ One row carries it — row ' + (rows[0] + 1) : '✗ ' + rows.length + ' ROWS carry it: ' + rows.map(i => i + 1).join(', '));
@@ -1599,7 +1671,7 @@ function whyCannotSignIn(phone){
 
   /* the fold, said out loud — this is the whole answer to issues 3 and 11 */
   const u = findByPhone_(p);
-  if(!u){ out.push('✗ findByPhone_ refuses it, which should not happen when rows exist. Read the Phone column of those rows by eye.'); Logger.log(out.join('\n')); return; }
+  if(!u){ out.push('✗ findByPhone_ refuses it, which should not happen when rows exist. Read the Phone column of those rows by eye.'); return admSay_(out); }
   out.push('', 'What the app will show him when he signs in:');
   out.push('    name    ' + (u.name || '(blank)'));
   out.push('    role    ' + u.role);
@@ -1618,7 +1690,7 @@ function whyCannotSignIn(phone){
   const n = Number(cache_().get('pl_' + u.phone) || 0);
   if(n >= MAX_PIN_TRIES) out.push('✗ ' + n + ' wrong-PIN attempts stand against this number within the hour — the app is refusing him with "Too many wrong attempts" whatever his PIN is. It clears itself; a reset does not hurry it.');
   else if(n > 0) out.push('· ' + n + ' wrong-PIN attempt(s) counted within the hour (' + MAX_PIN_TRIES + ' locks him out).');
-  Logger.log(out.join('\n'));
+  return admSay_(out);
 }
 
 /* "Wrong gp name show" — usually the Users tab and the GPs tab spelling the
@@ -1649,6 +1721,6 @@ function gpSpellCheck(){
     out.push('', 'VILLAGES ON THE ROLL THAT NO ACTIVE SECRETARY HOLDS (' + unheld.length + '):');
     unheld.forEach(r => out.push('    ' + r.mandal + ' / ' + r.gp));
   }
-  Logger.log(out.length ? out.join('\n')
-    : 'Every village a Secretary holds is on the GPs tab, once, and every village on the tab is held.');
+  return admSay_(out.length ? out
+    : ['Every village a Secretary holds is on the GPs tab, once, and every village on the tab is held.']);
 }
