@@ -927,6 +927,8 @@ function renderHome(){
         if(TAB==='home') renderHome(); }
     }).catch(()=>{});
     if(!isViewer(u.role)) get({op:'attendance'}).then(r=>{ if(r&&r.ok){ DB.attToday=r.rows; if(TAB==='home') renderHome(); } }).catch(()=>{});
+    refreshGpdp();      /* so the plan card states the district's record, not a guess */
+    refreshAdvisory();  /* and the circular is put up the moment it is issued */
   }
   const h=new Date().getHours();
   const greet = (h<12?'Good morning':h<17?'Good afternoon':'Good evening');
@@ -936,6 +938,8 @@ function renderHome(){
   $('#homeSub').textContent = roleName(u.role) + (u.mandal ? ' · ' + u.mandal + ' mandal' : ' · Jangaon District');
   const ym=ymNow(), body=$('#homeBody');
   let h2 = attendanceStrip();
+  h2 += advisoryCard();
+  h2 += gpdpCard();
 
   if(!isViewer(u.role)){
     const pend=pendingCount();
@@ -967,6 +971,11 @@ function renderHome(){
   body.querySelectorAll('[data-refresh]').forEach(el=>el.addEventListener('click', refreshDistrict));
   body.querySelectorAll('[data-attlist]').forEach(el=>el.addEventListener('click', showAttendanceList));
   body.querySelectorAll('[data-leave]').forEach(el=>el.addEventListener('click', openLeave));
+  body.querySelectorAll('[data-gpdp]').forEach(el=>el.addEventListener('click', openGpdp));
+  body.querySelectorAll('[data-adv]').forEach(el=>el.addEventListener('click', advSheet));
+  /* the circular goes up in front of him once each time the app is opened,
+     and keeps going up until he tells the district he has read it */
+  maybePopAdvisory();
 }
 function banner(kind, icon, text){
   return `<div class="banner ${kind}">${icon}<span>${esc(text)}</span></div>`;
@@ -2094,6 +2103,12 @@ async function renderMore(){
   </div></div>
 
   ${leaveVisible(u.role) ? `<div class="group"><div class="hdr">Leave</div><div class="card">
+    <div class="row tap" id="mAdv"><span class="ico" style="background:var(--seal)">${ICON.file}</span>
+      <span class="lbl"><b>Advisories</b><span>Circulars the District Collector has issued to you</span></span>
+      <span class="chev">›</span></div>
+    <div class="row tap" id="mGpdp"><span class="ico" style="background:var(--gold-ink)">${ICON.file}</span>
+      <span class="lbl"><b>Development plan</b><span>Send the Gram Panchayat Development Plan the district has called for</span></span>
+      <span class="chev">›</span></div>
     <div class="row tap" id="mLeave"><span class="ico" style="background:var(--seal-2)">${ICON.cal}</span>
       <span class="lbl"><b>${canApproveLeave(u.role)?'Leave applications':'Apply for leave'}</b>
       <span>${canApproveLeave(u.role)
@@ -2146,6 +2161,8 @@ async function renderMore(){
   [sun,big].forEach(el=>el.addEventListener('keydown',e=>{ if(e.key===' '||e.key==='Enter'){e.preventDefault(); el.click();} }));
 
   const iosRow=$('#mIos'); if(iosRow) iosRow.addEventListener('click', ()=>$('#iosTip').classList.add('on'));
+  const advRow=$('#mAdv'); if(advRow) advRow.addEventListener('click', advListSheet);
+  const gpRow=$('#mGpdp'); if(gpRow) gpRow.addEventListener('click', openGpdp);
   const lvRow=$('#mLeave'); if(lvRow) lvRow.addEventListener('click', openLeave);
   const attNow=$('#mAttNow'); if(attNow) attNow.addEventListener('click', () => { $('#app').hidden = true; openAttendance(); });
   const syncRow=$('#mSync'); if(syncRow) syncRow.addEventListener('click', syncAll);
@@ -2301,6 +2318,318 @@ const LV_PILL = {PENDING:['p-warn','Pending'], APPROVED:['p-ok','Sanctioned'],
 function lvPill(st){ const [c,l] = LV_PILL[st] || ['p-mut', st]; return `<span class="pill ${c}">${esc(l)}</span>`; }
 function lvSpan(l){
   return l.from === l.to ? niceDate(l.from) : niceDate(l.from) + ' to ' + niceDate(l.to);
+}
+
+
+/* ============================================================================
+ * ADVISORIES · the circular that opens in front of the officer
+ * ----------------------------------------------------------------------------
+ * It is put up once each time the app is opened, and the card stays on the
+ * home screen until the officer acknowledges it. It is not a trap: there is a
+ * Later, because an officer on a village road with one bar should not be held
+ * hostage by a modal. What he cannot do is make it go away for good without
+ * telling the district he has read it.
+ *
+ * ACKNOWLEDGEMENT IS RECEIPT, NOT COMPLIANCE — the button says so in those
+ * words, so nobody can later read the register as proof that the work was done.
+ * ========================================================================== */
+let ADV_SHOWN = false;          /* once per opening of the app */
+let ADV_SENDING = false;
+
+function advState(){ return (DB.adv && typeof DB.adv === 'object') ? DB.adv : null; }
+function refreshAdvisory(){
+  if(!navigator.onLine) return Promise.resolve();
+  return get({ op:'advisory' }).then(r => {
+    if(r && r.ok){
+      DB.adv = { advisory:r.advisory || null, acknowledged:!!r.acknowledged,
+                 ackAt:r.ackAt || '', recent:r.recent || [], at:new Date().toISOString() };
+      save();
+      if(TAB === 'home'){ renderHome(); maybePopAdvisory(); }
+    }
+  }).catch(()=>{});
+}
+
+function maybePopAdvisory(){
+  const st = advState();
+  if(ADV_SHOWN || !st || !st.advisory || st.acknowledged) return;
+  ADV_SHOWN = true;
+  advSheet();
+}
+
+function advSheet(){
+  const st = advState(); if(!st || !st.advisory) return;
+  const a = st.advisory;
+  showSheet(`<div style="padding:6px 20px 4px">
+      <p class="eyebrow">Advisory from the District Collector</p>
+      <h2>${esc(a.title)}</h2>
+      <p style="font-size:15.5px;color:var(--ink);margin-top:12px;line-height:1.6"><b>${esc(a.message)}</b></p>
+      ${a.publishedAt ? `<p style="font-size:12.5px;color:var(--ink-3);margin-top:10px">Issued ${esc(stampTime(a.publishedAt))}${a.publishedBy ? ' · ' + esc(a.publishedBy) : ''}</p>` : ''}
+    </div>
+    <div style="padding:14px 20px 4px">
+      ${a.url ? `<button class="btn quiet" id="advOpen">${ICON.file}Open the advisory</button>` : ''}
+      <button class="btn" id="advAck"${ADV_SENDING ? ' disabled' : ''}>${ADV_SENDING ? '<span class="spin"></span>Sending' : 'I have read this'}</button>
+      <button class="btn quiet" id="advLater">Later</button>
+      <p style="font-size:12.5px;color:var(--ink-3);margin-top:12px;line-height:1.55">
+        Pressing <b>I have read this</b> tells the district you have seen the advisory.
+        It is a receipt, not a report that the work is done.</p>
+    </div>`);
+  const o = $('#advOpen');
+  if(o) o.addEventListener('click', () => window.open(a.url, '_blank', 'noopener'));
+  $('#advLater').addEventListener('click', hideSheet);
+  $('#advAck').addEventListener('click', () => sendAdvAck());
+}
+
+async function sendAdvAck(){
+  const st = advState(); if(!st || !st.advisory || ADV_SENDING) return;
+  if(!navigator.onLine){
+    toast('No signal. The district has not been told yet — try again where there is a line.', 6000);
+    return;
+  }
+  ADV_SENDING = true; advSheet();
+  try{
+    const r = await post({ kind:'advAck', token:(DB.session||{}).token,
+                           id: st.advisory.id, at: new Date().toISOString() });
+    if(!r || r.ok === false) throw new Error((r && r.error) || 'The district did not record it.');
+    DB.adv = Object.assign({}, st, { acknowledged:true, ackAt:r.ackAt || new Date().toISOString() });
+    save();
+    hideSheet();
+    toast('Noted. The district has your acknowledgement.', 5000);
+  }catch(err){
+    toast(String(err.message || err), 6000);
+  }finally{
+    ADV_SENDING = false;
+    if(TAB === 'home') renderHome();
+  }
+}
+
+/* ---- every circular the district has issued, kept where he can reach it ---- */
+function advListSheet(){
+  const st = advState();
+  const list = (st && st.recent && st.recent.length) ? st.recent
+             : (st && st.advisory ? [Object.assign({standing:true, acknowledged:st.acknowledged}, st.advisory)] : []);
+  if(!list.length){
+    showSheet(`<div style="padding:6px 20px 18px"><h2>Advisories</h2>
+      <p style="font-size:14.5px;color:var(--ink-2);margin-top:9px;line-height:1.55">
+        The district has not issued one yet. When it does, it opens here.</p></div>`);
+    return;
+  }
+  showSheet(`<div style="padding:6px 20px 4px"><h2>Advisories from the Collector</h2>
+      <p style="font-size:13px;color:var(--ink-3);margin-top:6px">Every circular the district has issued to you. They stay here to be read again.</p></div>
+    <div style="padding:10px 16px 8px">` +
+    list.map((a, i) => `<div class="card" style="margin-bottom:10px"><div style="padding:13px 15px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:5px">
+          <b style="font-size:15px">${esc(a.title)}</b>
+          ${a.standing ? '<i class="rfchip" style="background:var(--seal-tint);color:var(--seal)">standing</i>' : ''}
+          ${a.standing && !a.acknowledged ? '<i class="rfchip">not acknowledged</i>' : ''}
+        </div>
+        <div style="font-size:14px;line-height:1.55;color:var(--ink)">${esc(a.message)}</div>
+        <div style="font-size:12px;color:var(--ink-3);margin-top:7px">${a.publishedAt ? esc(stampTime(a.publishedAt)) : ''}${a.publishedBy ? ' · ' + esc(a.publishedBy) : ''}</div>
+        ${a.url ? `<button class="btn quiet sm" style="margin-top:10px" data-advopen="${esc(a.url)}">Open the document</button>` : ''}
+        ${a.standing && !a.acknowledged ? '<button class="btn sm" style="margin-top:8px" id="advAckList">I have read this</button>' : ''}
+      </div></div>`).join('') + `</div>`);
+  $$('#sheetBody [data-advopen]').forEach(el => el.addEventListener('click',
+    () => window.open(el.dataset.advopen, '_blank', 'noopener')));
+  const ab = $('#advAckList'); if(ab) ab.addEventListener('click', () => sendAdvAck());
+}
+
+/* ---- the card that stays until he acknowledges ---- */
+function advisoryCard(){
+  const st = advState();
+  if(!st || !st.advisory) return '';
+  const a = st.advisory;
+  if(st.acknowledged){
+    return `<div class="group" style="margin-top:16px"><div class="hdr">Advisory</div>
+      <div class="card"><div class="row tap" data-adv="1">
+        <span class="ico" style="background:var(--ok)">${ICON.tickC}</span>
+        <span class="lbl"><b>${esc(a.title)}</b><span>Acknowledged${st.ackAt ? ' · ' + esc(stampTime(st.ackAt)) : ''} · tap to read again</span></span>
+        <span class="chev">›</span></div></div></div>`;
+  }
+  return `<div class="group" style="margin-top:16px"><div class="hdr">Advisory from the District Collector</div>
+    <div class="card"><div class="row tap" data-adv="1">
+      <span class="ico" style="background:var(--flag)">${ICON.warn}</span>
+      <span class="lbl"><b>${esc(a.title)}</b><span>${esc(a.message)}</span></span>
+      <span class="chev">›</span></div></div></div>`;
+}
+
+/* ============================================================================
+ * GPDP · the Gram Panchayat Development Plan
+ * ----------------------------------------------------------------------------
+ * The district calls every officer for one plan a year. It rides on the home
+ * screen because that is the screen an officer opens, and it has a screen of
+ * its own for the filing itself.
+ *
+ * A PLAN IS A DOCUMENT, NOT A DEFAULT. Nothing here says an officer is in
+ * default, locks anything, or draws a notice — because no order has been
+ * passed that it should. The card states what is due and whether it has been
+ * sent, and stops there.
+ *
+ * IT NEEDS SIGNAL, AND SAYS SO. An attendance mark is written to the phone and
+ * synced later because a mark is small and the day is judged at 18:00. A plan
+ * is megabytes; holding one on the handset and pretending it had gone would
+ * repeat the very fault rule 2 exists to prevent. The officer is told plainly
+ * that it goes now or not at all.
+ * ========================================================================== */
+const GPDP_ACCEPT = ['pdf','doc','docx','xls','xlsx'];
+let GPDP_SENDING = false;
+
+function gpdpState(){ return (DB.gpdp && typeof DB.gpdp === 'object') ? DB.gpdp : null; }
+function gpdpExtOf(name){
+  const m = String(name || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+  return m ? m[1] : '';
+}
+function gpdpNiceSize(kb){
+  const n = Number(kb) || 0;
+  return n >= 1024 ? (n / 1024).toFixed(1) + ' MB' : Math.max(1, Math.round(n)) + ' KB';
+}
+function refreshGpdp(){
+  if(!navigator.onLine) return Promise.resolve();
+  return get({ op:'gpdp' }).then(r => {
+    if(r && r.ok){
+      DB.gpdp = { year:r.year, mine:r.mine || null, due:!!r.due,
+                  maxMB:r.maxMB || 8, at:new Date().toISOString() };
+      save();
+      if(TAB === 'home') renderHome();
+      if(TAB === 'gpdp') renderGpdp();
+    }
+  }).catch(()=>{});
+}
+
+/* ---- the card on the home screen ---- */
+function gpdpCard(){
+  const u = user(); if(!u) return '';
+  const st = gpdpState();
+  /* Before the district has been asked even once, say nothing rather than
+     guess — an empty card that claims "not filed" would accuse an officer who
+     may well have filed. */
+  if(!st) return '';
+  if(st.due === false) return '';
+  const done = !!st.mine;
+  const yr = esc(st.year || '');
+  if(done){
+    const when = st.mine.uploadedAt || st.mine.receivedAt;
+    return `<div class="group" style="margin-top:16px"><div class="hdr">Development plan · ${yr}</div>
+      <div class="card"><div class="row tap" data-gpdp="1">
+        <span class="ico" style="background:var(--ok)">${ICON.tickC}</span>
+        <span class="lbl"><b>Plan filed</b><span>${esc(st.mine.fileName || 'document')} · ${esc(gpdpNiceSize(st.mine.sizeKB))}${when ? ' · ' + esc(stampTime(when)) : ''}</span></span>
+        <span class="chev">›</span></div></div></div>`;
+  }
+  return `<div class="group" style="margin-top:16px"><div class="hdr">Development plan · ${yr}</div>
+    <div class="card"><div class="row tap" data-gpdp="1">
+      <span class="ico" style="background:var(--gold-ink)">${ICON.file}</span>
+      <span class="lbl"><b>Your GPDP has not been sent</b><span>The district has called for the Gram Panchayat Development Plan. Tap to send it — PDF, Word or Excel.</span></span>
+      <span class="chev">›</span></div></div></div>`;
+}
+
+/* ---- the screen ---- */
+function openGpdp(){
+  showScreen('gpdp');
+  renderGpdp();
+  refreshGpdp();
+}
+$('#gpBack').innerHTML = '<button id="gpBackBtn">Back</button>';
+$('#gpBack').addEventListener('click', e => { if(e.target.closest('#gpBackBtn')) go('home'); });
+
+function renderGpdp(){
+  const u = user(); if(!u) return;
+  const st = gpdpState();
+  const yr = st ? st.year : '';
+  const maxMB = st ? st.maxMB : 8;
+  $('#gpBig').textContent = 'Development Plan' + (yr ? ' · ' + yr : '');
+  $('#gpSub').textContent = (u.gps && u.gps.length ? u.gps.join(', ') : roleName(u.role)) +
+    (u.mandal ? ' · ' + u.mandal + ' mandal' : '');
+
+  let h = '';
+  if(!st){
+    h += banner('info', ICON.cloud, 'The district has not been reached yet. Open this where there is signal and the plan can be sent.');
+  } else if(st.mine){
+    const when = st.mine.uploadedAt || st.mine.receivedAt;
+    h += banner('ok', ICON.tickC, 'The district has your plan for ' + st.year + '.');
+    h += `<div class="group"><div class="hdr">What the district holds</div><div class="card">
+      <div class="row"><span class="lbl"><b>${esc(st.mine.fileName || 'document')}</b>
+        <span>${esc(gpdpNiceSize(st.mine.sizeKB))}${when ? ' · sent ' + esc(stampTime(when)) : ''}</span></span></div>
+      ${st.mine.url ? `<div class="row tap" data-gpopen="${esc(st.mine.url)}"><span class="lbl"><b>Open the document</b><span>Opens in Drive</span></span><span class="chev">›</span></div>` : ''}
+    </div></div>`;
+  } else {
+    h += banner('warn', ICON.file, 'The Gram Panchayat Development Plan for ' + st.year + ' has been called for and has not been sent.');
+  }
+
+  h += `<div class="group"><div class="hdr">${st && st.mine ? 'Send a revised plan' : 'Send the plan'}</div><div class="card">
+    <div style="padding:14px 16px">
+      <button class="btn" id="gpPick"${GPDP_SENDING ? ' disabled' : ''}>${GPDP_SENDING ? '<span class="spin"></span>Sending' : ICON.plus + 'Choose the file'}</button>
+      <p style="margin-top:12px;font-size:13px;line-height:1.65;color:var(--ink-2)">
+        PDF, Word or Excel, up to ${maxMB} MB. It goes to the district as you send it —
+        a plan is too large to be held on the phone and sent later, so send it where there is signal.
+        ${st && st.mine ? 'A revised plan does not erase the one already filed; both are kept, and the newest is the one that stands.' : ''}
+      </p>
+      <div id="gpProg" style="margin-top:6px"></div>
+    </div>
+  </div></div>`;
+
+  $('#gpBody').innerHTML = h;
+  const pick = $('#gpPick');
+  if(pick) pick.addEventListener('click', () => { if(!GPDP_SENDING) $('#gpdpFile').click(); });
+  $$('#gpBody [data-gpopen]').forEach(el => el.addEventListener('click', () => {
+    window.open(el.dataset.gpopen, '_blank', 'noopener');
+  }));
+}
+
+/* ---- the send ---- */
+$('#gpdpFile').addEventListener('change', async ev => {
+  const f = ev.target.files && ev.target.files[0];
+  ev.target.value = '';                       /* so the same file can be re-picked */
+  if(!f) return;
+  const st = gpdpState(), maxMB = st ? st.maxMB : 8;
+  const ext = gpdpExtOf(f.name);
+  if(GPDP_ACCEPT.indexOf(ext) < 0){
+    toast('A plan must be a PDF, a Word document or an Excel workbook. That one is ' +
+      (ext ? 'a .' + ext : 'without a file type') + '.', 6000);
+    return;
+  }
+  if(f.size > maxMB * 1024 * 1024){
+    toast('That file is ' + (f.size / 1048576).toFixed(1) + ' MB. The limit is ' + maxMB + ' MB — please send a smaller copy.', 6000);
+    return;
+  }
+  if(!navigator.onLine){
+    toast('No signal. A plan is too large to hold on the phone — send it where there is a line.', 6000);
+    return;
+  }
+  GPDP_SENDING = true; renderGpdp();
+  const prog = $('#gpProg');
+  if(prog) prog.innerHTML = '<div class="banner info" style="margin:0">' + ICON.cloud +
+    '<span>Sending ' + esc(f.name) + ' — keep this screen open.</span></div>';
+  try{
+    const b64 = await gpdpRead(f);
+    const r = await post({ kind:'gpdp', token:(DB.session||{}).token, at:new Date().toISOString(),
+                           file:{ name:f.name, b64:b64 } });
+    if(!r || r.ok === false) throw new Error((r && r.error) || 'The district refused it.');
+    DB.gpdp = Object.assign({}, gpdpState() || {}, {
+      year:r.year, mine:{ fileName:r.fileName, url:r.url, sizeKB:r.sizeKB, uploadedAt:r.uploadedAt },
+      due:true, maxMB:maxMB, at:new Date().toISOString() });
+    save();
+    toast('The district has your plan.', 5000);
+  }catch(err){
+    toast(String(err.message || err), 7000);
+    if(prog) prog.innerHTML = '<div class="banner bad" style="margin:0">' + ICON.warn +
+      '<span>' + esc(String(err.message || err)) + ' Nothing was recorded — try again.</span></div>';
+  }finally{
+    GPDP_SENDING = false;
+    renderGpdp();
+    if(TAB === 'home') renderHome();
+  }
+});
+
+function gpdpRead(file){
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onerror = () => rej(new Error('The phone could not read that file.'));
+    fr.onload = () => {
+      const s = String(fr.result || '');
+      const i = s.indexOf(',');
+      if(i < 0) return rej(new Error('The phone could not read that file.'));
+      res(s.slice(i + 1));
+    };
+    fr.readAsDataURL(file);
+  });
 }
 
 /* ---------------- the screen ---------------- */

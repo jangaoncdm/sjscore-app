@@ -172,6 +172,11 @@ html[data-sun="1"] .masthead{background:#fff}
   min-height:52px;padding:0 20px;border-radius:14px;font-size:17px;font-weight:650;letter-spacing:-.01em;
   background:var(--seal);color:#fff;width:100%;transition:transform .1s var(--ease),opacity .12s;
 }
+/* ANY icon put in a button is sized here. Only ICON.plus carried its own
+   inline width, so every other icon in the set filled its button edge to edge
+   — the advisory's "Open the advisory" came out as a black slab. Inline styles
+   still win, so the icons that size themselves are untouched. */
+.btn svg{width:18px;height:18px;fill:currentColor;flex:none}
 .btn:active{transform:scale(.98)}
 .btn[disabled]{opacity:.4;pointer-events:none}
 .btn.sec{background:var(--seal-tint);color:var(--seal)}
@@ -726,6 +731,12 @@ body.kb .tabs,body.kb .strip{transform:translateY(160%);pointer-events:none}
     <div id="moreBody"></div>
   </section>
 
+  <section class="screen" id="s-gpdp">
+    <div class="nav"><span class="side" id="gpBack"></span><h1>GPDP</h1><span class="side r" id="gpRight"></span></div>
+    <div class="bigtitle"><h2 id="gpBig">Development Plan</h2><p id="gpSub"></p></div>
+    <div id="gpBody"></div>
+  </section>
+
   <section class="screen" id="s-leave">
     <div class="nav"><span class="side" id="lvBack"></span><h1>Leave</h1><span class="side r" id="lvRight"></span></div>
     <div class="bigtitle"><h2 id="lvBig">Leave</h2><p id="lvSub"></p></div>
@@ -733,6 +744,9 @@ body.kb .tabs,body.kb .strip{transform:translateY(160%);pointer-events:none}
   </section>
 
 </main>
+
+<input type="file" id="gpdpFile" hidden
+  accept=".pdf,.doc,.docx,.xls,.xlsx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
 
 <nav class="tabs" id="tabs" role="tablist"></nav>
 </div>
