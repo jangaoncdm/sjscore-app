@@ -10,8 +10,6 @@ const path = require('path');
 const { chromium } = require('playwright');
 
 const DIR = path.join(__dirname, '..', 'Info', 'guide');
-const OUT_HTML = path.join(DIR, 'SJGP-advisory-guide.html');
-const OUT_PDF  = path.join(DIR, 'SJGP-advisory-guide.pdf');
 
 const img = f => 'data:image/png;base64,' + fs.readFileSync(path.join(DIR, f)).toString('base64');
 const esc = s => String(s == null ? '' : s)
@@ -38,7 +36,7 @@ const ADVISORY = [
 
 const PLAN = [
   { shot:'2b-plan-card', h:'The plan card on your home screen',
-    p:'Under the advisory sits the Gram Panchayat Development Plan the district has called for. It says whether yours has been sent.',
+    p:'Your home screen carries the Gram Panchayat Development Plan the district has called for. It says whether yours has been sent.',
     l:['Tap it to open the plan screen.'] },
   { shot:'4-plan', h:'Send your development plan',
     p:'Press <b>Choose the file</b> and pick the plan from your phone. It goes to the district straight away.',
@@ -63,8 +61,8 @@ const steps = (list, start) => list.map((s, i) => `
     <div class="shot"><img src="${img(s.shot + '.png')}" alt=""></div>
   </section>`).join('');
 
-const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<title>SJGP — Advisory and Development Plan</title>
+function doc(opts){ return `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>${opts.title}</title>
 <style>
 @page{ size:A4; margin:14mm 15mm 16mm; }
 *{box-sizing:border-box}
@@ -115,48 +113,67 @@ footer b{color:#1A2437}
 
 <header class="mast">
   <p class="gov">Government of Telangana &middot; District Collector &amp; Magistrate, Jangaon</p>
-  <h1>The Collector&rsquo;s advisory on the SJGP app</h1>
-  <p class="sub">What every Panchayat Secretary, MPO, MSO and MPDO now sees when the app is opened,
-    and what to do about it. Six steps, and nothing here needs training.</p>
+  <h1>${opts.h1}</h1>
+  <p class="sub">${opts.sub}</p>
   <p class="rc">Swachh Jangaon Gram Panchayat &middot; Rc.No.788/DPO/26/34 &middot; ${esc(stamp)}</p>
 </header>
 
-<div class="callout">
+${opts.callout}
+${opts.body}
+
+<footer>
+  ${opts.foot}
+  <p style="margin-top:5pt">If the app does not show it, close it and open it again where there is
+  signal. For a number that will not sign in, or a wrong village against your name, contact the
+  District Panchayat Office, Jangaon.</p>
+</footer>
+
+</body></html>`; }
+
+const ADV_CALLOUT = `<div class="callout">
   <p class="k">The advisory now in force</p>
   <p><b>Kindly go through the to do list in the monsoon season and act accordingly.</b></p>
   <p style="font-size:9.5pt;color:#46536B">Open the advisory in the app and read the full document before you acknowledge it.</p>
-</div>
+</div>`;
 
-<div class="part">
-  <h2>Part one &middot; The advisory</h2>
-  ${steps(ADVISORY, 1)}
-</div>
+const DOCS = [
+  { file:'SJGP-advisory-guide',
+    title:'SJGP — Advisory and Development Plan',
+    h1:'The Collector&rsquo;s advisory on the SJGP app',
+    sub:'What every Panchayat Secretary, MPO, MSO and MPDO now sees when the app is opened, and what to do about it. Six steps, and nothing here needs training.',
+    callout: ADV_CALLOUT,
+    body: `<div class="part"><h2>Part one &middot; The advisory</h2>${steps(ADVISORY, 1)}</div>
+           <div class="part pagebreak"><h2>Part two &middot; The Gram Panchayat Development Plan</h2>${steps(PLAN, 4)}</div>`,
+    foot: `<p><b>The district can see who has read the advisory and who has not, and who has sent a
+      plan and who has not.</b> Acknowledging an advisory records only that you have seen it. It is
+      not a report that the work is done.</p>` },
 
-<div class="part pagebreak">
-  <h2>Part two &middot; The Gram Panchayat Development Plan</h2>
-  ${steps(PLAN, 4)}
-</div>
-
-<footer>
-  <p><b>The district can see who has read the advisory and who has not, and who has sent a plan
-  and who has not.</b> Acknowledging an advisory records only that you have seen it. It is not a
-  report that the work is done.</p>
-  <p style="margin-top:5pt">If the app does not show the advisory, close it and open it again where
-  there is signal. For a number that will not sign in, or a wrong village against your name,
-  contact the District Panchayat Office, Jangaon.</p>
-</footer>
-
-</body></html>`;
-
-fs.writeFileSync(OUT_HTML, html);
+  /* the plan on its own, for chasing the officers who have not sent one */
+  { file:'SJGP-gpdp-guide',
+    title:'SJGP — Sending your Development Plan',
+    h1:'Sending your Gram Panchayat Development Plan',
+    sub:'The district has called for one plan from every officer for 2026-27. It goes through the SJGP app in three steps.',
+    callout: `<div class="callout">
+      <p class="k">What is called for</p>
+      <p><b>One Gram Panchayat Development Plan for 2026-27, from every officer.</b></p>
+      <p style="font-size:9.5pt;color:#46536B">PDF, Word or Excel, up to 8 MB. The plan year runs April to March, so a plan sent up to March 2027 belongs to 2026-27.</p>
+    </div>`,
+    body: `<div class="part"><h2>The three steps</h2>${steps(PLAN, 1)}</div>`,
+    foot: `<p><b>The district can see who has sent a plan and who has not.</b> Sending a plan records
+      that the district holds the document. It is not an approval of what is in it.</p>` }
+];
 
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage();
-  await page.setContent(html, { waitUntil:'load' });
-  await page.pdf({ path: OUT_PDF, format:'A4', printBackground:true,
-                   margin:{ top:'14mm', right:'15mm', bottom:'16mm', left:'15mm' } });
+  for(const d of DOCS){
+    const html = doc(d);
+    const h = path.join(DIR, d.file + '.html'), pdf = path.join(DIR, d.file + '.pdf');
+    fs.writeFileSync(h, html);
+    await page.setContent(html, { waitUntil:'load' });
+    await page.pdf({ path: pdf, format:'A4', printBackground:true,
+                     margin:{ top:'14mm', right:'15mm', bottom:'16mm', left:'15mm' } });
+    console.log(d.file + '.pdf   (' + Math.round(fs.statSync(pdf).size / 1024) + ' KB)');
+  }
   await browser.close();
-  console.log('PDF   : ' + OUT_PDF + '  (' + Math.round(fs.statSync(OUT_PDF).size / 1024) + ' KB)');
-  console.log('HTML  : ' + OUT_HTML);
 })();

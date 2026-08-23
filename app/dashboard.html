@@ -2781,14 +2781,20 @@ function vAdvisory(j,A){
     h+=panel('c12','No advisory is standing','nothing has been issued to the district yet',
       '<div class="empty">Publish one below. It opens on every officer’s home screen the next time the app is opened, '+
       'and this section then names who has read it and who has not.</div>');
-    if((ADV&&ADV.coverage||[]).length)
+    if((ADV&&ADV.coverage||[]).length){
+      /* one series, so one colour — and the rows are scaled against the
+         largest mandal, or every bar fills its track and the lengths say
+         nothing at all */
+      const mx=Math.max(1,...(ADV.coverage||[]).map(c=>c.due));
       h+=panel('c12','Who the next circular reaches','mandal by mandal',
         '<div class="plot">'+Charts.stackRows((ADV.coverage||[]).map(c=>({
           label:c.mandal.length>16?c.mandal.slice(0,15)+'…':c.mandal,
           title:c.mandal+' — '+c.due+' officer'+(c.due===1?'':'s'),
-          parts:[{value:c.due,color:'var(--cs1)'}],
+          parts:[{value:c.due,color:'var(--cs1)'},
+                 {value:Math.max(0,mx-c.due),color:'var(--ch-grid)'}],
           right:String(c.due), tone:''
         })),{emptyMsg:'Nobody is on the roll yet.'})+'</div>');
+    }
   }
 
   /* ---- publishing ---- */

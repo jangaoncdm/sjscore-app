@@ -54,6 +54,21 @@ module.exports = {
     const ps = tokenFor(env, '9000000031');
     const cdm = tokenFor(env, '9000000001');
 
+    /* DAY ONE, BEFORE ANY OFFICER HAS FILED. The advisory register answered a
+       bare "nothing standing" in this state and the console rendered an empty
+       panel, which reads as broken machinery rather than as an empty register.
+       The plan register must not have the same fault: with nothing filed at
+       all it still names every officer the district is waiting on. */
+    let day1 = env.get('gpdp', { token: cdm });
+    t.eq(day1.ok, true, 'the plan register answers before anything is filed');
+    t.eq(day1.totals.due, 3, 'and still counts everyone called for');
+    t.eq(day1.totals.uploaded, 0, 'with nothing filed');
+    t.eq(day1.totals.pending, 3, 'and everyone pending');
+    t.eq(day1.roll.length, 3, 'the roll names them all');
+    t.ok(day1.roll.every(r => r.uploaded === false), 'each marked as not filed');
+    t.ok(day1.coverage.some(x => x.mandal === 'Jangaon' && x.uploaded === 0),
+      'and the mandal breakdown is there from the first day');
+
     /* ---- what will not be accepted ---- */
     let r = env.post({ kind:'gpdp', token: ps, file:{ name:'plan.txt', b64: b64(10) } });
     t.eq(r.ok, false, 'a text file is refused');
