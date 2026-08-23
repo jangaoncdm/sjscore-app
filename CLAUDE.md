@@ -16,7 +16,7 @@ the rules below exist because exactly that happened in production.
 ## Run this before you finish anything
 
 ```bash
-npm test              # 538 assertions, 14 suites, against the real backend files
+npm test              # 646 assertions, 16 suites, against the real backend files
 node tests/ladder     # one suite, with its detail
 ```
 
@@ -44,7 +44,11 @@ Frontend has no automated tests. **Render it and look**, with Playwright, at
 | `.github/workflows/deploy.yml` | Tests → publish site → push and deploy backend → verify |
 
 Sheet tabs: `Users` `GPs` `Inspections` `Attendance` `Leave` `Notices`
-`Reminders` `Holidays` `Tokens` `Audit` `Voided`.
+`Reminders` `Holidays` `Tokens` `Audit` `Voided` `Seen` `GPDP` `Advisories`
+`AdvAck`.
+
+Drive holds three areas, each made on first use: `SJ-SCORE Attendance`,
+`SJ-SCORE GPDP` (by plan year, then mandal) and `SJ-SCORE Advisories`.
 
 Columns are matched **by header name** (`headMap_`), never by position, and
 `ensureHeaders_` appends new ones automatically. Adding a field to a `*_HEAD`
@@ -142,6 +146,35 @@ manufacture a fortnight of misses.
 
 ---
 
+## Documents: the plan and the circular
+
+Two registers collect and distribute documents. Neither is part of the notice
+ladder, and that is deliberate.
+
+**GPDP** — every active officer but the Collector is called for one Gram
+Panchayat Development Plan a year (April–March, so a plan filed in March 2027
+is 2026-27). PDF, Word or Excel, up to 8 MB; the file goes to Drive before any
+lock is taken, and a second filing marks the first `REPLACED` rather than
+overwriting it. `op=gpdp` returns the officer his own line and the district the
+whole roll. **The plan endpoint sits ABOVE the viewer guard in `doPost`** — a
+GPDP is filed by the officer who holds the Gram Panchayat, which is the very
+role that may not file an evaluation. Move that line down and the district
+calls every Secretary for a plan and then refuses to take it.
+
+**Advisories** — the Collector publishes one circular with one line of
+instruction from the console. It opens by itself on every officer's home screen
+until acknowledged, and stays in the app afterwards under More ▸ Advisories, so
+a circular is never read once and lost. Publishing a new one marks the standing
+one `SUPERSEDED`; the receipts already given stand. `advAck` is idempotent — a
+double tap or a re-send writes no second receipt.
+
+**Neither accuses anyone.** A missing plan and an unacknowledged circular raise
+no reminder, no notice, no debit and no lock. An acknowledgement is **receipt,
+not compliance** — it records that the officer saw the circular, never that he
+acted on it, and the app says so on the button. An obligation of that weight is
+created by the Collector's written order, not by a table. The suites assert
+this; if it is ever to change, change it there first.
+
 ## House style
 
 The prose in this project is plain, unhurried, and written for an officer
@@ -195,7 +228,21 @@ node tests/render-console.js        # 6 views × 3 widths × both themes
 
 It fails on sideways scroll, on cards in one row that differ in height, on a
 hardcoded colour inside a chart, and on any script error, and leaves the
-screenshots in `Info/console-render/`. Playwright is deliberately **not** a
+screenshots in `Info/console-render/`.
+
+The document registers have a browser test of their own, which drives the real
+field app and the real console and writes a report with snapshots:
+
+```bash
+node tests/fixture-docs.js          # payloads from the real backend
+node tests/render-docs.js           # 35 checks; Info/docs-render/REPORT.md
+```
+
+It signs the app in by writing the session on the origin **without loading
+index.html first** — the app builds an empty store on load and its own
+debounced save puts `session:null` straight back over anything written after.
+
+Playwright is deliberately **not** a
 dependency — install it with `npm i playwright --no-save` when you need it, so
 the deploy Action stays light.
 

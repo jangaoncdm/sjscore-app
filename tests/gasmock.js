@@ -102,9 +102,17 @@ class MockFolder {
   }
   createFolder(name){ const f = new MockFolder(name); this.folders[name] = f; return f; }
   createFile(blob){
+    const nm = (blob && blob.name) || 'file';
+    const id = 'mockfile-' + (++MockFolder.seq);
     const file = {
-      name: (blob && blob.name) || 'file',
-      getUrl: () => 'https://drive.mock/' + this.name + '/' + ((blob && blob.name) || 'file'),
+      name: nm,
+      /* Drive hands back a stable id as well as a link, and the GPDP register
+         keeps it: a link can be re-issued, the id is what finds the document
+         again years later when a plan has to be produced. */
+      getId: () => id,
+      getName: () => nm,
+      getBlob: () => blob,
+      getUrl: () => 'https://drive.mock/' + this.name + '/' + nm,
       setSharing: () => {}
     };
     this.files.push(file);
@@ -113,6 +121,7 @@ class MockFolder {
   getUrl(){ return 'https://drive.mock/' + this.name; }
   setSharing(){}
 }
+MockFolder.seq = 0;
 
 /* Loads the backend from disk into a fresh mocked world and returns it.
    opts: now (ISO), scriptTz, sheetTz, admin (also load Admin.gs). */

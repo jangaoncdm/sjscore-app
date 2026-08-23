@@ -806,6 +806,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .nav [data-v="leave"][aria-current]{background:var(--amber-2);color:var(--amber)}
 .nav [data-v="notices"][aria-current]{background:var(--red-2);color:var(--red)}
 .nav [data-v="map"][aria-current]{background:var(--blue-2);color:var(--blue)}
+.nav [data-v="gpdp"][aria-current]{background:var(--teal-2);color:var(--teal)}
+.nav [data-v="advisory"][aria-current]{background:var(--amber-2);color:var(--gold)}
 .railfoot{position:absolute;left:14px;right:14px;bottom:16px;font-size:11px;color:var(--tx-3);line-height:1.6}
 
 /* ---------- top ---------- */
@@ -833,6 +835,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 #g[data-view="leave"] .panel{--acc:var(--amber)}
 #g[data-view="notices"] .panel{--acc:var(--red)}
 #g[data-view="map"] .panel{--acc:var(--blue)}
+#g[data-view="gpdp"] .panel{--acc:var(--teal)}
+#g[data-view="advisory"] .panel{--acc:var(--gold)}
 .panel .hd{display:flex;align-items:center;gap:var(--s1);padding:var(--s2) var(--s2) var(--s1);font-size:14px;font-weight:750;letter-spacing:-.01em}
 .panel .hd .r{margin-left:auto;font-size:11.5px;font-weight:500;color:var(--tx-3);font-family:var(--mono)}
 .panel .bd{padding:var(--s1) var(--s2) var(--s2)}
@@ -1121,6 +1125,8 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
       <button data-v="leave"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>Leave</button>
       <button data-v="notices"><svg viewBox="0 0 24 24"><path d="M12 3a5.5 5.5 0 0 0-5.5 5.5V12l-1.8 3.4h14.6L17.5 12V8.5A5.5 5.5 0 0 0 12 3z"/><path d="M9.8 17.8a2.3 2.3 0 0 0 4.4 0"/></svg>Notices</button>
       <button data-v="map"><svg viewBox="0 0 24 24"><path d="M9 4 3.8 6v14L9 18l6 2 5.2-2V4L15 6 9 4zM9 4v14M15 6v14"/></svg>Map</button>
+      <button data-v="gpdp"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>GPDP</button>
+      <button data-v="advisory"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/><path d="M12 8v3M12 13.4v.2"/></svg>Advisory</button>
     </nav>
     <div class="railfoot">District Operations Center<br>Rc.No.788/DPO/26/34<br><a href="./">Open the field app</a></div>
   </aside>
@@ -2629,6 +2635,172 @@ function vMap(j,A){
     mapTools()+'<div id="map2"></div>');
 }
 
+
+/* ============================================================================
+ * GPDP AND ADVISORY · the two registers of documents
+ * ----------------------------------------------------------------------------
+ * Both answer one question the Collector asks out loud: who has, and who has
+ * not. Both are read from their own endpoint rather than the dashboard
+ * payload, because neither changes minute to minute and the dashboard cache is
+ * already at its ceiling.
+ * ========================================================================== */
+let GPDP=null, ADV=null, GPFILTER='all', ADVFILTER='all', GPBUSY=false, ADVBUSY=false;
+
+function pullGpdp(){
+  return fetch(ST.url+'?op=gpdp&token='+encodeURIComponent(ST.token))
+    .then(r=>r.json()).then(j=>{ if(j&&j.ok){ GPDP=j; if(VIEW==='gpdp'&&DATA) render(DATA); } })
+    .catch(()=>{});
+}
+function pullAdv(){
+  return fetch(ST.url+'?op=advisory&token='+encodeURIComponent(ST.token))
+    .then(r=>r.json()).then(j=>{ if(j&&j.ok){ ADV=j; if(VIEW==='advisory'&&DATA) render(DATA); } })
+    .catch(()=>{});
+}
+const docWhen = s => { const d=new Date(s); return isNaN(d) ? '' : (dm(String(s).slice(0,10))+' '+hm(s)); };
+
+/* ---------------- GPDP ---------------- */
+function vGpdp(j,A){
+  if(!GPDP) return panel('c12','Development plans','loading',
+    '<div class="empty">Reading the plan register…</div>');
+  const T=GPDP.totals||{due:0,uploaded:0,pending:0};
+  let h='<div class="kpirow">';
+  h+=kpi('Plans filed',IC.f,T.uploaded,'', 'of '+T.due+' called for · '+GPDP.year,'gp:filed');
+  h+=kpi('Still to file',IC.u,T.pending,'', T.pending?'tap for the names':'every officer has filed','gp:pending');
+  h+=kpi('Coverage',IC.s,pct(T.uploaded,Math.max(1,T.due))+'%','', 'of the officers called for','');
+  h+=kpi('Accepted formats',IC.c,(GPDP.accepts||[]).length,'', (GPDP.accepts||[]).join(' · ')+' · up to '+GPDP.maxMB+' MB','');
+  h+=kpi('Held in Drive',IC.h,T.uploaded,'', GPDP.folderUrl?'tap to open the folder':'no folder yet',
+    GPDP.folderUrl?'gp:folder':'');
+  h+='</div>';
+
+  h+=panel('c5','Mandal by mandal','filed of called for',
+    '<div class="plot">'+Charts.stackRows((GPDP.coverage||[]).map(c=>({
+      label:c.mandal.length>16?c.mandal.slice(0,15)+'…':c.mandal,
+      title:c.mandal+' — '+c.uploaded+' of '+c.due+' filed',
+      parts:[{value:c.uploaded,color:Charts.ST.ok},{value:Math.max(0,c.due-c.uploaded),color:Charts.ST.bad}],
+      right:c.uploaded+'/'+c.due, tone:c.uploaded>=c.due?'ok':'bad'
+    })),{emptyMsg:'No officer is on the roll yet.'})+'</div>');
+
+  h+=panel('c7','Where the plans stand',GPDP.year,
+    '<div class="plot">'+Charts.stack([
+      {label:'Filed',value:T.uploaded,color:Charts.ST.ok},
+      {label:'Still to file',value:T.pending,color:Charts.ST.bad}],
+      {center:T.due,centerLabel:'officers called for',emptyMsg:'Nobody is on the roll yet.'})+'</div>');
+
+  const rows=(GPDP.roll||[]).filter(r=>GPFILTER==='all'||(GPFILTER==='filed'?r.uploaded:!r.uploaded));
+  window.__ROWS.gpdp=rows;
+  h+=panel('c12','Officer by officer',T.uploaded+' filed · '+T.pending+' pending',
+    `<div class="mtools">
+       <input class="find" id="gpFind" placeholder="Search name, role, mandal or village">
+       <span class="msp"></span>`+
+     [['all','Everyone',(GPDP.roll||[]).length],['filed','Filed',T.uploaded],['pending','Not filed',T.pending]]
+       .map(([k,n,c])=>`<button class="fchip" data-gpf="${k}" aria-pressed="${GPFILTER===k}">${n} <b>${c}</b></button>`).join('')+
+     `<button class="fchip" id="gpCsv">CSV of this register</button>
+      ${GPDP.folderUrl?`<a class="fchip" href="${esc(GPDP.folderUrl)}" target="_blank" rel="noopener">Open the Drive folder</a>`:''}
+     </div>
+     <div class="twrap"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th><th>Village</th><th>Status</th><th>Filed at</th><th>Document</th></tr></thead><tbody id="gpBody">`+
+     (rows.length?rows.map(r=>`<tr>
+        <td>${esc(r.name||'—')}</td><td class="mut">${esc(r.role)}</td><td class="mut">${esc(r.mandal||'—')}</td>
+        <td class="mut">${esc(r.gp||'—')}</td>
+        <td>${r.uploaded?'<span class="pill ok">filed</span>':'<span class="pill bad">not filed</span>'}</td>
+        <td class="num mut">${r.uploaded?esc(docWhen(r.uploadedAt)):'—'}</td>
+        <td>${r.uploaded&&r.url?`<a href="${esc(r.url)}" target="_blank" rel="noopener">View${r.fileName?' · '+esc(String(r.fileName).length>28?String(r.fileName).slice(0,27)+'…':String(r.fileName)):''}</a>`:'—'}</td>
+      </tr>`).join('')
+      :'<tr><td colspan="7" class="empty">Nobody on the roll matches this filter.</td></tr>')+
+     `</tbody></table></div>`,'gpdpT');
+  return h;
+}
+
+/* ---------------- Advisory ---------------- */
+function vAdvisory(j,A){
+  let h='';
+  const a=ADV&&ADV.advisory;
+  const T=(ADV&&ADV.totals)||{due:0,acknowledged:0,pending:0};
+
+  if(a){
+    h+='<div class="kpirow">';
+    h+=kpi('Acknowledged',IC.u,T.acknowledged,'', 'of '+T.due+' addressed','adv:ack');
+    h+=kpi('Still pending',IC.u,T.pending,'', T.pending?'tap for the names':'everyone has read it','adv:pending');
+    h+=kpi('Read',IC.s,pct(T.acknowledged,Math.max(1,T.due))+'%','', 'of the officers addressed','');
+    h+=kpi('Issued',IC.c,esc(String(a.publishedAt||'').slice(8,10)+'.'+String(a.publishedAt||'').slice(5,7)),'',
+      esc(a.publishedBy||'the district'),'');
+    h+=kpi('Addressed to',IC.h,esc(a.audience||'ALL'),'', a.audience==='ALL'?'every officer':'that role alone','');
+    h+='</div>';
+
+    h+=panel('c12','The standing advisory',esc(a.id||''),
+      `<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">
+         <div style="flex:1;min-width:280px">
+           <div style="font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--tx-3)">Title</div>
+           <div style="font-size:17px;font-weight:700;margin:3px 0 12px">${esc(a.title)}</div>
+           <div style="font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--tx-3)">The line every officer is shown</div>
+           <div style="font-size:14.5px;line-height:1.6;margin-top:4px">${esc(a.message)}</div>
+         </div>
+         ${a.url?`<a class="tbtn pri" href="${esc(a.url)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;padding:0 18px">Open the document</a>`:''}
+       </div>`);
+
+    h+=panel('c5','Mandal by mandal','read of addressed',
+      '<div class="plot">'+Charts.stackRows((ADV.coverage||[]).map(c=>({
+        label:c.mandal.length>16?c.mandal.slice(0,15)+'…':c.mandal,
+        title:c.mandal+' — '+c.acknowledged+' of '+c.due+' acknowledged',
+        parts:[{value:c.acknowledged,color:Charts.ST.ok},{value:Math.max(0,c.due-c.acknowledged),color:Charts.ST.bad}],
+        right:c.acknowledged+'/'+c.due, tone:c.acknowledged>=c.due?'ok':'bad'
+      })),{emptyMsg:'Nobody is addressed by it.'})+'</div>');
+
+    h+=panel('c7','Who has read it',esc(a.title),
+      '<div class="plot">'+Charts.stack([
+        {label:'Acknowledged',value:T.acknowledged,color:Charts.ST.ok},
+        {label:'Pending',value:T.pending,color:Charts.ST.bad}],
+        {center:T.due,centerLabel:'officers addressed',emptyMsg:'Nobody is addressed by it.'})+'</div>');
+
+    const rows=(ADV.roll||[]).filter(r=>ADVFILTER==='all'||(ADVFILTER==='ack'?r.acknowledged:!r.acknowledged));
+    window.__ROWS.adv=rows;
+    h+=panel('c12','Officer by officer',T.acknowledged+' acknowledged · '+T.pending+' pending',
+      `<div class="mtools">
+         <input class="find" id="advFind" placeholder="Search name, role or mandal">
+         <span class="msp"></span>`+
+       [['all','Everyone',(ADV.roll||[]).length],['ack','Acknowledged',T.acknowledged],['pending','Pending',T.pending]]
+         .map(([k,n,c])=>`<button class="fchip" data-advf="${k}" aria-pressed="${ADVFILTER===k}">${n} <b>${c}</b></button>`).join('')+
+       `<button class="fchip" id="advCsv">CSV of this register</button></div>
+       <div class="twrap"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th><th>Village</th><th>Status</th><th>Acknowledged at</th></tr></thead><tbody id="advBody">`+
+       (rows.length?rows.map(r=>`<tr>
+          <td>${esc(r.name||'—')}</td><td class="mut">${esc(r.role)}</td><td class="mut">${esc(r.mandal||'—')}</td>
+          <td class="mut">${esc(r.gp||'—')}</td>
+          <td>${r.acknowledged?'<span class="pill ok">read</span>':'<span class="pill bad">pending</span>'}</td>
+          <td class="num mut">${r.acknowledged?esc(docWhen(r.ackAt)):'—'}</td></tr>`).join('')
+        :'<tr><td colspan="6" class="empty">Nobody on the roll matches this filter.</td></tr>')+
+       `</tbody></table></div>`,'advT');
+  } else {
+    h+=panel('c12','No advisory is standing','nothing is in front of the district',
+      '<div class="empty">Publish one below and it opens on every officer’s home screen the next time the app is opened.</div>');
+  }
+
+  /* ---- publishing ---- */
+  h+=panel('c12','Publish an advisory',
+    'it opens on every officer’s home screen and stays there until acknowledged',
+    `<div style="display:grid;gap:12px;max-width:760px">
+       <label style="font-size:12px;color:var(--tx-2)">Title
+         <input class="find" id="advTitle" style="max-width:none;margin-top:5px" placeholder="PS MPDO MPO Health Advisory"></label>
+       <label style="font-size:12px;color:var(--tx-2)">The line every officer is shown
+         <input class="find" id="advMsg" style="max-width:none;margin-top:5px"
+           value="Kindly go through the to do list in the monsoon season and act accordingly"></label>
+       <label style="font-size:12px;color:var(--tx-2)">Addressed to
+         <select class="rsel" id="advAud" style="display:block;margin-top:5px;width:220px">
+           <option value="ALL">Every officer</option>
+           <option value="PS">Panchayat Secretaries</option>
+           <option value="MPDO">MPDOs</option>
+           <option value="MPO">MPOs</option>
+           <option value="MSO">MSOs</option></select></label>
+       <div>
+         <input type="file" id="advFile" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="font-size:13px">
+         <div class="expnote" style="margin-top:6px">PDF, Word or an image of the signed page, up to 12 MB. The file is stored in Drive and every officer gets a link to it.</div>
+       </div>
+       <div class="expbar">
+         <button class="tbtn pri" id="advGo"${ADVBUSY?' disabled':''}>${ADVBUSY?'Publishing…':'Publish to every officer'}</button>
+         <span class="expnote" id="advNote">${a?'Publishing a new advisory retires the one standing. Nothing is deleted, and the acknowledgements already given stay on the record.':''}</span>
+       </div>
+     </div>`);
+  return h;
+}
+
 /* ---------------- render ---------------- */
 function render(j){
   /* the accent follows the view — panels and nav answer in its colour */
@@ -2646,12 +2818,25 @@ function render(j){
     : VIEW==='attendance'?vAttendance(j,A)
     : VIEW==='villages'?vVillages(j,A)
     : VIEW==='leave'?vLeave(j,A)
-    : VIEW==='notices'?vNotices(j,A) : vMap(j,A);
+    : VIEW==='notices'?vNotices(j,A)
+    : VIEW==='gpdp'?vGpdp(j,A)
+    : VIEW==='advisory'?vAdvisory(j,A) : vMap(j,A);
   document.querySelectorAll('#g [data-k]').forEach(el=>{ if(keep[el.dataset.k]) el.scrollTop=keep[el.dataset.k]; });
+  if(VIEW==='gpdp' && !GPDP) pullGpdp();
+  if(VIEW==='advisory' && !ADV) pullAdv();
   if(VIEW==='overview') drawMap('map','main');
   if(VIEW==='map') drawMap('map2','full');
   const mf=$('#mFind'); if(mf) mf.onchange=()=>{ if(mf.value) flyTo(mf.value); };
   const mp=$('#mPick'); if(mp) mp.onchange=()=>{ if(mp.value) flyTo(mp.value); };
+  const gq=$('#gpFind');
+  if(gq) gq.oninput=()=>{const q=gq.value.toLowerCase();
+    document.querySelectorAll('#gpBody tr').forEach(tr=>{
+      tr.style.display = !q || tr.textContent.toLowerCase().indexOf(q)>=0 ? '' : 'none'; }); };
+  const aq=$('#advFind');
+  if(aq) aq.oninput=()=>{const q=aq.value.toLowerCase();
+    document.querySelectorAll('#advBody tr').forEach(tr=>{
+      tr.style.display = !q || tr.textContent.toLowerCase().indexOf(q)>=0 ? '' : 'none'; }); };
+
   const f=$('#attFind'); if(f) f.oninput=()=>{const q=f.value.toLowerCase();
     document.querySelectorAll('#attBody tr').forEach(tr=>tr.style.display=tr.dataset.f.includes(q)?'':'none');};
   const ni=$('#askIn');
@@ -2661,6 +2846,65 @@ function render(j){
     ni.onkeydown=e2=>{ if(e2.key==='Enter'&&ni.value.trim()){ e2.preventDefault(); const q=ni.value; ni.value=''; sendAsk(q); } };
   }
   if(!DOWN){ $('#live').className='live'; $('#liveTx').textContent='updated now'; }
+}
+
+
+/* ---- the two registers, taken away as a file ---- */
+function exportGpdpCsv(){
+  if(!GPDP) return;
+  const rows=[['Status','Mandal','Village','Officer','Role','Phone','Filed at','File','Link']];
+  (GPDP.roll||[]).forEach(r=>rows.push([
+    r.uploaded?'FILED':'NOT FILED', r.mandal||'', r.gp||'', r.name||'', r.role||'', r.phone||'',
+    r.uploaded?docWhen(r.uploadedAt):'', r.fileName||'', r.url||'']));
+  dlBlob('SJGP_GPDP_'+GPDP.year+'.csv','text/csv;charset=utf-8',csvText(rows));
+}
+function exportAdvCsv(){
+  if(!ADV||!ADV.advisory) return;
+  const rows=[['Status','Mandal','Village','Officer','Role','Phone','Acknowledged at']];
+  (ADV.roll||[]).forEach(r=>rows.push([
+    r.acknowledged?'READ':'PENDING', r.mandal||'', r.gp||'', r.name||'', r.role||'', r.phone||'',
+    r.acknowledged?docWhen(r.ackAt):'']));
+  dlBlob('SJGP_advisory_'+(ADV.advisory.id||'')+'.csv','text/csv;charset=utf-8',csvText(rows));
+}
+
+/* ---- publishing a circular ----
+   The file rides as base64 in the request body, the same way an attendance
+   photograph does. A circular is put in front of 280 officers, so the button
+   states plainly what it is about to do before it does it. */
+function publishAdvisory(){
+  if(ADVBUSY) return;
+  const title=($('#advTitle')&&$('#advTitle').value||'').trim();
+  const msg=($('#advMsg')&&$('#advMsg').value||'').trim();
+  const aud=($('#advAud')&&$('#advAud').value)||'ALL';
+  const fi=$('#advFile'), file=fi&&fi.files&&fi.files[0];
+  const note=$('#advNote');
+  const say=(t,bad)=>{ if(note){ note.textContent=t; note.style.color=bad?'var(--red)':'var(--tx-3)'; } };
+  if(!title){ say('Give the advisory a title first.',true); return; }
+  if(!msg){ say('Write the line every officer will be shown.',true); return; }
+
+  const send=b64=>{
+    ADVBUSY=true; if(DATA) render(DATA); say('Publishing…');
+    fetch(ST.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({kind:'advPublish',token:ST.token,title:title,message:msg,audience:aud,
+        file:file?{name:file.name,b64:b64}:null})})
+      .then(r=>r.json()).then(j=>{
+        ADVBUSY=false;
+        if(!j||j.ok===false){ say((j&&j.error)||'The district refused it.',true); if(DATA) render(DATA); return; }
+        ADV=null; pullAdv().then(()=>{ if(DATA) render(DATA); });
+      })
+      .catch(err=>{ ADVBUSY=false; say('It did not get through: '+err,true); if(DATA) render(DATA); });
+  };
+
+  if(!file){
+    if(!confirm('Publish this advisory to every officer with no document attached?\n\nThey will see the title and your line of instruction.')) return;
+    send(null); return;
+  }
+  if(file.size > 12*1024*1024){ say('That file is '+(file.size/1048576).toFixed(1)+' MB. The limit is 12 MB.',true); return; }
+  const fr=new FileReader();
+  fr.onerror=()=>say('The file could not be read.',true);
+  fr.onload=()=>{ const s=String(fr.result||''), i=s.indexOf(','); if(i<0){ say('The file could not be read.',true); return; }
+    send(s.slice(i+1)); };
+  fr.readAsDataURL(file);
 }
 
 /* ---------------- interactions ---------------- */
@@ -2677,6 +2921,18 @@ document.addEventListener('click',e=>{
     else if(arg==='absent'){ const ab=DATA.today.absent;
       openDrawer('Not marked today', ab.length+' officer'+(ab.length===1?'':'s'),
         ab.length?'<ul>'+ab.map(o=>'<li>'+esc(o.name)+' · '+esc(o.role)+' · '+esc(o.mandal||'—')+'</li>').join('')+'</ul>':'<p style="font-size:13px">Everyone is accounted for.</p>'); }
+    else if(kind==='gp'){
+      if(arg==='folder'){ if(GPDP&&GPDP.folderUrl) window.open(GPDP.folderUrl,'_blank','noopener'); return; }
+      const list=(GPDP&&GPDP.roll||[]).filter(r=>arg==='filed'?r.uploaded:!r.uploaded);
+      openDrawer(arg==='filed'?'Plans filed':'Still to file', list.length+' officer'+(list.length===1?'':'s'),
+        list.length?'<ul>'+list.map(o=>'<li>'+esc(o.name)+' · '+esc(o.role)+' · '+esc(o.mandal||'—')+
+          (o.uploaded&&o.url?' · <a href="'+esc(o.url)+'" target="_blank" rel="noopener">view</a>':'')+'</li>').join('')+'</ul>'
+        :'<p style="font-size:13px">Nobody.</p>'); }
+    else if(kind==='adv'){
+      const list=(ADV&&ADV.roll||[]).filter(r=>arg==='ack'?r.acknowledged:!r.acknowledged);
+      openDrawer(arg==='ack'?'Acknowledged':'Still pending', list.length+' officer'+(list.length===1?'':'s'),
+        list.length?'<ul>'+list.map(o=>'<li>'+esc(o.name)+' · '+esc(o.role)+' · '+esc(o.mandal||'—')+'</li>').join('')+'</ul>'
+        :'<p style="font-size:13px">Nobody.</p>'); }
     else if(arg==='flags'){ const fl=DATA.month.rows.filter(r=>String(r.rf||'').trim());
       window.__ROWS.fl=fl;
       openDrawer('Red-flagged villages', fl.length+' this month',
@@ -2696,6 +2952,14 @@ document.addEventListener('click',e=>{
   if(e.target.closest('#ntcDrop')){ decideNotices('drop'); return; }
   if(e.target.closest('#newsClear')){ NEWS=[]; if(DATA) render(DATA); return; }
   if(e.target.closest('#newsAsk')){ try{ Notification.requestPermission().then(()=>{ if(DATA) render(DATA); }); }catch(e2){} return; }
+  const gf=e.target.closest('[data-gpf]');
+  if(gf){ GPFILTER=gf.dataset.gpf; if(DATA) render(DATA); return; }
+  const af=e.target.closest('[data-advf]');
+  if(af){ ADVFILTER=af.dataset.advf; if(DATA) render(DATA); return; }
+  if(e.target.closest('#gpCsv')){ exportGpdpCsv(); return; }
+  if(e.target.closest('#advCsv')){ exportAdvCsv(); return; }
+  if(e.target.closest('#advGo')){ publishAdvisory(); return; }
+
   const fc=e.target.closest('[data-mf]');
   if(fc){ MFILTER=fc.dataset.mf; if(DATA) render(DATA); return; }
   if(e.target.closest('#mFit')){ const m=MAP2&&document.getElementById('map2')?MAP2:MAP;

@@ -156,6 +156,35 @@ const MAX_PIN_TRIES = 10;
 const PHOTO_FOLDER = 'SJ-SCORE Photos';
 const ATT_FOLDER   = 'SJ-SCORE Attendance';
 
+/* ---------------------------------------------------------------------------
+ * GPDP — the Gram Panchayat Development Plan, called for from every officer.
+ *
+ * ONE AREA IN DRIVE: SJ-SCORE GPDP / <plan year> / <mandal> / the file. The
+ * Collector is given the folder's own link, so the whole year can be taken
+ * down in one go from Drive itself.
+ *
+ * A GPDP IS A DOCUMENT, NOT A DEFAULT. Nothing here feeds the reminder or
+ * notice ladder, debits a day of leave, or locks an officer's app. The
+ * register records who has filed and who has not, and that is all it does —
+ * an obligation of this weight is created by the Collector's written order,
+ * not by a developer adding a table. Say the word and it is wired in.
+ * ------------------------------------------------------------------------- */
+const GPDP_FOLDER = 'SJ-SCORE GPDP';
+const GPDP_HEAD = ['id','year','phone','name','role','mandal','gp','fileName','mime',
+                   'sizeKB','fileId','url','uploadedAt','receivedAt','status','note'];
+/* Apps Script carries the whole upload in one request body, base64 inflates a
+   file by a third, and these go up over rural signal. Eight megabytes is the
+   line at which a Secretary can actually get one through. */
+const GPDP_MAX_KB = 8 * 1024;
+/* what a plan may be filed as — the district asked for PDF, Word or Excel */
+const GPDP_EXT = {
+  pdf:'application/pdf',
+  doc:'application/msword',
+  docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls:'application/vnd.ms-excel',
+  xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+};
+
 const HEADERS = ['id','ym','mandal','gp','date','score','grade','rf','psScore','wkAvg','bcScore',
                  'status','officer','role','lat','lng','album','photoCount','photoFolder',
                  'evidence','attId','updatedAt','payload'];
@@ -1817,6 +1846,10 @@ function doGet(e){
     return json_({ ok:true, rows:rows.slice(0, 400) });
   }
 
+  /* the plan register: an officer sees his own line, the district sees the roll */
+  if(p.op === 'gpdp') return gpdpRegister_(u, p.year);
+  if(p.op === 'advisory') return advisoryRegister_(u, p.id);
+
   if(p.op === 'attendance'){
     const want = p.date ? dateText_(p.date) : today_();
     const sh = sheet_('Attendance', A_HEAD);
@@ -1850,6 +1883,376 @@ function doGet(e){
   if(viewerRole_(u.role)) rows = rows.filter(o => u.gps.indexOf(String(o.gp)) >= 0);
   else if(mandalRole_(u.role)) rows = rows.filter(o => o.mandal === u.mandal);
   return json_({ ok:true, rows:rows, user:u });
+}
+
+
+/* ============================================================================
+ * GPDP · THE PLAN REGISTER
+ * ----------------------------------------------------------------------------
+ * Every active officer but the Collector is called for a plan. An MSO's
+ * ATTENDANCE is voluntary by the order of 19.08.2026; that order is about
+ * attendance and nothing else, so it does not excuse him a document.
+ * ========================================================================== */
+
+/* The plan year runs with the financial year: a plan filed in March 2027
+   belongs to 2026-27, not to 2027-28. Reading it off the calendar year would
+   split one year of filings across two folders every April. */
+function gpdpYear_(d){
+  const dt = d || new Date();
+  const y = Number(Utilities.formatDate(dt, Session.getScriptTimeZone(), 'yyyy'));
+  const m = Number(Utilities.formatDate(dt, Session.getScriptTimeZone(), 'MM'));
+  const start = m >= 4 ? y : y - 1;
+  return start + '-' + ('0' + ((start + 1) % 100)).slice(-2);
+}
+function gpdpExt_(name){
+  const m = String(name || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+  return m ? m[1] : '';
+}
+/* Who the register expects a plan from. The Collector calls for it; he is not
+   called upon by it. */
+function gpdpDue_(role){
+  const r = String(role || '').toUpperCase();
+  return !!r && r !== 'COLLECTOR';
+}
+
+/* ---- the officer files one ---- */
+function saveGpdp_(b, u){
+  const f = b.file || {};
+  const name = String(f.name || '').trim();
+  const ext = gpdpExt_(name);
+  if(!name || !GPDP_EXT[ext])
+    return json_({ ok:false, error:'A plan must be a PDF, a Word document or an Excel workbook. This one is ' +
+      (ext ? ('a .' + ext) : 'without a file type') + '.' });
+  if(!f.b64) return json_({ ok:false, error:'The file did not arrive. Try again where the signal is better.' });
+  const sizeKB = Math.round((String(f.b64).length * 3 / 4) / 1024);
+  if(sizeKB > GPDP_MAX_KB)
+    return json_({ ok:false, error:'That file is about ' + Math.round(sizeKB / 1024) + ' MB. The limit is ' +
+      Math.round(GPDP_MAX_KB / 1024) + ' MB — please send a smaller copy.' });
+
+  const year = gpdpYear_();
+  const gp = (u.gps && u.gps.length) ? u.gps.join(', ') : '';
+
+  /* DRIVE FIRST, AND OUTSIDE THE LOCK. The photograph path learned this on
+     19.08.2026: one slow upload holding the script lock starved the whole
+     district's endpoint. Drive may be slow; the register must not wait on it. */
+  let url = '', fileId = '';
+  try{
+    const root = getFolder_(DriveApp.getRootFolder(), GPDP_FOLDER);
+    const into = getFolder_(getFolder_(root, year), clean_(u.mandal) || 'District');
+    const safe = 'GPDP_' + year + '_' + (clean_(u.mandal) || 'District') + '_' +
+      (clean_(gp) || String(u.role || '')) + '_' + clean_(u.name) + '_' + u.phone + '.' + ext;
+    const file = into.createFile(Utilities.newBlob(Utilities.base64Decode(f.b64), GPDP_EXT[ext], safe));
+    fileId = file.getId();
+    url = file.getUrl();
+    try{ file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); }catch(err){}
+  }catch(err){
+    return json_({ ok:false, error:'The district could not store the file (' + err + '). Nothing was recorded — try again.' });
+  }
+
+  const sh = sheet_('GPDP', GPDP_HEAD), m = headMap_(sh, GPDP_HEAD);
+  const lock = LockService.getScriptLock();
+  try{ lock.waitLock(20000); }catch(err){ return json_({ ok:false, error:'busy — try again' }); }
+  try{
+    /* NOTHING IS DESTROYED. A second filing does not overwrite the first: the
+       earlier row is marked REPLACED and stays, so the district can always
+       produce what was filed and when. */
+    const v = sh.getDataRange().getValues();
+    for(let i = 1; i < v.length; i++){
+      if(phone10_(v[i][m.ix.phone]) !== u.phone) continue;
+      if(String(v[i][m.ix.year]).replace(/^'/, '') !== year) continue;
+      if(String(v[i][m.ix.status] || 'ACTIVE') !== 'ACTIVE') continue;
+      sh.getRange(i + 1, m.ix.status + 1).setValue('REPLACED');
+    }
+    const row = new Array(m.width).fill('');
+    const put = (k, val) => { if(m.ix[k] >= 0) row[m.ix[k]] = val; };
+    put('id', 'GPDP-' + Utilities.getUuid().slice(0, 8));
+    put('year', "'" + year); put('phone', "'" + u.phone); put('name', u.name);
+    put('role', u.role); put('mandal', u.mandal || ''); put('gp', gp);
+    put('fileName', name); put('mime', GPDP_EXT[ext]); put('sizeKB', sizeKB);
+    put('fileId', fileId); put('url', url);
+    put('uploadedAt', String(b.at || new Date().toISOString()));
+    put('receivedAt', new Date().toISOString());
+    put('status', 'ACTIVE'); put('note', String(b.note || '').slice(0, 300));
+    sh.appendRow(row);
+  } finally { lock.releaseLock(); }
+  return json_({ ok:true, url:url, fileName:name, year:year, sizeKB:sizeKB,
+                 uploadedAt:new Date().toISOString() });
+}
+
+/* ---- the register, read ----
+   An officer gets his own line. The Collector and the district roles get the
+   whole roll, every officer on it, with a plan against his name or the plain
+   fact that there is none. */
+function gpdpRegister_(u, yearReq){
+  const year = String(yearReq || gpdpYear_()).replace(/^'/, '');
+  const sh = sheet_('GPDP', GPDP_HEAD), m = headMap_(sh, GPDP_HEAD);
+  const v = sh.getDataRange().getValues();
+  const mine = {}, count = {};
+  for(let i = 1; i < v.length; i++){
+    const ph = phone10_(v[i][m.ix.phone]); if(!ph) continue;
+    if(String(v[i][m.ix.year]).replace(/^'/, '') !== year) continue;
+    count[ph] = (count[ph] || 0) + 1;
+    if(String(v[i][m.ix.status] || 'ACTIVE') !== 'ACTIVE') continue;
+    mine[ph] = {
+      id: cell_(v[i], m.ix.id), fileName: cell_(v[i], m.ix.fileName),
+      url: cell_(v[i], m.ix.url), sizeKB: Number(v[i][m.ix.sizeKB]) || 0,
+      uploadedAt: String(v[i][m.ix.uploadedAt] || ''),
+      receivedAt: String(v[i][m.ix.receivedAt] || ''),
+      note: cell_(v[i], m.ix.note)
+    };
+  }
+
+  /* the officer's own line */
+  if(!districtRole_(u.role)){
+    return json_({ ok:true, year:year, mine: mine[u.phone] || null,
+                   due: gpdpDue_(u.role), maxMB: Math.round(GPDP_MAX_KB / 1024),
+                   accepts: Object.keys(GPDP_EXT) });
+  }
+
+  const t = uidx_(), uv = t.sh.getDataRange().getValues(), seen = {}, roll = [];
+  for(let i = 1; i < uv.length; i++){
+    const ph = phone10_(uv[i][t.ix.phone]); if(!ph || seen[ph]) continue; seen[ph] = true;
+    if(String(uv[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
+    const role = cell_(uv[i], t.ix.role).toUpperCase();
+    if(!gpdpDue_(role)) continue;
+    const f = mine[ph] || null;
+    roll.push({ phone: ph, name: cell_(uv[i], t.ix.name), role: role,
+                mandal: cell_(uv[i], t.ix.mandal), gp: cell_(uv[i], t.ix.gp),
+                uploaded: !!f, fileName: f ? f.fileName : '', url: f ? f.url : '',
+                sizeKB: f ? f.sizeKB : 0,
+                uploadedAt: f ? (f.receivedAt || f.uploadedAt) : '',
+                filings: count[ph] || 0 });
+  }
+  roll.sort(function(a, b2){
+    return String(a.mandal || '').localeCompare(String(b2.mandal || '')) ||
+           String(a.name || '').localeCompare(String(b2.name || ''));
+  });
+  const up = roll.filter(r => r.uploaded).length;
+  const byMandal = {};
+  roll.forEach(r => {
+    const k = r.mandal || 'Unassigned';
+    byMandal[k] = byMandal[k] || { mandal: k, due: 0, uploaded: 0 };
+    byMandal[k].due++; if(r.uploaded) byMandal[k].uploaded++;
+  });
+  let folderUrl = '';
+  try{
+    folderUrl = getFolder_(getFolder_(DriveApp.getRootFolder(), GPDP_FOLDER), year).getUrl();
+  }catch(err){ folderUrl = ''; }
+  return json_({ ok:true, year:year, roll:roll, folderUrl:folderUrl,
+                 totals:{ due: roll.length, uploaded: up, pending: roll.length - up },
+                 coverage: Object.keys(byMandal).sort().map(k => byMandal[k]),
+                 maxMB: Math.round(GPDP_MAX_KB / 1024), accepts: Object.keys(GPDP_EXT) });
+}
+
+
+/* ============================================================================
+ * ADVISORIES · a circular the district puts in front of every officer
+ * ----------------------------------------------------------------------------
+ * The Collector publishes one document with one line of instruction. It opens
+ * on every officer's home screen the next time the app is opened, and stays
+ * there until he acknowledges it. The district can then say, by name, who has
+ * read it and who has not.
+ *
+ * AN ACKNOWLEDGEMENT IS RECEIPT, NOT COMPLIANCE. It records that the officer
+ * saw the circular. It is not evidence that he acted on it, and nothing here
+ * may be quoted as though it were — the notice ladder already says the same
+ * thing about an acknowledged show-cause notice.
+ *
+ * NOTHING IS DESTROYED. Publishing a new advisory retires the standing one to
+ * SUPERSEDED; it does not delete it, and the acknowledgements against it stay
+ * exactly where they are.
+ * ========================================================================== */
+const ADV_FOLDER = 'SJ-SCORE Advisories';
+const ADV_HEAD = ['id','title','message','fileName','mime','sizeKB','fileId','url',
+                  'publishedAt','publishedBy','audience','status'];
+const ADV_ACK_HEAD = ['advId','phone','name','role','mandal','ackAt','receivedAt'];
+const ADV_MAX_KB = 12 * 1024;
+/* a circular may be a PDF, a Word file or an image of the signed page */
+const ADV_EXT = {
+  pdf:'application/pdf',
+  doc:'application/msword',
+  docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  jpg:'image/jpeg', jpeg:'image/jpeg', png:'image/png'
+};
+
+/* ---- the Collector publishes one ---- */
+function publishAdvisory_(b, u){
+  if(!districtRole_(u.role)) return json_({ ok:false, error:'Only the district may publish an advisory.' });
+  const title = String(b.title || '').trim();
+  const message = String(b.message || '').trim();
+  if(!title) return json_({ ok:false, error:'An advisory needs a title.' });
+  if(!message) return json_({ ok:false, error:'An advisory needs a line of instruction — that is what the officer reads first.' });
+
+  let url = String(b.url || '').trim(), fileId = '', fileName = '', mime = '', sizeKB = 0;
+  const f = b.file || {};
+  if(f.b64 && f.name){
+    const ext = gpdpExt_(f.name);
+    if(!ADV_EXT[ext]) return json_({ ok:false, error:'An advisory may be a PDF, a Word document or an image.' });
+    sizeKB = Math.round((String(f.b64).length * 3 / 4) / 1024);
+    if(sizeKB > ADV_MAX_KB) return json_({ ok:false, error:'That file is about ' +
+      Math.round(sizeKB / 1024) + ' MB. The limit is ' + Math.round(ADV_MAX_KB / 1024) + ' MB.' });
+    try{
+      const root = getFolder_(DriveApp.getRootFolder(), ADV_FOLDER);
+      const into = getFolder_(root, gpdpYear_());
+      const file = into.createFile(Utilities.newBlob(Utilities.base64Decode(f.b64), ADV_EXT[ext],
+        'ADV_' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd') + '_' + clean_(title) + '.' + ext));
+      fileId = file.getId(); url = file.getUrl(); fileName = String(f.name); mime = ADV_EXT[ext];
+      try{ file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); }catch(err){}
+    }catch(err){
+      return json_({ ok:false, error:'The district could not store the file (' + err + '). Nothing was published.' });
+    }
+  }
+
+  const sh = sheet_('Advisories', ADV_HEAD), m = headMap_(sh, ADV_HEAD);
+  const lock = LockService.getScriptLock();
+  try{ lock.waitLock(20000); }catch(err){ return json_({ ok:false, error:'busy — try again' }); }
+  let id = '';
+  try{
+    /* the standing circular steps down; it is not deleted, and the
+       acknowledgements already given against it stand */
+    const v = sh.getDataRange().getValues();
+    for(let i = 1; i < v.length; i++)
+      if(String(v[i][m.ix.status] || 'ACTIVE') === 'ACTIVE')
+        sh.getRange(i + 1, m.ix.status + 1).setValue('SUPERSEDED');
+    id = 'ADV-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd') +
+         '-' + Utilities.getUuid().slice(0, 4);
+    const row = new Array(m.width).fill('');
+    const put = (k, val) => { if(m.ix[k] >= 0) row[m.ix[k]] = val; };
+    put('id', id); put('title', title); put('message', message);
+    put('fileName', fileName); put('mime', mime); put('sizeKB', sizeKB);
+    put('fileId', fileId); put('url', url);
+    put('publishedAt', new Date().toISOString());
+    put('publishedBy', u.name + ' (' + u.role + ')');
+    put('audience', String(b.audience || 'ALL').toUpperCase());
+    put('status', 'ACTIVE');
+    sh.appendRow(row);
+  } finally { lock.releaseLock(); }
+  admAudit_('ADVISORY PUBLISHED', title, id + ' · to ' + String(b.audience || 'ALL'));
+  return json_({ ok:true, id:id, url:url, title:title });
+}
+
+/* the active circular, whatever else is on the tab */
+function activeAdvisory_(){
+  const sh = sheet_('Advisories', ADV_HEAD), m = headMap_(sh, ADV_HEAD);
+  const v = sh.getDataRange().getValues();
+  for(let i = v.length - 1; i >= 1; i--){
+    if(String(v[i][m.ix.status] || 'ACTIVE') !== 'ACTIVE') continue;
+    return { id: cell_(v[i], m.ix.id), title: cell_(v[i], m.ix.title),
+             message: cell_(v[i], m.ix.message), fileName: cell_(v[i], m.ix.fileName),
+             url: cell_(v[i], m.ix.url), audience: cell_(v[i], m.ix.audience) || 'ALL',
+             publishedAt: String(v[i][m.ix.publishedAt] || ''),
+             publishedBy: cell_(v[i], m.ix.publishedBy) };
+  }
+  return null;
+}
+/* who a circular is addressed to. ALL is every officer bar the Collector; a
+   role name narrows it to that role. */
+function advApplies_(adv, role){
+  const r = String(role || '').toUpperCase();
+  if(r === 'COLLECTOR') return false;
+  const a = String((adv && adv.audience) || 'ALL').toUpperCase();
+  return a === 'ALL' || a === r;
+}
+
+/* ---- an officer acknowledges ---- */
+function ackAdvisory_(b, u){
+  const adv = activeAdvisory_();
+  const id = String(b.id || (adv && adv.id) || '');
+  if(!id) return json_({ ok:false, error:'There is no advisory standing.' });
+  const sh = sheet_('AdvAck', ADV_ACK_HEAD), m = headMap_(sh, ADV_ACK_HEAD);
+  const lock = LockService.getScriptLock();
+  try{ lock.waitLock(20000); }catch(err){ return json_({ ok:false, error:'busy — try again' }); }
+  try{
+    /* IDEMPOTENT. A double tap, or a re-send after the signal returned, must
+       not write a second receipt against the same officer. */
+    const v = sh.getDataRange().getValues();
+    for(let i = 1; i < v.length; i++)
+      if(String(v[i][m.ix.advId]) === id && phone10_(v[i][m.ix.phone]) === u.phone)
+        return json_({ ok:true, already:true, ackAt:String(v[i][m.ix.ackAt] || '') });
+    const row = new Array(m.width).fill('');
+    const put = (k, val) => { if(m.ix[k] >= 0) row[m.ix[k]] = val; };
+    put('advId', id); put('phone', "'" + u.phone); put('name', u.name);
+    put('role', u.role); put('mandal', u.mandal || '');
+    /* the handset's claim is kept, but the district's own clock is what the
+       register is read by — the phone's clock is not evidence */
+    put('ackAt', String(b.at || new Date().toISOString()));
+    put('receivedAt', new Date().toISOString());
+    sh.appendRow(row);
+  } finally { lock.releaseLock(); }
+  return json_({ ok:true, ackAt:new Date().toISOString() });
+}
+
+/* ---- the register, read ---- */
+function advisoryRegister_(u, idReq){
+  const adv = activeAdvisory_();
+  if(!adv) return json_({ ok:true, advisory:null });
+  const id = String(idReq || adv.id);
+  const sh = sheet_('AdvAck', ADV_ACK_HEAD), m = headMap_(sh, ADV_ACK_HEAD);
+  const v = sh.getDataRange().getValues();
+  const ack = {};
+  for(let i = 1; i < v.length; i++){
+    if(String(v[i][m.ix.advId]) !== id) continue;
+    const ph = phone10_(v[i][m.ix.phone]); if(!ph) continue;
+    ack[ph] = String(v[i][m.ix.receivedAt] || v[i][m.ix.ackAt] || '');
+  }
+
+  if(!districtRole_(u.role)){
+    /* THE CIRCULARS STAY IN THE APP. An officer must be able to go back and
+       read what the district has issued — a message he can only see once is a
+       message he cannot act on a week later. The standing one comes with its
+       acknowledgement; the ones it replaced come as a list he can reopen. */
+    const shA = sheet_('Advisories', ADV_HEAD), mA = headMap_(shA, ADV_HEAD);
+    const vA = shA.getDataRange().getValues(), recent = [];
+    for(let i = vA.length - 1; i >= 1 && recent.length < 8; i--){
+      const role = String(u.role || '').toUpperCase();
+      const one = { id: cell_(vA[i], mA.ix.id), title: cell_(vA[i], mA.ix.title),
+                    message: cell_(vA[i], mA.ix.message), url: cell_(vA[i], mA.ix.url),
+                    audience: cell_(vA[i], mA.ix.audience) || 'ALL',
+                    publishedAt: String(vA[i][mA.ix.publishedAt] || ''),
+                    publishedBy: cell_(vA[i], mA.ix.publishedBy),
+                    standing: String(vA[i][mA.ix.status] || 'ACTIVE') === 'ACTIVE' };
+      if(!advApplies_(one, role)) continue;
+      one.acknowledged = !!ack[u.phone] && one.id === adv.id;
+      recent.push(one);
+    }
+    return json_({ ok:true, advisory: advApplies_(adv, u.role) ? adv : null,
+                   acknowledged: !!ack[u.phone], ackAt: ack[u.phone] || '',
+                   recent: recent });
+  }
+
+  const t = uidx_(), uv = t.sh.getDataRange().getValues(), seen = {}, roll = [];
+  for(let i = 1; i < uv.length; i++){
+    const ph = phone10_(uv[i][t.ix.phone]); if(!ph || seen[ph]) continue; seen[ph] = true;
+    if(String(uv[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
+    const role = cell_(uv[i], t.ix.role).toUpperCase();
+    if(!advApplies_(adv, role)) continue;
+    roll.push({ phone: ph, name: cell_(uv[i], t.ix.name), role: role,
+                mandal: cell_(uv[i], t.ix.mandal), gp: cell_(uv[i], t.ix.gp),
+                acknowledged: !!ack[ph], ackAt: ack[ph] || '' });
+  }
+  roll.sort(function(a, b2){
+    return String(a.mandal || '').localeCompare(String(b2.mandal || '')) ||
+           String(a.name || '').localeCompare(String(b2.name || ''));
+  });
+  const done = roll.filter(r => r.acknowledged).length;
+  const byMandal = {};
+  roll.forEach(r => {
+    const k = r.mandal || 'Unassigned';
+    byMandal[k] = byMandal[k] || { mandal: k, due: 0, acknowledged: 0 };
+    byMandal[k].due++; if(r.acknowledged) byMandal[k].acknowledged++;
+  });
+  return json_({ ok:true, advisory:adv, roll:roll,
+                 totals:{ due: roll.length, acknowledged: done, pending: roll.length - done },
+                 coverage: Object.keys(byMandal).sort().map(k => byMandal[k]) });
+}
+
+/* Admin.gs owns the Audit tab, but Code.gs publishes an advisory, so it needs
+   its own way in. Same tab, same shape, signed as the console. */
+function admAudit_(action, subject, detail){
+  try{
+    const sh = sheet_('Audit', ['at','action','subject','detail','by']);
+    sh.appendRow([new Date().toISOString(), action, subject, detail, 'District Operations Center (console)']);
+  }catch(err){}
 }
 
 /* ---------------- POST ---------------- */
@@ -2038,6 +2441,20 @@ function doPost(e){
     sh.getRange(found.at, m.ix.decidedAt + 1).setValue(when);
     return json_({ ok:true, id:String(b.id||''), status:'CANCELLED', decidedAt:when });
   }
+
+  /* THE PLAN IS THE SECRETARY'S OWN WORK, and so it stands ABOVE the guard
+     below. A Gram Panchayat Development Plan is filed by the officer who
+     holds the Gram Panchayat — the very role that may not file an
+     evaluation. Put this line one place lower and the district calls every
+     Secretary for a plan and then refuses to take it. */
+  if(b.kind === 'gpdp') return saveGpdp_(b, u);
+
+  /* a circular the district puts in front of everyone, and the receipt for it.
+     Both stand above the evaluation guard: an advisory is addressed TO the
+     Secretary, so the role that may not file an evaluation must still be able
+     to acknowledge one. */
+  if(b.kind === 'advAck') return ackAdvisory_(b, u);
+  if(b.kind === 'advPublish') return publishAdvisory_(b, u);
 
   /* everything below writes an evaluation, which a Secretary may not do */
   if(viewerRole_(u.role))
