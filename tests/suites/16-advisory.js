@@ -41,6 +41,16 @@ module.exports = {
     t.eq(r.ok, true, 'the register answers when nothing is standing');
     t.eq(r.advisory, null, 'and says there is no circular');
 
+    /* WITH NOTHING ISSUED, THE DISTRICT STILL SEES ITS ROLL. An empty answer
+       made the console look as though the tracking were missing rather than as
+       though nothing had been issued. */
+    let pre = env.get('advisory', { token: cdm });
+    t.eq(pre.advisory, null, 'the Collector is told nothing is standing');
+    t.eq(pre.totals.due, 3, 'but is shown how many officers a circular would reach');
+    t.eq(pre.totals.acknowledged, 0, 'with nothing acknowledged');
+    t.ok(pre.roll.length === 3, 'and the roll itself, by name');
+    t.ok(pre.coverage.some(x => x.mandal === 'Jangaon'), 'broken down by mandal');
+
     /* ---- only the district may publish ---- */
     r = env.post({ kind:'advPublish', token: ps, title:'Mine', message:'x' });
     t.eq(r.ok, false, 'a Secretary may not publish an advisory');

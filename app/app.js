@@ -2405,8 +2405,13 @@ async function sendAdvAck(){
 /* ---- every circular the district has issued, kept where he can reach it ---- */
 function advListSheet(){
   const st = advState();
-  const list = (st && st.recent && st.recent.length) ? st.recent
-             : (st && st.advisory ? [Object.assign({standing:true, acknowledged:st.acknowledged}, st.advisory)] : []);
+  /* THE STANDING CIRCULAR'S RECEIPT HAS ONE SOURCE. The list came from the
+     district before the officer pressed the button, so reading its own copy
+     showed "not acknowledged" against a circular he had just acknowledged.
+     The standing entry takes its receipt from the live state instead. */
+  const list = (st && st.recent && st.recent.length)
+             ? st.recent.map(a => a.standing ? Object.assign({}, a, { acknowledged: st.acknowledged }) : a)
+             : (st && st.advisory ? [Object.assign({}, st.advisory, { standing:true, acknowledged:st.acknowledged })] : []);
   if(!list.length){
     showSheet(`<div style="padding:6px 20px 18px"><h2>Advisories</h2>
       <p style="font-size:14.5px;color:var(--ink-2);margin-top:9px;line-height:1.55">

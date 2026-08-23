@@ -2185,16 +2185,22 @@ function ackAdvisory_(b, u){
 /* ---- the register, read ---- */
 function advisoryRegister_(u, idReq){
   const adv = activeAdvisory_();
-  if(!adv) return json_({ ok:true, advisory:null });
-  const id = String(idReq || adv.id);
+  /* WITH NOTHING STANDING, THE DISTRICT STILL GETS ITS ROLL. Returning a bare
+     "no advisory" left the console showing an empty section, and it reads as
+     though the tracking is missing rather than as though nothing has been
+     issued. The Collector is shown who WOULD be addressed, so the section is
+     alive before the first circular as well as after it. */
+  const id = String(idReq || (adv && adv.id) || '');
   const sh = sheet_('AdvAck', ADV_ACK_HEAD), m = headMap_(sh, ADV_ACK_HEAD);
   const v = sh.getDataRange().getValues();
   const ack = {};
   for(let i = 1; i < v.length; i++){
-    if(String(v[i][m.ix.advId]) !== id) continue;
+    if(!id || String(v[i][m.ix.advId]) !== id) continue;
     const ph = phone10_(v[i][m.ix.phone]); if(!ph) continue;
     ack[ph] = String(v[i][m.ix.receivedAt] || v[i][m.ix.ackAt] || '');
   }
+
+  if(!districtRole_(u.role) && !adv) return json_({ ok:true, advisory:null, recent:[] });
 
   if(!districtRole_(u.role)){
     /* THE CIRCULARS STAY IN THE APP. An officer must be able to go back and
@@ -2225,7 +2231,7 @@ function advisoryRegister_(u, idReq){
     const ph = phone10_(uv[i][t.ix.phone]); if(!ph || seen[ph]) continue; seen[ph] = true;
     if(String(uv[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
     const role = cell_(uv[i], t.ix.role).toUpperCase();
-    if(!advApplies_(adv, role)) continue;
+    if(!advApplies_(adv || { audience:'ALL' }, role)) continue;
     roll.push({ phone: ph, name: cell_(uv[i], t.ix.name), role: role,
                 mandal: cell_(uv[i], t.ix.mandal), gp: cell_(uv[i], t.ix.gp),
                 acknowledged: !!ack[ph], ackAt: ack[ph] || '' });
