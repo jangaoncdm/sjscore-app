@@ -67,15 +67,27 @@ function serve(){
   await page.waitForSelector('#app:not([hidden])', { timeout:20000 });
   await page.waitForTimeout(1500);
 
-  const shot = async n => { await page.screenshot({ path: path.join(OUT, n + '.png') }); console.log('  ' + n); };
+  /* THE FRAME IS THE PART THAT MATTERS, NOT THE WHOLE HANDSET. A full 844px
+     screen printed at 52mm is half a page of mostly empty app, and the thing
+     the step is pointing at ends up too small to read. Each frame is the
+     element itself. */
+  const shot = async (n, sel) => {
+    const el = sel ? page.locator(sel).first() : null;
+    if(el) await el.screenshot({ path: path.join(OUT, n + '.png') });
+    else await page.screenshot({ path: path.join(OUT, n + '.png') });
+    console.log('  ' + n + (sel ? '   ' + sel : ''));
+  };
 
   /* 1 — the circular, as it opens by itself */
-  await shot('1-opens');
+  await shot('1-opens', '#sheet .panel');
 
   /* 2 — acknowledged, and the card that stays */
   await page.click('#advAck');
   await page.waitForTimeout(5200);
-  await shot('2-home');
+  await shot('2-home', 'div.group:has([data-adv])');
+
+  /* 2b — the plan card, as it sits on the same home screen */
+  await shot('2b-plan-card', 'div.group:has([data-gpdp])');
 
   /* 3 — every circular, kept under More */
   await page.click('#tabs [data-s="more"]');
@@ -84,7 +96,7 @@ function serve(){
   /* long enough for the toast to clear — a guide frame with a notification
      sitting over the thing it is pointing at teaches nothing */
   await page.waitForTimeout(5200);
-  await shot('3-kept');
+  await shot('3-kept', '#sheet .panel');
   await page.click('#sheet .scrim');
   await page.waitForTimeout(350);
 
@@ -93,14 +105,14 @@ function serve(){
   await page.waitForTimeout(450);
   await page.click('[data-gpdp]');
   await page.waitForTimeout(600);
-  await shot('4-plan');
+  await shot('4-plan', '#gpBody');
 
   /* 5 — the plan, once the district holds it */
   const pdf = path.join(OUT, '_sample.pdf');
   fs.writeFileSync(pdf, Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(3000, 0x20)]));
   await page.setInputFiles('#gpdpFile', pdf);
   await page.waitForTimeout(1600);
-  await shot('5-plan-sent');
+  await shot('5-plan-sent', '#gpBody');
   try{ fs.unlinkSync(pdf); }catch(e){}
 
   await browser.close(); srv.close();
