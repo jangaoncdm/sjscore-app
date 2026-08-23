@@ -31,15 +31,16 @@ const MIME = { '.html':'text/html', '.js':'text/javascript', '.css':'text/css',
 const results = [];
 const shots = [];
 let step = 0;
+let SECTION = 'The field app';
 function check(name, cond, detail){
-  results.push({ name, pass: !!cond, detail: detail || '' });
+  results.push({ name, pass: !!cond, detail: detail || '', section: SECTION });
   console.log((cond ? '  PASS  ' : '  FAIL  ') + name + (detail ? '   — ' + detail : ''));
 }
 async function shot(page, label, full){
   step++;
   const file = String(step).padStart(2, '0') + '-' + label.replace(/[^a-z0-9]+/gi, '-').toLowerCase() + '.png';
   await page.screenshot({ path: path.join(OUT, file), fullPage: !!full });
-  shots.push({ file, label });
+  shots.push({ file, label, section: SECTION, after: results.length });
   return file;
 }
 
@@ -201,6 +202,7 @@ function makeRouter(state){
   }
 
   /* ======================= THE CONSOLE ======================= */
+  SECTION = 'The console';
   console.log('\nTHE CONSOLE — the Collector reading both registers');
   for(const theme of ['light', 'dark']){
     const state = { posts: [], gpdp: FIX.gpdpDistrict, adv: FIX.advDistrict,
@@ -339,6 +341,11 @@ function makeRouter(state){
   lines.push('');
   shots.forEach(s => { lines.push('### ' + s.label); lines.push(''); lines.push('![' + s.label + '](' + s.file + ')'); lines.push(''); });
   fs.writeFileSync(path.join(OUT, 'REPORT.md'), lines.join('\n'));
+  /* the same run, structured, so the published report is built from the run
+     itself rather than from a person retyping it */
+  fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({
+    at: new Date().toISOString(), passed: pass, total: results.length,
+    results: results, shots: shots }, null, 1));
 
   console.log('\n' + pass + '/' + results.length + ' checks passed');
   console.log('report + ' + shots.length + ' snapshots: ' + path.join(OUT, 'REPORT.md'));
