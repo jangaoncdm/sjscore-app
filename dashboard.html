@@ -2769,8 +2769,26 @@ function vAdvisory(j,A){
         :'<tr><td colspan="6" class="empty">Nobody on the roll matches this filter.</td></tr>')+
        `</tbody></table></div>`,'advT');
   } else {
-    h+=panel('c12','No advisory is standing','nothing is in front of the district',
-      '<div class="empty">Publish one below and it opens on every officer’s home screen the next time the app is opened.</div>');
+    /* Nothing standing is not nothing to show: the Collector sees who the next
+       circular will reach, so the section reads as ready rather than broken. */
+    h+='<div class="kpirow">';
+    h+=kpi('Officers on the roll',IC.u,T.due,'', 'who a circular would reach','');
+    h+=kpi('Standing advisory',IC.c,'none','', 'publish one below','');
+    h+=kpi('Acknowledged',IC.u,'—','', 'nothing to acknowledge yet','');
+    h+=kpi('Pending',IC.u,'—','', 'nothing issued yet','');
+    h+=kpi('Mandals',IC.h,(ADV&&ADV.coverage||[]).length,'', 'covered by the roll','');
+    h+='</div>';
+    h+=panel('c12','No advisory is standing','nothing has been issued to the district yet',
+      '<div class="empty">Publish one below. It opens on every officer’s home screen the next time the app is opened, '+
+      'and this section then names who has read it and who has not.</div>');
+    if((ADV&&ADV.coverage||[]).length)
+      h+=panel('c12','Who the next circular reaches','mandal by mandal',
+        '<div class="plot">'+Charts.stackRows((ADV.coverage||[]).map(c=>({
+          label:c.mandal.length>16?c.mandal.slice(0,15)+'…':c.mandal,
+          title:c.mandal+' — '+c.due+' officer'+(c.due===1?'':'s'),
+          parts:[{value:c.due,color:'var(--cs1)'}],
+          right:String(c.due), tone:''
+        })),{emptyMsg:'Nobody is on the roll yet.'})+'</div>');
   }
 
   /* ---- publishing ---- */
