@@ -115,10 +115,19 @@ function makeRouter(state){
        static file gives the same origin with no app code on the page. */
     await page.goto(base + '/manifest.webmanifest', { waitUntil:'domcontentloaded' });
     await page.evaluate(off => {
+      /* ATTENDANCE STANDS BETWEEN SIGN-IN AND THE APP, every working day. The
+         harness ran green while the date happened to be a Sunday and broke the
+         moment it was not; the officer is marked present so the test is about
+         the documents rather than about the calendar. */
+      const d = new Date();
+      const today = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+      const att = {};
+      att[today] = { id:'A1', date:today, ts:new Date().toISOString(), lat:17.72, lng:79.15,
+                     acc:14, verified:true, status:'PRESENT', sync:'synced' };
       localStorage.setItem('sjf5', JSON.stringify({
         url:'https://mock.district/exec',
         session:{ token:'T', user: off },
-        records:{}, att:{}, cache:[], master:[], leave:[], prefs:{ sun:0, big:0 }
+        records:{}, att:att, cache:[], master:[], leave:[], prefs:{ sun:0, big:0 }
       }));
     }, FIX.officer);
     await page.goto(base + '/index.html', { waitUntil:'domcontentloaded' });
@@ -143,11 +152,33 @@ function makeRouter(state){
     const ackPost = state.posts.find(p => p.kind === 'advAck');
     check('pressing "I have read this" posts the acknowledgement', !!ackPost,
       ackPost ? 'kind=advAck, id=' + (ackPost.id || '(active)') : 'nothing was posted');
-    const stillOpen = await page.$eval('#sheet', el => el.classList.contains('on')).catch(() => false);
-    check('and the circular closes', !stillOpen);
+    /* the circular closes — and because the plan is still outstanding, the
+       prompt for it takes the sheet straight away, so what is checked is that
+       the ADVISORY is gone, not that the sheet is */
+    const afterAck = await page.$eval('#sheetBody', el => el.innerText).catch(() => '');
+    check('and the circular closes', !/I have read this/i.test(afterAck),
+      String(afterAck).split(/\n/)[1] || '(sheet empty)');
     const homeTxt = await page.$eval('#homeBody', el => el.innerText);
     check('the home card now reads as acknowledged', /Acknowledged/i.test(homeTxt));
     await shot(page, 'app-home-after-ack', true);
+
+    /* --- THE PIN, and the prompt that follows the circular --- */
+    const pinFirst = await page.$eval('#homeBody', el => {
+      const g = [...el.querySelectorAll('.group')];
+      const i = g.findIndex(x => x.querySelector('[data-gpdp]'));
+      const j = g.findIndex(x => x.querySelector('[data-adv]'));
+      return { i, j, pinned: !!(g[i] && g[i].classList.contains('pinned')) };
+    });
+    check('the outstanding plan is pinned above the advisory on the home screen',
+      pinFirst.i >= 0 && pinFirst.i < pinFirst.j, 'plan card at ' + pinFirst.i + ', advisory at ' + pinFirst.j);
+    check('and is marked as pending', pinFirst.pinned);
+    const gpSheet = await page.$eval('#sheet', el => el.classList.contains('on')).catch(() => false);
+    check('once the circular is dealt with, the pending plan is put in front of him too', gpSheet);
+    const gpSheetTxt = gpSheet ? await page.$eval('#sheetBody', el => el.innerText) : '';
+    check('the prompt says what is outstanding and offers to send it now',
+      /has not been sent/i.test(gpSheetTxt) && /Send it now/i.test(gpSheetTxt));
+    await shot(page, 'app-gpdp-pending-prompt');
+    if(gpSheet){ await page.click('#gpLater'); await page.waitForTimeout(400); }
 
     /* --- the plan card --- */
     check('the home screen calls for the development plan', /GPDP has not been sent/i.test(homeTxt),

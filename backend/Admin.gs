@@ -35,6 +35,10 @@ function onOpen(){
     .addItem('1 · Read the plan (22.08 field register)', 'menuShowFixes3')
     .addItem('2 · Apply the plan (asks first)',          'menuApplyFixes3')
     .addSeparator()
+    .addSeparator()
+    .addItem('Chase the advisory and the plan — read first', 'menuShowChase')
+    .addItem('Send the chase mail (asks first)',             'menuSendChase')
+    .addSeparator()
     .addItem('Why can an officer not sign in?',          'menuWhySignIn')
     .addItem('Check the village roll',                   'menuGpSpellCheck')
     .addItem('Check the officer roll',                   'menuRosterAudit')
@@ -84,6 +88,17 @@ function menuWhySignIn(){
   const res = ui.prompt('Which number?', 'The officer’s mobile number.', ui.ButtonSet.OK_CANCEL);
   if(res.getSelectedButton() !== ui.Button.OK) return;
   admShow_('Why that number cannot sign in', whyCannotSignIn(res.getResponseText()));
+}
+function menuShowChase(){ admShow_('Who is still pending — nothing sent', showDocumentChase()); }
+function menuSendChase(){
+  const ui = SpreadsheetApp.getUi();
+  const ok = ui.alert('Mail every officer who is still pending?',
+    'One mail each, naming only what that officer owes — the advisory to acknowledge, the plan to send, or both. ' +
+    'It chases; it accuses nobody. No reminder, no notice and no debit is written.' +
+    '\n\nRead item 1 first if you have not.\n\nSend now?',
+    ui.ButtonSet.YES_NO);
+  if(ok !== ui.Button.YES){ ui.alert('Nothing was sent.'); return; }
+  admShow_('The chase mail has gone', sendDocumentChase());
 }
 function menuGpSpellCheck(){ admShow_('The village roll', gpSpellCheck()); }
 function menuRosterAudit(){  admShow_('The officer roll', rosterAudit()); }
@@ -1729,4 +1744,108 @@ function gpSpellCheck(){
   }
   return admSay_(out.length ? out
     : ['Every village a Secretary holds is on the GPs tab, once, and every village on the tab is held.']);
+}
+
+/* ============================================================================
+ * 14. CHASING THE TWO DOCUMENTS · the advisory and the plan
+ * ----------------------------------------------------------------------------
+ * The one channel that reaches an officer whose app is shut. A true push needs
+ * a VAPID key signed ES256 and Apps Script signs RSA and HMAC only, so there is
+ * no push sender behind this app; the circular and the plan are put in front of
+ * the officer when he opens it, and this mails the ones who have not yet acted.
+ *
+ * IT CHASES, IT DOES NOT ACCUSE. No reminder row, no notice, no debit, no lock
+ * — a document is not a default until the Collector says so in writing. The
+ * mail says what is outstanding and how to send it, and stops.
+ *
+ * Read first with showDocumentChase(), then press sendDocumentChase().
+ * ========================================================================== */
+function showDocumentChase(){ return documentChase_(false); }
+function sendDocumentChase(){ return documentChase_(true); }
+
+function documentChase_(send){
+  const year = gpdpYear_();
+  const adv = activeAdvisory_();
+
+  /* who owes what — read from the two registers, never guessed */
+  const gp = JSON.parse(gpdpRegister_({ role:'COLLECTOR', phone:'', name:'', gps:[] }, year).getContent());
+  const ad = JSON.parse(advisoryRegister_({ role:'COLLECTOR', phone:'', name:'', gps:[] }, '').getContent());
+  const planPending = {};
+  (gp.roll || []).forEach(r => { if(!r.uploaded) planPending[r.phone] = true; });
+  const advPending = {};
+  (ad.roll || []).forEach(r => { if(!r.acknowledged) advPending[r.phone] = true; });
+
+  /* the roll, with the addresses the mail needs */
+  const t = uidx_(), uv = t.sh.getDataRange().getValues(), seen = {}, out = [], noMail = [];
+  for(let i = 1; i < uv.length; i++){
+    const ph = phone10_(uv[i][t.ix.phone]); if(!ph || seen[ph]) continue; seen[ph] = true;
+    if(String(uv[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
+    const role = cell_(uv[i], t.ix.role).toUpperCase();
+    if(role === 'COLLECTOR') continue;
+    const owesPlan = !!planPending[ph];
+    const owesAdv  = !!advPending[ph] && !!adv;
+    if(!owesPlan && !owesAdv) continue;
+    const rec = { phone:ph, name:cell_(uv[i], t.ix.name), role:role,
+                  mandal:cell_(uv[i], t.ix.mandal), gp:cell_(uv[i], t.ix.gp),
+                  email:String(uv[i][t.ix.email] || '').trim(), plan:owesPlan, adv:owesAdv };
+    if(rec.email) out.push(rec); else noMail.push(rec);
+  }
+
+  const L = [];
+  L.push('CHASING THE TWO DOCUMENTS · ' + dmy_(today_()));
+  L.push('Plan year ' + year + (adv ? ' · advisory "' + adv.title + '"' : ' · no advisory standing'));
+  L.push('');
+  L.push('Plans outstanding      : ' + Object.keys(planPending).length + ' of ' + ((gp.totals || {}).due || 0));
+  L.push('Advisory unacknowledged: ' + (adv ? Object.keys(advPending).length + ' of ' + ((ad.totals || {}).due || 0) : 'n/a'));
+  L.push('Officers to be mailed  : ' + out.length);
+  if(noMail.length){
+    L.push('');
+    L.push('NO EMAIL ON THE ROLL — these officers cannot be reached this way (' + noMail.length + '):');
+    noMail.slice(0, 40).forEach(r => L.push('  ' + r.name + ' · ' + r.role + ' · ' + (r.mandal || '—') +
+      ' · ' + r.phone + '  [' + (r.plan ? 'plan' : '') + (r.plan && r.adv ? ' + ' : '') + (r.adv ? 'advisory' : '') + ']'));
+    if(noMail.length > 40) L.push('  … and ' + (noMail.length - 40) + ' more');
+    L.push('  → they still see both the moment they open the app.');
+  }
+
+  if(!send){
+    L.push('');
+    L.push('NOTHING HAS BEEN SENT. Run sendDocumentChase() to mail the ' + out.length + ' above.');
+    Logger.log(L.join('\n'));
+    return L.join('\n');
+  }
+
+  /* one mail an officer, naming only what HE owes */
+  let sent = 0, failed = 0;
+  out.forEach(r => {
+    const owes = [];
+    if(r.adv)  owes.push('read the Collector’s advisory and acknowledge it');
+    if(r.plan) owes.push('send the Gram Panchayat Development Plan for ' + year);
+    const subject = 'SJGP · ' + (r.adv && r.plan ? 'advisory and development plan' :
+                     r.adv ? 'advisory to be acknowledged' : 'development plan for ' + year) +
+                    ' · ' + dmy_(today_());
+    const body =
+      'Sir/Madam,\n\n' +
+      r.name + ' (' + r.role + (r.mandal ? ', ' + r.mandal : '') + (r.gp ? ' / ' + r.gp : '') + ')\n\n' +
+      'The district is waiting on the following from you:\n\n' +
+      owes.map((x, i) => '  ' + (i + 1) + '. ' + x).join('\n') + '\n\n' +
+      (r.adv && adv ? 'ADVISORY: ' + adv.title + '\n' + adv.message + '\n' +
+        (adv.url ? adv.url + '\n' : '') + '\n' : '') +
+      (r.plan ? 'THE PLAN: one document for ' + year + ' — PDF, Word or Excel, up to ' +
+        Math.round(GPDP_MAX_KB / 1024) + ' MB. Send it where there is signal; it goes to the district as you send it.\n\n' : '') +
+      'Open the SJGP app on your phone. Both appear on the home screen, and the app shows what is still outstanding.\n\n' +
+      'Acknowledging an advisory records only that you have seen it. It is not a report that the work is done, ' +
+      'and nothing in this message is a notice under the Conduct Rules.\n\n' +
+      '— District Panchayat Office, Jangaon';
+    try{ MailApp.sendEmail(r.email, subject, body); sent++; }
+    catch(err){ failed++; L.push('  ✗ ' + r.name + ' <' + r.email + '>: ' + err); }
+  });
+
+  admLog_('DOCUMENT CHASE', dmy_(today_()),
+    sent + ' mailed · ' + Object.keys(planPending).length + ' plans outstanding · ' +
+    (adv ? Object.keys(advPending).length + ' advisory pending' : 'no advisory'));
+  L.push('');
+  L.push(sent + ' officer(s) mailed' + (failed ? ', ' + failed + ' failed' : '') + '.');
+  L.push('Nothing was written against anybody: no reminder, no notice, no debit.');
+  Logger.log(L.join('\n'));
+  return L.join('\n');
 }

@@ -59,9 +59,14 @@ function serve(){
 
   await page.goto(base + '/manifest.webmanifest', { waitUntil:'domcontentloaded' });
   await page.evaluate(off => {
+    const d = new Date();
+    const today = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    const att = {};
+    att[today] = { id:'A1', date:today, ts:new Date().toISOString(), lat:17.72, lng:79.15,
+                   acc:14, verified:true, status:'PRESENT', sync:'synced' };
     localStorage.setItem('sjf5', JSON.stringify({
       url:'https://mock.district/exec', session:{ token:'T', user: off },
-      records:{}, att:{}, cache:[], master:[], leave:[], prefs:{ sun:0, big:0 } }));
+      records:{}, att:att, cache:[], master:[], leave:[], prefs:{ sun:0, big:0 } }));
   }, FIX.officer);
   await page.goto(base + '/index.html', { waitUntil:'domcontentloaded' });
   await page.waitForSelector('#app:not([hidden])', { timeout:20000 });

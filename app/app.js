@@ -938,8 +938,13 @@ function renderHome(){
   $('#homeSub').textContent = roleName(u.role) + (u.mandal ? ' · ' + u.mandal + ' mandal' : ' · Jangaon District');
   const ym=ymNow(), body=$('#homeBody');
   let h2 = attendanceStrip();
+  /* PINNED WHILE IT IS OUTSTANDING. An officer opens this screen and the first
+     thing on it is what the district is waiting for; once the plan is in, it
+     drops back below the circular where it belongs. */
+  const gpPin = gpdpPending();
+  if(gpPin) h2 += gpdpCard();
   h2 += advisoryCard();
-  h2 += gpdpCard();
+  if(!gpPin) h2 += gpdpCard();
 
   if(!isViewer(u.role)){
     const pend=pendingCount();
@@ -976,6 +981,10 @@ function renderHome(){
   /* the circular goes up in front of him once each time the app is opened,
      and keeps going up until he tells the district he has read it */
   maybePopAdvisory();
+  /* and if the circular is dealt with, the plan is the next thing he is asked
+     about — once per opening of the app, never twice */
+  maybePopGpdp();
+  notifyPending();
 }
 function banner(kind, icon, text){
   return `<div class="banner ${kind}">${icon}<span>${esc(text)}</span></div>`;
@@ -2322,6 +2331,102 @@ function lvSpan(l){
 
 
 /* ============================================================================
+ * WHAT THE DISTRICT IS WAITING FOR, PUT IN FRONT OF THE OFFICER
+ * ----------------------------------------------------------------------------
+ * A NOTE ON "PUSH". A true push — one that reaches a handset with the app
+ * shut — needs a VAPID key signed ES256, and Apps Script can sign RSA and
+ * HMAC only. There is no push sender behind this app, and pretending
+ * otherwise would be worse than not having one: an officer would believe he
+ * had been told. What is here instead is honest and works today —
+ *   · the circular and the plan are put IN FRONT of him when he opens the app;
+ *   · a system notification is raised while the app is open, through the
+ *     service worker, which is the only way Android shows one at all;
+ *   · and the district can mail every officer who is still pending, from the
+ *     console's own maintenance menu.
+ * The service worker carries a push handler already, so the day a sender is
+ * put behind it, the handsets need no change.
+ * ========================================================================== */
+let GPDP_SHOWN = false;
+
+/* Android refuses `new Notification()` outright — a notification has to come
+   from the service worker registration. This tries that first and falls back
+   to the plain constructor on a desktop that has no worker. */
+function notifyLocal(title, body, tag){
+  try{
+    if(!('Notification' in window) || Notification.permission !== 'granted') return;
+    if(navigator.serviceWorker && navigator.serviceWorker.ready){
+      navigator.serviceWorker.ready.then(reg => {
+        reg.showNotification(title, { body:body, tag:tag || 'sjgp', icon:'icons/icon-192.png',
+          badge:'icons/icon-192.png', data:{ open:'./' } });
+      }).catch(() => { try{ new Notification(title, {body:body, tag:tag}); }catch(e){} });
+      return;
+    }
+    new Notification(title, { body:body, tag:tag, icon:'icons/icon-192.png' });
+  }catch(e){}
+}
+
+/* Is the district still waiting on this officer's plan? */
+function gpdpPending(){
+  const st = gpdpState();
+  return !!(st && st.due !== false && !st.mine);
+}
+function advPending(){
+  const st = advState();
+  return !!(st && st.advisory && !st.acknowledged);
+}
+
+/* Raised once per opening of the app, and only for what is actually
+   outstanding — a notification for something already done teaches an officer
+   to ignore the next one. */
+let NOTIFIED = false;
+function notifyPending(){
+  if(NOTIFIED) return;
+  const bits = [];
+  if(advPending()) bits.push('an advisory to read');
+  if(gpdpPending()) bits.push('your development plan to send');
+  if(!bits.length) return;
+  NOTIFIED = true;
+  notifyLocal('SJGP — the district is waiting',
+    'You have ' + bits.join(' and ') + '.', 'sjgp-pending');
+}
+
+/* The plan, put in front of him the way the circular is. There is a Later:
+   an officer on a village road should not be held by a modal. What he cannot
+   do is not know. */
+function maybePopGpdp(){
+  if(GPDP_SHOWN || !gpdpPending()) return;
+  /* WAIT UNTIL THE CIRCULAR IS KNOWN. The two registers are fetched side by
+     side, and whichever answers first renders. When the plan answered first
+     the prompt went up while the advisory was still unknown, and the circular
+     then replaced it on screen — so the officer was shown the plan for an
+     instant and never asked about it again that opening. */
+  if(!advState()) return;
+  /* one sheet at a time — the circular outranks the plan */
+  if(advPending()) return;
+  GPDP_SHOWN = true;
+  gpdpSheet();
+}
+function gpdpSheet(){
+  const st = gpdpState(); if(!st) return;
+  showSheet(`<div style="padding:6px 20px 4px">
+      <p class="eyebrow">The district is waiting</p>
+      <h2>Your development plan has not been sent</h2>
+      <p style="font-size:15px;color:var(--ink-2);margin-top:10px;line-height:1.6">
+        The Gram Panchayat Development Plan for <b>${esc(st.year || '')}</b> has been called for from
+        every officer, and the district does not have yours.</p>
+      <p style="font-size:13.5px;color:var(--ink-3);margin-top:9px;line-height:1.55">
+        PDF, Word or Excel, up to ${st.maxMB || 8}&nbsp;MB. It goes as you send it, so send it where
+        there is signal.</p>
+    </div>
+    <div style="padding:14px 20px 4px">
+      <button class="btn" id="gpNow">Send it now</button>
+      <button class="btn quiet" id="gpLater">Later</button>
+    </div>`);
+  $('#gpNow').addEventListener('click', () => { hideSheet(); openGpdp(); });
+  $('#gpLater').addEventListener('click', hideSheet);
+}
+
+/* ============================================================================
  * ADVISORIES · the circular that opens in front of the officer
  * ----------------------------------------------------------------------------
  * It is put up once each time the app is opened, and the card stays on the
@@ -2518,10 +2623,13 @@ function gpdpCard(){
         <span class="lbl"><b>Plan filed</b><span>${esc(st.mine.fileName || 'document')} · ${esc(gpdpNiceSize(st.mine.sizeKB))}${when ? ' · ' + esc(stampTime(when)) : ''}</span></span>
         <span class="chev">›</span></div></div></div>`;
   }
-  return `<div class="group" style="margin-top:16px"><div class="hdr">Development plan · ${yr}</div>
+  /* the outstanding state wears the pin: it is the first thing on the screen,
+     and the header says the district is waiting */
+  return `<div class="group pinned" style="margin-top:16px">
+    <div class="hdr">Pending &middot; development plan ${yr}</div>
     <div class="card"><div class="row tap" data-gpdp="1">
-      <span class="ico" style="background:var(--gold-ink)">${ICON.file}</span>
-      <span class="lbl"><b>Your GPDP has not been sent</b><span>The district has called for the Gram Panchayat Development Plan. Tap to send it — PDF, Word or Excel.</span></span>
+      <span class="ico" style="background:var(--flag)">${ICON.file}</span>
+      <span class="lbl"><b>Your GPDP has not been sent</b><span>The district has called for the Gram Panchayat Development Plan for ${yr}. Tap to send it — PDF, Word or Excel.</span></span>
       <span class="chev">›</span></div></div></div>`;
 }
 
