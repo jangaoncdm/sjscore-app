@@ -1839,6 +1839,17 @@ function panel(span,title,right,body,k){
 /* ---------------- maps ---------------- */
 function suspect(p){ return (p.lat!=null&&(p.lat<16.4||p.lat>19.2||p.lng<77.6||p.lng>80.9))
   || (p.acc&&p.acc>250) || (p.tz&&!/Calcutta|Kolkata/i.test(p.tz)); }
+/* WHAT THE GREEN PILL ACTUALLY SAYS. It said "verified", and a person reads
+   that as "his presence has been verified". It never meant that: it means the
+   handset returned a fix and the fix was precise to within 250 m. A phone
+   standing 70 km away under open sky returns a BETTER reading than one inside
+   the panchayat office. The pill now says what it measured. */
+function locWord(r){ return '±'+Math.round(r.acc||0)+' m'; }
+/* and how far that reading was from the middle of the officer's own mandal,
+   which is the thing the word was mistaken for. It is a figure, not a verdict:
+   an officer may be at a mandal meeting, at the Collectorate or on tour, and
+   the register cannot know which. Nothing follows from it automatically. */
+function farPill(r){ return r.far ? ' <span class="pill warn" title="'+r.km+' km from the middle of '+esc(r.mandal||'his mandal')+'">'+r.km+' km away</span>' : ''; }
 function marker(p){
   if(p._s==='V'){ const c=p.grade==='A'?'#16A34A':p.grade==='B'?'#65A30D':p.grade==='C'?'#D97706':'#DC2626';
     return L.circleMarker([p.lat,p.lng],{radius:8,color:'#fff',weight:2,fillColor:c,fillOpacity:.9})
@@ -1856,7 +1867,7 @@ function marker(p){
   }
   const col=suspect(p)?'#DC2626':p.verified?'#16A34A':'#D97706';
   return L.circleMarker([p.lat,p.lng],{radius:(p.marks||1)>1?9:7,color:'#fff',weight:2,fillColor:col,fillOpacity:.95})
-    .bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.role)} · ${esc(p.mandal||'—')}<br>${esc(hm(p.at))} · ${suspect(p)?'<span style="color:#DC2626">location not trustworthy</span>':p.verified?'verified':'no fix'}${p.acc?' · ±'+Math.round(p.acc)+' m':''}${(p.marks||1)>1?' · <span style="color:#DC2626">'+p.marks+'×</span>':''}<br><a target="_blank" rel="noopener" href="https://maps.google.com/?q=${p.lat},${p.lng}">Open in Google Maps</a>`);}
+    .bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.role)} · ${esc(p.mandal||'—')}<br>${esc(hm(p.at))} · ${suspect(p)?'<span style="color:#DC2626">location not trustworthy</span>':p.verified?'location recorded':'no fix'}${p.acc?' · ±'+Math.round(p.acc)+' m':''}${p.km!=null?' · '+p.km+' km from '+esc(p.mandal||'the mandal'):''}${(p.marks||1)>1?' · <span style="color:#DC2626">'+p.marks+'×</span>':''}<br><a target="_blank" rel="noopener" href="https://maps.google.com/?q=${p.lat},${p.lng}">Open in Google Maps</a>`);}
 function mapPoints(){
   const out=[];
   (DATA.today.present||[]).forEach(r=>{ if(r.lat&&r.lng) out.push({...r,_s:'P'}); });
@@ -1974,7 +1985,7 @@ function vOverview(j,A){
       `<div class="mk${r.verified?'':' nofix'}" data-mi="${i}"><span class="av">${inits(r.name)}</span>
         <div><b>${esc(r.name)}${(r.marks||1)>1?' <span class="pill bad">'+r.marks+'×</span>':''}</b>
         <span>${esc(r.role)} · ${esc(r.mandal||'—')}</span></div>
-        <span class="t">${esc(hm(r.at))}${skewPill(r)}<br><span class="pill ${suspect(r)?'bad':r.verified?'ok':'warn'}">${suspect(r)?'not trustworthy':r.verified?'verified':'no fix'}</span></span></div>`).join('')
+        <span class="t">${esc(hm(r.at))}${skewPill(r)}<br><span class="pill ${suspect(r)?'bad':r.verified?'ok':'warn'}">${locWord(r)}</span>${farPill(r)}</span></div>`).join('')
       :'<div class="empty">No officer yet today.</div>')+`</div>`,'marks');
   h+=panel('c7','Live map · officers and villages','wheel scrolls the page · Ctrl+wheel zooms',
     mapTools()+'<div id="map"></div>');
@@ -2189,14 +2200,15 @@ function dlBlob(name,mime,text){
 function todayRoster(j){
   const rows=[];
   j.today.present.forEach(r=>rows.push([r.name,r.role,r.mandal||'','PRESENT','',hm(r.at)+(Math.abs(Number(r.skew)||0)>SKEW_TOL?' (phone '+Math.round(Math.abs(r.skew)/60)+'m '+(r.skew>0?'fast':'slow')+')':''),r.marks||1,
-    suspect(r)?'NOT TRUSTWORTHY':r.verified?'Verified':'No fix',
-    r.lat==null?'':r.lat, r.lng==null?'':r.lng, r.acc==null?'':Math.round(r.acc)]));
-  j.today.onLeave.forEach(r=>rows.push([r.name,r.role,r.mandal||'','ON LEAVE',r.leaveType||'','','','','','','']));
-  j.today.absent.forEach(r=>rows.push([r.name,r.role,r.mandal||'','NOT MARKED','','','','','','','']));
+    suspect(r)?'NOT TRUSTWORTHY':r.verified?'Location recorded':'No fix',
+    r.lat==null?'':r.lat, r.lng==null?'':r.lng, r.acc==null?'':Math.round(r.acc),
+    r.km==null?'':r.km]));
+  j.today.onLeave.forEach(r=>rows.push([r.name,r.role,r.mandal||'','ON LEAVE',r.leaveType||'','','','','','','','']));
+  j.today.absent.forEach(r=>rows.push([r.name,r.role,r.mandal||'','NOT MARKED','','','','','','','','']));
   rows.sort((a,b)=>String(a[2]).localeCompare(String(b[2]))||String(a[0]).localeCompare(String(b[0])));
   return rows;
 }
-const ROSTER_HEAD=['Officer','Role','Mandal','Status','Leave type','Marked at','Marks','Location','Latitude','Longitude','± m'];
+const ROSTER_HEAD=['Officer','Role','Mandal','Status','Leave type','Marked at','Marks','Location','Latitude','Longitude','± m','km from mandal'];
 function matrixData(j){
   if(!j||!j.attm||!Array.isArray(j.attm.dates)||!Array.isArray(j.attm.rows)||!j.attm.rows.length) return null;
   const dates=j.attm.dates, hol={};
@@ -2481,7 +2493,29 @@ function vAttendance(j,A){
   h+=kpi('Not marked',IC.u,A.off?'—':A.absent,'',A.off?esc(A.off)+' — not tracked today':'as of now');
   h+=kpi('Marked by 10:00',IC.u,A.present?pct(A.by10,A.present)+'%':'—','',A.by10+' of '+A.present);
   h+=kpi('Location not trustworthy',IC.u,j.today.present.filter(r=>suspect(r)||!r.verified).length,'','of '+A.present+' present');
+  const farRows=(j.today.present||[]).filter(r=>r.far).sort((a,b)=>b.km-a.km);
   h+='</div>';
+  /* THE QUESTION THE WORD "VERIFIED" INVITED. It never meant the officer was at
+     his place of duty — only that his handset returned a precise fix, which a
+     phone 70 km away under open sky returns better than one indoors. This names
+     the marks made far from their own mandal, measured from the middle of that
+     mandal as the district's own marks place it.
+     IT ACCUSES NOBODY. No reminder, no notice, no debit, no lock follows from
+     it, and a distant mark is still a mark. An officer may be at a mandal
+     meeting, at the Collectorate or on tour; the register cannot know which,
+     and a table must not decide it. */
+  h+=panel('c12','Marked away from the mandal',
+    farRows.length?farRows.length+' of '+A.present+' present · over 15 km':'nothing over 15 km today',
+    `<div class="twrap"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th><th>Marked</th><th>Distance</th><th>Reading</th><th></th></tr></thead><tbody>`+
+    farRows.map(r=>`<tr>
+       <td>${esc(r.name||'—')}</td><td class="mut">${esc(r.role||'')}</td>
+       <td class="mut">${esc(r.mandal||'—')}</td><td class="num mut">${esc(hm(r.at))}</td>
+       <td class="num"><b>${r.km} km</b></td>
+       <td class="mut">±${Math.round(r.acc||0)} m</td>
+       <td>${r.lat!=null?`<a href="https://maps.google.com/?q=${r.lat},${r.lng}" target="_blank" rel="noopener">Open in Maps</a>`:''}</td></tr>`).join('')+
+    (farRows.length?'':`<tr><td colspan="7" class="empty">Every trustworthy mark today was made inside the officer's own mandal.</td></tr>`)+
+    `</tbody></table></div>
+     <div class="expnote" style="margin-top:8px">Measured from the middle of the officer's own mandal, as the district's own attendance marks place it — the register holds no village coordinates. A distance is a fact for you to read, not a default: nothing here raises a reminder, a notice or a debit, and the mark stands.</div>`);
   h+=panel('c12','Export the attendance record','opens in Excel · names, gaps and the fortnight compared',
     `<div class="expbar">
       <button class="tbtn pri" data-exp="xlsx">Excel workbook (.xlsx)</button>
@@ -2499,7 +2533,7 @@ function vAttendance(j,A){
   h+=panel('c6','Location quality today','of '+A.present+' marks',
     /* three STATUS classes of one total, read against each other: a ring of
        three close values is the exact form the method rules out. */
-    '<div class="plot">'+Charts.stack([{label:'Verified',value:j.today.present.filter(r=>r.verified&&!suspect(r)).length,color:Charts.ST.ok},
+    '<div class="plot">'+Charts.stack([{label:'Location recorded',value:j.today.present.filter(r=>r.verified&&!suspect(r)).length,color:Charts.ST.ok},
       {label:'No fix',value:j.today.present.filter(r=>!r.verified&&!suspect(r)).length,color:Charts.ST.warn},
       {label:'Not trustworthy',value:j.today.present.filter(suspect).length,color:Charts.ST.bad}],
       {center:A.present,centerLabel:'marks today',emptyMsg:'No officer has marked yet today.'})+'</div>');
@@ -2515,7 +2549,7 @@ function attRow(r,i){
   return `<tr data-di="att:${i}" data-f="${esc((r.name+' '+r.role+' '+(r.mandal||'')+' '+(r._s==='P'?'present':r._s==='L'?'leave':'not marked')).toLowerCase())}">
     <td>${esc(r.name)}</td><td class="mut">${esc(r.role)}</td><td class="mut">${esc(r.mandal||'—')}</td>
     <td class="num">${r._s==='P'?esc(hm(r.at)):'—'}</td>
-    <td>${r._s==='P'?(suspect(r)?'<span class="pill bad">not trustworthy</span>':r.verified?'<span class="pill ok">verified</span>':'<span class="pill warn">no fix</span>')+((r.marks||1)>1?' <span class="pill bad">'+r.marks+'×</span>':''):'—'}</td>
+    <td>${r._s==='P'?(suspect(r)?'<span class="pill bad">not trustworthy</span>':r.verified?'<span class="pill ok">'+locWord(r)+'</span>':'<span class="pill warn">no fix</span>')+farPill(r)+((r.marks||1)>1?' <span class="pill bad">'+r.marks+'×</span>':''):'—'}</td>
     <td>${r._s==='P'?'<span class="pill ok">present</span>':r._s==='L'?'<span class="pill warn">'+esc(r.leaveType||'leave')+'</span>':'<span class="pill bad">not marked</span>'}</td></tr>`;
 }
 function vVillages(j,A){
@@ -2638,7 +2672,7 @@ function vNotices(j,A){
 }
 function vMap(j,A){
   return wxPanel() + panel('c12','District map · everything located',
-    'green verified &middot; amber no fix &middot; red not trustworthy &middot; grey on leave &middot; red ring not marked (solid: app opened today &middot; dashed: last known) &middot; villages by grade',
+    'green location recorded &middot; amber no fix &middot; red not trustworthy &middot; grey on leave &middot; red ring not marked (solid: app opened today &middot; dashed: last known) &middot; villages by grade',
     mapTools()+'<div id="map2"></div>');
 }
 
@@ -3330,7 +3364,7 @@ document.addEventListener('click',e=>{
     if(kind==='ins'||kind==='worst'||kind==='day'||kind==='mv'||kind==='fl'){ openVillage(r); return; }
     if(kind==='att') openDrawer(r.name,r.role+' · '+(r.mandal||'—'),
       `<dl><dt>Status</dt><dd>${r._s==='P'?'Present':r._s==='L'?'On leave ('+esc(r.leaveType||'')+')':'Not marked'}</dd>
-       ${r._s==='P'?`<dt>Time</dt><dd>${esc(hm(r.at))}</dd><dt>Location</dt><dd>${r.verified?'verified':'no fix'}${r.acc?' · ±'+r.acc+' m':''}</dd>`:''}
+       ${r._s==='P'?`<dt>Time</dt><dd>${esc(hm(r.at))}</dd><dt>Location</dt><dd>${r.verified?'location recorded':'no fix'}${r.acc?' · ±'+r.acc+' m':''}</dd>${r.km!=null?`<dt>From the mandal</dt><dd>${r.km} km from the middle of ${esc(r.mandal||'')}${r.far?' — the Collector reads this, it accuses nobody':''}</dd>`:''}`:''}
        ${(r.marks||1)>1?`<dt>Marked</dt><dd>${r.marks}× today</dd>`:''}
        ${r.lat&&r.lng?`<dt>Coordinates</dt><dd>${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}</dd>`:''}</dl>`+
       (r.lat&&r.lng?`<a class="mapsbtn" target="_blank" rel="noopener" href="https://maps.google.com/?q=${r.lat},${r.lng}">Open the pin in Google Maps</a>`:''));

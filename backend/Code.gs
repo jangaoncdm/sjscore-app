@@ -518,6 +518,15 @@ function offInfo_(dStr){
    rather than a place, or if the handset says it is in another timezone. */
 const FIX_BOX_ = { latMin:16.4, latMax:19.2, lngMin:77.6, lngMax:80.9 };
 const FIX_ACC_LIMIT_ = 250;
+/* WHETHER A MARK CARRIES A LOCATION AT ALL — and note what this does NOT say:
+   it says the handset returned a fix precise to within FIX_ACC_LIMIT_ metres,
+   never that the officer was at his place of duty. saveAttendance_ writes the
+   WORD 'TRUE'; the Sheet coerces it to a boolean, so the console's read matched
+   by luck. A text-formatted column would have left it a string and shown every
+   mark in the district as unverified. Read either spelling, in one place. */
+function markVerified_(v){
+  return v === true || String(v).trim().toUpperCase() === 'TRUE';
+}
 function suspectMark_(lat, lng, acc, tz){
   if(lat != null && lat !== '' && (Number(lat) < FIX_BOX_.latMin || Number(lat) > FIX_BOX_.latMax ||
      Number(lng) < FIX_BOX_.lngMin || Number(lng) > FIX_BOX_.lngMax)) return true;
@@ -525,6 +534,69 @@ function suspectMark_(lat, lng, acc, tz){
   if(tz && !/Calcutta|Kolkata/i.test(String(tz))) return true;
   return false;
 }
+/* HOW FAR A MARK WAS MADE FROM THE OFFICER'S OWN MANDAL.
+   `verified` on a mark has never meant "he was at his place of duty". It means
+   only that the handset returned a fix and that the fix was precise — accurate
+   to within FIX_ACC_LIMIT_ metres. A phone standing 70 km away with a clear
+   view of the sky returns a BETTER reading than one inside the panchayat
+   office, and the console printed the word "verified" against it. Asked from
+   the district in those words: how is the app taking attendance for people who
+   are 50 or 70 km away.
+
+   It was not checking, because there was nothing to check against — the GPs
+   tab carries `Mandal` and `GP` and no coordinates, so the register does not
+   know where Devaruppula is. The district's own marks do. The MEDIAN of a
+   mandal's located marks is a point inside that mandal, and a median is used
+   rather than a mean on purpose: a mean is dragged towards the very marks this
+   is meant to find, so a fortnight of marking from the city would quietly move
+   the mandal to the city and the distance would read as nothing.
+
+   THIS ACCUSES NOBODY. The figure is shown to the Collector and goes no
+   further: it raises no reminder, no notice, no debit and no lock, and a
+   distant mark is still a mark. An officer may be at a mandal meeting, at the
+   Collectorate, on tour, or escorting a case — the register cannot know which,
+   and a table must not decide it. Whether a distance is a default is read by
+   the Collector on the facts, under the Conduct Rules, as it always was. */
+const FAR_MARK_KM_ = 15;   /* no mandal in the district is anywhere near this wide */
+function median_(xs){
+  const a = xs.slice().sort((x, y) => x - y), n = a.length;
+  if(!n) return null;
+  return n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2;
+}
+/* the distance between two readings, on a sphere. Good to a few metres over
+   the tens of kilometres this is ever asked about. */
+function distKm_(aLat, aLng, bLat, bLng){
+  if(!aLat || !aLng || !bLat || !bLng) return null;
+  const R = 6371, rad = Math.PI / 180;
+  const dLa = (bLat - aLat) * rad, dLn = (bLng - aLng) * rad;
+  const h = Math.sin(dLa / 2) * Math.sin(dLa / 2) +
+            Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLn / 2) * Math.sin(dLn / 2);
+  return +(2 * R * Math.asin(Math.min(1, Math.sqrt(h)))).toFixed(1);
+}
+/* where each mandal sits, by the median of its own marks. Marks outside the
+   district's box are left out — a handset reporting itself in another state
+   must not move a mandal, the same rule the weather map is drawn under. */
+function mandalCentres_(rows){
+  const agg = {};
+  (rows || []).forEach(r => {
+    const md = String(r.mandal || '').trim(); if(!md) return;
+    const la = Number(r.lat), ln = Number(r.lng);
+    if(!la || !ln) return;
+    if(la < FIX_BOX_.latMin || la > FIX_BOX_.latMax ||
+       ln < FIX_BOX_.lngMin || ln > FIX_BOX_.lngMax) return;
+    agg[md] = agg[md] || { la:[], ln:[] };
+    agg[md].la.push(la); agg[md].ln.push(ln);
+  });
+  const out = {};
+  Object.keys(agg).forEach(k => {
+    /* ONE MARK IS NOT A MANDAL. A single reading cannot say where a mandal is,
+       and measuring a mark against itself always reads nought. */
+    if(agg[k].la.length < 3) return;
+    out[k] = { lat: median_(agg[k].la), lng: median_(agg[k].ln), n: agg[k].la.length };
+  });
+  return out;
+}
+
 /* the day's marks with enough detail to judge them — the district's reading of
    when each was made (rule 1), never the handset's unchecked claim */
 function markedDetail_(dStr){
@@ -1589,6 +1661,8 @@ function doGet(e){
     /* every count is of OFFICERS, never of rows — historical duplicate rows
        collapse here, and repeated marking is carried as a count, not a copy */
     const todayByPh = {}, dailyPh = {}, lastFix = {};
+    /* every located mark in the window, to say where each mandal sits */
+    const histFix = [];
     for(let i = 1; i < av.length; i++){
       const d = dateText_(av[i][am.ix.date]); if(!d) continue;
       const ph = phone10_(av[i][am.ix.phone]); if(!ph) continue;
@@ -1599,7 +1673,10 @@ function doGet(e){
          one seen wins. An officer missing today can then be shown on the
          map at the place he last marked, said as exactly that. */
       const fl = Number(av[i][am.ix.lat]), fg = Number(av[i][am.ix.lng]);
-      if(fl && fg) lastFix[ph] = { lat: fl, lng: fg, d: d };
+      if(fl && fg){
+        lastFix[ph] = { lat: fl, lng: fg, d: d };
+        histFix.push({ mandal: cell_(av[i], am.ix.mandal), lat: fl, lng: fg });
+      }
       if(d === today){
         const rowMarks = Number(av[i][am.ix.markCount]) || 1;
         const prev = todayByPh[ph];
@@ -1613,7 +1690,7 @@ function doGet(e){
           at:effMarkAt_(String(av[i][am.ix.markedAt]||''), String(av[i][am.ix.receivedAt]||'')),
           claimedAt:String(av[i][am.ix.markedAt]||''),
           skew:Number(av[i][am.ix.skew])||0,
-          verified:String(av[i][am.ix.verified])==='true' || av[i][am.ix.verified]===true,
+          verified:markVerified_(av[i][am.ix.verified]),
           lat:Number(av[i][am.ix.lat])||null, lng:Number(av[i][am.ix.lng])||null,
           acc:Number(av[i][am.ix.accuracy])||null, tz:String(av[i][am.ix.timezone]||''),
           status:st, leaveType:cell_(av[i], am.ix.leaveType),
@@ -1621,6 +1698,23 @@ function doGet(e){
       }
     }
     const todayRows = Object.keys(todayByPh).map(k => todayByPh[k]);
+
+    /* HOW FAR EACH MARK WAS MADE FROM ITS OWN MANDAL. Read by the Collector,
+       and by nobody else: it raises no reminder, no notice, no debit and no
+       lock. A distant mark is still a mark. */
+    const centres = mandalCentres_(histFix);
+    todayRows.forEach(r => {
+      /* A DISTANCE OFF AN UNTRUSTWORTHY READING IS NOT A DISTANCE. A network
+         guess of ±2 km, or a fix that lands outside the district altogether,
+         is a broken reading — not an officer in another state. Those marks are
+         already called not trustworthy on their own account, and measuring
+         them as well put "509 km from the mandal" against a phone that simply
+         never got a fix. */
+      const c = centres[String(r.mandal || '').trim()];
+      const usable = c && r.lat && r.lng && !suspectMark_(r.lat, r.lng, r.acc, r.tz);
+      r.km = usable ? distKm_(r.lat, r.lng, c.lat, c.lng) : null;
+      r.far = r.km != null && r.km > FAR_MARK_KM_;
+    });
 
     /* SANCTIONED LEAVE STANDS IN FOR THE MISSING ROW. An officer whose
        leave the Collector approved rightly stays home and writes nothing —

@@ -116,6 +116,27 @@ district. Read the roll through `gpRoll_`, match names case-blind.
 
 ---
 
+**10 — "Verified" is not "present at the place of duty."**
+`verified` on a mark means only that the handset returned a fix precise to
+within 250 m. It says nothing about *where*. A phone 70 km away under open sky
+returns a **better** reading than one inside the panchayat office, and the
+console printed the word "verified" against it — asked from the district in
+those words: *how is the app taking attendance for people who are 50 or 70 km
+away.* Nothing was checking the place, because the register has nothing to
+check against: the `GPs` tab is `Mandal, GP` and carries no coordinates, and
+`suspectMark_`'s box is the whole region, some 300 km across. The console now
+says `±31 m` — what it actually measured — and carries the **distance from the
+officer's own mandal**, located by the **median** of that mandal's own marks
+(a mean is dragged towards the very marks it is meant to find; three readings
+minimum, because one mark is not a mandal, and a distance off an untrustworthy
+reading is not a distance). **It accuses nobody**: no reminder, no notice, no
+debit, no lock, and the mark stands. An officer may be at a mandal meeting, at
+the Collectorate or on tour — the register cannot know which, and a table must
+not decide it. Whether a distance is a default is read by the Collector on the
+facts, under the Conduct Rules.
+
+---
+
 ## Doctrine of the notice ladder
 
 Working days only — Sundays and the `Holidays` tab are never counted. The

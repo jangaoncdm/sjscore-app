@@ -30,6 +30,18 @@ function build(){
   const c = env.ctx;
   const U = ['Phone','Name','Role','Mandal','GP','Email','InitPin','Hash','Active'];
 
+  /* WHERE EACH MANDAL SITS. The marks used to be scattered at random over the
+     whole district, which made a distance from the officer's own mandal
+     meaningless — every officer looked 40 km from home. They are now laid
+     around a point per mandal, the way real marks fall. */
+  const HOME = {};
+  MANDALS.forEach((m, i) => {
+    HOME[m] = { lat: 17.62 + (i % 4) * 0.14, lng: 79.02 + Math.floor(i / 4) * 0.16 };
+  });
+  /* and two officers who marked from far outside their mandal — the case the
+     district reported: "verified · ±31 m" against a phone 60-odd km away. */
+  const AWAY_PH = {};
+
   const users = [{ Phone:'9000000001', Name:'Sandeep Kumar Jha', Role:'COLLECTOR',
                    Mandal:'', GP:'', Email:'cdm@mock.example', Active:'TRUE' }];
   const gps = [];
@@ -88,6 +100,8 @@ function build(){
     days.push(d.toISOString().slice(0, 10));
   }
   const marking = users.filter(u => u.Role !== 'COLLECTOR' && u.Role !== 'MSO');
+  /* two of them, picked steadily so the fixture is the same every run */
+  [7, 22, 43, 61].forEach(i => { if(marking[i]) AWAY_PH[marking[i].Phone] = true; });
   /* the officers whose leave the Collector has sanctioned for today. They are
      chosen BEFORE the marking loop and skipped in it: an officer on sanctioned
      leave rightly writes no attendance row, and the console must show him on
@@ -104,12 +118,21 @@ function build(){
       const hour = 8 + (rnd() < 0.75 ? int(0,2) : int(3,6));
       const at = day + 'T' + String(hour).padStart(2,'0') + ':' + String(int(0,59)).padStart(2,'0') + ':00+05:30';
       const good = rnd() < 0.78;
+      const hm2 = HOME[u.Mandal] || { lat:17.72, lng:79.14 };
+      /* A MARK MADE NOWHERE NEAR THE MANDAL, and a precise one at that — the
+         reading is better than most of the honest ones, which is exactly how
+         the word "verified" came to be read as proof of presence. */
+      const away = day === TODAY && AWAY_PH[u.Phone];
       env.mark(u.Phone, day, at, at, {
         name:u.Name, role:u.Role, mandal:u.Mandal,
-        lat: good ? 17.6 + rnd()*0.5 : (rnd() < 0.5 ? 17.6 + rnd()*0.5 : 12.9 + rnd()*0.3),
-        lng: good ? 79.0 + rnd()*0.45 : 79.0 + rnd()*0.45,
-        accuracy: good ? int(6, 60) : int(300, 2400),
-        verified: good ? 'true' : 'false',
+        lat: away ? 17.40 + rnd()*0.02
+           : good ? hm2.lat + (rnd()-0.5)*0.05
+           : (rnd() < 0.5 ? hm2.lat + (rnd()-0.5)*0.05 : 12.9 + rnd()*0.3),
+        lng: away ? 78.46 + rnd()*0.02
+           : good ? hm2.lng + (rnd()-0.5)*0.05
+           : hm2.lng + (rnd()-0.5)*0.05,
+        accuracy: away ? int(9, 34) : good ? int(6, 60) : int(300, 2400),
+        verified: (away || good) ? 'true' : 'false',
         timezone: rnd() < 0.985 ? 'Asia/Calcutta' : 'Asia/Dubai',
         skew: rnd() < 0.9 ? 0 : int(-900, 900)
       });
