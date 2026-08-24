@@ -482,9 +482,41 @@ function makeRouter(state){
       const wat = await page.$$eval('[data-k="wxT"] .pill.warn', p => p.length);
       check('marked severe or watch, agreeing with the forecast',
         sev === 1 && wat === 1, sev + ' severe · ' + wat + ' watch');
-      const rings = await page.$$eval('#map2 path', p => p.length);
-      check('and the mandals are ringed on the map itself', rings >= WXROWS.length,
-        rings + ' vectors drawn');
+      /* THE WEATHER MUST BE VISIBLE ON THE MAP, NOT MERELY PRESENT IN IT.
+         It was drawn with circleMarker, whose radius is in pixels — twelve
+         20px specks lost among 159 officers' marks at district zoom. Reported
+         as "I cannot see the weather condition on map". */
+      const wxGeo = await page.evaluate(() => {
+        if(typeof WXLAYER === 'undefined' || !WXLAYER) return null;
+        const ls = Object.keys(WXLAYER._layers).map(k => WXLAYER._layers[k]);
+        return { n: ls.length,
+                 metres: (ls[0] && typeof ls[0].getRadius === 'function') ? ls[0].getRadius() : 0,
+                 pane: ls[0] ? ls[0].options.pane : '' };
+      });
+      check('every mandal is drawn on the map', !!wxGeo && wxGeo.n === WXROWS.length,
+        wxGeo ? wxGeo.n + ' areas' : 'no weather layer');
+      check('as an area on the ground, measured in metres — not a pixel dot',
+        !!wxGeo && wxGeo.metres >= 1000, wxGeo ? wxGeo.metres + ' m radius' : '');
+      check('and it sits in its own pane, beneath the officers’ marks',
+        !!wxGeo && wxGeo.pane === 'wx', wxGeo ? wxGeo.pane : '');
+
+      /* clicking the chip must SHOW it — turning a layer on while the map is
+         framed somewhere else changes nothing a reader can see */
+      const zBefore = await page.evaluate(() => MAP2 ? MAP2.getZoom() : 0);
+      await page.click('#wxToggle'); await page.waitForTimeout(700);
+      const offN = await page.evaluate(() =>
+        (typeof WXLAYER !== 'undefined' && WXLAYER) ? Object.keys(WXLAYER._layers).length : 0);
+      check('the chip takes the weather off the map', offN === 0, offN + ' areas left');
+      const label = await page.$eval('#wxToggle', el => el.textContent.trim());
+      check('and the chip then offers to put it back', /Show on the map/i.test(label), label);
+      await page.click('#wxToggle'); await page.waitForTimeout(1200);
+      const zAfter = await page.evaluate(() => MAP2 ? MAP2.getZoom() : 0);
+      const onN = await page.evaluate(() =>
+        (typeof WXLAYER !== 'undefined' && WXLAYER) ? Object.keys(WXLAYER._layers).length : 0);
+      check('putting it back draws it again', onN === WXROWS.length, onN + ' areas');
+      check('and brings the map to the weather instead of leaving it framed elsewhere',
+        zAfter > zBefore, 'zoom ' + zBefore + ' → ' + zAfter);
+      await shot(page, 'console-weather-on-the-map', false);
       check('the draft names the rain, the wind and the mandal',
         /88 mm/.test(mapTxt) && /46 km\/h/.test(mapTxt) && /Bachannapeta/.test(mapTxt));
     }
