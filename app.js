@@ -2449,7 +2449,11 @@ function gpdpPending(){
 }
 function advPending(){
   const st = advState();
-  return !!(st && st.advisory && !st.acknowledged);
+  if(!st || !st.advisory) return false;
+  /* what he pressed on this handset counts, whatever the district has managed
+     to write down yet — the badge, the pinned card and the plan prompt all
+     hang off this one answer */
+  return !st.acknowledged && !advDone(st.advisory.id);
 }
 
 /* WHAT THE DISTRICT IS STILL WAITING FOR, AS A NUMBER. The badge counts the
@@ -2575,8 +2579,19 @@ function refreshAdvisory(){
   if(!navigator.onLine) return Promise.resolve();
   return get({ op:'advisory' }).then(r => {
     if(r && r.ok){
-      DB.adv = { advisory:r.advisory || null, acknowledged:!!r.acknowledged,
-                 ackAt:r.ackAt || '', recent:r.recent || [], at:new Date().toISOString() };
+      /* THE DISTRICT'S ANSWER MUST NOT ERASE WHAT HE PRESSED. This overwrote
+         DB.adv wholesale, so a receipt still queued on the phone — or one the
+         district had not written yet — came back as acknowledged:false and the
+         home screen went straight back to nagging him for a circular he had
+         already read. The modal stayed shut, because it consults the phone's
+         own record; the pinned card, the badge and "an advisory to read" did
+         not, and to the officer that IS the advisory coming back. Reported
+         from the field again, in those words. The phone's receipt stands. */
+      const advId = (r.advisory && r.advisory.id) || '';
+      DB.adv = { advisory:r.advisory || null,
+                 acknowledged: !!r.acknowledged || advDone(advId),
+                 ackAt:r.ackAt || (DB.advDone||{})[advId] || '',
+                 recent:r.recent || [], at:new Date().toISOString() };
       save();
       if(TAB === 'home'){ renderHome(); maybePopAdvisory(); }
     }
@@ -2586,6 +2601,11 @@ function refreshAdvisory(){
 function maybePopAdvisory(){
   const st = advState();
   if(ADV_SHOWN || !st || !st.advisory || st.acknowledged) return;
+  /* A CIRCULAR WITH NO ID CANNOT BE DISMISSED. The phone remembers what he
+     pressed by id, so an id-less circular is one advMarkDone cannot record and
+     advDone can never match — it would open every single time the app was
+     opened, and no amount of pressing would stop it. Better to show nothing. */
+  if(!st.advisory.id) return;
   if(advDone(st.advisory.id)) return;   /* he pressed it on this phone already */
   ADV_SHOWN = true;
   advSheet();
