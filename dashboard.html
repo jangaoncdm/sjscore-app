@@ -2666,38 +2666,64 @@ const wxTone = l => l === 'SEVERE' ? 'var(--st-bad)' : l === 'WATCH' ? 'var(--st
 const wxPill = l => l === 'SEVERE' ? 'bad' : l === 'WATCH' ? 'warn' : 'ok';
 
 /* the mandal markers, drawn over the officers' pins */
-function drawWeather(map){
+/* THE WEATHER IS GROUND, NOT A PIN.
+   It was drawn with circleMarker, whose radius is in PIXELS — so at the zoom
+   the district sits at, twelve 20px specks were lost among 159 officers'
+   marks, and the Collector could not see the weather at all. L.circle takes
+   its radius in METRES, so each mandal is a real area on the ground that
+   grows and shrinks with the map, which is what "the weather over a region"
+   means. Size is uniform: the LEVEL is carried by colour, and letting it
+   drive the radius as well would encode one thing twice.
+
+   It also rides in a pane of its own, beneath the officers' pins. The marks
+   are the subject of this map; the weather is the ground they stand on. */
+const WX_RADIUS_M = 6000;
+function wxPane_(map){
+  if(!map.getPane('wx')){
+    const pane = map.createPane('wx');
+    pane.style.zIndex = 350;          /* over the tiles (200), under the pins (400) */
+    pane.style.pointerEvents = 'auto';
+  }
+  return 'wx';
+}
+function drawWeather(map, andFit){
   /* THE LAYER TAKES ITSELF OFF. drawMap destroys and rebuilds the map whenever
      its container changes, and asking the NEW map to remove a layer belonging
-     to the old one throws inside Leaflet — at 390px, every time. A layer knows
-     which map it is on; let it do the removing. */
+     to the old one throws inside Leaflet — at 390px, every time. */
   if(WXLAYER){ try{ WXLAYER.remove(); }catch(e){} WXLAYER = null; }
   if(!map || !WX || !WX.ok || !WXON) return;
   try{
-  WXLAYER = L.layerGroup().addTo(map);
-  (WX.rows || []).forEach(r => {
-    if(!r.lat || !r.lng) return;
-    const col = wxTone(r.level);
-    /* a ring, not a filled pin: the officers' marks are the subject of this
-       map and the weather must sit behind them, not over them */
-    const m = L.circleMarker([r.lat, r.lng], {
-      radius: r.level === 'SEVERE' ? 26 : r.level === 'WATCH' ? 20 : 14,
-      color: col, weight: 2, opacity: .85, fillColor: col,
-      fillOpacity: r.level === 'SEVERE' ? .16 : r.level === 'WATCH' ? .11 : .06,
-      dashArray: r.level === 'CALM' ? '3 4' : null, interactive: true
-    }).bindTooltip(esc(r.mandal) + ' · ' + esc(r.today || '') +
-        (r.tmax != null ? ' · ' + Math.round(r.tmax) + '°' : '') +
-        (r.rainClass ? ' · ' + esc(r.rainClass) : ''), { direction:'top' })
-      .bindPopup('<b>' + esc(r.mandal) + '</b><br>' + esc(r.today || '') +
-        (r.temp != null ? '<br>now ' + Math.round(r.temp) + '°' : '') +
-        (r.tmax != null ? ' · max ' + Math.round(r.tmax) + '°' : '') +
-        (r.rain != null ? '<br>rain ' + Math.round(r.rain) + ' mm' +
-          (r.rainClass ? ' · ' + esc(r.rainClass) : '') : '') +
-        (r.rainChance != null ? ' · ' + Math.round(r.rainChance) + '% chance' : '') +
-        (r.wind != null ? '<br>wind to ' + Math.round(r.wind) + ' km/h' : '') +
-        (r.located ? '' : '<br><i>no located mark in this mandal — read at the district town</i>'));
-    WXLAYER.addLayer(m);
-  });
+    const pane = wxPane_(map);
+    WXLAYER = L.layerGroup([], { pane: pane }).addTo(map);
+    const pts = [];
+    (WX.rows || []).forEach(r => {
+      if(!r.lat || !r.lng) return;
+      const col = wxTone(r.level);
+      const c = L.circle([r.lat, r.lng], {
+        pane: pane, radius: WX_RADIUS_M,
+        color: col, weight: 2, opacity: .9,
+        fillColor: col,
+        fillOpacity: r.level === 'SEVERE' ? .22 : r.level === 'WATCH' ? .15 : .07,
+        dashArray: r.level === 'CALM' ? '4 5' : null
+      }).bindTooltip(esc(r.mandal) + ' · ' + esc(r.level) + ' · ' + esc(r.today || '') +
+          (r.rainClass ? ' · ' + esc(r.rainClass) : ''), { direction:'top', sticky:true })
+        .bindPopup('<b>' + esc(r.mandal) + '</b> &middot; ' + esc(r.level) + '<br>' + esc(r.today || '') +
+          (r.temp != null ? '<br>now ' + Math.round(r.temp) + '°' : '') +
+          (r.tmax != null ? ' · max ' + Math.round(r.tmax) + '°' : '') +
+          (r.rain != null ? '<br>rain ' + Math.round(r.rain) + ' mm' +
+            (r.rainClass ? ' · ' + esc(r.rainClass) : '') : '') +
+          (r.rainChance != null ? ' · ' + Math.round(r.rainChance) + '% chance' : '') +
+          (r.wind != null ? '<br>wind to ' + Math.round(r.wind) + ' km/h' : '') +
+          (r.located ? '' : '<br><i>no located mark in this mandal — read at the district town</i>'));
+      WXLAYER.addLayer(c);
+      pts.push([r.lat, r.lng]);
+    });
+    /* CLICKING "SHOW ON THE MAP" MUST SHOW IT. Turning the layer on when the
+       map is framed on something else changes nothing a reader can see, so
+       the map is brought to the weather. */
+    if(andFit && pts.length){
+      try{ map.fitBounds(L.latLngBounds(pts).pad(0.35)); }catch(e){}
+    }
   }catch(e){ WXLAYER = null; }
 }
 
@@ -2712,7 +2738,7 @@ function wxPanel(){
   h += panel('c5','Weather over the district',
     esc(String(WX.source || '').split('·')[0].trim()),
     `<div class="mtools">
-       <button class="fchip" id="wxToggle" aria-pressed="${WXON}">Show on the map</button>
+       <button class="fchip" id="wxToggle" aria-pressed="${WXON}">${WXON?'Hide from the map':'Show on the map'}</button>
        <span class="msp"></span>
        <span class="pill ${wxPill(WX.level)}">${esc(WX.level)}</span>
      </div>
@@ -3107,7 +3133,13 @@ document.addEventListener('click',e=>{
   if(e.target.closest('#gpCsv')){ exportGpdpCsv(); return; }
   if(e.target.closest('#advCsv')){ exportAdvCsv(); return; }
   if(e.target.closest('#advGo')){ publishAdvisory(); return; }
-  if(e.target.closest('#wxToggle')){ WXON=!WXON; drawWeather(MAP2); if(DATA) render(DATA); return; }
+  if(e.target.closest('#wxToggle')){
+    WXON=!WXON;
+    if(DATA) render(DATA);
+    /* re-drawn AFTER the render has rebuilt the map, and the map is brought to
+       the weather when it is switched on */
+    drawWeather(MAP2, WXON);
+    return; }
   if(e.target.closest('#wxDraft')){
     /* the draft is carried to the advisory composer, never sent from here —
        a weather warning is an advisory like any other, and the Collector
