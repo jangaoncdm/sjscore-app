@@ -61,7 +61,22 @@ function build(){
       file:{ name:(u.GP || u.Mandal) + ' GPDP 2026-27.' + ext, b64: b64(200 + Math.floor(rnd()*3000)) } });
   });
 
-  /* the circular, and about half the district has read it */
+  /* AN EARLIER CIRCULAR, SINCE RETIRED. The district has issued more than one,
+     and the console must go on showing every one of them with the receipts it
+     collected — publishing a new circular retires the standing one, it has
+     never deleted it. */
+  const older = env.post({ kind:'advPublish', token:cdm, title:'Chlorination of drinking water sources',
+             message:'Every source in the panchayat to be chlorinated and the register signed before Friday.',
+             audience:'PS', mandals:['Jangaon', 'Chilpur'] });
+  officers.forEach(u => {
+    if(u.Phone === her.Phone) return;
+    if(u.Role !== 'PS' || ['Jangaon','Chilpur'].indexOf(u.Mandal) < 0) return;
+    if(rnd() < 0.3) return;
+    const tok = env.post({ kind:'login', u:u.Phone, p:'1111' }).token;
+    env.post({ kind:'advAck', token:tok });
+  });
+
+  /* the circular now standing, and about half the district has read it */
   env.post({ kind:'advPublish', token:cdm, title:'PS MPDO MPO Health Advisory',
              message: MSG, audience:'ALL',
              file:{ name:'PS MPDO MPO HEALTH ADVISORY.pdf', b64: b64(9000) } });
@@ -77,6 +92,9 @@ function build(){
   return {
     gpdpDistrict: env.get('gpdp', { token: cdm }),
     advDistrict:  env.get('advisory', { token: cdm }),
+    /* the same register, rebuilt against the circular already retired — what
+       the console asks for when the Collector opens one out of the history */
+    advRetired:   env.get('advisory', { token: cdm, id: older.id }),
     gpdpOfficer:  env.get('gpdp', { token: herTok }),
     advOfficer:   env.get('advisory', { token: herTok }),
     officer: { name: her.Name, role: her.Role, phone: her.Phone, mandal: her.Mandal,
@@ -91,6 +109,8 @@ console.log('GPDP    : ' + d.gpdpDistrict.totals.uploaded + ' filed of ' + d.gpd
             '  (' + d.gpdpDistrict.year + ')');
 console.log('ADVISORY: ' + d.advDistrict.totals.acknowledged + ' read of ' + d.advDistrict.totals.due +
             '  "' + d.advDistrict.advisory.title + '"');
+console.log('HISTORY : ' + (d.advDistrict.list || []).length + ' circular(s) on the register  ' +
+            (d.advDistrict.list || []).map(x => x.acknowledged + '/' + x.due + ' ' + x.status).join(' · '));
 console.log('officer : ' + d.officer.name + ' (' + d.officer.role + ', ' + d.officer.gp + ')' +
             '  plan filed: ' + (d.gpdpOfficer.mine ? 'yes' : 'no') +
             ', advisory read: ' + (d.advOfficer.acknowledged ? 'yes' : 'no'));

@@ -177,6 +177,16 @@ a circular is never read once and lost. Publishing a new one marks the standing
 one `SUPERSEDED`; the receipts already given stand. `advAck` is idempotent — a
 double tap or a re-send writes no second receipt.
 
+**Nothing goes off the console either.** `op=advisory` carries `list` — every
+circular the district has issued, newest first, each with the roll it addressed
+and the receipts it collected — and the Collector may open any of them by
+passing `id`, which rebuilds the register officer by officer against that
+circular. It had always been SUPERSEDED rather than deleted, but the console
+could read only the circular in force, so publishing a new one took the
+previous circular and its whole read/unread register off the screen and it
+looked as though the tracking had been thrown away. An officer is never handed
+a retired circular by asking for one: history is not an instruction.
+
 **A receipt is written on the phone before the wire is tried.** An officer who
 presses *I have read this* is never shown that circular again on that handset —
 the acknowledgement is recorded locally, the sheet closes at once, and the

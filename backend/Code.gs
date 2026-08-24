@@ -2139,6 +2139,27 @@ function publishAdvisory_(b, u){
   return json_({ ok:true, id:id, url:url, title:title });
 }
 
+/* EVERY CIRCULAR THE DISTRICT HAS ISSUED, newest first. A superseded one is
+   retired, never deleted — and the acknowledgements given against it stand
+   exactly where they were. The console reads this so the Collector can look
+   back at what he issued in June and see who read it, which he could not do
+   before: publishing a new circular took the old register off his screen and
+   it looked as though the tracking had been thrown away. */
+function advAll_(){
+  const sh = sheet_('Advisories', ADV_HEAD), m = headMap_(sh, ADV_HEAD);
+  const v = sh.getDataRange().getValues(), out = [];
+  for(let i = v.length - 1; i >= 1; i--){
+    const id = cell_(v[i], m.ix.id); if(!id) continue;
+    out.push({ id: id, title: cell_(v[i], m.ix.title), message: cell_(v[i], m.ix.message),
+               fileName: cell_(v[i], m.ix.fileName), url: cell_(v[i], m.ix.url),
+               audience: cell_(v[i], m.ix.audience) || 'ALL',
+               mandals: advMandalList_(cell_(v[i], m.ix.mandals)),
+               publishedAt: String(v[i][m.ix.publishedAt] || ''),
+               publishedBy: cell_(v[i], m.ix.publishedBy),
+               status: String(v[i][m.ix.status] || 'ACTIVE') });
+  }
+  return out;
+}
 /* the active circular, whatever else is on the tab */
 function activeAdvisory_(){
   const sh = sheet_('Advisories', ADV_HEAD), m = headMap_(sh, ADV_HEAD);
@@ -2216,23 +2237,39 @@ function ackAdvisory_(b, u){
 
 /* ---- the register, read ---- */
 function advisoryRegister_(u, idReq){
-  const adv = activeAdvisory_();
+  /* THE WHOLE HISTORY, READ ONCE — the circular that stands, the one asked
+     for, and the tally against every one of them all come out of this.
+     An OFFICER is only ever shown the circular that stands: a retired one is
+     history, not an instruction. The DISTRICT may open any of them. */
+  const all = advAll_();
+  const standing = all.filter(x => x.status === 'ACTIVE')[0] || null;
+  const want = String(idReq || '');
+  const adv = (districtRole_(u.role) && want)
+            ? (all.filter(x => x.id === want)[0] || standing)
+            : standing;
   /* WITH NOTHING STANDING, THE DISTRICT STILL GETS ITS ROLL. Returning a bare
      "no advisory" left the console showing an empty section, and it reads as
      though the tracking is missing rather than as though nothing has been
      issued. The Collector is shown who WOULD be addressed, so the section is
      alive before the first circular as well as after it. */
-  const id = String(idReq || (adv && adv.id) || '');
+  const id = String((adv && adv.id) || idReq || '');
   const sh = sheet_('AdvAck', ADV_ACK_HEAD), m = headMap_(sh, ADV_ACK_HEAD);
   const v = sh.getDataRange().getValues();
-  const ack = {};
+  const ack = {}, mine = {};
   for(let i = 1; i < v.length; i++){
-    if(!id || String(v[i][m.ix.advId]) !== id) continue;
+    const aid = String(v[i][m.ix.advId] || ''); if(!aid) continue;
     const ph = phone10_(v[i][m.ix.phone]); if(!ph) continue;
-    ack[ph] = String(v[i][m.ix.receivedAt] || v[i][m.ix.ackAt] || '');
+    const at = String(v[i][m.ix.receivedAt] || v[i][m.ix.ackAt] || '');
+    if(id && aid === id) ack[ph] = at;
+    /* AND EVERY CIRCULAR THIS OFFICER HAS ALREADY SIGNED FOR. The list under
+       More ▸ Advisories took its receipts from the standing circular alone,
+       so an officer who had acknowledged June's circular was shown it as unread
+       again the moment July's was issued — his own record of what he had read
+       disappeared behind the newest one. */
+    if(ph === u.phone) mine[aid] = at;
   }
 
-  if(!districtRole_(u.role) && !adv) return json_({ ok:true, advisory:null, recent:[] });
+  if(!districtRole_(u.role) && !standing) return json_({ ok:true, advisory:null, recent:[] });
 
   if(!districtRole_(u.role)){
     /* THE CIRCULARS STAY IN THE APP. An officer must be able to go back and
@@ -2250,7 +2287,8 @@ function advisoryRegister_(u, idReq){
                     publishedBy: cell_(vA[i], mA.ix.publishedBy),
                     standing: String(vA[i][mA.ix.status] || 'ACTIVE') === 'ACTIVE' };
       if(!advApplies_(one, role, u.mandal)) continue;
-      one.acknowledged = !!ack[u.phone] && one.id === adv.id;
+      one.acknowledged = !!mine[one.id];
+      one.ackAt = mine[one.id] || '';
       recent.push(one);
     }
     return json_({ ok:true, advisory: advApplies_(adv, u.role, u.mandal) ? adv : null,
@@ -2300,7 +2338,40 @@ function advisoryRegister_(u, idReq){
     if(!seenM[md]){ seenM[md] = true; counts.mandals.push(md); }
   }
   counts.mandals.sort();
-  return json_({ ok:true, advisory:adv, roll:roll,
+
+  /* EVERY CIRCULAR, WITH ITS OWN TALLY. Read in one pass: the receipts are
+     grouped by circular, and each circular's roll is counted by applying its
+     own audience to the officers already gathered above. A few hundred
+     comparisons, and the Collector never loses sight of what he issued. */
+  const ackBy = {};
+  for(let i = 1; i < v.length; i++){
+    const aid = String(v[i][m.ix.advId] || ''); if(!aid) continue;
+    const ph2 = phone10_(v[i][m.ix.phone]); if(!ph2) continue;
+    (ackBy[aid] = ackBy[aid] || {})[ph2] = true;
+  }
+  const everyone = [];
+  const seen3 = {};
+  for(let i = 1; i < uv.length; i++){
+    const ph = phone10_(uv[i][t.ix.phone]); if(!ph || seen3[ph]) continue; seen3[ph] = true;
+    if(String(uv[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
+    const role = cell_(uv[i], t.ix.role).toUpperCase();
+    if(role === 'COLLECTOR') continue;
+    everyone.push({ phone: ph, role: role, mandal: cell_(uv[i], t.ix.mandal) });
+  }
+  const list = all.map(a2 => {
+    const got = ackBy[a2.id] || {};
+    let due = 0, done2 = 0;
+    everyone.forEach(o => {
+      if(!advApplies_(a2, o.role, o.mandal)) return;
+      due++; if(got[o.phone]) done2++;
+    });
+    return { id:a2.id, title:a2.title, publishedAt:a2.publishedAt, status:a2.status,
+             audience:a2.audience, mandals:a2.mandals, url:a2.url,
+             due:due, acknowledged:done2, pending:due - done2 };
+  });
+
+  return json_({ ok:true, advisory:adv, roll:roll, list:list,
+                 viewing: adv ? adv.id : '', standing: standing ? standing.id : '',
                  totals:{ due: roll.length, acknowledged: done, pending: roll.length - done },
                  coverage: Object.keys(byMandal).sort().map(k => byMandal[k]),
                  roll_counts: counts });

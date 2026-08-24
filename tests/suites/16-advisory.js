@@ -197,6 +197,63 @@ module.exports = {
     t.eq(reg2.roll_counts.byRoleMandal['PS|Jangaon'], 1, 'and by the two together');
     t.ok(reg2.roll_counts.mandals.indexOf('Chilpur') >= 0, 'with the mandals themselves listed');
 
+    /* ================= NOTHING GOES OFF THE CONSOLE =================
+       Publishing retires the standing circular; it has never deleted one. But
+       the console could only ever read the circular in force, so the moment a
+       new one went out the previous circular and its whole read/unread
+       register left the screen. Reported in those words: the old advisory is
+       deleted and its tracking is gone. It was neither — it could not be
+       reached. The district now gets the whole history, each line with its own
+       tally, and may open any of them. */
+    const hist = reg2.list;
+    t.ok(Array.isArray(hist), 'the district is given every circular it has issued');
+    t.ok(hist.length >= 7, 'all of them, not only the one standing');
+    t.eq(hist[0].status, 'ACTIVE', 'newest first, and the newest is the one in force');
+    t.ok(hist.slice(1).every(x => x.status === 'SUPERSEDED'), 'the rest are retired, not gone');
+    t.ok(hist.some(x => x.id === advId), 'the very first circular is still on the register');
+
+    const first = hist.find(x => x.id === advId);
+    t.eq(first.title, 'PS MPDO MPO Health Advisory', 'by its title');
+    t.eq(first.due, 3, 'carrying the roll it addressed');
+    t.eq(first.acknowledged, 2, 'and the receipts given against it, months later');
+    t.eq(first.pending, 1, 'with what was never read still counted');
+
+    /* the Collector opens a retired one, and it reads exactly as the standing
+       one does — officer by officer, with the time against each name */
+    const back = env.get('advisory', { token: cdm, id: advId });
+    t.eq(back.ok, true, 'the Collector may open a retired circular');
+    t.eq(back.advisory.id, advId, 'and is shown that circular, not the one standing');
+    t.eq(back.viewing, advId, 'the answer says which one he is looking at');
+    t.ok(back.standing && back.standing !== advId, 'and which one is actually in force');
+    t.eq(back.totals.due, 3, 'the register is rebuilt against its own audience');
+    t.eq(back.totals.acknowledged, 2, 'with the acknowledgements it collected');
+    t.eq(back.roll.find(x => x.phone === '9000000031').acknowledged, true,
+      'the Secretary who read it is still named as having read it');
+    t.ok(String(back.roll.find(x => x.phone === '9000000031').ackAt).length > 10,
+      'with the moment he did');
+    t.ok(back.list.length === hist.length, 'and the history travels with it, so he can step to another');
+
+    /* an id nobody issued falls back to the circular standing, rather than
+       leaving the console with an empty register */
+    const bad = env.get('advisory', { token: cdm, id: 'ADV-NOSUCH' });
+    t.eq(bad.ok, true, 'an unknown circular does not break the register');
+    t.eq(bad.advisory.id, reg2.advisory.id, 'the Collector is returned to the one standing');
+
+    /* AN OFFICER IS NEVER SENT BACK TO A RETIRED CIRCULAR BY ASKING. A retired
+       circular is history; the instruction in force is the only one his home
+       screen may open on. */
+    const nudge = env.get('advisory', { token: ps, id: advId });
+    t.ok(!nudge.advisory || nudge.advisory.id !== advId,
+      'an officer asking for a retired circular is not given it as standing');
+
+    /* and his own record of what he has read does not vanish behind the newest
+       circular — the list under More ▸ Advisories reads its receipts per
+       circular, not from the standing one alone */
+    const his = env.get('advisory', { token: ps });
+    const mine = (his.recent || []).find(x => x.id === advId);
+    t.ok(!!mine, 'the Secretary can still reach the circular he acknowledged in the app');
+    t.eq(mine.acknowledged, true, 'and it still shows as one he has read');
+
     /* ---- THE LINE THAT MUST HOLD ---- */
     t.ok(!env.sheets['Notices'] || env.sheets['Notices'].rows.length <= 1,
       'not acknowledging a circular raises no notice');

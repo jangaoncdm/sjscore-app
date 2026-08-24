@@ -895,7 +895,8 @@ th:first-child{text-align:left}
 td{padding:7.5px 10px;border:1px solid var(--line-2);white-space:nowrap;text-align:center}
 td:first-child{text-align:left}
 td.mut{color:var(--tx-2)} td.num{font-family:var(--mono);text-align:center}
-tr[data-di]{cursor:pointer} tr:hover td{background:var(--row-hover)}
+tr[data-di],tr[data-advopen]{cursor:pointer} tr:hover td{background:var(--row-hover)}
+tr[data-advopen].on td{background:var(--row-hover);font-weight:600}
 .twrap{overflow:auto;max-height:352px;border-radius:14px;box-shadow:var(--nm-in-sm);background:var(--well)}
 th{background:var(--well)}
 tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--row-hover-2)}
@@ -2793,6 +2794,12 @@ function wxPanel(){
  * already at its ceiling.
  * ========================================================================== */
 let GPDP=null, ADV=null, GPFILTER='all', ADVFILTER='all', GPBUSY=false, ADVBUSY=false;
+/* WHICH CIRCULAR THE COLLECTOR IS LOOKING AT. Empty means the one standing.
+   The console used to show the standing circular and nothing else, so
+   publishing a new one took the previous circular and its whole read/unread
+   register off the screen — it read as though the district had thrown the
+   tracking away. Nothing was ever deleted; it simply could not be reached. */
+let ADV_OPEN='';
 /* what the composer is currently addressing: a role, and a list of mandals.
    An empty list is the whole district — the same rule the backend applies. */
 let ADV_AUD='ALL', ADV_MANDALS=[];
@@ -2833,8 +2840,9 @@ function pullGpdp(){
     .then(r=>r.json()).then(j=>{ if(j&&j.ok){ GPDP=j; if(VIEW==='gpdp'&&DATA) render(DATA); } })
     .catch(()=>{});
 }
-function pullAdv(){
-  return fetch(ST.url+'?op=advisory&token='+encodeURIComponent(ST.token))
+function pullAdv(id){
+  return fetch(ST.url+'?op=advisory&token='+encodeURIComponent(ST.token)+
+               (id?'&id='+encodeURIComponent(id):''))
     .then(r=>r.json()).then(j=>{ if(j&&j.ok){ ADV=j; if(VIEW==='advisory'&&DATA) render(DATA); } })
     .catch(()=>{});
 }
@@ -2894,9 +2902,14 @@ function vGpdp(j,A){
 
 /* ---------------- Advisory ---------------- */
 function vAdvisory(j,A){
+  if(!ADV) return panel('c12','Advisories','loading',
+    '<div class="empty">Reading the advisory register…</div>');
   let h='';
   const a=ADV&&ADV.advisory;
   const T=(ADV&&ADV.totals)||{due:0,acknowledged:0,pending:0};
+  /* a circular the Collector has opened out of the history, rather than the
+     one now in force — the register reads the same either way */
+  const retired=!!(a && ADV.standing && a.id!==ADV.standing);
 
   if(a){
     h+='<div class="kpirow">';
@@ -2912,7 +2925,10 @@ function vAdvisory(j,A){
       esc(advWho),'');
     h+='</div>';
 
-    h+=panel('c12','The standing advisory',esc(a.id||''),
+    h+=panel('c12',retired?'A circular already retired':'The standing advisory',
+      (retired?'<span class="pill mut">retired</span> ':'')+esc(a.id||''),
+      (retired?'<div class="expbar" style="margin-bottom:12px"><button class="tbtn" id="advBack">Back to the circular now standing</button>'+
+               '<span class="expnote">This one was retired when a later circular was published. Nothing was deleted and every receipt below still stands.</span></div>':'')+
       `<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">
          <div style="flex:1;min-width:280px">
            <div style="font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--tx-3)">Title</div>
@@ -2983,6 +2999,41 @@ function vAdvisory(j,A){
     }
   }
 
+  /* ---- EVERY CIRCULAR THE DISTRICT HAS ISSUED ----
+     Publishing retires the standing circular; it has never deleted one. But
+     the console showed the standing circular alone, so the moment a new one
+     went out the previous circular and its whole read/unread register left the
+     screen, and it looked as though the district had thrown the tracking away.
+     The history sits here, each line carrying its own tally, and any of them
+     opens into the register above. */
+  const hist=(ADV&&ADV.list)||[];
+  if(hist.length){
+    h+=panel('c12','Every circular the district has issued',
+      hist.length+' on the record · nothing is deleted',
+      `<div class="twrap"><table><thead><tr><th>Circular</th><th>Issued</th><th>Addressed to</th><th>Read</th><th></th><th>Status</th></tr></thead><tbody>`+
+      hist.map(x=>{
+        const on=!!(a&&x.id===a.id);
+        const who=x.audience==='ALL'?'All roles':x.audience;
+        const where=(x.mandals&&x.mandals.length)
+          ? (x.mandals.length>2?x.mandals.length+' mandals':x.mandals.join(', '))
+          : 'every mandal';
+        /* ONE HUE, AND THE NUMBERS DO THE ACCUSING. A read count is a
+           magnitude compared down the column, not a verdict on the officers
+           who have not opened it yet — an acknowledgement is receipt, never
+           compliance, so a half-read circular is not painted red here. */
+        const p2=pct(x.acknowledged,Math.max(1,x.due));
+        return `<tr data-advopen="${esc(x.id)}"${on?' class="on"':''}>
+          <td>${esc(x.title||'—')}${on?' <span class="pill mut">open</span>':''}</td>
+          <td class="mut">${esc(docWhen(x.publishedAt))}</td>
+          <td class="mut">${esc(who)} · ${esc(where)}</td>
+          <td class="num">${x.acknowledged}/${x.due}</td>
+          <td><div class="bar"><i style="width:${x.due?p2:0}%;background:var(--cs1)"></i></div></td>
+          <td>${x.status==='ACTIVE'?'<span class="pill ok">standing</span>':'<span class="pill mut">retired</span>'}</td></tr>`;
+      }).join('')+
+      `</tbody></table></div>
+       <div class="expnote" style="margin-top:8px">Open any circular to read it and see, name by name, who has acknowledged it. A retired circular keeps every receipt given against it.</div>`);
+  }
+
   /* ---- publishing ---- */
   h+=panel('c12','Publish an advisory',
     'it opens on every officer’s home screen and stays there until acknowledged',
@@ -3015,7 +3066,7 @@ function vAdvisory(j,A){
        </div>
        <div class="expbar">
          <button class="tbtn pri" id="advGo"${ADVBUSY?' disabled':''}>${ADVBUSY?'Publishing…':'Publish to every officer'}</button>
-         <span class="expnote" id="advNote">${a?'Publishing a new advisory retires the one standing. Nothing is deleted, and the acknowledgements already given stay on the record.':''}</span>
+         <span class="expnote" id="advNote">${a?'Publishing a new advisory retires the one standing. Nothing is deleted — the retired circular and every acknowledgement given against it stay on the register above.':''}</span>
        </div>
      </div>`);
   return h;
@@ -3044,7 +3095,7 @@ function render(j){
   document.querySelectorAll('#g [data-k]').forEach(el=>{ if(keep[el.dataset.k]) el.scrollTop=keep[el.dataset.k]; });
   if((VIEW==='map'||VIEW==='advisory') && !WX) pullWeather();
   if(VIEW==='gpdp' && !GPDP) pullGpdp();
-  if(VIEW==='advisory' && !ADV) pullAdv();
+  if(VIEW==='advisory' && !ADV) pullAdv(ADV_OPEN);
   if(VIEW==='overview') drawMap('map','main');
   if(VIEW==='map'){ const m2=drawMap('map2','full'); drawWeather(m2 || MAP2); }
   const mf=$('#mFind'); if(mf) mf.onchange=()=>{ if(mf.value) flyTo(mf.value); };
@@ -3119,7 +3170,8 @@ function publishAdvisory(){
       .then(r=>r.json()).then(j=>{
         ADVBUSY=false;
         if(!j||j.ok===false){ say((j&&j.error)||'The district refused it.',true); if(DATA) render(DATA); return; }
-        ADV=null; pullAdv().then(()=>{ if(DATA) render(DATA); });
+        /* the newly published circular becomes the one on the screen */
+        ADV_OPEN=''; ADV=null; ADVFILTER='all'; pullAdv().then(()=>{ if(DATA) render(DATA); });
       })
       .catch(err=>{ ADVBUSY=false; say('It did not get through: '+err,true); if(DATA) render(DATA); });
   };
@@ -3186,6 +3238,22 @@ document.addEventListener('click',e=>{
   if(gf){ GPFILTER=gf.dataset.gpf; if(DATA) render(DATA); return; }
   const af=e.target.closest('[data-advf]');
   if(af){ ADVFILTER=af.dataset.advf; if(DATA) render(DATA); return; }
+  /* OPENING A CIRCULAR OUT OF THE HISTORY. The register above is rebuilt
+     against the one asked for; a retired circular reads exactly as the
+     standing one does, receipts and all. */
+  const ao=e.target.closest('[data-advopen]');
+  if(ao){
+    const want=ao.dataset.advopen;
+    if(want && !(ADV&&ADV.advisory&&ADV.advisory.id===want)){
+      /* the render's own guard fetches it — one request, not two */
+      ADV_OPEN=want; ADVFILTER='all'; ADV=null;
+      if(DATA) render(DATA); else pullAdv(ADV_OPEN);
+    }
+    return; }
+  if(e.target.closest('#advBack')){
+    ADV_OPEN=''; ADVFILTER='all'; ADV=null;
+    if(DATA) render(DATA); else pullAdv('');
+    return; }
   if(e.target.closest('#gpCsv')){ exportGpdpCsv(); return; }
   if(e.target.closest('#advCsv')){ exportAdvCsv(); return; }
   const am=e.target.closest('[data-advm]');

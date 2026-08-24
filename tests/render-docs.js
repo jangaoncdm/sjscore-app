@@ -129,7 +129,16 @@ function makeRouter(state){
     }
     if(/op=weather/.test(url))  return reply(state.wx);
     if(/op=gpdp/.test(url))     return reply(state.gpdp);
-    if(/op=advisory/.test(url)) return reply(state.adv);
+    if(/op=advisory/.test(url)){
+      /* THE CONSOLE MAY ASK FOR A CIRCULAR OUT OF THE HISTORY, by name. The
+         district answers with that circular's own register — the same shape,
+         rebuilt against the roll it addressed. */
+      const m2 = /[?&]id=([^&]+)/.exec(url);
+      const want = m2 ? decodeURIComponent(m2[1]) : '';
+      if(want && FIX.advRetired && FIX.advRetired.advisory && FIX.advRetired.advisory.id === want)
+        return reply(FIX.advRetired);
+      return reply(state.adv);
+    }
     if(/op=dashboard/.test(url))return reply(state.dash);
     if(/op=list/.test(url))     return reply({ ok:true, rows:[] });
     if(/op=attendance/.test(url))return reply({ ok:true, rows:[] });
@@ -463,6 +472,43 @@ function makeRouter(state){
       check('the "pending" filter names exactly the officers who have not read it',
         penRows === aT.pending, penRows + ' named');
       await shot(page, 'console-advisory-pending', true);
+      await page.click('[data-advf="all"]');
+      await page.waitForTimeout(400);
+
+      /* ---- NOTHING GOES OFF THE CONSOLE ----
+         Publishing retires the standing circular; it has never deleted one.
+         But the console could read only the circular in force, so a new one
+         took the previous circular and its whole read/unread register off the
+         screen. The history is on the page, and any of them opens. */
+      const histN = await page.$$eval('[data-advopen]', rs => rs.length);
+      check('every circular the district has issued is on the console',
+        histN === (FIX.advDistrict.list || []).length, histN + ' on the register');
+      check('the retired circular is still named, and marked retired',
+        /Chlorination of drinking water sources/i.test(aTxt) && /retired/i.test(aTxt));
+      const oT = FIX.advRetired.totals;
+      check('carrying the tally it collected before it was retired',
+        aTxt.indexOf(oT.acknowledged + '/' + oT.due) >= 0,
+        oT.acknowledged + ' of ' + oT.due + ' read');
+      await shot(page, 'console-advisory-history', true);
+
+      await page.click('[data-advopen="' + FIX.advRetired.advisory.id + '"]');
+      await page.waitForTimeout(900);
+      const rTxt = await page.$eval('#g', el => el.innerText);
+      check('opening it rebuilds the register against that circular',
+        /Chlorination of drinking water sources/i.test(rTxt) &&
+        rTxt.indexOf('of ' + oT.due + ' addressed') >= 0, oT.acknowledged + ' of ' + oT.due);
+      check('and says plainly that this one has been retired',
+        /already retired/i.test(rTxt));
+      const rAck = await page.$$eval('#advBody .pill.ok', pp => pp.length);
+      check('with the receipts given against it, name by name',
+        rAck === oT.acknowledged, rAck + ' read');
+      await shot(page, 'console-advisory-retired', true);
+
+      await page.click('#advBack');
+      await page.waitForTimeout(900);
+      const bTxt = await page.$eval('#g', el => el.innerText);
+      check('and the way back to the circular now standing',
+        /PS MPDO MPO Health Advisory/i.test(bTxt) && !/already retired/i.test(bTxt));
 
       /* ---- publishing ---- */
       await page.fill('#advTitle', 'Monsoon to-do list');
