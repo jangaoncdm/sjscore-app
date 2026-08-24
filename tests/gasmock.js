@@ -204,7 +204,14 @@ function load(opts){
     UrlFetchApp: {
       fetch: (url, o) => {
         env.fetches.push({ url: url, opts: o });
-        return { getContentText: () => env.fetchReply || '{"content":[{"type":"text","text":"mock"}]}' };
+        /* env.fetchReply may be a string, or a function of (url, opts) — the
+           weather suite answers one endpoint and the briefing another, and a
+           single canned reply cannot serve both. */
+        const r = (typeof env.fetchReply === 'function') ? env.fetchReply(url, o) : env.fetchReply;
+        return {
+          getContentText: () => r || '{"content":[{"type":"text","text":"mock"}]}',
+          getResponseCode: () => env.fetchCode || 200
+        };
       }
     },
     Logger: { log: s => { env.logs.push(String(s)); } }

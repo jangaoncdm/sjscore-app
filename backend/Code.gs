@@ -1849,6 +1849,8 @@ function doGet(e){
   /* the plan register: an officer sees his own line, the district sees the roll */
   if(p.op === 'gpdp') return gpdpRegister_(u, p.year);
   if(p.op === 'advisory') return advisoryRegister_(u, p.id);
+  /* the sky over the district — one call an hour, cached, keyless */
+  if(p.op === 'weather') return weatherRead_(u, p.draft === '1');
 
   if(p.op === 'attendance'){
     const want = p.date ? dateText_(p.date) : today_();
@@ -2259,6 +2261,213 @@ function admAudit_(action, subject, detail){
     const sh = sheet_('Audit', ['at','action','subject','detail','by']);
     sh.appendRow([new Date().toISOString(), action, subject, detail, 'District Operations Center (console)']);
   }catch(err){}
+}
+
+
+/* ============================================================================
+ * WEATHER · what the sky is doing over each mandal
+ * ----------------------------------------------------------------------------
+ * WHY OPEN-METEO. It needs no key and no account. Every other forecast service
+ * wants a credential, and a credential in a government repository is the one
+ * mistake this project has already written a rule about. There is nothing here
+ * to leak and nothing to bill.
+ *
+ * ONE CALL FOR THE DISTRICT, NOT 280. The district's server asks once and
+ * caches; the handsets ask the district. Open-Meteo takes every mandal in a
+ * single request, so twelve mandals cost one call an hour.
+ *
+ * THE THRESHOLDS ARE THE IMD'S, NOT MINE. Rainfall is classed the way the
+ * India Meteorological Department classes it — light 2.5–15.5 mm, moderate
+ * 15.6–64.4, heavy 64.5–115.5, very heavy 115.6–204.4, extremely heavy above
+ * that. A district officer already reads those words in that sense, and a
+ * scale invented here would mean something different to him than to everyone
+ * else in the state.
+ *
+ * IT FORECASTS; IT DOES NOT WARN. Nothing here is an IMD warning and nothing
+ * here is an order. The console drafts a message from these figures and the
+ * Collector decides whether it goes out — the same rule as every other thing
+ * this app says to 280 officers at once.
+ * ========================================================================== */
+const WX_URL   = 'https://api.open-meteo.com/v1/forecast';
+const WX_CACHE = 1800;                 /* half an hour; the sky is not a ledger */
+const WX_HOME  = { lat: 17.7231, lng: 79.1526 };   /* Jangaon town */
+
+/* WMO weather codes, in the words an officer would use */
+function wxText_(c){
+  const n = Number(c);
+  if(n === 0) return 'Clear';
+  if(n === 1) return 'Mostly clear';
+  if(n === 2) return 'Partly cloudy';
+  if(n === 3) return 'Overcast';
+  if(n === 45 || n === 48) return 'Fog';
+  if(n >= 51 && n <= 57) return 'Drizzle';
+  if(n >= 61 && n <= 65) return 'Rain';
+  if(n === 66 || n === 67) return 'Freezing rain';
+  if(n >= 71 && n <= 77) return 'Snow';
+  if(n >= 80 && n <= 82) return 'Rain showers';
+  if(n === 85 || n === 86) return 'Snow showers';
+  if(n === 95) return 'Thunderstorm';
+  if(n === 96 || n === 99) return 'Thunderstorm with hail';
+  return 'Unsettled';
+}
+/* the IMD's rainfall classes, by the day's total in millimetres */
+function wxRainClass_(mm){
+  const v = Number(mm) || 0;
+  if(v < 2.5) return '';
+  if(v <= 15.5) return 'light rain';
+  if(v <= 64.4) return 'moderate rain';
+  if(v <= 115.5) return 'heavy rain';
+  if(v <= 204.4) return 'very heavy rain';
+  return 'extremely heavy rain';
+}
+/* SEVERE is what the Collector would want to act on before the day starts.
+   WATCH is what he would want to know about. Everything else is weather. */
+function wxLevel_(d){
+  const code = Number(d.code) || 0, mm = Number(d.rain) || 0;
+  const wind = Number(d.wind) || 0, tmax = Number(d.tmax);
+  if(code === 96 || code === 99 || mm > 64.4 || wind >= 50 || (isFinite(tmax) && tmax >= 43)) return 'SEVERE';
+  if(code === 95 || mm > 15.5 || wind >= 35 || (isFinite(tmax) && tmax >= 40)) return 'WATCH';
+  return 'CALM';
+}
+const WX_RANK = { CALM:0, WATCH:1, SEVERE:2 };
+
+/* Where each mandal is. The district's own attendance marks say it better than
+   any gazetteer would: the average of the located marks in a mandal is a point
+   inside that mandal. Marks outside the district's box are ignored — a handset
+   that reported itself in another state must not move a mandal onto the map. */
+function wxMandalPoints_(){
+  const sh = sheet_('Attendance', A_HEAD), m = headMap_(sh, A_HEAD);
+  const last = sh.getLastRow(), agg = {};
+  if(last >= 2){
+    const start = Math.max(2, last - 3000);
+    const v = sh.getRange(start, 1, last - start + 1, sh.getLastColumn()).getValues();
+    v.forEach(r => {
+      const mm = String(r[m.ix.mandal] || '').trim(); if(!mm) return;
+      const la = Number(r[m.ix.lat]), ln = Number(r[m.ix.lng]);
+      if(!la || !ln) return;
+      if(la < FIX_BOX_.latMin || la > FIX_BOX_.latMax || ln < FIX_BOX_.lngMin || ln > FIX_BOX_.lngMax) return;
+      agg[mm] = agg[mm] || { la:0, ln:0, n:0 };
+      agg[mm].la += la; agg[mm].ln += ln; agg[mm].n++;
+    });
+  }
+  /* every mandal on the village roll gets a row, located or not */
+  const roll = {};
+  gpRoll_().forEach(r => { if(r.mandal) roll[r.mandal] = true; });
+  Object.keys(agg).forEach(k => { roll[k] = true; });
+  return Object.keys(roll).sort().map(k => {
+    const a = agg[k];
+    return a && a.n
+      ? { mandal:k, lat: +(a.la / a.n).toFixed(4), lng: +(a.ln / a.n).toFixed(4), located:true }
+      : { mandal:k, lat: WX_HOME.lat, lng: WX_HOME.lng, located:false };
+  });
+}
+
+/* one request, every point */
+function wxFetch_(points){
+  const url = WX_URL +
+    '?latitude=' + points.map(p => p.lat).join(',') +
+    '&longitude=' + points.map(p => p.lng).join(',') +
+    '&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m' +
+    '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max' +
+    '&timezone=Asia%2FKolkata&forecast_days=3';
+  const res = UrlFetchApp.fetch(url, { muteHttpExceptions:true });
+  const body = res.getContentText();
+  let j;
+  try{ j = JSON.parse(body); }
+  catch(err){ throw new Error('the forecast service did not answer with figures'); }
+  /* one coordinate returns an object, several return an array — Open-Meteo
+     does both, and reading only one shape breaks the day a mandal is added */
+  return Array.isArray(j) ? j : [j];
+}
+
+function wxRead_(){
+  const key = 'wx_' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd-HH');
+  const cache = cache_();
+  const hit = cache.get(key);
+  if(hit){ try{ return JSON.parse(hit); }catch(err){} }
+
+  const points = wxMandalPoints_();
+  if(!points.length) points.push({ mandal:'Jangaon', lat:WX_HOME.lat, lng:WX_HOME.lng, located:false });
+  const raw = wxFetch_(points);
+
+  const rows = points.map((p, i) => {
+    const w = raw[i] || raw[0] || {};
+    const cur = w.current || {}, day = w.daily || {};
+    const at = a => (Array.isArray(a) ? a[0] : undefined);
+    const d = {
+      mandal: p.mandal, lat: p.lat, lng: p.lng, located: p.located,
+      temp: cur.temperature_2m, humidity: cur.relative_humidity_2m,
+      code: cur.weather_code, now: wxText_(cur.weather_code),
+      windNow: cur.wind_speed_10m,
+      tmax: at(day.temperature_2m_max), tmin: at(day.temperature_2m_min),
+      rain: at(day.precipitation_sum), rainChance: at(day.precipitation_probability_max),
+      wind: at(day.wind_speed_10m_max), dayCode: at(day.weather_code)
+    };
+    d.rainClass = wxRainClass_(d.rain);
+    d.level = wxLevel_({ code: d.dayCode != null ? d.dayCode : d.code, rain: d.rain, wind: d.wind, tmax: d.tmax });
+    d.today = wxText_(d.dayCode);
+    return d;
+  });
+
+  rows.sort((a, b) => (WX_RANK[b.level] - WX_RANK[a.level]) || String(a.mandal).localeCompare(String(b.mandal)));
+  const worst = rows.reduce((s, r) => WX_RANK[r.level] > WX_RANK[s] ? r.level : s, 'CALM');
+  const out = {
+    at: new Date().toISOString(),
+    date: today_(),
+    level: worst,
+    rows: rows,
+    counts: {
+      severe: rows.filter(r => r.level === 'SEVERE').length,
+      watch:  rows.filter(r => r.level === 'WATCH').length,
+      calm:   rows.filter(r => r.level === 'CALM').length
+    },
+    source: 'Open-Meteo · thresholds after the India Meteorological Department'
+  };
+  try{ cache.put(key, JSON.stringify(out), WX_CACHE); }catch(err){}
+  return out;
+}
+
+/* The message the console offers the Collector. It is DRAFTED from the
+   figures, never sent by itself — a line that reaches 280 officers is passed
+   by the Collector, not by a forecast. */
+function wxDraft_(w){
+  const bad = w.rows.filter(r => r.level !== 'CALM');
+  if(!bad.length){
+    return 'Weather over the district is settled today. No action is called for on this account.';
+  }
+  const sev = w.rows.filter(r => r.level === 'SEVERE').map(r => r.mandal);
+  const wat = w.rows.filter(r => r.level === 'WATCH').map(r => r.mandal);
+  const worst = w.rows[0];
+  const bits = [];
+  bits.push(worst.rainClass ? (worst.rainClass.charAt(0).toUpperCase() + worst.rainClass.slice(1)) : worst.today);
+  const line = [];
+  line.push(bits[0] + ' expected today' +
+    (worst.rain != null ? ' — up to ' + Math.round(worst.rain) + ' mm' : '') +
+    (worst.wind != null ? ', wind to ' + Math.round(worst.wind) + ' km/h' : '') + '.');
+  if(sev.length) line.push('Worst in ' + sev.slice(0, 6).join(', ') + (sev.length > 6 ? ' and others' : '') + '.');
+  else if(wat.length) line.push('Watch ' + wat.slice(0, 6).join(', ') + (wat.length > 6 ? ' and others' : '') + '.');
+  line.push('Secretaries to check drains, tank bunds and the chlorination of drinking water sources, ' +
+    'and to report any breach or waterlogging to the MPDO the same day.');
+  return line.join(' ');
+}
+
+/* ---- what the app and the console ask for ---- */
+function weatherRead_(u, forDraft){
+  let w;
+  try{ w = wxRead_(); }
+  catch(err){ return json_({ ok:false, error:String(err.message || err) }); }
+
+  /* An officer is shown his own mandal first — the sky over Zaffergadh is no
+     use to a Secretary in Chilpur. The district sees all of it. */
+  if(!districtRole_(u.role)){
+    const mine = w.rows.filter(r => !u.mandal || r.mandal === u.mandal);
+    return json_({ ok:true, at:w.at, date:w.date, source:w.source,
+                   mine: mine[0] || null, level: (mine[0] || {}).level || 'CALM' });
+  }
+  const out = { ok:true, at:w.at, date:w.date, level:w.level, counts:w.counts,
+                rows:w.rows, source:w.source };
+  if(forDraft) out.draft = wxDraft_(w);
+  return json_(out);
 }
 
 /* ---------------- POST ---------------- */

@@ -28,6 +28,39 @@ const DASH = path.join(__dirname, 'fixture-dashboard.json');
 const MIME = { '.html':'text/html', '.js':'text/javascript', '.css':'text/css',
   '.png':'image/png', '.webmanifest':'application/manifest+json', '.json':'application/json' };
 
+/* The forecast the harness serves. It is the shape the backend returns, with
+   one mandal severe and one on watch, so the map, the table, the level pills
+   and the draft all have something real to render. */
+const MANDALS = ['Bachannapeta','Chilpur','Devaruppula','Ghanpur (Stn)','Jangaon','Kodakandla',
+                 'Lingala Ghanpur','Narmetta','Palakurthy','Raghunathpalle','Tharigoppula','Zaffergadh'];
+const WXROWS = MANDALS.map((m, i) => {
+  const level = i === 0 ? 'SEVERE' : i === 1 ? 'WATCH' : 'CALM';
+  const rain  = i === 0 ? 88 : i === 1 ? 31 : (i % 4);
+  return { mandal:m, lat: 17.55 + i * 0.035, lng: 79.02 + (i % 5) * 0.06, located: i !== 11,
+           temp: 26 + (i % 5), humidity: 70 - i, code: level === 'CALM' ? 2 : 65,
+           now: level === 'CALM' ? 'Partly cloudy' : 'Rain', windNow: 9 + i,
+           tmax: 29 + (i % 4), tmin: 23, rain: rain,
+           rainChance: level === 'CALM' ? 20 : 85, wind: level === 'SEVERE' ? 46 : 14 + i,
+           dayCode: level === 'CALM' ? 2 : 65,
+           rainClass: rain > 64.4 ? 'heavy rain' : rain > 15.5 ? 'moderate rain' : rain >= 2.5 ? 'light rain' : '',
+           today: level === 'CALM' ? 'Partly cloudy' : 'Rain', level: level };
+});
+const WXFIX = {
+  ok:true, at:new Date().toISOString(), date:new Date().toISOString().slice(0,10),
+  level:'SEVERE', counts:{ severe:1, watch:1, calm:10 }, rows:WXROWS,
+  source:'Open-Meteo · thresholds after the India Meteorological Department',
+  draft:'Heavy rain expected today — up to 88 mm, wind to 46 km/h. Worst in Bachannapeta. ' +
+        'Secretaries to check drains, tank bunds and the chlorination of drinking water sources, ' +
+        'and to report any breach or waterlogging to the MPDO the same day.'
+};
+/* the officer the app is driven as sits in Jangaon, so Jangaon is the mandal
+   given the severe day — otherwise the card and the notification it raises are
+   never exercised at all */
+const WXMINE = { ok:true, at:WXFIX.at, date:WXFIX.date, source:WXFIX.source,
+                 mine: Object.assign({}, WXROWS[4], { level:'SEVERE', rain:88, wind:46,
+                   rainClass:'heavy rain', today:'Rain', tmax:31 }),
+                 level:'SEVERE' };
+
 const results = [];
 const shots = [];
 let step = 0;
@@ -78,6 +111,7 @@ function makeRouter(state){
       if(b.kind === 'advPublish') return reply({ ok:true, id:'ADV-20260823-tst', url:'https://drive.mock/adv.pdf', title:b.title });
       return reply({ ok:true });
     }
+    if(/op=weather/.test(url))  return reply(state.wx);
     if(/op=gpdp/.test(url))     return reply(state.gpdp);
     if(/op=advisory/.test(url)) return reply(state.adv);
     if(/op=dashboard/.test(url))return reply(state.dash);
@@ -99,7 +133,7 @@ function makeRouter(state){
   /* ======================= THE FIELD APP ======================= */
   console.log('\nTHE FIELD APP — an officer who has neither read the circular nor filed a plan');
   {
-    const state = { posts: [], gpdp: FIX.gpdpOfficer, adv: FIX.advOfficer, dash: {} };
+    const state = { posts: [], gpdp: FIX.gpdpOfficer, adv: FIX.advOfficer, dash: {}, wx: WXMINE };
     const ctx = await browser.newContext({ viewport:{ width:390, height:844 }, deviceScaleFactor:2 });
     const page = await ctx.newPage();
     const errs = [];
@@ -146,6 +180,16 @@ function makeRouter(state){
       /receipt, not a report/i.test(sheetTxt));
     await shot(page, 'app-advisory-popup');
 
+    /* --- THE BADGES, while both are outstanding --- */
+    const b1 = await page.$eval('#homeBadge', el => ({ hidden: el.hidden, n: el.textContent })).catch(() => null);
+    check('the home tab carries a badge for what is outstanding',
+      !!b1 && !b1.hidden, b1 ? ('badge reads "' + b1.n + '"') : 'no badge element');
+    check('and it counts BOTH — the circular and the plan', !!b1 && b1.n === '2', b1 ? b1.n : '');
+    const b2 = await page.$eval('#moreBadge', el => ({ hidden: el.hidden, n: el.textContent })).catch(() => null);
+    check('More carries the same count, because that is where the rows are',
+      !!b2 && !b2.hidden && b2.n === '2', b2 ? b2.n : '');
+
+    /* --- acknowledging the circular takes one off --- */
     /* --- acknowledging tells the district --- */
     await page.click('#advAck');
     await page.waitForTimeout(700);
@@ -160,6 +204,8 @@ function makeRouter(state){
       String(afterAck).split(/\n/)[1] || '(sheet empty)');
     const homeTxt = await page.$eval('#homeBody', el => el.innerText);
     check('the home card now reads as acknowledged', /Acknowledged/i.test(homeTxt));
+    const b3 = await page.$eval('#homeBadge', el => ({ hidden: el.hidden, n: el.textContent })).catch(() => null);
+    check('and the badge drops to one', !!b3 && !b3.hidden && b3.n === '1', b3 ? b3.n : '');
     await shot(page, 'app-home-after-ack', true);
 
     /* --- THE PIN, and the prompt that follows the circular --- */
@@ -178,7 +224,10 @@ function makeRouter(state){
     check('the prompt says what is outstanding and offers to send it now',
       /has not been sent/i.test(gpSheetTxt) && /Send it now/i.test(gpSheetTxt));
     await shot(page, 'app-gpdp-pending-prompt');
-    if(gpSheet){ await page.click('#gpLater'); await page.waitForTimeout(400); }
+    if(gpSheet){ await page.click('#gpLater'); await page.waitForTimeout(500); }
+    /* photographed with nothing covering the tab bar — a badge nobody can see
+       in the picture proves nothing to the reader of the report */
+    await shot(page, 'app-badges');
 
     /* --- the plan card --- */
     check('the home screen calls for the development plan', /GPDP has not been sent/i.test(homeTxt),
@@ -217,6 +266,16 @@ function makeRouter(state){
     check('and the screen then says the district holds it', /district has your plan/i.test(gpAfter));
     await shot(page, 'app-gpdp-filed', true);
 
+    /* --- the weather over his own mandal --- */
+    const wxTxt = await page.$eval('#homeBody', el => el.innerText);
+    check('the officer is shown the forecast for his own mandal',
+      /Jangaon · forecast/i.test(wxTxt),
+      (String(wxTxt).split(/\n/).find(l => /forecast/i.test(l)) || ''));
+    check('with what the district calls it, not a raw code',
+      /Severe weather expected|Watch the weather/i.test(wxTxt));
+    check('and the rainfall in the IMD’s words', /heavy rain|moderate rain/i.test(wxTxt));
+    await shot(page, 'app-weather-card', true);
+
     /* --- the circulars stay reachable --- */
     await page.click('#tabs [data-s="more"]');
     await page.waitForTimeout(500);
@@ -228,7 +287,80 @@ function makeRouter(state){
     check('and the standing one is marked as standing', /standing/i.test(listTxt));
     await shot(page, 'app-advisory-list');
 
+    /* the badge is only useful if it goes away when the work is done */
+    const cleared = await page.$eval('#homeBadge', el => el.hidden).catch(() => null);
+    check('and the badge clears once nothing is outstanding', cleared === true,
+      cleared === true ? 'hidden' : 'still showing');
+
     check('the app raised no script error', errs.length === 0, errs.slice(0, 2).join(' | '));
+    await ctx.close();
+  }
+
+  /* ============ THE CIRCULAR MUST NOT COME BACK ============
+     Reported from the field: acknowledged, and it kept opening every time. The
+     receipt used to be written only when the server answered, so a dropped
+     signal — the ordinary case on a village road — meant the circular opened
+     again the next morning. Here the district REFUSES the receipt outright and
+     the circular must still never be put up again on that handset. */
+  SECTION = 'The circular must not come back';
+  console.log('\nTHE REPEAT — a receipt the district never got');
+  {
+    const state = { posts: [], gpdp: FIX.gpdpOfficer, adv: FIX.advOfficer, dash: {}, wx: WXMINE };
+    const ctx = await browser.newContext({ viewport:{ width:390, height:844 } });
+    const page = await ctx.newPage();
+    const router = async route => {
+      const req = route.request();
+      const reply = b2 => route.fulfill({ status:200, contentType:'application/json', body:JSON.stringify(b2) });
+      if(req.method() === 'POST'){
+        let b2 = {}; try{ b2 = JSON.parse(req.postData() || '{}'); }catch(e){}
+        state.posts.push(b2);
+        if(b2.kind === 'advAck') return reply({ ok:false, error:'busy — try again' });
+        return reply({ ok:true });
+      }
+      const u = req.url();
+      if(/op=weather/.test(u))  return reply(state.wx);
+      if(/op=advisory/.test(u)) return reply(state.adv);   /* still says unacknowledged */
+      if(/op=gpdp/.test(u))     return reply(state.gpdp);
+      return reply({ ok:true, rows:[] });
+    };
+    await page.route('**/mock.district/**', router);
+    await page.route('**script.google.com/**', router);
+    await page.goto(base + '/manifest.webmanifest', { waitUntil:'domcontentloaded' });
+    await page.evaluate(off => {
+      const d = new Date();
+      const today = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+      const att = {}; att[today] = { id:'A1', date:today, ts:new Date().toISOString(), verified:true, status:'PRESENT', sync:'synced' };
+      localStorage.setItem('sjf5', JSON.stringify({ url:'https://mock.district/exec',
+        session:{ token:'T', user: off }, records:{}, att:att, cache:[], master:[], leave:[], prefs:{ sun:0, big:0 } }));
+    }, FIX.officer);
+
+    const openIt = async () => {
+      await page.goto(base + '/index.html', { waitUntil:'domcontentloaded' });
+      await page.waitForSelector('#app:not([hidden])', { timeout:20000 });
+      await page.waitForTimeout(2000);
+      const on = await page.$eval('#sheet', el => el.classList.contains('on'));
+      const txt = on ? await page.$eval('#sheetBody', el => el.innerText) : '';
+      return { on, isAdvisory: /I have read this/i.test(txt) };
+    };
+
+    let o = await openIt();
+    check('the circular opens the first time', o.isAdvisory);
+    await page.click('#advAck');
+    await page.waitForTimeout(900);
+    const tried = state.posts.filter(p2 => p2.kind === 'advAck').length;
+    check('the district is told, and refuses', tried >= 1, tried + ' attempt(s), all refused');
+    const homeAfter = await page.$eval('#homeBody', el => el.innerText);
+    check('the card still reads acknowledged — he pressed it, and that stands',
+      /Acknowledged/i.test(homeAfter));
+
+    o = await openIt();
+    check('and on the next opening the circular does NOT come back', !o.isAdvisory,
+      o.on ? 'a sheet is up, but it is not the circular' : 'nothing is up');
+    o = await openIt();
+    check('nor the one after that', !o.isAdvisory);
+    const q = await page.evaluate(() => (JSON.parse(localStorage.getItem('sjf5') || '{}').advAckQ || []).length);
+    check('the receipt is held on the phone and retried, not dropped', q >= 1, q + ' queued');
+    await shot(page, 'app-advisory-not-repeated', true);
     await ctx.close();
   }
 
@@ -236,7 +368,7 @@ function makeRouter(state){
   SECTION = 'The console';
   console.log('\nTHE CONSOLE — the Collector reading both registers');
   for(const theme of ['light', 'dark']){
-    const state = { posts: [], gpdp: FIX.gpdpDistrict, adv: FIX.advDistrict,
+    const state = { posts: [], gpdp: FIX.gpdpDistrict, adv: FIX.advDistrict, wx: WXFIX,
                     dash: fs.existsSync(DASH) ? JSON.parse(fs.readFileSync(DASH, 'utf8')) : { ok:true } };
     const ctx = await browser.newContext({ viewport:{ width:1500, height:1000 } });
     await ctx.addInitScript(th => {
@@ -335,6 +467,40 @@ function makeRouter(state){
       check('the broadcast line is what is sent', !!(pub && /monsoon season and act accordingly/i.test(pub.message)),
         pub ? pub.message : '');
       await shot(page, 'console-advisory-published', true);
+    }
+
+    /* ---- weather ---- */
+    await page.click('#nav [data-v="map"]');
+    await page.waitForTimeout(1400);
+    const mapTxt = await page.$eval('#g', el => el.innerText);
+    if(theme === 'light'){
+      check('the map view carries the weather over the district',
+        /Weather over the district/i.test(mapTxt));
+      const rows = await page.$$eval('[data-k="wxT"] tbody tr', r => r.length);
+      check('every mandal has a line', rows === WXROWS.length, rows + ' of ' + WXROWS.length);
+      const sev = await page.$$eval('[data-k="wxT"] .pill.bad', p => p.length);
+      const wat = await page.$$eval('[data-k="wxT"] .pill.warn', p => p.length);
+      check('marked severe or watch, agreeing with the forecast',
+        sev === 1 && wat === 1, sev + ' severe · ' + wat + ' watch');
+      const rings = await page.$$eval('#map2 path', p => p.length);
+      check('and the mandals are ringed on the map itself', rings >= WXROWS.length,
+        rings + ' vectors drawn');
+      check('the draft names the rain, the wind and the mandal',
+        /88 mm/.test(mapTxt) && /46 km\/h/.test(mapTxt) && /Bachannapeta/.test(mapTxt));
+    }
+    await shot(page, 'console-weather-' + theme, true);
+
+    if(theme === 'light'){
+      const pubBefore = state.posts.filter(p => p.kind === 'advPublish').length;
+      await page.click('#wxDraft');
+      await page.waitForTimeout(1100);
+      const title = await page.$eval('#advTitle', el => el.value);
+      const msg = await page.$eval('#advMsg', el => el.value);
+      check('the draft is carried into the advisory composer, not sent from the map',
+        /Weather advisory/i.test(title) && /Heavy rain expected/i.test(msg), title);
+      check('and nothing was published on the way', state.posts.filter(p => p.kind === 'advPublish').length === pubBefore,
+        'publishes before ' + pubBefore + ', after ' + state.posts.filter(p => p.kind === 'advPublish').length);
+      await shot(page, 'console-weather-draft-carried', true);
     }
 
     check('the console raised no script error in ' + theme, errs.length === 0, errs.slice(0, 2).join(' | '));

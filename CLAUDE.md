@@ -16,7 +16,7 @@ the rules below exist because exactly that happened in production.
 ## Run this before you finish anything
 
 ```bash
-npm test              # 646 assertions, 16 suites, against the real backend files
+npm test              # 727 assertions, 18 suites, against the real backend files
 node tests/ladder     # one suite, with its detail
 ```
 
@@ -168,12 +168,47 @@ a circular is never read once and lost. Publishing a new one marks the standing
 one `SUPERSEDED`; the receipts already given stand. `advAck` is idempotent — a
 double tap or a re-send writes no second receipt.
 
+**A receipt is written on the phone before the wire is tried.** An officer who
+presses *I have read this* is never shown that circular again on that handset —
+the acknowledgement is recorded locally, the sheet closes at once, and the
+receipt is queued and retried if the district could not be reached. It used to
+be recorded only when the server answered, so a dropped signal on a village
+road meant the circular opened again the next morning, and the morning after
+that. Reported from the field in those words: *"even once I acknowledged the
+advisory it keeps coming to my screen, which is annoying."* The plan prompt is
+shown **once a day**, not once an opening, for the same reason — the card is
+pinned to the top of the home screen the whole time it is outstanding, and a
+modal every time an officer opens the app is how he learns to dismiss things
+unread.
+
 **Neither accuses anyone.** A missing plan and an unacknowledged circular raise
 no reminder, no notice, no debit and no lock. An acknowledgement is **receipt,
 not compliance** — it records that the officer saw the circular, never that he
 acted on it, and the app says so on the button. An obligation of that weight is
 created by the Collector's written order, not by a table. The suites assert
 this; if it is ever to change, change it there first.
+
+## Weather
+
+Open-Meteo, because it needs **no key and no account** — a credential in a
+government repository is the one mistake this project already has a rule about.
+One request an hour carries every mandal, cached in the script cache; the
+handsets ask the district, never the service. Mandals are located from the
+district's **own attendance marks** — the average of the located marks in a
+mandal is a point inside it — and a mark outside the district's box is ignored
+rather than averaged in.
+
+Rainfall is classed the way the **India Meteorological Department** classes it
+(light 2.5–15.5 mm, moderate 15.6–64.4, heavy 64.5–115.5, very heavy
+115.6–204.4, extremely heavy above that). A district officer already reads
+those words in that sense; a scale invented here would mean something different
+to him than to everyone else in the state.
+
+**It forecasts; it does not warn.** Nothing here is an IMD warning and nothing
+goes out by itself. The console *drafts* a message from the figures and the
+Collector passes it — and it is published through the **advisory** pipeline, so
+a weather warning opens on every home screen and the district can see who has
+read it. One pipeline, one acknowledgement register.
 
 ## House style
 
@@ -235,7 +270,7 @@ field app and the real console and writes a report with snapshots:
 
 ```bash
 node tests/fixture-docs.js          # payloads from the real backend
-node tests/render-docs.js           # 35 checks; Info/docs-render/REPORT.md
+node tests/render-docs.js           # 55 checks; Info/docs-render/REPORT.md
 ```
 
 It signs the app in by writing the session on the origin **without loading
