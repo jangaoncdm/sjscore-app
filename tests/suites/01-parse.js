@@ -27,7 +27,13 @@ module.exports = {
     t.eq(c.entitlement_('EL', 2026), 30, 'EL is not prorated');
     t.eq(c.entitlement_('ML', 2026), 0, 'ML is on certificate, never a yearly figure');
     t.eq(c.entitlement_('HQ', 2026), 0, 'HQ is a permission, never a yearly figure');
-    t.eq(c.entitlement_('OH', 2026), 5, 'five optional holidays a calendar year, per the G.O. — never prorated');
+    /* Annexure-II grants five a calendar year, never prorated. The Collector's
+       order for 2026 reduces THAT YEAR to three; 2027 takes the five back by
+       itself, without anybody editing anything. */
+    t.eq(env.eval('LEAVE_ENTITLEMENT').OH, 5, "the G.O.'s figure stands at five a calendar year");
+    t.eq(env.eval('OH_REDUCED_YEAR'), 2026, "and the Collector's order is scoped to one year");
+    t.eq(c.entitlement_('OH', 2026), 3, "and the Collector's order for 2026 reduces that year to three");
+    t.eq(c.entitlement_('OH', 2027), 5, 'the year after takes the five back by itself');
 
     /* roles: who may apply, who may sanction, who is exempt */
     t.ok(k.canApplyLeave_('MPO') && k.canApplyLeave_('PS') && k.canApplyLeave_('MPDO'), 'MPO, PS and MPDO apply');

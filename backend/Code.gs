@@ -243,9 +243,9 @@ const SETTLE_HOUR = 9;           /* and settled the NEXT morning, for the day be
 /* CL 15 a year, EL 30 a year, HQ a permission and ML on certificate — neither
    of the last two is counted against a yearly figure. 2026 opens in August,
    so casual leave that year is five months' worth: 15 x 5/12, taken as 6. */
-/* OH — the G.O.'s Optional Holidays: FIVE a calendar year, each a single
-   notified date, sanctioned like any leave. Not prorated: the G.O. grants
-   five for the year, whichever months the register covers. */
+/* OH — the G.O.'s Optional Holidays: five a calendar year under Annexure-II,
+   each a single notified date, sanctioned like any leave. Not prorated: the
+   G.O. grants them for the year, whichever months the register covers. */
 const LEAVE_ENTITLEMENT = {CL:15, EL:30, HQ:0, ML:0, OH:5};
 /* Annexure-II of G.O.Rt.No.1715 dt. 06.12.2025 — the only dates an OH
    application may name. Next year's G.O. replaces this map (and the app's
@@ -264,8 +264,19 @@ const TS_OPTIONAL_2026 = {
 };
 const LEAVE_OPENING_YEAR = 2026;
 const CL_OPENING_BALANCE = 6;
+/* THE COLLECTOR'S ORDER FOR 2026: three optional holidays, not the five of
+   Annexure-II. Scoped to the year on purpose — 2027 takes the G.O.'s figure
+   again by itself, and next year's order edits this pair, nothing else.
+   IT REACHES FORWARD ONLY. An officer who already holds four sanctioned in
+   2026 keeps all four: the check below counts what is already APPROVED and
+   refuses the NEXT one. Nothing is reversed, no debit is raised and no
+   sanction already passed is disturbed — an order reduces what remains, it
+   does not undo what the Collector has already granted. */
+const OH_REDUCED_YEAR = 2026;
+const OH_REDUCED_BALANCE = 3;
 function entitlement_(type, year){
   if(type === 'CL' && Number(year) === LEAVE_OPENING_YEAR) return CL_OPENING_BALANCE;
+  if(type === 'OH' && Number(year) === OH_REDUCED_YEAR) return OH_REDUCED_BALANCE;
   return LEAVE_ENTITLEMENT[type] || 0;
 }
 /* Leave is applied for by these three, and sanctioned by the Collector alone. */

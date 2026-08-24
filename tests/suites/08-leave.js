@@ -114,7 +114,14 @@ module.exports = {
     t.eq(wdGhost.ok, true, 'withdrawing an application that never reached the district is quietly fine');
     t.eq(wdGhost.local, true, 'and marked as local-only, so the phone can clean up');
 
-    /* the Optional Holiday: one NOTIFIED day, five a year, the list is law */
+    /* THE COLLECTOR'S ORDER FOR 2026 — three optional holidays, not the five
+       of Annexure-II. Scoped to the year: 2027 takes the G.O.'s figure back
+       by itself, without anybody editing anything. */
+    t.eq(c.entitlement_('OH', 2026), 3, 'three optional holidays are granted for 2026');
+    t.eq(c.entitlement_('OH', 2027), 5, "and 2027 takes the G.O.'s five back by itself");
+    t.eq(c.entitlement_('CL', 2026), 6, 'the casual-leave opening balance is untouched');
+
+    /* the Optional Holiday: one NOTIFIED day, the list is law */
     const oh1 = env.post({ kind: 'leave', token: b, leave: { id: 'OH1', from: '2026-09-23', to: '2026-09-23', days: 3, type: 'OH' } });
     t.eq(oh1.ok, true, 'a notified optional date is taken');
     const ohRow = env.sheets['Leave'].rows.find(r => String(r[0]) === 'OH1');
@@ -126,15 +133,47 @@ module.exports = {
     t.contains(ohBad.error, 'notified optional-holiday list', 'in words');
     const ohSpan = env.post({ kind: 'leave', token: b, leave: { id: 'OH3', from: '2026-10-19', to: '2026-10-26', days: 8, type: 'OH' } });
     t.contains(ohSpan.error, 'single day', 'an optional holiday cannot span');
-    /* the five-a-year cap falls at sanction, like CL's */
+    /* the cap falls at sanction, like CL's — the app may ask, the server decides */
     ['2026-10-19', '2026-10-26', '2026-11-08', '2026-12-24'].forEach((d2, i2) =>
       env.post({ kind: 'leave', token: b, leave: { id: 'OHm' + i2, from: d2, to: d2, days: 1, type: 'OH' } }));
-    ['OH1', 'OHm0', 'OHm1', 'OHm2', 'OHm3'].forEach(id2 =>
-      env.post({ kind: 'leaveDecision', token: cdm, id: id2, status: 'APPROVED' }));
-    env.post({ kind: 'leave', token: b, leave: { id: 'OH6', from: '2026-12-26', to: '2026-12-26', days: 1, type: 'OH' } });
-    const ohOver = env.post({ kind: 'leaveDecision', token: cdm, id: 'OH6', status: 'APPROVED' });
-    t.eq(ohOver.ok, false, 'the sixth optional holiday of the year is refused');
-    t.contains(ohOver.error, 'OH: 5', 'with the arithmetic shown');
+    ['OH1', 'OHm0'].forEach(id2 =>
+      t.eq(env.post({ kind: 'leaveDecision', token: cdm, id: id2, status: 'APPROVED' }).ok, true,
+        'the first two optional holidays are sanctioned'));
+    t.eq(env.post({ kind: 'leaveDecision', token: cdm, id: 'OHm1', status: 'APPROVED' }).ok, true,
+      'and the third');
+    const ohOver = env.post({ kind: 'leaveDecision', token: cdm, id: 'OHm2', status: 'APPROVED' });
+    t.eq(ohOver.ok, false, 'the fourth optional holiday of 2026 is refused');
+    t.contains(ohOver.error, 'OH: 3', 'with the arithmetic shown');
+    t.contains(ohOver.error, '2026', 'against the year it is counted in');
+    /* REFUSED IS NOT DESTROYED. The application stays on the register, awaiting
+       the Collector, and he may still refuse it in words — the balance check
+       declines to sanction, it does not delete. */
+    t.eq(String(env.sheets['Leave'].rows.find(r2 => String(r2[0]) === 'OHm2')[
+      env.sheets['Leave'].rows[0].map(String).indexOf('status')] || 'PENDING'), 'PENDING',
+      'the refused-over-balance application is left standing, not struck off');
+
+    /* AN ORDER REACHES FORWARD, NOT BACK. An officer who already holds more
+       than three sanctioned for 2026 keeps every one of them: the check counts
+       what is APPROVED and declines the NEXT one. Nothing is reversed, no
+       sanction already passed is disturbed, and no debit arises — reducing what
+       remains is not undoing what the Collector has already granted. */
+    const held = ['2026-01-01', '2026-01-16', '2026-03-31', '2026-05-01'];
+    const lH = env.sheets['Leave'].rows[0].map(String);
+    held.forEach((d2, i2) => env.addRow('Leave', {
+      id: 'OHold' + i2, phone: '9000000011', name: 'M. MPO', role: 'MPO', mandal: 'Jangaon',
+      type: 'OH', fromDate: d2, toDate: d2, days: 1, status: 'APPROVED',
+      appliedAt: '2026-01-01T04:00:00.000Z' }));
+    held.forEach((d2, i2) => {
+      const row = env.sheets['Leave'].rows.find(r2 => String(r2[0]) === 'OHold' + i2);
+      t.eq(String(row[lH.indexOf('status')]), 'APPROVED',
+        'the optional holiday of ' + d2 + ' already sanctioned still stands');
+      t.ok(!!c.sanctionedSet_(d2)['9000000011'],
+        'and still answers for the day — no notice can arise on it');
+    });
+    env.post({ kind: 'leave', token: a, leave: { id: 'OHnext', from: '2026-06-04', to: '2026-06-04', days: 1, type: 'OH' } });
+    const ohPast = env.post({ kind: 'leaveDecision', token: cdm, id: 'OHnext', status: 'APPROVED' });
+    t.eq(ohPast.ok, false, 'but the next one he asks for is refused');
+    t.contains(ohPast.error, '4 already sanctioned', 'and the order is honest about what he already holds');
     /* a sanctioned optional holiday answers for the day, like any leave */
     t.ok(c.sanctionedSet_('2026-09-23')['9000000012'], 'the day is covered — no notice can arise on it');
 
@@ -160,7 +199,7 @@ module.exports = {
     const mine = env.get('leave', { token: a });
     t.ok(mine.rows.every(r => r.phone === '9000000011'), 'an applicant sees his file and nobody else’s');
     const theirs = env.get('leave', { token: b });
-    t.eq(theirs.rows.length, 8, 'B sees exactly his own: one CL, six optional-holiday applications, one begun-and-standing EL');
+    t.eq(theirs.rows.length, 7, 'B sees exactly his own: one CL, five optional-holiday applications, one begun-and-standing EL');
     t.ok(theirs.rows.every(r => r.phone === '9000000012'), 'and nobody else’s');
     const allRows = env.get('leave', { token: cdm });
     t.ok(allRows.rows.length >= 5, 'the Collector sees the whole register');

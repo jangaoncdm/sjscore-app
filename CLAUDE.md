@@ -142,7 +142,14 @@ facts, under the Conduct Rules.
 Working days only — Sundays and the `Holidays` tab are never counted. The
 2026 tab carries G.O.Rt.No.1715 (dt. 06.12.2025): the 27 General Holidays and
 every second Saturday, loaded by `applyTsHolidays()`; Annexure-II's optional
-holidays are an individual's choice of five and are deliberately not on it.
+holidays are an individual's choice and are deliberately not on it — the G.O.
+grants five a calendar year, and **the Collector's order reduces 2026 to
+three** (`OH_REDUCED_YEAR` / `OH_REDUCED_BALANCE`, mirrored in the app, scoped
+to the year so 2027 takes the five back by itself). An order of this kind
+**reaches forward only**: the cap is checked at sanction against what is
+already APPROVED, so an officer who already holds four for 2026 keeps all four
+and is refused the next one. Nothing is reversed, no debit arises, and no
+sanction already passed is disturbed.
 
 - Misses **1 and 2** of a calendar month → a **reminder**. Pushed at once,
   unnumbered, off the register, no lock, no debit.
