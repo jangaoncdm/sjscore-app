@@ -135,6 +135,68 @@ module.exports = {
     reg = env.get('advisory', { token: cdm });
     t.eq(reg.totals.due, 1, 'the register counts only the officers this circular addresses');
 
+    /* ================= ADDRESSED BY ROLE AND BY MANDAL =================
+       A circular may go to everyone, to a role, to a mandal, or to a role
+       WITHIN a mandal. The two compose. */
+    const mpo = tok(env, '9000000034');   /* MPO, Chilpur */
+
+    /* a mandal, whatever the role */
+    r = env.post({ kind:'advPublish', token: cdm, title:'For Jangaon mandal',
+                   message:'Tank bunds in Jangaon to be walked today.', audience:'ALL',
+                   mandals:['Jangaon'] });
+    t.eq(r.ok, true, 'a circular can be addressed to one mandal');
+    let seen = env.get('advisory', { token: ps });          /* PS, Jangaon */
+    t.ok(!!seen.advisory, 'the Secretary in that mandal is shown it');
+    t.eq(seen.advisory.mandals.length, 1, 'and it carries the mandal it is addressed to');
+    t.eq(seen.advisory.mandals[0], 'Jangaon', 'by name');
+    seen = env.get('advisory', { token: mpdo });             /* MPDO, Jangaon */
+    t.ok(!!seen.advisory, 'so is the MPDO of that mandal, whatever his role');
+    seen = env.get('advisory', { token: mpo });              /* MPO, Chilpur */
+    t.eq(seen.advisory, null, 'an officer of another mandal is not');
+    let reg2 = env.get('advisory', { token: cdm });
+    t.eq(reg2.totals.due, 2, 'the register counts only that mandal');
+
+    /* a role within a mandal — the two together */
+    r = env.post({ kind:'advPublish', token: cdm, title:'Secretaries of Jangaon',
+                   message:'Chlorinate every source before Friday.', audience:'PS',
+                   mandals:['Jangaon'] });
+    t.eq(r.ok, true, 'and to a role within a mandal');
+    seen = env.get('advisory', { token: ps });
+    t.ok(!!seen.advisory, 'the Secretary of that mandal is shown it');
+    seen = env.get('advisory', { token: mpdo });
+    t.eq(seen.advisory, null, 'the MPDO of the same mandal is not — it is not his circular');
+    reg2 = env.get('advisory', { token: cdm });
+    t.eq(reg2.totals.due, 1, 'and exactly one officer is on the register');
+
+    /* several mandals at once */
+    r = env.post({ kind:'advPublish', token: cdm, title:'Two mandals',
+                   message:'Report waterlogging by 6 pm.', audience:'ALL',
+                   mandals:['Jangaon', 'Chilpur'] });
+    t.eq(r.ok, true, 'several mandals may be named');
+    reg2 = env.get('advisory', { token: cdm });
+    t.eq(reg2.totals.due, 3, 'and every officer in either is addressed');
+
+    /* a mandal written the way the roll happens to spell it */
+    r = env.post({ kind:'advPublish', token: cdm, title:'Case blind',
+                   message:'Check the drains.', audience:'ALL', mandals:['  jangaon '] });
+    seen = env.get('advisory', { token: ps });
+    t.ok(!!seen.advisory, 'a mandal is matched case-blind and trimmed — a capital letter must not lose a mandal');
+
+    /* no mandals named means the whole district, as before */
+    r = env.post({ kind:'advPublish', token: cdm, title:'Everyone again',
+                   message:'Monsoon to-do list.', audience:'ALL' });
+    reg2 = env.get('advisory', { token: cdm });
+    t.eq(reg2.totals.due, 3, 'naming no mandal addresses the whole district');
+    t.eq(reg2.advisory.mandals.length, 0, 'and the circular says so by carrying none');
+
+    /* what the composer needs to say who it will reach, before it does */
+    t.ok(!!reg2.roll_counts, 'the district is given the roll counts for the composer');
+    t.eq(reg2.roll_counts.total, 3, 'the whole roll, less the Collector and the inactive');
+    t.eq(reg2.roll_counts.byRole.PS, 1, 'counted by role');
+    t.eq(reg2.roll_counts.byMandal.Jangaon, 2, 'and by mandal');
+    t.eq(reg2.roll_counts.byRoleMandal['PS|Jangaon'], 1, 'and by the two together');
+    t.ok(reg2.roll_counts.mandals.indexOf('Chilpur') >= 0, 'with the mandals themselves listed');
+
     /* ---- THE LINE THAT MUST HOLD ---- */
     t.ok(!env.sheets['Notices'] || env.sheets['Notices'].rows.length <= 1,
       'not acknowledging a circular raises no notice');

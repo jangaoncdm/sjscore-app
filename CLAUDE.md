@@ -16,7 +16,7 @@ the rules below exist because exactly that happened in production.
 ## Run this before you finish anything
 
 ```bash
-npm test              # 727 assertions, 18 suites, against the real backend files
+npm test              # 749 assertions, 18 suites, against the real backend files
 node tests/ladder     # one suite, with its detail
 ```
 
@@ -162,7 +162,16 @@ role that may not file an evaluation. Move that line down and the district
 calls every Secretary for a plan and then refuses to take it.
 
 **Advisories** — the Collector publishes one circular with one line of
-instruction from the console. It opens by itself on every officer's home screen
+instruction from the console. It is addressed by **role and by mandal, and the
+two compose**: `audience` is ALL or a role (PS/MPDO/MPO/MSO), `mandals` is
+empty for the whole district or the mandals it is confined to — so *the
+Secretaries of Chilpur and Jangaon* is one circular, not three. Mandal names
+match case-blind and trimmed, because the roll spells `Ghanpur (Stn)` three
+ways and a circular must not miss a mandal over a capital letter. The composer
+says how many officers a choice reaches **before** it reaches them, from counts
+the server sends, and holds the typed title and line across a re-render — they
+used to be wiped by choosing a role, and the Collector would have written the
+circular twice. It opens by itself on every officer's home screen
 until acknowledged, and stays in the app afterwards under More ▸ Advisories, so
 a circular is never read once and lost. Publishing a new one marks the standing
 one `SUPERSEDED`; the receipts already given stand. `advAck` is idempotent — a
@@ -270,7 +279,7 @@ field app and the real console and writes a report with snapshots:
 
 ```bash
 node tests/fixture-docs.js          # payloads from the real backend
-node tests/render-docs.js           # 55 checks; Info/docs-render/REPORT.md
+node tests/render-docs.js           # 71 checks; Info/docs-render/REPORT.md
 ```
 
 It signs the app in by writing the session on the origin **without loading

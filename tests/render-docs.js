@@ -23,6 +23,22 @@ const { chromium } = require('playwright');
 const ROOT = path.join(__dirname, '..', 'app');
 const OUT = process.argv[2] || path.join(__dirname, '..', 'Info', 'docs-render');
 const FIX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-docs.json'), 'utf8'));
+/* the counts the composer reads to say who a choice reaches, derived from the
+   same roll the register was built from */
+(() => {
+  const roll = FIX.advDistrict.roll || [];
+  const c = { byRole:{}, byMandal:{}, byRoleMandal:{}, mandals:[], total:roll.length };
+  const seen = {};
+  roll.forEach(r => {
+    c.byRole[r.role] = (c.byRole[r.role] || 0) + 1;
+    const m = r.mandal || 'Unassigned';
+    c.byMandal[m] = (c.byMandal[m] || 0) + 1;
+    c.byRoleMandal[r.role + '|' + m] = (c.byRoleMandal[r.role + '|' + m] || 0) + 1;
+    if(!seen[m]){ seen[m] = true; c.mandals.push(m); }
+  });
+  c.mandals.sort();
+  FIX.advDistrict.roll_counts = c;
+})();
 const DASH = path.join(__dirname, 'fixture-dashboard.json');
 
 const MIME = { '.html':'text/html', '.js':'text/javascript', '.css':'text/css',
@@ -380,7 +396,7 @@ function makeRouter(state){
     }, theme);
     const page = await ctx.newPage();
     const errs = [];
-    page.on('pageerror', e => errs.push(String(e)));
+    page.on('pageerror', e => { errs.push(String(e)); console.log('   PAGEERROR: ' + String(e).split(/\n/)[0]); });
     await page.route('**/mock.district/**', makeRouter(state));
     await page.route('**script.google.com/**', makeRouter(state));
     await page.route('**tile.openstreetmap.org**', r => r.abort());
@@ -454,6 +470,39 @@ function makeRouter(state){
       const msgVal = await page.$eval('#advMsg', el => el.value);
       check('the publish form is pre-filled with the district’s broadcast line',
         /monsoon season and act accordingly/i.test(msgVal), msgVal);
+      /* ---- addressed by role and by mandal ---- */
+      const chips = await page.$$eval('#advMandals [data-advm]', els => els.length);
+      check('the composer offers every mandal as a chip', chips === FIX.advDistrict.roll_counts.mandals.length + 1,
+        chips + ' chips for ' + FIX.advDistrict.roll_counts.mandals.length + ' mandals, plus "Every mandal"');
+      const reach0 = await page.$eval('#advReach', el => el.textContent.trim());
+      check('and says how many officers the choice reaches, before it reaches them',
+        /reaches \d+ officers in the whole district/i.test(reach0), reach0);
+
+      await page.selectOption('#advAud', 'PS');
+      await page.waitForTimeout(700);
+      const reachPS = await page.$eval('#advReach', el => el.textContent.trim());
+      check('narrowing to a role narrows the count', /reaches \d+ PSs/i.test(reachPS), reachPS);
+
+      const firstMandal = FIX.advDistrict.roll_counts.mandals[0];
+      await page.click('[data-advm="' + firstMandal + '"]');
+      await page.waitForTimeout(700);
+      const reachBoth = await page.$eval('#advReach', el => el.textContent.trim());
+      check('and adding a mandal narrows it again — the two compose',
+        reachBoth.indexOf(firstMandal) >= 0, reachBoth);
+      await shot(page, 'console-advisory-addressing');
+
+      /* back to everyone for the publish check below */
+      /* THE WORDS MUST SURVIVE THE CHOICE. Picking a role or a mandal
+         re-renders the view; the title and the line the Collector had typed
+         used to go with it. */
+      const keptTitle = await page.$eval('#advTitle', el => el.value);
+      const keptMsg = await page.$eval('#advMsg', el => el.value);
+      check('what the Collector typed survives changing the audience',
+        keptTitle === 'Monsoon to-do list' && /monsoon season/i.test(keptMsg), keptTitle);
+
+      await page.click('[data-advm=""]');
+      await page.selectOption('#advAud', 'ALL');
+      await page.waitForTimeout(600);
       await shot(page, 'console-advisory-publish-form');
 
       const advPdf = path.join(OUT, '_advisory.pdf');

@@ -2793,6 +2793,40 @@ function wxPanel(){
  * already at its ceiling.
  * ========================================================================== */
 let GPDP=null, ADV=null, GPFILTER='all', ADVFILTER='all', GPBUSY=false, ADVBUSY=false;
+/* what the composer is currently addressing: a role, and a list of mandals.
+   An empty list is the whole district — the same rule the backend applies. */
+let ADV_AUD='ALL', ADV_MANDALS=[];
+/* THE COMPOSER HOLDS ITS OWN WORDS. Choosing a role or a mandal re-renders the
+   view, and the title and the line the Collector had typed went with it — he
+   would have written the circular twice and blamed himself. They live in state
+   now and survive every re-render. */
+const ADV_FORM = { title:'', message:'Kindly go through the to do list in the monsoon season and act accordingly' };
+
+/* HOW MANY OFFICERS THIS CHOICE REACHES, said before it reaches them. The
+   backend sends the roll counted by role, by mandal and by the two together,
+   so this is the district's own arithmetic rather than a guess made here. */
+function advReach(){
+  const c = ADV && ADV.roll_counts;
+  if(!c) return null;
+  const mandals = ADV_MANDALS.length ? ADV_MANDALS : (c.mandals || []);
+  if(ADV_AUD === 'ALL'){
+    if(!ADV_MANDALS.length) return c.total;
+    return mandals.reduce((s2,m)=>s2+(c.byMandal[m]||0),0);
+  }
+  if(!ADV_MANDALS.length) return c.byRole[ADV_AUD] || 0;
+  return mandals.reduce((s2,m)=>s2+(c.byRoleMandal[ADV_AUD+'|'+m]||0),0);
+}
+function advReachText(){
+  const n = advReach();
+  if(n == null) return '';
+  const who = ADV_AUD === 'ALL' ? 'officer' : ADV_AUD;
+  const where = ADV_MANDALS.length
+    ? (ADV_MANDALS.length > 3 ? ADV_MANDALS.length + ' mandals' : ADV_MANDALS.join(', '))
+    : 'the whole district';
+  return n === 0
+    ? 'Nobody on the roll matches that — the circular would reach no one.'
+    : 'This reaches ' + n + ' ' + who + (n === 1 ? '' : 's') + ' in ' + where + '.';
+}
 
 function pullGpdp(){
   return fetch(ST.url+'?op=gpdp&token='+encodeURIComponent(ST.token))
@@ -2871,7 +2905,11 @@ function vAdvisory(j,A){
     h+=kpi('Read',IC.s,pct(T.acknowledged,Math.max(1,T.due))+'%','', 'of the officers addressed','');
     h+=kpi('Issued',IC.c,esc(String(a.publishedAt||'').slice(8,10)+'.'+String(a.publishedAt||'').slice(5,7)),'',
       esc(a.publishedBy||'the district'),'');
-    h+=kpi('Addressed to',IC.h,esc(a.audience||'ALL'),'', a.audience==='ALL'?'every officer':'that role alone','');
+    const advWho = (a.mandals&&a.mandals.length)
+      ? (a.mandals.length>2 ? a.mandals.length+' mandals' : a.mandals.join(', '))
+      : 'every mandal';
+    h+=kpi('Addressed to',IC.h,esc(a.audience==='ALL'?'All roles':a.audience),'',
+      esc(advWho),'');
     h+='</div>';
 
     h+=panel('c12','The standing advisory',esc(a.id||''),
@@ -2951,17 +2989,26 @@ function vAdvisory(j,A){
     `<div style="display:grid;gap:12px;max-width:760px">
        <label style="font-size:12px;color:var(--tx-2)">Title
          <input class="find" id="advTitle" style="max-width:none;margin-top:5px" placeholder="PS MPDO MPO Health Advisory"
-           value="${ADV_DRAFT?esc(ADV_DRAFT.title):''}"></label>
+           value="${esc(ADV_DRAFT?ADV_DRAFT.title:ADV_FORM.title)}"></label>
        <label style="font-size:12px;color:var(--tx-2)">The line every officer is shown
          <input class="find" id="advMsg" style="max-width:none;margin-top:5px"
-           value="${ADV_DRAFT?esc(ADV_DRAFT.message):'Kindly go through the to do list in the monsoon season and act accordingly'}"></label>
-       <label style="font-size:12px;color:var(--tx-2)">Addressed to
-         <select class="rsel" id="advAud" style="display:block;margin-top:5px;width:220px">
-           <option value="ALL">Every officer</option>
-           <option value="PS">Panchayat Secretaries</option>
-           <option value="MPDO">MPDOs</option>
-           <option value="MPO">MPOs</option>
-           <option value="MSO">MSOs</option></select></label>
+           value="${esc(ADV_DRAFT?ADV_DRAFT.message:ADV_FORM.message)}"></label>
+       <label style="font-size:12px;color:var(--tx-2)">Which officers
+         <select class="rsel" id="advAud" style="display:block;margin-top:5px;width:250px">
+           <option value="ALL"${ADV_AUD==='ALL'?' selected':''}>Every role</option>
+           <option value="PS"${ADV_AUD==='PS'?' selected':''}>Panchayat Secretaries</option>
+           <option value="MPDO"${ADV_AUD==='MPDO'?' selected':''}>MPDOs</option>
+           <option value="MPO"${ADV_AUD==='MPO'?' selected':''}>MPOs</option>
+           <option value="MSO"${ADV_AUD==='MSO'?' selected':''}>MSOs</option></select></label>
+       <div>
+         <div style="font-size:12px;color:var(--tx-2);margin-bottom:6px">Which mandals</div>
+         <div class="mtools" id="advMandals" style="padding:0">
+           <button class="fchip" data-advm="" aria-pressed="${ADV_MANDALS.length===0}">Every mandal</button>` +
+           ((ADV&&ADV.roll_counts&&ADV.roll_counts.mandals||[]).map(m2=>
+             `<button class="fchip" data-advm="${esc(m2)}" aria-pressed="${ADV_MANDALS.indexOf(m2)>=0}">${esc(m2)}</button>`).join('')) +
+         `</div>
+         <div class="expnote" id="advReach" style="margin-top:8px">${esc(advReachText())}</div>
+       </div>
        <div>
          <input type="file" id="advFile" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="font-size:13px">
          <div class="expnote" style="margin-top:6px">PDF, Word or an image of the signed page, up to 12 MB. The file is stored in Drive and every officer gets a link to it.</div>
@@ -3002,6 +3049,13 @@ function render(j){
   if(VIEW==='map'){ const m2=drawMap('map2','full'); drawWeather(m2 || MAP2); }
   const mf=$('#mFind'); if(mf) mf.onchange=()=>{ if(mf.value) flyTo(mf.value); };
   const mp=$('#mPick'); if(mp) mp.onchange=()=>{ if(mp.value) flyTo(mp.value); };
+  const aud=$('#advAud');
+  if(aud) aud.onchange=()=>{ ADV_AUD=aud.value; if(DATA) render(DATA); };
+  const at2=$('#advTitle'), am2=$('#advMsg');
+  if(at2){ if(ADV_DRAFT){ ADV_FORM.title=ADV_DRAFT.title; }
+           at2.oninput=()=>{ ADV_FORM.title=at2.value; ADV_DRAFT=null; }; }
+  if(am2){ if(ADV_DRAFT){ ADV_FORM.message=ADV_DRAFT.message; }
+           am2.oninput=()=>{ ADV_FORM.message=am2.value; ADV_DRAFT=null; }; }
   const gq=$('#gpFind');
   if(gq) gq.oninput=()=>{const q=gq.value.toLowerCase();
     document.querySelectorAll('#gpBody tr').forEach(tr=>{
@@ -3047,9 +3101,10 @@ function exportAdvCsv(){
    states plainly what it is about to do before it does it. */
 function publishAdvisory(){
   if(ADVBUSY) return;
-  const title=($('#advTitle')&&$('#advTitle').value||'').trim();
-  const msg=($('#advMsg')&&$('#advMsg').value||'').trim();
-  const aud=($('#advAud')&&$('#advAud').value)||'ALL';
+  const title=(($('#advTitle')&&$('#advTitle').value)||ADV_FORM.title||'').trim();
+  const msg=(($('#advMsg')&&$('#advMsg').value)||ADV_FORM.message||'').trim();
+  const aud=($('#advAud')&&$('#advAud').value)||ADV_AUD||'ALL';
+  const mandals=ADV_MANDALS.slice();
   const fi=$('#advFile'), file=fi&&fi.files&&fi.files[0];
   const note=$('#advNote');
   const say=(t,bad)=>{ if(note){ note.textContent=t; note.style.color=bad?'var(--red)':'var(--tx-3)'; } };
@@ -3060,7 +3115,7 @@ function publishAdvisory(){
     ADVBUSY=true; if(DATA) render(DATA); say('Publishing…');
     fetch(ST.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
       body:JSON.stringify({kind:'advPublish',token:ST.token,title:title,message:msg,audience:aud,
-        file:file?{name:file.name,b64:b64}:null})})
+        mandals:mandals, file:file?{name:file.name,b64:b64}:null})})
       .then(r=>r.json()).then(j=>{
         ADVBUSY=false;
         if(!j||j.ok===false){ say((j&&j.error)||'The district refused it.',true); if(DATA) render(DATA); return; }
@@ -3070,7 +3125,8 @@ function publishAdvisory(){
   };
 
   if(!file){
-    if(!confirm('Publish this advisory to every officer with no document attached?\n\nThey will see the title and your line of instruction.')) return;
+    if(!confirm('Publish this advisory with no document attached?\n\n' + advReachText() +
+      '\n\nThey will see the title and your line of instruction.')) return;
     send(null); return;
   }
   if(file.size > 12*1024*1024){ say('That file is '+(file.size/1048576).toFixed(1)+' MB. The limit is 12 MB.',true); return; }
@@ -3132,6 +3188,16 @@ document.addEventListener('click',e=>{
   if(af){ ADVFILTER=af.dataset.advf; if(DATA) render(DATA); return; }
   if(e.target.closest('#gpCsv')){ exportGpdpCsv(); return; }
   if(e.target.closest('#advCsv')){ exportAdvCsv(); return; }
+  const am=e.target.closest('[data-advm]');
+  if(am){
+    const v=am.dataset.advm;
+    if(!v) ADV_MANDALS=[];                       /* "Every mandal" clears the rest */
+    else {
+      const i=ADV_MANDALS.indexOf(v);
+      if(i>=0) ADV_MANDALS.splice(i,1); else ADV_MANDALS.push(v);
+    }
+    if(DATA) render(DATA);
+    return; }
   if(e.target.closest('#advGo')){ publishAdvisory(); return; }
   if(e.target.closest('#wxToggle')){
     WXON=!WXON;

@@ -2065,8 +2065,13 @@ function gpdpRegister_(u, yearReq){
  * exactly where they are.
  * ========================================================================== */
 const ADV_FOLDER = 'SJ-SCORE Advisories';
+/* 'audience' is the ROLE the circular addresses (ALL, or PS/MPDO/MPO/MSO) and
+   'mandals' narrows it to a list of mandals (empty means every mandal). The two
+   compose: PS + Chilpur,Jangaon addresses the Secretaries of those two mandals
+   and nobody else. Adding a column to a *_HEAD array is safe — ensureHeaders_
+   appends it and no migration is needed. */
 const ADV_HEAD = ['id','title','message','fileName','mime','sizeKB','fileId','url',
-                  'publishedAt','publishedBy','audience','status'];
+                  'publishedAt','publishedBy','audience','mandals','status'];
 const ADV_ACK_HEAD = ['advId','phone','name','role','mandal','ackAt','receivedAt'];
 const ADV_MAX_KB = 12 * 1024;
 /* a circular may be a PDF, a Word file or an image of the signed page */
@@ -2126,6 +2131,7 @@ function publishAdvisory_(b, u){
     put('publishedAt', new Date().toISOString());
     put('publishedBy', u.name + ' (' + u.role + ')');
     put('audience', String(b.audience || 'ALL').toUpperCase());
+    put('mandals', advMandalList_(b.mandals).join(', '));
     put('status', 'ACTIVE');
     sh.appendRow(row);
   } finally { lock.releaseLock(); }
@@ -2142,18 +2148,42 @@ function activeAdvisory_(){
     return { id: cell_(v[i], m.ix.id), title: cell_(v[i], m.ix.title),
              message: cell_(v[i], m.ix.message), fileName: cell_(v[i], m.ix.fileName),
              url: cell_(v[i], m.ix.url), audience: cell_(v[i], m.ix.audience) || 'ALL',
+             mandals: advMandalList_(cell_(v[i], m.ix.mandals)),
              publishedAt: String(v[i][m.ix.publishedAt] || ''),
              publishedBy: cell_(v[i], m.ix.publishedBy) };
   }
   return null;
 }
-/* who a circular is addressed to. ALL is every officer bar the Collector; a
-   role name narrows it to that role. */
-function advApplies_(adv, role){
+/* a mandal list, however it was written: an array, a comma string, or nothing */
+function advMandalList_(v){
+  if(v == null || v === '') return [];
+  const arr = Array.isArray(v) ? v : String(v).split(',');
+  const out = [], seen = {};
+  arr.forEach(x => {
+    const t = String(x || '').trim();
+    if(!t) return;
+    const k = t.toLowerCase();
+    if(seen[k]) return;
+    seen[k] = true; out.push(t);
+  });
+  return out;
+}
+/* WHO A CIRCULAR IS ADDRESSED TO — a role and a place, and they compose.
+   audience: ALL, or one of PS / MPDO / MPO / MSO.
+   mandals : empty for the whole district, or the mandals it is confined to.
+   The Collector is never addressed by one; he issues them. Mandal names are
+   matched case-blind and trimmed, because the roll spells "Ghanpur (Stn)"
+   three ways and a circular must not miss a mandal over a capital letter. */
+function advApplies_(adv, role, mandal){
   const r = String(role || '').toUpperCase();
   if(r === 'COLLECTOR') return false;
   const a = String((adv && adv.audience) || 'ALL').toUpperCase();
-  return a === 'ALL' || a === r;
+  if(a !== 'ALL' && a !== r) return false;
+  const ms = advMandalList_(adv && adv.mandals);
+  if(!ms.length) return true;
+  const mine = String(mandal || '').trim().toLowerCase();
+  if(!mine) return false;          /* an officer with no mandal is not in one */
+  return ms.some(x => String(x).trim().toLowerCase() === mine);
 }
 
 /* ---- an officer acknowledges ---- */
@@ -2219,11 +2249,11 @@ function advisoryRegister_(u, idReq){
                     publishedAt: String(vA[i][mA.ix.publishedAt] || ''),
                     publishedBy: cell_(vA[i], mA.ix.publishedBy),
                     standing: String(vA[i][mA.ix.status] || 'ACTIVE') === 'ACTIVE' };
-      if(!advApplies_(one, role)) continue;
+      if(!advApplies_(one, role, u.mandal)) continue;
       one.acknowledged = !!ack[u.phone] && one.id === adv.id;
       recent.push(one);
     }
-    return json_({ ok:true, advisory: advApplies_(adv, u.role) ? adv : null,
+    return json_({ ok:true, advisory: advApplies_(adv, u.role, u.mandal) ? adv : null,
                    acknowledged: !!ack[u.phone], ackAt: ack[u.phone] || '',
                    recent: recent });
   }
@@ -2233,7 +2263,7 @@ function advisoryRegister_(u, idReq){
     const ph = phone10_(uv[i][t.ix.phone]); if(!ph || seen[ph]) continue; seen[ph] = true;
     if(String(uv[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
     const role = cell_(uv[i], t.ix.role).toUpperCase();
-    if(!advApplies_(adv || { audience:'ALL' }, role)) continue;
+    if(!advApplies_(adv || { audience:'ALL' }, role, cell_(uv[i], t.ix.mandal))) continue;
     roll.push({ phone: ph, name: cell_(uv[i], t.ix.name), role: role,
                 mandal: cell_(uv[i], t.ix.mandal), gp: cell_(uv[i], t.ix.gp),
                 acknowledged: !!ack[ph], ackAt: ack[ph] || '' });
@@ -2249,9 +2279,31 @@ function advisoryRegister_(u, idReq){
     byMandal[k] = byMandal[k] || { mandal: k, due: 0, acknowledged: 0 };
     byMandal[k].due++; if(r.acknowledged) byMandal[k].acknowledged++;
   });
+  /* THE COMPOSER MUST BE ABLE TO SAY WHO IT WILL REACH, BEFORE IT REACHES
+     THEM. Counts of the whole roll by role, by mandal, and by the two
+     together — a few dozen numbers rather than 280 rows, and enough for the
+     console to say "this reaches 23 officers" while the Collector is still
+     choosing. */
+  const counts = { byRole:{}, byMandal:{}, byRoleMandal:{}, mandals:[], total:0 };
+  const seen2 = {}, seenM = {};
+  for(let i = 1; i < uv.length; i++){
+    const ph = phone10_(uv[i][t.ix.phone]); if(!ph || seen2[ph]) continue; seen2[ph] = true;
+    if(String(uv[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
+    const role = cell_(uv[i], t.ix.role).toUpperCase();
+    if(role === 'COLLECTOR') continue;
+    const md = cell_(uv[i], t.ix.mandal) || 'Unassigned';
+    counts.total++;
+    counts.byRole[role] = (counts.byRole[role] || 0) + 1;
+    counts.byMandal[md] = (counts.byMandal[md] || 0) + 1;
+    const k = role + '|' + md;
+    counts.byRoleMandal[k] = (counts.byRoleMandal[k] || 0) + 1;
+    if(!seenM[md]){ seenM[md] = true; counts.mandals.push(md); }
+  }
+  counts.mandals.sort();
   return json_({ ok:true, advisory:adv, roll:roll,
                  totals:{ due: roll.length, acknowledged: done, pending: roll.length - done },
-                 coverage: Object.keys(byMandal).sort().map(k => byMandal[k]) });
+                 coverage: Object.keys(byMandal).sort().map(k => byMandal[k]),
+                 roll_counts: counts });
 }
 
 /* Admin.gs owns the Audit tab, but Code.gs publishes an advisory, so it needs
