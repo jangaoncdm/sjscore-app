@@ -177,6 +177,11 @@ html[data-sun="1"] .masthead{background:#fff}
    — the advisory's "Open the advisory" came out as a black slab. Inline styles
    still win, so the icons that size themselves are untouched. */
 .btn svg{width:18px;height:18px;fill:currentColor;flex:none}
+/* A PINNED GROUP. What the district is waiting for sits at the top of the home
+   screen and is marked as outstanding — the same card, worn differently, so an
+   officer can tell at a glance whether anything is owed. */
+.group.pinned .hdr{color:var(--flag)}
+.group.pinned .card{box-shadow:var(--shadow),0 0 0 1.5px var(--flag)}
 .btn:active{transform:scale(.98)}
 .btn[disabled]{opacity:.4;pointer-events:none}
 .btn.sec{background:var(--seal-tint);color:var(--seal)}
