@@ -222,7 +222,17 @@ receipt is queued and retried if the district could not be reached. It used to
 be recorded only when the server answered, so a dropped signal on a village
 road meant the circular opened again the next morning, and the morning after
 that. Reported from the field in those words: *"even once I acknowledged the
-advisory it keeps coming to my screen, which is annoying."* The plan prompt is
+advisory it keeps coming to my screen, which is annoying."* **The receipt the
+phone holds beats the district's answer, everywhere and not only in the modal.**
+`refreshAdvisory` overwrote `DB.adv` wholesale, so a receipt still queued came
+back as `acknowledged:false` and the pinned card, the badge and the plan prompt
+all went back to chasing him — the modal stayed shut, but to the officer that
+is the circular coming back, and it was reported a second time in the same
+words. `advPending()` and the refresh both read `advDone` now. And a circular
+with **no id** is never shown at all: the handset remembers by id, so an id-less
+one could be neither recorded nor matched and would open every single time —
+`activeAdvisory_` skips blank rows, whose empty status column otherwise reads
+as ACTIVE. The plan prompt is
 shown **once a day**, not once an opening, for the same reason — the card is
 pinned to the top of the home screen the whole time it is outstanding, and a
 modal every time an officer opens the app is how he learns to dismiss things

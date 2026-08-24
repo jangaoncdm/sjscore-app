@@ -2270,6 +2270,11 @@ function activeAdvisory_(){
   const sh = sheet_('Advisories', ADV_HEAD), m = headMap_(sh, ADV_HEAD);
   const v = sh.getDataRange().getValues();
   for(let i = v.length - 1; i >= 1; i--){
+    /* A BLANK ROW IS NOT A CIRCULAR. An empty status reads as ACTIVE, so one
+       stray blank row at the foot of the tab became "the standing advisory" —
+       an id-less circular that every phone would open and none could ever
+       dismiss, because the handset remembers what it acknowledged by id. */
+    if(!cell_(v[i], m.ix.id)) continue;
     if(String(v[i][m.ix.status] || 'ACTIVE') !== 'ACTIVE') continue;
     return { id: cell_(v[i], m.ix.id), title: cell_(v[i], m.ix.title),
              message: cell_(v[i], m.ix.message), fileName: cell_(v[i], m.ix.fileName),

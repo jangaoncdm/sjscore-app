@@ -254,6 +254,22 @@ module.exports = {
     t.ok(!!mine, 'the Secretary can still reach the circular he acknowledged in the app');
     t.eq(mine.acknowledged, true, 'and it still shows as one he has read');
 
+    /* ================= A BLANK ROW IS NOT A CIRCULAR =================
+       An empty status column reads as ACTIVE, so one stray blank row at the
+       foot of the tab became "the standing advisory" — an id-less circular.
+       The handset remembers what it acknowledged BY ID, so an id-less one is
+       a circular it cannot record and cannot match: it opens every time the
+       app is opened and no amount of pressing stops it. */
+    const shAdv = env.sheets['Advisories'];
+    shAdv.rows.push(new Array(shAdv.rows[0].length).fill(''));
+    const stand = c.activeAdvisory_();
+    t.ok(!!stand, 'a blank row does not empty the register');
+    t.ok(!!stand.id, 'and never becomes the standing circular itself');
+    t.eq(stand.id, reg2.advisory.id, 'the real circular still stands');
+    const afterBlank = env.get('advisory', { token: ps });
+    t.ok(!afterBlank.advisory || !!afterBlank.advisory.id,
+      'no officer is ever handed a circular without an id');
+
     /* ---- THE LINE THAT MUST HOLD ---- */
     t.ok(!env.sheets['Notices'] || env.sheets['Notices'].rows.length <= 1,
       'not acknowledging a circular raises no notice');

@@ -381,6 +381,23 @@ function makeRouter(state){
     o = await openIt();
     check('and on the next opening the circular does NOT come back', !o.isAdvisory,
       o.on ? 'a sheet is up, but it is not the circular' : 'nothing is up');
+
+    /* AND NEITHER DOES THE NAG. Re-opening refreshes the register, and the
+       district still answers "not acknowledged" because it never got the
+       receipt. That answer used to overwrite what the phone held, so the
+       pinned card, the badge and "an advisory to read" all came back — and to
+       the officer that IS the circular coming back, whatever the modal does. */
+    const after = await page.evaluate(() => ({
+      pending: advPending(), docs: docsPending(),
+      flag: !!(DB.adv && DB.adv.acknowledged), queued: (DB.advAckQ || []).length }));
+    check('the circular is no longer counted against him', after.pending === false,
+      'advPending() = ' + after.pending);
+    check('only the plan is left outstanding, not the circular too', after.docs === 1,
+      'docsPending() = ' + after.docs + ' (the plan alone)');
+    check('and the phone still holds the receipt, waiting for a line',
+      after.flag === true && after.queued === 1,
+      'acknowledged=' + after.flag + ', ' + after.queued + ' queued');
+
     o = await openIt();
     check('nor the one after that', !o.isAdvisory);
     const q = await page.evaluate(() => (JSON.parse(localStorage.getItem('sjf5') || '{}').advAckQ || []).length);
