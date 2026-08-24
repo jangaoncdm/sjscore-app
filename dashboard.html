@@ -1940,7 +1940,13 @@ function drawMap(id,which){
   if(shown.length){ shown.forEach(p=>{ const mk=marker(p); MARKERS.push({p:p,mk:mk}); layer.addLayer(mk); });
     map.fitBounds(L.latLngBounds(shown.map(p=>[p.lat,p.lng])).pad(0.25)); }
   else map.setView([17.72,79.15],10);   /* Jangaon, when nothing is marked yet */
-  setTimeout(()=>map.invalidateSize(),60);
+  /* A MAP THAT HAS BEEN TAKEN DOWN MUST NOT BE MEASURED. This waited 60ms and
+     then measured whatever it had captured; a second render inside that window
+     — which the weather panel made ordinary — destroys the map first, and
+     Leaflet throws reading _leaflet_pos off a pane that is no longer there. */
+  setTimeout(()=>{ try{
+    if(map._container && map._container.isConnected) map.invalidateSize();
+  }catch(err){} }, 60);
   return map;
 }
 
@@ -2630,11 +2636,127 @@ function vNotices(j,A){
   return h;
 }
 function vMap(j,A){
-  return panel('c12','District map · everything located',
+  return wxPanel() + panel('c12','District map · everything located',
     'green verified &middot; amber no fix &middot; red not trustworthy &middot; grey on leave &middot; red ring not marked (solid: app opened today &middot; dashed: last known) &middot; villages by grade',
     mapTools()+'<div id="map2"></div>');
 }
 
+
+/* ============================================================================
+ * WEATHER ON THE CONSOLE
+ * ----------------------------------------------------------------------------
+ * The sky over each mandal, on the map and in a table beside it — and a
+ * message drafted from those figures which the COLLECTOR passes. Nothing here
+ * sends itself: a line that reaches 280 officers is passed by him, and a
+ * forecast is not an order.
+ *
+ * The draft is handed to the advisory composer rather than sent from here, so
+ * a weather warning is an advisory like any other — it opens on every home
+ * screen, and the district can see who has read it. One pipeline, one
+ * acknowledgement register.
+ * ========================================================================== */
+let WX = null, WXON = true, WXLAYER = null, ADV_DRAFT = null;
+
+function pullWeather(){
+  return fetch(ST.url + '?op=weather&draft=1&token=' + encodeURIComponent(ST.token))
+    .then(r => r.json()).then(j => { WX = j; if((VIEW === 'map' || VIEW === 'advisory') && DATA) render(DATA); })
+    .catch(() => { WX = { ok:false, error:'the forecast could not be read' }; });
+}
+const wxTone = l => l === 'SEVERE' ? 'var(--st-bad)' : l === 'WATCH' ? 'var(--st-warn)' : 'var(--st-ok)';
+const wxPill = l => l === 'SEVERE' ? 'bad' : l === 'WATCH' ? 'warn' : 'ok';
+
+/* the mandal markers, drawn over the officers' pins */
+function drawWeather(map){
+  /* THE LAYER TAKES ITSELF OFF. drawMap destroys and rebuilds the map whenever
+     its container changes, and asking the NEW map to remove a layer belonging
+     to the old one throws inside Leaflet — at 390px, every time. A layer knows
+     which map it is on; let it do the removing. */
+  if(WXLAYER){ try{ WXLAYER.remove(); }catch(e){} WXLAYER = null; }
+  if(!map || !WX || !WX.ok || !WXON) return;
+  try{
+  WXLAYER = L.layerGroup().addTo(map);
+  (WX.rows || []).forEach(r => {
+    if(!r.lat || !r.lng) return;
+    const col = wxTone(r.level);
+    /* a ring, not a filled pin: the officers' marks are the subject of this
+       map and the weather must sit behind them, not over them */
+    const m = L.circleMarker([r.lat, r.lng], {
+      radius: r.level === 'SEVERE' ? 26 : r.level === 'WATCH' ? 20 : 14,
+      color: col, weight: 2, opacity: .85, fillColor: col,
+      fillOpacity: r.level === 'SEVERE' ? .16 : r.level === 'WATCH' ? .11 : .06,
+      dashArray: r.level === 'CALM' ? '3 4' : null, interactive: true
+    }).bindTooltip(esc(r.mandal) + ' · ' + esc(r.today || '') +
+        (r.tmax != null ? ' · ' + Math.round(r.tmax) + '°' : '') +
+        (r.rainClass ? ' · ' + esc(r.rainClass) : ''), { direction:'top' })
+      .bindPopup('<b>' + esc(r.mandal) + '</b><br>' + esc(r.today || '') +
+        (r.temp != null ? '<br>now ' + Math.round(r.temp) + '°' : '') +
+        (r.tmax != null ? ' · max ' + Math.round(r.tmax) + '°' : '') +
+        (r.rain != null ? '<br>rain ' + Math.round(r.rain) + ' mm' +
+          (r.rainClass ? ' · ' + esc(r.rainClass) : '') : '') +
+        (r.rainChance != null ? ' · ' + Math.round(r.rainChance) + '% chance' : '') +
+        (r.wind != null ? '<br>wind to ' + Math.round(r.wind) + ' km/h' : '') +
+        (r.located ? '' : '<br><i>no located mark in this mandal — read at the district town</i>'));
+    WXLAYER.addLayer(m);
+  });
+  }catch(e){ WXLAYER = null; }
+}
+
+function wxPanel(){
+  if(!WX) return panel('c12','Weather over the district','reading…',
+    '<div class="empty">Asking the forecast service…</div>');
+  if(!WX.ok) return panel('c12','Weather over the district','not available',
+    '<div class="empty">' + esc(WX.error || 'The forecast could not be read.') +
+    ' The map and the register are unaffected.</div>');
+  const C = WX.counts || {};
+  let h = '';
+  h += panel('c5','Weather over the district',
+    esc(String(WX.source || '').split('·')[0].trim()),
+    `<div class="mtools">
+       <button class="fchip" id="wxToggle" aria-pressed="${WXON}">Show on the map</button>
+       <span class="msp"></span>
+       <span class="pill ${wxPill(WX.level)}">${esc(WX.level)}</span>
+     </div>
+     <div class="plot">` +
+    Charts.stackRows((WX.rows || []).map(r => ({
+      label: r.mandal.length > 16 ? r.mandal.slice(0, 15) + '…' : r.mandal,
+      title: r.mandal + ' — ' + (r.today || '') +
+             (r.rain != null ? ' · ' + Math.round(r.rain) + ' mm' : '') +
+             (r.wind != null ? ' · wind ' + Math.round(r.wind) + ' km/h' : ''),
+      parts: [{ value: Math.max(1, Math.round(Number(r.rain) || 0)), color: wxTone(r.level) },
+              { value: Math.max(0, 80 - Math.round(Number(r.rain) || 0)), color: 'var(--ch-grid)' }],
+      right: (r.tmax != null ? Math.round(r.tmax) + '°' : '—'),
+      tone: r.level === 'SEVERE' ? 'bad' : r.level === 'CALM' ? 'ok' : ''
+    })), { emptyMsg:'No mandal is on the roll yet.' }) +
+    `</div>
+     <div class="expnote" style="margin-top:10px">Bars are the day's rainfall against 80&nbsp;mm.
+       ${C.severe || 0} severe · ${C.watch || 0} watch · ${C.calm || 0} settled.
+       Rainfall classed after the India Meteorological Department.</div>`);
+
+  h += panel('c7','Mandal by mandal', esc(dm(WX.date || '') + ' · read ' + hm(WX.at)),
+    `<div class="twrap"><table><thead><tr><th>Mandal</th><th>Now</th><th>Max</th><th>Rain</th><th>Wind</th><th>Level</th></tr></thead><tbody>` +
+    (WX.rows || []).map(r => `<tr>
+       <td>${esc(r.mandal)}${r.located ? '' : '<span class="mut"> · district town</span>'}</td>
+       <td class="mut">${esc(r.today || '—')}</td>
+       <td class="num">${r.tmax != null ? Math.round(r.tmax) + '°' : '—'}</td>
+       <td class="num">${r.rain != null ? Math.round(r.rain) + ' mm' : '—'}${r.rainClass ? '<span class="mut"> · ' + esc(r.rainClass) + '</span>' : ''}</td>
+       <td class="num">${r.wind != null ? Math.round(r.wind) + '' : '—'}</td>
+       <td><span class="pill ${wxPill(r.level)}">${esc(r.level)}</span></td></tr>`).join('') +
+    `</tbody></table></div>`, 'wxT');
+
+  /* the draft, and the one button that does anything with it */
+  h += panel('c12','A weather advisory, drafted from these figures',
+    'nothing is sent until you pass it',
+    `<div style="display:grid;gap:11px;max-width:820px">
+       <div style="font-size:14.5px;line-height:1.65;background:var(--well);border-radius:12px;padding:13px 15px;box-shadow:var(--nm-in-sm)">
+         ${esc(WX.draft || 'No draft — the forecast could not be read.')}</div>
+       <div class="expbar">
+         <button class="tbtn pri" id="wxDraft">Take this to the advisory composer</button>
+         <span class="expnote">It opens on every officer's home screen and stays there until acknowledged.
+           You can edit every word before publishing.</span>
+       </div>
+     </div>`);
+  return h;
+}
 
 /* ============================================================================
  * GPDP AND ADVISORY · the two registers of documents
@@ -2802,10 +2924,11 @@ function vAdvisory(j,A){
     'it opens on every officer’s home screen and stays there until acknowledged',
     `<div style="display:grid;gap:12px;max-width:760px">
        <label style="font-size:12px;color:var(--tx-2)">Title
-         <input class="find" id="advTitle" style="max-width:none;margin-top:5px" placeholder="PS MPDO MPO Health Advisory"></label>
+         <input class="find" id="advTitle" style="max-width:none;margin-top:5px" placeholder="PS MPDO MPO Health Advisory"
+           value="${ADV_DRAFT?esc(ADV_DRAFT.title):''}"></label>
        <label style="font-size:12px;color:var(--tx-2)">The line every officer is shown
          <input class="find" id="advMsg" style="max-width:none;margin-top:5px"
-           value="Kindly go through the to do list in the monsoon season and act accordingly"></label>
+           value="${ADV_DRAFT?esc(ADV_DRAFT.message):'Kindly go through the to do list in the monsoon season and act accordingly'}"></label>
        <label style="font-size:12px;color:var(--tx-2)">Addressed to
          <select class="rsel" id="advAud" style="display:block;margin-top:5px;width:220px">
            <option value="ALL">Every officer</option>
@@ -2846,10 +2969,11 @@ function render(j){
     : VIEW==='gpdp'?vGpdp(j,A)
     : VIEW==='advisory'?vAdvisory(j,A) : vMap(j,A);
   document.querySelectorAll('#g [data-k]').forEach(el=>{ if(keep[el.dataset.k]) el.scrollTop=keep[el.dataset.k]; });
+  if((VIEW==='map'||VIEW==='advisory') && !WX) pullWeather();
   if(VIEW==='gpdp' && !GPDP) pullGpdp();
   if(VIEW==='advisory' && !ADV) pullAdv();
   if(VIEW==='overview') drawMap('map','main');
-  if(VIEW==='map') drawMap('map2','full');
+  if(VIEW==='map'){ const m2=drawMap('map2','full'); drawWeather(m2 || MAP2); }
   const mf=$('#mFind'); if(mf) mf.onchange=()=>{ if(mf.value) flyTo(mf.value); };
   const mp=$('#mPick'); if(mp) mp.onchange=()=>{ if(mp.value) flyTo(mp.value); };
   const gq=$('#gpFind');
@@ -2983,6 +3107,16 @@ document.addEventListener('click',e=>{
   if(e.target.closest('#gpCsv')){ exportGpdpCsv(); return; }
   if(e.target.closest('#advCsv')){ exportAdvCsv(); return; }
   if(e.target.closest('#advGo')){ publishAdvisory(); return; }
+  if(e.target.closest('#wxToggle')){ WXON=!WXON; drawWeather(MAP2); if(DATA) render(DATA); return; }
+  if(e.target.closest('#wxDraft')){
+    /* the draft is carried to the advisory composer, never sent from here —
+       a weather warning is an advisory like any other, and the Collector
+       passes it */
+    ADV_DRAFT={ title:'Weather advisory · '+dm(WX.date||'')+' · '+(WX.level||''), message:WX.draft||'' };
+    VIEW='advisory';
+    document.querySelectorAll('#nav [data-v]').forEach(x=>x.toggleAttribute('aria-current',x.dataset.v==='advisory'));
+    if(DATA) render(DATA);
+    return; }
 
   const fc=e.target.closest('[data-mf]');
   if(fc){ MFILTER=fc.dataset.mf; if(DATA) render(DATA); return; }

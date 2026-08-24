@@ -314,7 +314,7 @@ function buildTabs(){
   $('#tabs').innerHTML = keys.map(k => {
     const [label, svg] = TAB_DEFS[k];
     return `<button role="tab" data-s="${k}" aria-selected="${k===TAB?'true':'false'}" aria-label="${label}">
-      ${svg}<span>${label}</span>${k==='records'?'<i class="dot" id="pendDot" hidden></i>':''}${k==='notices'?'<i class="dot" id="ntcDot" hidden></i>':''}</button>`;
+      ${svg}<span>${label}</span>${k==='records'?'<i class="dot" id="pendDot" hidden></i>':''}${k==='notices'?'<i class="dot" id="ntcDot" hidden></i>':''}${k==='home'?'<i class="badge" id="homeBadge" hidden></i>':''}${k==='more'?'<i class="badge" id="moreBadge" hidden></i>':''}</button>`;
   }).join('');
   updateNtcDot();
 }
@@ -929,6 +929,8 @@ function renderHome(){
     if(!isViewer(u.role)) get({op:'attendance'}).then(r=>{ if(r&&r.ok){ DB.attToday=r.rows; if(TAB==='home') renderHome(); } }).catch(()=>{});
     refreshGpdp();      /* so the plan card states the district's record, not a guess */
     refreshAdvisory();  /* and the circular is put up the moment it is issued */
+    refreshWeather();   /* the sky over his own mandal, from the district's one call */
+    flushAdvAcks();     /* any receipt the signal swallowed goes up now */
   }
   const h=new Date().getHours();
   const greet = (h<12?'Good morning':h<17?'Good afternoon':'Good evening');
@@ -945,6 +947,7 @@ function renderHome(){
   if(gpPin) h2 += gpdpCard();
   h2 += advisoryCard();
   if(!gpPin) h2 += gpdpCard();
+  h2 += weatherCard();
 
   if(!isViewer(u.role)){
     const pend=pendingCount();
@@ -985,6 +988,8 @@ function renderHome(){
      about — once per opening of the app, never twice */
   maybePopGpdp();
   notifyPending();
+  updateDocBadges();
+  notifyWeather();
 }
 function banner(kind, icon, text){
   return `<div class="banner ${kind}">${icon}<span>${esc(text)}</span></div>`;
@@ -2114,10 +2119,10 @@ async function renderMore(){
   ${leaveVisible(u.role) ? `<div class="group"><div class="hdr">Leave</div><div class="card">
     <div class="row tap" id="mAdv"><span class="ico" style="background:var(--seal)">${ICON.file}</span>
       <span class="lbl"><b>Advisories</b><span>Circulars the District Collector has issued to you</span></span>
-      <span class="chev">›</span></div>
+      ${advPending() ? '<i class="badge">1</i>' : '<span class="chev">›</span>'}</div>
     <div class="row tap" id="mGpdp"><span class="ico" style="background:var(--gold-ink)">${ICON.file}</span>
       <span class="lbl"><b>Development plan</b><span>Send the Gram Panchayat Development Plan the district has called for</span></span>
-      <span class="chev">›</span></div>
+      ${gpdpPending() ? '<i class="badge">1</i>' : '<span class="chev">›</span>'}</div>
     <div class="row tap" id="mLeave"><span class="ico" style="background:var(--seal-2)">${ICON.cal}</span>
       <span class="lbl"><b>${canApproveLeave(u.role)?'Leave applications':'Apply for leave'}</b>
       <span>${canApproveLeave(u.role)
@@ -2331,6 +2336,72 @@ function lvSpan(l){
 
 
 /* ============================================================================
+ * WEATHER · the sky over the officer's own mandal
+ * ----------------------------------------------------------------------------
+ * It is INFORMATION, not an order, and it is not an IMD warning. The card says
+ * what is forecast and what the district's own threshold calls it; anything a
+ * Secretary is told to DO about it comes from the Collector, as an advisory.
+ *
+ * It is also the only thing on this screen the app is happy to be wrong about
+ * quietly: if the forecast cannot be had, the card simply does not appear.
+ * Attendance and the two documents must always say where they stand; the
+ * weather may stay silent.
+ * ========================================================================== */
+const WX_ICON = { CALM:'ok', WATCH:'warn', SEVERE:'bad' };
+function wxState(){ return (DB.wx && typeof DB.wx === 'object') ? DB.wx : null; }
+
+function refreshWeather(){
+  if(!navigator.onLine) return Promise.resolve();
+  return get({ op:'weather' }).then(r => {
+    if(r && r.ok){
+      DB.wx = { mine:r.mine || null, level:r.level || 'CALM', at:r.at || new Date().toISOString(),
+                source:r.source || '' };
+      save();
+      if(TAB === 'home') renderHome();
+    }
+  }).catch(()=>{});
+}
+
+function weatherCard(){
+  const st = wxState(); if(!st || !st.mine) return '';
+  const w = st.mine;
+  const lvl = w.level || 'CALM';
+  const tone = lvl === 'SEVERE' ? 'var(--flag)' : lvl === 'WATCH' ? 'var(--gold-ink)' : 'var(--ok)';
+  const head = lvl === 'SEVERE' ? 'Severe weather expected'
+             : lvl === 'WATCH'  ? 'Watch the weather today'
+             : 'Weather today';
+  const bits = [];
+  if(w.today) bits.push(w.today);
+  if(w.tmax != null) bits.push(Math.round(w.tmax) + '° max');
+  if(w.rainClass) bits.push(w.rainClass + (w.rain != null ? ' · ' + Math.round(w.rain) + ' mm' : ''));
+  else if(w.rain != null && w.rain >= 1) bits.push(Math.round(w.rain) + ' mm');
+  if(w.wind != null && w.wind >= 25) bits.push('wind to ' + Math.round(w.wind) + ' km/h');
+  return `<div class="group" style="margin-top:16px"><div class="hdr">${esc(w.mandal || 'Your mandal')} &middot; forecast</div>
+    <div class="card"><div class="row">
+      <span class="ico" style="background:${tone}">${ICON.cloud}</span>
+      <span class="lbl"><b>${esc(head)}</b><span>${esc(bits.join(' · '))}</span></span>
+      ${w.temp != null ? `<span class="num" style="font-size:19px;font-weight:750">${Math.round(w.temp)}°</span>` : ''}
+    </div></div></div>`;
+}
+
+/* Raised once per opening, and only when the sky is worth a notification. A
+   notification for a fine day teaches an officer to swipe the next one away. */
+let WX_NOTIFIED = false;
+function notifyWeather(){
+  const st = wxState();
+  if(WX_NOTIFIED || !st || !st.mine) return;
+  const lvl = st.mine.level;
+  if(lvl !== 'SEVERE' && lvl !== 'WATCH') return;
+  WX_NOTIFIED = true;
+  const w = st.mine;
+  const what = w.rainClass || w.today || 'Unsettled weather';
+  notifyLocal((lvl === 'SEVERE' ? 'Severe weather — ' : 'Weather watch — ') + (w.mandal || 'your mandal'),
+    what + (w.rain != null ? ' · up to ' + Math.round(w.rain) + ' mm' : '') +
+    (w.wind != null && w.wind >= 25 ? ' · wind to ' + Math.round(w.wind) + ' km/h' : ''),
+    'sjgp-weather');
+}
+
+/* ============================================================================
  * WHAT THE DISTRICT IS WAITING FOR, PUT IN FRONT OF THE OFFICER
  * ----------------------------------------------------------------------------
  * A NOTE ON "PUSH". A true push — one that reaches a handset with the app
@@ -2375,6 +2446,22 @@ function advPending(){
   return !!(st && st.advisory && !st.acknowledged);
 }
 
+/* WHAT THE DISTRICT IS STILL WAITING FOR, AS A NUMBER. The badge counts the
+   things an officer can act on — a circular he has not acknowledged, a plan he
+   has not sent. The weather is not counted: it is information, and a number on
+   a tab that cannot be cleared by doing anything is a number an officer learns
+   to ignore. */
+function docsPending(){
+  return (advPending() ? 1 : 0) + (gpdpPending() ? 1 : 0);
+}
+function updateDocBadges(){
+  const n = docsPending();
+  [['#homeBadge', n], ['#moreBadge', n]].forEach(([sel, v]) => {
+    const el = $(sel); if(!el) return;
+    el.hidden = !v; el.textContent = v > 9 ? '9+' : String(v);
+  });
+}
+
 /* Raised once per opening of the app, and only for what is actually
    outstanding — a notification for something already done teaches an officer
    to ignore the next one. */
@@ -2395,6 +2482,12 @@ function notifyPending(){
    do is not know. */
 function maybePopGpdp(){
   if(GPDP_SHOWN || !gpdpPending()) return;
+  /* ONCE A DAY, NOT ONCE AN OPENING. The card is pinned to the top of the home
+     screen the whole time the plan is outstanding, so the officer cannot miss
+     it; a modal in front of him every single time he opens the app is nagging,
+     and nagging is how an officer learns to dismiss things unread. */
+  const today = todayStr();
+  if((DB.gpdpPrompt || '') === today){ GPDP_SHOWN = true; return; }
   /* WAIT UNTIL THE CIRCULAR IS KNOWN. The two registers are fetched side by
      side, and whichever answers first renders. When the plan answered first
      the prompt went up while the advisory was still unknown, and the circular
@@ -2404,6 +2497,7 @@ function maybePopGpdp(){
   /* one sheet at a time — the circular outranks the plan */
   if(advPending()) return;
   GPDP_SHOWN = true;
+  DB.gpdpPrompt = today; save();
   gpdpSheet();
 }
 function gpdpSheet(){
@@ -2442,6 +2536,35 @@ let ADV_SHOWN = false;          /* once per opening of the app */
 let ADV_SENDING = false;
 
 function advState(){ return (DB.adv && typeof DB.adv === 'object') ? DB.adv : null; }
+
+/* THE PHONE REMEMBERS WHAT HE PRESSED. An officer who has acknowledged a
+   circular must never be shown it again on that handset — not if the signal
+   dropped on the way to the district, not if the district's answer lags
+   behind. Reported from the field, in those words: "even once I acknowledged
+   the advisory it keeps coming to my screen, which is annoying." */
+function advDone(id){ return !!(id && DB.advDone && DB.advDone[id]); }
+function advMarkDone(id, at){
+  if(!id) return;
+  DB.advDone = DB.advDone || {};
+  DB.advDone[id] = at || new Date().toISOString();
+  save();
+}
+function advQueue(id){
+  if(!id) return;
+  DB.advAckQ = DB.advAckQ || [];
+  if(DB.advAckQ.indexOf(id) < 0) DB.advAckQ.push(id);
+  save();
+}
+/* the receipts held on the phone, sent again the next time there is a line */
+function flushAdvAcks(){
+  const q = (DB.advAckQ || []).slice();
+  if(!q.length || !navigator.onLine) return Promise.resolve();
+  return Promise.all(q.map(id =>
+    post({ kind:'advAck', token:(DB.session||{}).token, id:id, at:(DB.advDone||{})[id] })
+      .then(r => { if(r && r.ok !== false) DB.advAckQ = (DB.advAckQ || []).filter(x => x !== id); })
+      .catch(()=>{})
+  )).then(() => save());
+}
 function refreshAdvisory(){
   if(!navigator.onLine) return Promise.resolve();
   return get({ op:'advisory' }).then(r => {
@@ -2457,6 +2580,7 @@ function refreshAdvisory(){
 function maybePopAdvisory(){
   const st = advState();
   if(ADV_SHOWN || !st || !st.advisory || st.acknowledged) return;
+  if(advDone(st.advisory.id)) return;   /* he pressed it on this phone already */
   ADV_SHOWN = true;
   advSheet();
 }
@@ -2484,23 +2608,35 @@ function advSheet(){
   $('#advAck').addEventListener('click', () => sendAdvAck());
 }
 
+/* HE PRESSED IT ONCE, AND ONCE IS ENOUGH.
+   The receipt is written on the phone BEFORE the wire is tried, and the sheet
+   closes at once. If the district cannot be reached the receipt is queued and
+   goes up by itself with the next line — the officer is told, but he is never
+   asked to press it a second time. It used to be recorded only when the server
+   answered, so a dropped signal meant the circular opened again the next
+   morning, and the morning after that. */
 async function sendAdvAck(){
   const st = advState(); if(!st || !st.advisory || ADV_SENDING) return;
+  const id = st.advisory.id, at = new Date().toISOString();
+  advMarkDone(id, at);
+  DB.adv = Object.assign({}, st, { acknowledged:true, ackAt:at });
+  save();
+  hideSheet();
+  if(TAB === 'home') renderHome();
+
   if(!navigator.onLine){
-    toast('No signal. The district has not been told yet — try again where there is a line.', 6000);
+    advQueue(id);
+    toast('Noted on this phone. It goes to the district by itself when there is signal.', 6500);
     return;
   }
-  ADV_SENDING = true; advSheet();
+  ADV_SENDING = true;
   try{
-    const r = await post({ kind:'advAck', token:(DB.session||{}).token,
-                           id: st.advisory.id, at: new Date().toISOString() });
+    const r = await post({ kind:'advAck', token:(DB.session||{}).token, id:id, at:at });
     if(!r || r.ok === false) throw new Error((r && r.error) || 'The district did not record it.');
-    DB.adv = Object.assign({}, st, { acknowledged:true, ackAt:r.ackAt || new Date().toISOString() });
-    save();
-    hideSheet();
     toast('Noted. The district has your acknowledgement.', 5000);
   }catch(err){
-    toast(String(err.message || err), 6000);
+    advQueue(id);
+    toast('Noted on this phone. The district has not been told yet — it will go by itself when there is signal.', 6500);
   }finally{
     ADV_SENDING = false;
     if(TAB === 'home') renderHome();
@@ -2515,7 +2651,7 @@ function advListSheet(){
      showed "not acknowledged" against a circular he had just acknowledged.
      The standing entry takes its receipt from the live state instead. */
   const list = (st && st.recent && st.recent.length)
-             ? st.recent.map(a => a.standing ? Object.assign({}, a, { acknowledged: st.acknowledged }) : a)
+             ? st.recent.map(a => a.standing ? Object.assign({}, a, { acknowledged: st.acknowledged || advDone(a.id) }) : a)
              : (st && st.advisory ? [Object.assign({}, st.advisory, { standing:true, acknowledged:st.acknowledged })] : []);
   if(!list.length){
     showSheet(`<div style="padding:6px 20px 18px"><h2>Advisories</h2>
@@ -2547,7 +2683,7 @@ function advisoryCard(){
   const st = advState();
   if(!st || !st.advisory) return '';
   const a = st.advisory;
-  if(st.acknowledged){
+  if(st.acknowledged || advDone(a.id)){
     return `<div class="group" style="margin-top:16px"><div class="hdr">Advisory</div>
       <div class="card"><div class="row tap" data-adv="1">
         <span class="ico" style="background:var(--ok)">${ICON.tickC}</span>

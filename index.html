@@ -220,6 +220,15 @@ html[data-sun="1"] .masthead{background:#fff}
 .tabs button span{font-size:10.5px;font-weight:600;letter-spacing:.01em}
 .tabs button[aria-selected=true]{color:var(--seal)}
 .tabs .dot{position:absolute;top:7px;margin-left:24px;width:9px;height:9px;border-radius:50%;background:var(--flag);border:2px solid var(--surface)}
+/* A COUNT, NOT A DOT. A dot says "something"; a badge says how many things,
+   which is the difference between an officer checking and an officer knowing.
+   It is only ever drawn when the number is greater than nought. */
+.tabs .badge{position:absolute;top:4px;margin-left:20px;min-width:17px;height:17px;padding:0 4px;
+  border-radius:9px;background:var(--flag);color:#fff;font:700 10.5px/17px var(--mono);
+  text-align:center;border:2px solid var(--surface);box-sizing:content-box}
+/* and on a row inside a list, where it counts what that row is hiding */
+.row .badge{margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:10px;
+  background:var(--flag);color:#fff;font:700 11px/20px var(--mono);text-align:center;flex:none}
 
 /* ---------- sign in: brand band above, credentials below ---------- */
 #signin{position:fixed;inset:0;z-index:80;background:var(--canvas);display:flex;flex-direction:column;
@@ -558,7 +567,7 @@ body.kb .tabs,body.kb .strip{transform:translateY(160%);pointer-events:none}
   .tabs button span{font-size:14px;font-weight:600;letter-spacing:0}
   .tabs button[aria-selected=true]{color:var(--seal);background:var(--seal-tint);font-weight:700}
   .tabs button[aria-selected=true] span{font-weight:700}
-  .tabs .dot{border-color:transparent}
+  .tabs .dot,.tabs .badge{border-color:transparent}
   body.kb .tabs{transform:none;pointer-events:auto}
 
   /* the working column */
