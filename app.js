@@ -2282,9 +2282,15 @@ const leaveName = t => (LEAVE_TYPES.find(x => x[0] === t) || [t, t])[1];
    Earned leave is not pro-rated: it is credited for the year. */
 const LEAVE_OPENING_YEAR = 2026;
 const CL_OPENING_BALANCE = 6;
+/* The Collector's order for 2026: three optional holidays, not the five of
+   Annexure-II. The server holds the same pair and is the authority; this copy
+   is so the screen says the same thing before the application is sent. */
+const OH_REDUCED_YEAR = 2026;
+const OH_REDUCED_BALANCE = 3;
 
 function entitlement(type, year){
   if(type === 'CL' && Number(year) === LEAVE_OPENING_YEAR) return CL_OPENING_BALANCE;
+  if(type === 'OH' && Number(year) === OH_REDUCED_YEAR) return OH_REDUCED_BALANCE;
   return leaveMeta(type).year || 0;
 }
 /* Sanctioned leave is spent; an application awaiting orders is committed and
@@ -2998,7 +3004,7 @@ function openLeaveForm(edit){
         <select id="lvOh">${OPTIONAL_HOLIDAYS.filter(([d]) => d >= t)
           .map(([d,n]) => `<option value="${d}">${esc(dayName(d).split(',')[0])} ${esc(d.slice(8))}.${esc(d.slice(5,7))} — ${esc(n)}</option>`).join('')
           || '<option value="">No optional holidays remain this year</option>'}</select>
-        <p style="font-size:12px;color:var(--ink-3);margin-top:5px;line-height:1.45">Five a calendar year, from the Government’s notified list, one day each. Apply in advance; the day is yours once the Collector sanctions it.</p></div>
+        <p style="font-size:12px;color:var(--ink-3);margin-top:5px;line-height:1.45">${entitlement('OH', Number(t.slice(0,4)))} a calendar year, from the Government’s notified list, one day each. Apply in advance; the day is yours once the Collector sanctions it.</p></div>
       <div class="field"><label for="lvReason">Reason</label>
         <textarea id="lvReason" rows="3" placeholder="Briefly, in your own words"></textarea></div>
       <div class="field" id="lvCertBox" hidden><label for="lvCert">Medical certificate</label>
