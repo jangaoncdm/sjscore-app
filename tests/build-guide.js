@@ -115,7 +115,7 @@ footer b{color:#1A2437}
   <p class="gov">Government of Telangana &middot; District Collector &amp; Magistrate, Jangaon</p>
   <h1>${opts.h1}</h1>
   <p class="sub">${opts.sub}</p>
-  <p class="rc">Swachh Jangaon Gram Panchayat &middot; Rc.No.788/DPO/26/34 &middot; ${esc(stamp)}</p>
+  <p class="rc">Swachh Jangaon Gram Panchayat &middot; ${esc(stamp)}</p>
 </header>
 
 ${opts.callout}

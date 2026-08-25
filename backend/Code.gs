@@ -1,6 +1,6 @@
 /**********************************************************************
  * SJGP — Swachh Jangaon Gram Panchayat — district backend v6.8.4
- * Collectorate, Jangaon • Rc.No.788/DPO/26/34
+ * Collectorate, Jangaon
  *
  * NEW IN v6.9 — the deployment stops being a ritual
  *  • The SALT moved to Script Properties. It was the one line that had to be
