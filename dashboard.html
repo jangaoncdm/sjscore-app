@@ -808,6 +808,12 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .nav [data-v="map"][aria-current]{background:var(--blue-2);color:var(--blue)}
 .nav [data-v="gpdp"][aria-current]{background:var(--teal-2);color:var(--teal)}
 .nav [data-v="advisory"][aria-current]{background:var(--amber-2);color:var(--gold)}
+.nav [data-v="admin"][aria-current]{background:var(--violet-2);color:var(--violet)}
+/* the register form: two columns on a desk, one on a phone */
+.rlform{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.rlform label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--tx-3)}
+.rlform input,.rlform select{min-height:38px;padding:0 10px;border:1px solid var(--ln);border-radius:9px;
+  background:var(--bg-2);color:var(--tx);font:inherit;font-size:13.5px}
 .railfoot{position:absolute;left:14px;right:14px;bottom:16px;font-size:11px;color:var(--tx-3);line-height:1.6}
 
 /* ---------- top ---------- */
@@ -1128,6 +1134,7 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
       <button data-v="map"><svg viewBox="0 0 24 24"><path d="M9 4 3.8 6v14L9 18l6 2 5.2-2V4L15 6 9 4zM9 4v14M15 6v14"/></svg>Map</button>
       <button data-v="gpdp"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>GPDP</button>
       <button data-v="advisory"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/><path d="M12 8v3M12 13.4v.2"/></svg>Advisory</button>
+      <button data-v="admin" id="navAdmin" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M4.5 20c1.2-3.6 4-5.4 7.5-5.4 1.2 0 2.3.2 3.3.6"/><path d="M17.5 15.5v5M15 18h5"/></svg>Admin</button>
     </nav>
     <div class="railfoot">District Operations Center<br><a href="./">Open the field app</a></div>
   </aside>
@@ -1208,6 +1215,9 @@ function boot(){
   if(!d||!d.session||!d.session.token||!d.url){ gate('Sign in once in the SJGP app on this device, then open this page again. The console uses that sign-in.',true); return; }
   if((d.session.user||{}).role!=='COLLECTOR'){ gate('<span class="rd">The monitoring console is available to the Collector alone.</span> This device is signed in as '+esc((d.session.user||{}).name||'another officer')+'.',true); return; }
   ST={url:d.url,token:d.session.token,user:d.session.user};
+  /* the roll is the Collector's. Hiding the rail item is a courtesy, not a
+     rule — every one of those calls re-checks the role on the server. */
+  if(String((ST.user||{}).role||'').toUpperCase()==='COLLECTOR'){ const na=$('#navAdmin'); if(na) na.hidden=false; }
   const h=new Date().getHours();
   $('#hi').textContent=(h<12?'Good morning':h<17?'Good afternoon':'Good evening')+', '+String(ST.user.name||'').replace(/,.*$/,'').split(' ').slice(0,2).join(' ');
   pull(); TIMER=setInterval(tick,1000);
@@ -2613,6 +2623,168 @@ function vLeave(j,A){
     (lr.length?lr.slice(0,60).map(row).join(''):'<tr><td colspan="5" class="empty">No orders yet.</td></tr>')+`</tbody></table></div>`,'lr');
   return h;
 }
+/* ============================================================================
+   THE OFFICER ROLL · registering, the PIN, and taking a man off the roll
+   ----------------------------------------------------------------------------
+   Asked for on 25.08.2026: this work used to mean the Apps Script editor, a
+   line in a FIELD_FIXES batch and a deploy, for one Secretary who had
+   forgotten four figures.
+
+   THE CONSOLE ONLY ASKS. Every one of these is re-checked on the server
+   against the Collector's own token — the rail item is hidden from anybody
+   else, but hiding a button is not a rule, and the server refuses a DPO the
+   same as it refuses a Secretary.
+
+   THERE IS NO DELETE HERE. Taking an officer off the roll writes Active =
+   FALSE; the row stays and so does everything pointing at it — his
+   attendance, his notices, his leave, his plan. It is reversible. A deleted
+   row would orphan all of it and no file could be produced afterwards.
+   ========================================================================== */
+let ROLL=null, ROLLQ='', ROLLBUSY=false, ROLLPIN=null, ROLLMSG='', ROLLBAD=false, ROLLADD=false;
+const ROLLFORM={phone:'',name:'',role:'PS',mandal:'',gp:'',email:''};
+
+function pullRoll(){
+  return fetch(ST.url+'?op=roll&token='+encodeURIComponent(ST.token))
+    .then(r=>r.json()).then(j=>{ if(j&&j.ok){ ROLL=j; if(VIEW==='admin'&&DATA) render(DATA); } })
+    .catch(()=>{});
+}
+function rollSay(t,bad){ ROLLMSG=t||''; ROLLBAD=!!bad; if(DATA) render(DATA); }
+
+/* one call, one shape: post, report what the district said, re-read the roll */
+function rollPost(body,after){
+  if(ROLLBUSY) return;
+  ROLLBUSY=true; rollSay('Sending to the district…');
+  fetch(ST.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify(Object.assign({token:ST.token},body))})
+    .then(r=>r.json()).then(j=>{
+      ROLLBUSY=false;
+      if(!j||j.ok===false){ rollSay((j&&j.error)||'The district refused it.',true); return; }
+      after(j);
+      pullRoll().then(()=>{ if(DATA) render(DATA); });
+    })
+    .catch(err=>{ ROLLBUSY=false; rollSay('It did not get through: '+err,true); });
+}
+
+function vAdmin(j,A){
+  if(String(ST.user.role||'').toUpperCase()!=='COLLECTOR')
+    return panel('c12','The officer roll','',
+      '<div class="empty">The roll is the Collector’s. Your login can read the district, not change who is on it.</div>');
+  if(!ROLL) return panel('c12','The officer roll','reading…','<div class="empty">Reading the roll…</div>');
+
+  const rows=ROLL.rows||[];
+  const on=rows.filter(r=>r.active), off=rows.filter(r=>!r.active);
+  const noPin=on.filter(r=>!r.hasPin), twin=rows.filter(r=>r.rows>1);
+
+  let h='<div class="kpirow">';
+  h+=kpi('On the roll',IC.u,on.length,'','active logins');
+  h+=kpi('Off the roll',IC.u,off.length,'','the row stands, inactive');
+  h+=kpi('No PIN set',IC.s,noPin.length,'','cannot sign in yet');
+  h+=kpi('Numbers on two rows',IC.f,twin.length,'','the app greets from the senior row');
+  h+='</div>';
+
+  /* THE PIN, SHOWN ONCE. It is in the answer to the call that made it and
+     nowhere else — not on the Audit tab, not in this page's storage. Once
+     this panel is dismissed the district cannot tell anyone what it was. */
+  if(ROLLPIN) h+=panel('c12','The PIN for '+esc(ROLLPIN.name||ROLLPIN.phone),
+    'copy it now — it is shown once',
+    `<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+      <div style="font-family:var(--mono);font-size:38px;font-weight:700;letter-spacing:.12em;color:var(--pri)">${esc(ROLLPIN.pin)}</div>
+      <div style="font-size:13px;color:var(--tx-2);line-height:1.6;flex:1;min-width:240px">
+        ${esc(ROLLPIN.phone)}${ROLLPIN.rows>1?' · written to all '+ROLLPIN.rows+' rows carrying this number, so it works whichever row the app reads':''}<br>
+        ${ROLLPIN.unlocked?'The '+ROLLPIN.unlocked+' wrong-PIN attempts standing against him were cleared.<br>':''}
+        ${ROLLPIN.inactive?'<b style="color:var(--red)">He is off the roll — the PIN is set but the app will not let him in until he is put back.</b><br>':''}
+        It is written nowhere else. Give it to him before you close this.
+      </div>
+      <button class="tbtn" id="rlPinShut">Done</button>
+    </div>`);
+
+  if(ROLLMSG) h+=panel('c12','','',
+    `<div style="font-size:13px;color:${ROLLBAD?'var(--red)':'var(--tx-3)'}">${esc(ROLLMSG)}</div>`);
+
+  /* ---- register an officer ---- */
+  const roles=(ROLL.roles||['PS','MPO','MSO','MPDO','DLPO','DPO','COLLECTOR']);
+  if(ROLLADD) h+=panel('c12','Register an officer',
+    '<button class="fchip" id="rlAddShut" style="min-height:34px">Not now</button>',
+    `<div class="rlform">
+      <label>Mobile number<input id="rlPhone" inputmode="numeric" maxlength="10" placeholder="ten digits" value="${esc(ROLLFORM.phone)}"></label>
+      <label>Name<input id="rlName" placeholder="as it should be read" value="${esc(ROLLFORM.name)}"></label>
+      <label>Role<select id="rlRole">${roles.map(r=>`<option value="${esc(r)}"${ROLLFORM.role===r?' selected':''}>${esc(r)}</option>`).join('')}</select></label>
+      <label>Mandal<input id="rlMandal" list="rlMandals" value="${esc(ROLLFORM.mandal)}">
+        <datalist id="rlMandals">${(ROLL.mandals||[]).map(m=>`<option value="${esc(m)}">`).join('')}</datalist></label>
+      <label>Gram Panchayat<input id="rlGp" placeholder="for a Secretary" value="${esc(ROLLFORM.gp)}"></label>
+      <label>Email<input id="rlEmail" placeholder="for notices" value="${esc(ROLLFORM.email)}"></label>
+      </div>
+      <div style="margin-top:12px"><button class="tbtn pri" id="rlAdd"${ROLLBUSY?' disabled':''}>Register and set a PIN</button></div>
+      <p style="font-size:12px;color:var(--tx-3);margin-top:10px;line-height:1.6">A number already on the roll is refused and its holder named — one number, one officer. The PIN is shown once, here, and written nowhere.</p>`);
+
+  /* ---- the roll ---- */
+  const q=ROLLQ.trim().toLowerCase();
+  const shown=q?rows.filter(r=>(r.name+' '+r.phone+' '+r.mandal+' '+r.gp+' '+r.role).toLowerCase().indexOf(q)>=0):rows;
+  h+=panel('c12','The roll',
+    `${ROLLADD?'':'<button class="fchip" id="rlAddOpen" style="min-height:34px">Add an officer</button> · '}<input id="rlFind" placeholder="name, number, mandal or village" value="${esc(ROLLQ)}" style="min-height:34px;padding:0 10px;border:1px solid var(--ln);border-radius:8px;background:var(--bg-2);color:var(--tx);font:inherit;font-size:13px"> · ${shown.length} of ${rows.length}`,
+    `<div class="twrap" style="max-height:520px"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th><th>Village</th><th>Number</th><th>Status</th><th></th></tr></thead><tbody>`+
+    (shown.length?shown.map(r=>`<tr>
+      <td>${esc(r.name||'(unnamed)')}${r.rows>1?'<span class="pill warn" style="margin-left:6px">'+r.rows+' rows</span>':''}</td>
+      <td class="mut">${esc(r.role)}</td>
+      <td class="mut">${esc(r.mandal||'—')}</td>
+      <td class="mut">${esc(r.gp||'—')}</td>
+      <td class="num mut">${esc(r.phone)}</td>
+      <td>${r.active?'<span class="pill ok">on the roll</span>':'<span class="pill mut">off the roll</span>'}${r.hasPin?'':'<span class="pill warn" style="margin-left:6px">no PIN</span>'}</td>
+      <td style="white-space:nowrap">
+        <button class="fchip" data-rlpin="${esc(r.phone)}" style="min-height:30px">Reset PIN</button>
+        ${r.phone===String(ST.user.phone||'').replace(/D/g,'').slice(-10)
+          ? '<span class="mut" style="font-size:12px">you</span>'
+          : `<button class="fchip" data-rlact="${esc(r.phone)}" data-on="${r.active?'0':'1'}" style="min-height:30px">${r.active?'Take off':'Put back'}</button>`}
+      </td></tr>`).join('')
+      :'<tr><td colspan="7" class="empty">Nobody on the roll matches that.</td></tr>')+
+    `</tbody></table></div>
+    <p style="font-size:12px;color:var(--tx-3);margin-top:10px;line-height:1.6"><b>Taking an officer off the roll deletes nothing.</b> His row stays, marked inactive, and so does his attendance, his leave, his notices and his plan — a file can still be produced. He stops counting for attendance and no notice can arise against him. Put him back and his own PIN works again.</p>`,'rl');
+  return h;
+}
+
+function wireAdmin(){
+  const shut=$('#rlPinShut'); if(shut) shut.onclick=()=>{ ROLLPIN=null; if(DATA) render(DATA); };
+  const op=$('#rlAddOpen'); if(op) op.onclick=()=>{ ROLLADD=true; ROLLMSG=''; if(DATA) render(DATA); };
+  const cl=$('#rlAddShut'); if(cl) cl.onclick=()=>{ ROLLADD=false; if(DATA) render(DATA); };
+
+  const fq=$('#rlFind');
+  if(fq) fq.oninput=()=>{ ROLLQ=fq.value; const at=fq.selectionStart; if(DATA) render(DATA);
+    const f2=$('#rlFind'); if(f2){ f2.focus(); try{ f2.setSelectionRange(at,at); }catch(e){} } };
+
+  /* THE TYPED FORM MUST SURVIVE A RE-RENDER. The console polls every minute
+     and re-renders under whatever is on the screen; the advisory composer lost
+     a typed circular that way and the Collector would have written it twice. */
+  const bind=(id,k)=>{ const el=$(id); if(el) el.oninput=el.onchange=()=>{ ROLLFORM[k]=el.value; }; };
+  bind('#rlPhone','phone'); bind('#rlName','name'); bind('#rlRole','role');
+  bind('#rlMandal','mandal'); bind('#rlGp','gp'); bind('#rlEmail','email');
+
+  const add=$('#rlAdd');
+  if(add) add.onclick=()=>{
+    const f=ROLLFORM;
+    if(!/^\d{10}$/.test(String(f.phone||'').replace(/\D/g,'').slice(-10))){ rollSay('A mobile number is ten digits.',true); return; }
+    if(!String(f.name||'').trim()){ rollSay('A name is needed — the roll is read by people.',true); return; }
+    if(!confirm('Register '+f.name+' ('+f.role+(f.mandal?', '+f.mandal:'')+') on '+f.phone+'?')) return;
+    rollPost({kind:'userCreate',phone:f.phone,name:f.name,role:f.role,mandal:f.mandal,gp:f.gp,email:f.email},
+      r=>{ ROLLPIN={pin:r.pin,name:r.name,phone:r.phone,rows:1}; ROLLMSG=r.name+' is on the roll.'; ROLLBAD=false;
+           ROLLADD=false; ['phone','name','mandal','gp','email'].forEach(k=>ROLLFORM[k]=''); });
+  };
+
+  document.querySelectorAll('#g [data-rlpin]').forEach(b=>b.onclick=()=>{
+    const p=b.dataset.rlpin, who=(ROLL.rows.find(r=>r.phone===p)||{}).name||p;
+    if(!confirm('Reset the PIN for '+who+'?\n\nThe PIN he is using today stops working at once. The new one is shown once — copy it and give it to him.')) return;
+    rollPost({kind:'userPin',phone:p}, r=>{ ROLLPIN=r; ROLLMSG=''; ROLLBAD=false; });
+  });
+
+  document.querySelectorAll('#g [data-rlact]').forEach(b=>b.onclick=()=>{
+    const p=b.dataset.rlact, on=b.dataset.on==='1';
+    const who=(ROLL.rows.find(r=>r.phone===p)||{}).name||p;
+    if(!confirm(on?('Put '+who+' back on the roll?')
+      :('Take '+who+' off the roll?\n\nNothing is deleted. His row stays, marked inactive, and so does his attendance, leave, notices and plan. He stops counting for attendance and no notice can arise against him. You can put him back.'))) return;
+    rollPost({kind:'userActive',phone:p,active:on},
+      r=>{ ROLLPIN=null; rollSay(r.name+(on?' is back on the roll.':' is off the roll. The row stands, nothing was deleted.')); });
+  });
+}
+
 function vNotices(j,A){
   const N=j.notices;
   if(!N) return panel('c12','Show-cause notices','needs the 6.7 backend',
@@ -3125,11 +3297,14 @@ function render(j){
     : VIEW==='leave'?vLeave(j,A)
     : VIEW==='notices'?vNotices(j,A)
     : VIEW==='gpdp'?vGpdp(j,A)
-    : VIEW==='advisory'?vAdvisory(j,A) : vMap(j,A);
+    : VIEW==='advisory'?vAdvisory(j,A)
+    : VIEW==='admin'?vAdmin(j,A) : vMap(j,A);
   document.querySelectorAll('#g [data-k]').forEach(el=>{ if(keep[el.dataset.k]) el.scrollTop=keep[el.dataset.k]; });
   if((VIEW==='map'||VIEW==='advisory') && !WX) pullWeather();
   if(VIEW==='gpdp' && !GPDP) pullGpdp();
   if(VIEW==='advisory' && !ADV) pullAdv(ADV_OPEN);
+  if(VIEW==='admin' && !ROLL) pullRoll();
+  if(VIEW==='admin') wireAdmin();
   if(VIEW==='overview') drawMap('map','main');
   if(VIEW==='map'){ const m2=drawMap('map2','full'); drawWeather(m2 || MAP2); }
   const mf=$('#mFind'); if(mf) mf.onchange=()=>{ if(mf.value) flyTo(mf.value); };
