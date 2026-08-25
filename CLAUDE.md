@@ -16,7 +16,7 @@ the rules below exist because exactly that happened in production.
 ## Run this before you finish anything
 
 ```bash
-npm test              # 889 assertions, 20 suites, against the real backend files
+npm test              # 923 assertions, 21 suites, against the real backend files
 node tests/ladder     # one suite, with its detail
 ```
 
@@ -201,6 +201,22 @@ any application with no decision on it for his orders.
 
 Note while debugging the console: **the dashboard payload is cached for 50
 seconds** server-side, so two reads in quick succession are the same read.
+
+**A PIN reset goes to every row carrying the number.** A reset used to mean a
+line in a `FIELD_FIXES` batch — a code edit and a deploy for one Secretary.
+`showPinReset` / `resetOnePin` in Admin.gs do it for one number from the menu,
+and they write the new PIN to **every** row that carries it: `findByPhone_`
+takes the PIN from the *first* row holding one, so a reset written to the row
+somebody meant to fix hands the officer a PIN that does not open the app — that
+is issue 4 of the 22.08 register, and it came back three times as "still
+showing wrong PIN". The rows carry the same number, so they are the same man;
+the duplication itself is a separate cure, a `claimPhone` line. The reset also
+clears the wrong-PIN counter, because **no PIN opens the app while ten failures
+stand within the hour** and a reset without it reads to the mandal as another
+failure. The PIN is seeded from the number and **today's date**, so a nervous
+second run the same day is the same reset and writes nothing, while a reset
+tomorrow is properly a new one. It is printed **once**, in the log: the Audit
+tab records that a reset was passed and by whom, never the PIN.
 
 - Misses **1 and 2** of a calendar month → a **reminder**. Pushed at once,
   unnumbered, off the register, no lock, no debit.

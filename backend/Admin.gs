@@ -44,6 +44,8 @@ function onOpen(){
     .addItem('Settle those duplicated applications (asks first)',           'menuSettleLeaveTwins')
     .addSeparator()
     .addItem('Why can an officer not sign in?',          'menuWhySignIn')
+    .addItem('What a PIN reset would do — read first',   'menuShowPinReset')
+    .addItem('Reset one officer’s PIN (asks first)',     'menuResetOnePin')
     .addItem('Check the village roll',                   'menuGpSpellCheck')
     .addItem('Check the officer roll',                   'menuRosterAudit')
     .addToUi();
@@ -1984,4 +1986,142 @@ function settleLeaveTwins(){
   L.push('writes nothing.');
   Logger.log(L.join('\n'));
   return L.join('\n');
+}
+
+/* ============================================================================
+ * ONE OFFICER'S PIN, RESET ON THE TELEPHONE
+ *
+ * Until now a reset meant a line in a FIELD_FIXES batch — a code edit and a
+ * deploy to give one Secretary his PIN back. This is the same act for one
+ * number, asked for from the menu.
+ *
+ * THREE THINGS THIS DOES THAT A PLAIN RESET DOES NOT:
+ *
+ *  1. It writes the new PIN to EVERY row carrying the number. When a number
+ *     sits on more than one row, findByPhone_ takes the PIN from the FIRST row
+ *     holding one — which is not necessarily the row anybody meant to fix. A
+ *     reset written to one row hands the officer a PIN that does not open the
+ *     app, and he telephones again saying it still shows wrong PIN. That is
+ *     issue 4 of the 22.08 register, and it came back three times. The rows
+ *     carry the same number, so they are the same man: giving them all the
+ *     same PIN makes the login work whichever row the fold reads. The stale
+ *     rows themselves are a separate matter, for a claimPhone line.
+ *
+ *  2. It tells the truth about the lock-out. Ten wrong attempts within the
+ *     hour and the server refuses him whatever his PIN is, so a reset cures
+ *     nothing and the mandal reports it as "still wrong PIN". The counter is
+ *     cleared with the reset, and the log says it was — a man whose PIN the
+ *     Collector has just changed should not be serving out a sentence for
+ *     guessing the old one.
+ *
+ *  3. The PIN is seeded from the number and TODAY'S DATE, so a nervous second
+ *     run within the day yields the SAME PIN and changes nothing. The 28.07
+ *     batch seeded from the day it ran, and a re-run the following week would
+ *     have re-scrambled PINs already circulated. A reset tomorrow is a new
+ *     reset and gives a new PIN, which is right.
+ *
+ * The PIN is printed ONCE, in the log, and nowhere else — not on the Audit
+ * tab, which records only that a reset was passed and by whom. Copy it before
+ * closing the dialog.
+ * ------------------------------------------------------------------------- */
+
+function admPinRows_(phone){
+  const p = phone10_(phone || '');
+  const t = uidx_(), v = t.sh.getDataRange().getValues(), rows = [];
+  for(let i = 1; i < v.length; i++) if(phone10_(v[i][t.ix.phone]) === p) rows.push(i);
+  return { p: p, t: t, v: v, rows: rows };
+}
+
+/* READ ONLY. What a reset would do to this number, and whether it would help
+   at all — run it before pressing anything. It does not print the PIN. */
+function showPinReset(phone){
+  const q = admPinRows_(phone);
+  const L = ['PIN RESET — what it would do to "' + q.p + '"', ''];
+  if(q.p.length !== 10) return admSay_(L.concat('✗ That is not ten digits. Nothing would be written.'));
+  if(!q.rows.length) return admSay_(L.concat(
+    '✗ NOT ON THE ROLL. There is no PIN to reset — the app tells him the number is not registered.',
+    '  → register him with a line in FIELD_FIXES_3 first.'));
+
+  q.rows.forEach(i => L.push('  row ' + (i + 1) + ': ' + (cell_(q.v[i], q.t.ix.name) || '(no name)') +
+    ' · ' + cell_(q.v[i], q.t.ix.role) + ' · ' + cell_(q.v[i], q.t.ix.mandal) + ' / ' + cell_(q.v[i], q.t.ix.gp) +
+    ' · ' + (q.v[i][q.t.ix.hash] ? 'PIN set' : 'NO PIN') +
+    ' · ' + (String(q.v[i][q.t.ix.active]).toUpperCase() === 'FALSE' ? 'INACTIVE' : 'active')));
+  L.push('');
+  L.push('A reset would write the SAME new PIN to ' + q.rows.length + ' row(s), so the login works');
+  L.push('whichever row the fold reads.');
+
+  if(q.rows.length > 1)
+    L.push('· NOTE: this number is on ' + q.rows.length + ' rows. The reset cures the PIN, not the ' +
+           'duplication — the app will still greet him off the SENIOR row. Run "Why can an officer ' +
+           'not sign in?" and cure the rows with a claimPhone line.');
+
+  const inactive = q.rows.every(i => String(q.v[i][q.t.ix.active]).toUpperCase() === 'FALSE');
+  if(inactive) L.push('✗ EVERY row on this number is INACTIVE. A PIN will not let him in — the app ' +
+                      'tells him the number is not registered. Reactivate the row first.');
+
+  const n = Number(cache_().get('pl_' + q.p) || 0);
+  if(n >= MAX_PIN_TRIES) L.push('✗ ' + n + ' wrong-PIN attempts stand against this number within the hour. ' +
+    'The server is refusing him whatever his PIN is. The reset clears that counter as well.');
+  else if(n > 0) L.push('· ' + n + ' wrong-PIN attempt(s) counted within the hour (' + MAX_PIN_TRIES + ' locks him out).');
+
+  L.push('');
+  L.push('This was read only. Nothing was written, and no PIN was generated.');
+  return admSay_(L);
+}
+
+function resetOnePin(phone){
+  const q = admPinRows_(phone);
+  const L = ['PIN RESET — "' + q.p + '"', ''];
+  if(q.p.length !== 10) return admSay_(L.concat('✗ That is not ten digits. Nothing was written.'));
+  if(!q.rows.length) return admSay_(L.concat(
+    '✗ NOT ON THE ROLL. Nothing was written. Register him with a line in FIELD_FIXES_3 first.'));
+
+  const pin = batchPin_(q.p, today_());        /* same PIN all day; new tomorrow */
+  const h = hash_(q.p, pin);
+  let already = 0;
+  q.rows.forEach(i => {
+    if(q.v[i][q.t.ix.hash] === h){ already++; return; }
+    q.t.sh.getRange(i + 1, q.t.ix.hash + 1).setValue(h);
+    if(q.t.ix.initpin >= 0) q.t.sh.getRange(i + 1, q.t.ix.initpin + 1).setValue('');
+  });
+
+  const who = q.rows.map(i => cell_(q.v[i], q.t.ix.name)).filter(String)[0] || '(unnamed)';
+  const cleared = Number(cache_().get('pl_' + q.p) || 0);
+  if(cleared) try{ cache_().remove('pl_' + q.p); }catch(err){}
+
+  L.push(who + ' · ' + q.rows.length + ' row(s) carry this number');
+  L.push('');
+  L.push('    NEW PIN:  ' + pin);
+  L.push('');
+  L.push('Copy it now — it is printed here and nowhere else, and it is not on the Audit tab.');
+  if(already === q.rows.length) L.push('(Every row already held this PIN: nothing was written. A second run ' +
+                                       'on the same day is the same reset.)');
+  else if(already) L.push('(' + already + ' row(s) already held it; ' + (q.rows.length - already) + ' written.)');
+  if(cleared) L.push('· ' + cleared + ' wrong-PIN attempt(s) against this number were cleared, so he is not ' +
+                     'refused for guessing the PIN you have just replaced.');
+  if(q.rows.every(i => String(q.v[i][q.t.ix.active]).toUpperCase() === 'FALSE'))
+    L.push('✗ WARNING: every row on this number is INACTIVE. The PIN is set, but the app will still tell ' +
+           'him the number is not registered until a row is made active.');
+
+  admLog_('PIN RESET', q.p, who + ' · ' + q.rows.length + ' row(s) · PIN not recorded here');
+  return admSay_(L);
+}
+
+function menuShowPinReset(){
+  const ui = SpreadsheetApp.getUi();
+  const res = ui.prompt('Which number?', 'The officer’s mobile number. Nothing will be written.', ui.ButtonSet.OK_CANCEL);
+  if(res.getSelectedButton() !== ui.Button.OK) return;
+  admShow_('What a PIN reset would do — nothing written', showPinReset(res.getResponseText()));
+}
+function menuResetOnePin(){
+  const ui = SpreadsheetApp.getUi();
+  const res = ui.prompt('Reset the PIN for which number?', 'The officer’s mobile number.', ui.ButtonSet.OK_CANCEL);
+  if(res.getSelectedButton() !== ui.Button.OK) return;
+  const p = phone10_(res.getResponseText() || '');
+  const ok = ui.alert('Reset the PIN for ' + p + '?',
+    'The PIN he is using today stops working at once. The new one is shown once, in the log, and ' +
+    'nowhere else — copy it and give it to him. Read "What a PIN reset would do" first if you have not.',
+    ui.ButtonSet.YES_NO);
+  if(ok !== ui.Button.YES){ ui.alert('Nothing was written.'); return; }
+  admShow_('PIN reset — copy it now, it is shown once', resetOnePin(p));
 }
