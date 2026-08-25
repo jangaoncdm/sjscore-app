@@ -1999,6 +1999,8 @@ function doGet(e){
   /* the plan register: an officer sees his own line, the district sees the roll */
   if(p.op === 'gpdp') return gpdpRegister_(u, p.year);
   if(p.op === 'advisory') return advisoryRegister_(u, p.id);
+  /* the officer roll, for the console's Admin view */
+  if(p.op === 'roll') return rollRegister_(u);
   /* the sky over the district — one call an hour, cached, keyless */
   if(p.op === 'weather') return weatherRead_(u, p.draft === '1');
 
@@ -2542,6 +2544,201 @@ function admAudit_(action, subject, detail){
 }
 
 
+
+/* ============================================================================
+ * THE OFFICER ROLL, FROM THE CONSOLE
+ * ----------------------------------------------------------------------------
+ * Registering an officer, giving him his PIN back and taking him off the roll
+ * used to mean the Apps Script editor: a line in a FIELD_FIXES batch, a deploy,
+ * and the Collector reading a log. Asked for on 25.08.2026 to be on the console
+ * where the rest of the district's work is done.
+ *
+ * THE COLLECTOR ALONE. Every one of these re-checks the role on the server
+ * against his own token — the console is a web page and its convenience is
+ * never the authority (rule 6). A DPO or an MPDO gets the same refusal a
+ * Secretary would.
+ *
+ * NOTHING IS DESTROYED. There is no delete here and there will not be one.
+ * Taking an officer off the roll writes Active = FALSE on his rows; the rows
+ * stay, and so does everything that points at them — his attendance, his
+ * notices, his leave, his plan. Deleting the row would orphan all of it and a
+ * file could no longer be produced from the register, which is the whole of
+ * rule 7. It is reversible: putting him back on the roll writes TRUE again.
+ *
+ * A PIN IS SHOWN ONCE. It is returned in the answer to the call that made it,
+ * printed on the console, and written nowhere — not to the Audit tab, which
+ * records only that a PIN was set, on which number and by whom.
+ * ========================================================================== */
+
+/* The PIN for a number TODAY. Seeded from the number and the date, so pressing
+   the button twice in one morning yields the same PIN and the second press
+   changes nothing — the lesson of the 28.07 batch, which seeded from the day
+   it ran and would have re-scrambled PINs already circulated on a later
+   re-run. Admin.gs's resetOnePin reads the same function, so the console and
+   the editor cannot hand out two different PINs for the same officer. */
+function dayPin_(phone){
+  return String(1000 + (parseInt(hash_(phone10_(phone) + '|' + today_(), 'fix2')
+    .replace(/\D/g, '').slice(0, 6) || '0', 10) % 9000));
+}
+
+/* every row carrying a number, folded into one line for the console */
+function rollRows_(t, v, p){
+  const out = [];
+  for(let i = 1; i < v.length; i++) if(phone10_(v[i][t.ix.phone]) === p) out.push(i);
+  return out;
+}
+
+/* op=roll — the officer roll as the console shows it. Collector only: it
+   carries every officer's mobile number, which is not a thing to hand to a
+   mandal login. */
+function rollRegister_(u){
+  if(u.role !== 'COLLECTOR') return json_({ ok:false, error:'The roll is the Collector’s.' });
+  const t = uidx_(), v = t.sh.getDataRange().getValues();
+  const by = {}, order = [];
+  for(let i = 1; i < v.length; i++){
+    const p = phone10_(v[i][t.ix.phone]);
+    const key = p || ('(row ' + (i + 1) + ')');
+    if(!by[key]){
+      by[key] = { phone:p, rows:0, name:'', role:'', mandal:'', gp:'', email:'',
+                  hasPin:false, active:false, at:i + 1 };
+      order.push(key);
+    }
+    const r = by[key];
+    r.rows++;
+    /* the SENIOR row is the one the app greets him from, so it is the one the
+       console shows — anything else and the roll disagrees with his phone */
+    const role = cell_(v[i], t.ix.role).toUpperCase();
+    if(!r.role || (RANK[role] || 0) > (RANK[r.role] || 0)){
+      r.role = role; r.name = cell_(v[i], t.ix.name); r.mandal = cell_(v[i], t.ix.mandal);
+      r.gp = cell_(v[i], t.ix.gp); r.email = cell_(v[i], t.ix.email);
+    }
+    if(v[i][t.ix.hash]) r.hasPin = true;
+    const a = t.ix.active < 0 ? true : v[i][t.ix.active];
+    if(!(a === false || String(a).toUpperCase() === 'FALSE' || a === '')) r.active = true;
+  }
+  const rows = order.map(k => by[k]);
+  rows.sort((a, b) => (a.mandal || '').localeCompare(b.mandal || '') ||
+                      (RANK[b.role] || 0) - (RANK[a.role] || 0) ||
+                      (a.name || '').localeCompare(b.name || ''));
+  return json_({ ok:true, rows:rows, roles:Object.keys(RANK),
+                 mandals:gpRoll_().map(r => r.mandal).filter((m, i, A) => m && A.indexOf(m) === i).sort() });
+}
+
+/* register an officer */
+function createUser_(b, u){
+  if(u.role !== 'COLLECTOR') return json_({ ok:false, error:'Officers are registered by the Collector alone.' });
+  const p = phone10_(b.phone || '');
+  if(p.length !== 10) return json_({ ok:false, error:'A mobile number is ten digits. Nothing was written.' });
+  const name = String(b.name || '').trim();
+  if(!name) return json_({ ok:false, error:'A name is needed — the roll is read by people.' });
+  const role = String(b.role || '').trim().toUpperCase();
+  if(!RANK[role]) return json_({ ok:false, error:'That is not a role on the register: ' + Object.keys(RANK).join(', ') + '.' });
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const t = uidx_(), v = t.sh.getDataRange().getValues();
+    /* ONE NUMBER, ONE OFFICER. A number already on the roll is the very thing
+       that makes the app greet a man with somebody else's name and village, so
+       it is refused here and the holder is named rather than quietly doubled. */
+    const held = rollRows_(t, v, p);
+    if(held.length)
+      return json_({ ok:false, error:'That number is already on the roll — ' +
+        (cell_(v[held[0]], t.ix.name) || '(unnamed)') + ', ' + cell_(v[held[0]], t.ix.role) +
+        (cell_(v[held[0]], t.ix.mandal) ? ', ' + cell_(v[held[0]], t.ix.mandal) : '') +
+        '. Correct that row rather than adding a second.' });
+
+    const pin = dayPin_(p);
+    const width = Math.max(t.sh.getLastColumn(), U_HEAD.length);
+    const row = new Array(width).fill('');
+    const put = (k, val) => { if(t.ix[k] >= 0) row[t.ix[k]] = val; };
+    put('phone', "'" + p);
+    put('name', name);
+    put('role', role);
+    put('mandal', String(b.mandal || '').trim());
+    put('gp', String(b.gp || '').trim());
+    put('email', String(b.email || '').trim());
+    put('hash', hash_(p, pin));
+    put('initpin', '');
+    put('active', 'TRUE');
+    t.sh.appendRow(row);
+    admAudit_('OFFICER REGISTERED', p, name + ' · ' + role +
+      (b.mandal ? ' · ' + String(b.mandal).trim() : '') + ' · PIN set, not recorded here');
+    return json_({ ok:true, phone:p, name:name, role:role, pin:pin });
+  } finally { lock.releaseLock(); }
+}
+
+/* give an officer his PIN back */
+function resetUserPin_(b, u){
+  if(u.role !== 'COLLECTOR') return json_({ ok:false, error:'A PIN is reset by the Collector alone.' });
+  const p = phone10_(b.phone || '');
+  if(p.length !== 10) return json_({ ok:false, error:'A mobile number is ten digits.' });
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const t = uidx_(), v = t.sh.getDataRange().getValues();
+    const rows = rollRows_(t, v, p);
+    if(!rows.length) return json_({ ok:false, error:'That number is not on the roll. Register it first.' });
+
+    const pin = dayPin_(p), h = hash_(p, pin);
+    /* EVERY ROW CARRYING THE NUMBER. findByPhone_ takes the PIN from the FIRST
+       row holding one, which is not necessarily the row anybody meant to fix —
+       a reset written to one row hands the officer a PIN that does not open
+       the app, and he telephones again saying it still shows wrong PIN. That
+       is issue 4 of the 22.08 register and it came back three times. */
+    let wrote = 0;
+    rows.forEach(i => {
+      if(v[i][t.ix.hash] === h) return;
+      t.sh.getRange(i + 1, t.ix.hash + 1).setValue(h);
+      if(t.ix.initpin >= 0) t.sh.getRange(i + 1, t.ix.initpin + 1).setValue('');
+      wrote++;
+    });
+    /* and the lock-out with it: ten wrong attempts within the hour and the
+       server refuses him whatever his PIN is, so a reset alone cures nothing */
+    const locked = Number(cache_().get('pl_' + p) || 0);
+    if(locked) try{ cache_().remove('pl_' + p); }catch(err){}
+
+    const name = rows.map(i => cell_(v[i], t.ix.name)).filter(String)[0] || '(unnamed)';
+    const dead = rows.every(i => String(v[i][t.ix.active]).toUpperCase() === 'FALSE');
+    admAudit_('PIN RESET', p, name + ' · ' + rows.length + ' row(s) · PIN not recorded here');
+    return json_({ ok:true, phone:p, name:name, pin:pin, rows:rows.length,
+                   written:wrote, unlocked:locked, inactive:dead });
+  } finally { lock.releaseLock(); }
+}
+
+/* take an officer off the roll, or put him back on it */
+function setUserActive_(b, u){
+  if(u.role !== 'COLLECTOR') return json_({ ok:false, error:'The roll is the Collector’s.' });
+  const p = phone10_(b.phone || '');
+  if(p.length !== 10) return json_({ ok:false, error:'A mobile number is ten digits.' });
+  const on = b.active === true || String(b.active) === 'true';
+  /* the Collector cannot take himself off the roll — there is nobody else who
+     could put him back, and the console would be shut behind him */
+  if(!on && p === u.phone) return json_({ ok:false, error:'You cannot take yourself off the roll.' });
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const t = uidx_(), v = t.sh.getDataRange().getValues();
+    const rows = rollRows_(t, v, p);
+    if(!rows.length) return json_({ ok:false, error:'That number is not on the roll.' });
+    if(t.ix.active < 0) return json_({ ok:false, error:'The Users tab has no Active column.' });
+
+    const want = on ? 'TRUE' : 'FALSE';
+    let wrote = 0;
+    rows.forEach(i => {
+      if(String(v[i][t.ix.active]).toUpperCase() === want) return;
+      t.sh.getRange(i + 1, t.ix.active + 1).setValue(want);
+      wrote++;
+    });
+    const name = rows.map(i => cell_(v[i], t.ix.name)).filter(String)[0] || '(unnamed)';
+    admAudit_(on ? 'OFFICER RESTORED TO THE ROLL' : 'OFFICER TAKEN OFF THE ROLL', p,
+      name + ' · ' + rows.length + ' row(s) · the row stands, nothing was deleted');
+    return json_({ ok:true, phone:p, name:name, active:on, rows:rows.length, written:wrote });
+  } finally { lock.releaseLock(); }
+}
+
 /* ============================================================================
  * WEATHER · what the sky is doing over each mandal
  * ----------------------------------------------------------------------------
@@ -2956,6 +3153,12 @@ function doPost(e){
      to acknowledge one. */
   if(b.kind === 'advAck') return ackAdvisory_(b, u);
   if(b.kind === 'advPublish') return publishAdvisory_(b, u);
+
+  /* the officer roll from the console. Each re-checks the Collector's own
+     role on the server; none of them deletes anything. */
+  if(b.kind === 'userCreate') return createUser_(b, u);
+  if(b.kind === 'userPin')    return resetUserPin_(b, u);
+  if(b.kind === 'userActive') return setUserActive_(b, u);
 
   /* everything below writes an evaluation, which a Secretary may not do */
   if(viewerRole_(u.role))

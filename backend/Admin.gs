@@ -2076,7 +2076,9 @@ function resetOnePin(phone){
   if(!q.rows.length) return admSay_(L.concat(
     '✗ NOT ON THE ROLL. Nothing was written. Register him with a line in FIELD_FIXES_3 first.'));
 
-  const pin = batchPin_(q.p, today_());        /* same PIN all day; new tomorrow */
+  const pin = dayPin_(q.p);                    /* same PIN all day; new tomorrow.
+                                                  Code.gs owns it, so the console
+                                                  and the editor agree. */
   const h = hash_(q.p, pin);
   let already = 0;
   q.rows.forEach(i => {

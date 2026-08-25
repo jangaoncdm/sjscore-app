@@ -16,7 +16,7 @@ the rules below exist because exactly that happened in production.
 ## Run this before you finish anything
 
 ```bash
-npm test              # 923 assertions, 21 suites, against the real backend files
+npm test              # 982 assertions, 22 suites, against the real backend files
 node tests/ladder     # one suite, with its detail
 ```
 
@@ -218,6 +218,23 @@ second run the same day is the same reset and writes nothing, while a reset
 tomorrow is properly a new one. It is printed **once**, in the log: the Audit
 tab records that a reset was passed and by whom, never the PIN.
 
+**The officer roll lives on the console, under Admin.** `op=roll`,
+`userCreate`, `userPin` and `userActive` are the Collector's alone, re-checked
+on the server against his own token — the rail item is hidden from anybody
+else and the console has always been Collector-only at the door, but hiding a
+button is a courtesy, not a rule. **There is no delete and there will not be
+one**: taking an officer off the roll writes `Active = FALSE`, and the row
+stays along with everything pointing at it — his attendance, his notices, his
+leave, his plan. It is reversible, and his own PIN still works when he is put
+back. Deleting the row would orphan all of it and no file could be produced
+afterwards, which is the whole of rule 7. Registering refuses a number already
+on the roll and names its holder, because one number on two rows is what makes
+the app greet a man with somebody else's name. A PIN is returned in the answer
+to the call that made it, shown once on the console, and written nowhere —
+`Audit` records that a PIN was set, on which number and by whom, never the PIN.
+`dayPin_` in Code.gs is the single derivation the console and Admin.gs both
+read, so the two can never hand out different PINs for the same officer.
+
 - Misses **1 and 2** of a calendar month → a **reminder**. Pushed at once,
   unnumbered, off the register, no lock, no debit.
 - Miss **3** (`SCN_FROM_MISS`) → a show-cause notice is **proposed**.
@@ -395,6 +412,7 @@ field app and the real console and writes a report with snapshots:
 ```bash
 node tests/fixture-docs.js          # payloads from the real backend
 node tests/render-docs.js           # 71 checks; Info/docs-render/REPORT.md
+node tests/render-admin.js          # 19 checks; presses the Admin view's buttons
 ```
 
 It signs the app in by writing the session on the origin **without loading

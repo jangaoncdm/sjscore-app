@@ -33,7 +33,25 @@ function serve(){
   });
 }
 
-const VIEWS = ['overview', 'attendance', 'villages', 'leave', 'notices', 'map'];
+const VIEWS = ['overview', 'attendance', 'villages', 'leave', 'notices', 'map', 'admin'];
+
+/* THE OFFICER ROLL the Admin view reads. Shaped like op=roll's answer, with
+   the three states that view has to draw: a man off the roll, a man with no
+   PIN, and a number sitting on two rows. */
+const ROLLFIX = { ok:true,
+  roles:['PS','MPO','MSO','MPDO','DLPO','DPO','COLLECTOR'],
+  mandals:['Bachannapeta','Chilpur','Devaruppula','Ghanpur (Stn)','Jangaon','Kodakandla',
+           'Lingala Ghanpur','Narmetta','Palakurthy','Raghunathpalle','Tharigoppula','Zaffergadh'],
+  rows:[
+    { phone:'9000000001', name:'Sandeep Kumar Jha', role:'COLLECTOR', mandal:'', gp:'', email:'cdm@x', hasPin:true,  active:true,  rows:1 },
+    { phone:'9848100201', name:'Rachakonda Upender', role:'PS',   mandal:'Raghunathpalle', gp:'Kodavatancha', email:'a@x', hasPin:true,  active:true,  rows:1 },
+    { phone:'9848100202', name:'Gopagani Sandhya Rani', role:'PS', mandal:'Palakurthy',   gp:'Errabelli',    email:'b@x', hasPin:true,  active:true,  rows:1 },
+    { phone:'9848100203', name:'Burra Bhanuchander', role:'PS',  mandal:'Devaruppula',   gp:'Ramboji Gudem', email:'c@x', hasPin:false, active:true,  rows:1 },
+    { phone:'9848100204', name:'Donthi Praveen Kumar', role:'PS', mandal:'Jangaon',      gp:'Pedda Thanda (M)', email:'d@x', hasPin:true, active:true, rows:2 },
+    { phone:'9848100205', name:'K. Ravi Kumar', role:'MPO',      mandal:'Chilpur',       gp:'',             email:'e@x', hasPin:true,  active:true,  rows:1 },
+    { phone:'9848100206', name:'M. Sattaiah',   role:'MPDO',     mandal:'Narmetta',      gp:'',             email:'f@x', hasPin:true,  active:true,  rows:1 },
+    { phone:'9848100207', name:'Gone Away',     role:'PS',       mandal:'Zaffergadh',    gp:'Old Charge',   email:'g@x', hasPin:true,  active:false, rows:1 }
+  ] };
 const SIZES = [{ w:2560, h:1440, n:'2560' }, { w:1500, h:1000, n:'1500' }, { w:390, h:844, n:'390' }];
 
 (async () => {
@@ -60,7 +78,8 @@ const SIZES = [{ w:2560, h:1440, n:'2560' }, { w:1500, h:1000, n:'1500' }, { w:3
       const page = await ctx.newPage();
       /* the district's own reply, served locally */
       await page.route('**/mock.district/**', r =>
-        r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload) }));
+        r.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify(/op=roll/.test(r.request().url()) ? ROLLFIX : payload) }));
       /* no map tiles over the wire in a render check */
       await page.route('**tile.openstreetmap.org**', r => r.abort());
 
