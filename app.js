@@ -1,7 +1,7 @@
 'use strict';
 /* ============================================================
    SJGP — Swachh Jangaon Gram Panchayat 5.1
-   Collectorate, Jangaon · Rc.No.788/DPO/26/34
+   Collectorate, Jangaon
    Paste the Apps Script /exec URL below before publishing.
 
    New in 5.0
@@ -2164,7 +2164,7 @@ async function renderMore(){
   </div></div>
 
   <p style="font-size:12.5px;color:var(--ink-3);text-align:center;padding:22px 24px 34px;line-height:1.6">
-    SJGP · version ${APP_VERSION}<br>Collectorate, Jangaon · Rc.No.788/DPO/26/34<br>
+    SJGP · version ${APP_VERSION}<br>Collectorate, Jangaon<br>
     <a href="privacy.html">How this app handles your data</a></p>`;
 
   const sun=$('#prefSun'), big=$('#prefBig');
