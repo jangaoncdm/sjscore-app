@@ -195,6 +195,139 @@ module.exports = {
       'the refused application stays waiting for the single-order look');
     t.eq(c.clUsed_('9000000011', 2026), 6, 'the register closes the year’s CL at exactly its entitlement');
 
+    /* MEDICAL LEAVE — NO YEARLY FIGURE, BUT NOT MORE THAN FIFTEEN DAYS AT A
+       TIME (the Collector's order). An illness does not keep to an allowance,
+       so there is nothing here to count against the year; what is capped is
+       the spell. 2027 is used throughout so these dates meet none of the
+       spells applied for above. */
+    const d = c.issueToken_(c.findByPhone_(9000000014));   /* D — a Panchayat Secretary, nothing applied for yet */
+    t.eq(c.entitlement_('ML', 2027), 0, 'medical leave answers to no yearly figure');
+    t.eq(c.entitlement_('ML', 2026), 0, 'in the opening year either');
+
+    const ml1 = env.post({ kind: 'leave', token: d, leave: { id: 'ML1', from: '2027-01-01', to: '2027-01-15', days: 15, type: 'ML', reason: 'admitted', cert: 'Govt. Hospital, Jangaon, 31.12.2026' } });
+    t.eq(ml1.ok, true, 'fifteen days of medical leave is taken');
+    const ml1again = env.post({ kind: 'leave', token: d, leave: { id: 'ML1', from: '2027-01-01', to: '2027-01-15', days: 15, type: 'ML' } });
+    t.eq(ml1again.ok, true, 'and the same id resent is still a retry, not a refusal');
+    t.eq(env.sheets['Leave'].rows.filter(r => String(r[0]) === 'ML1').length, 1, 'one row, not two');
+
+    const ml16 = env.post({ kind: 'leave', token: d, leave: { id: 'ML2', from: '2027-03-01', to: '2027-03-16', days: 16, type: 'ML' } });
+    t.eq(ml16.ok, false, 'sixteen days in one spell is refused');
+    t.contains(ml16.error, '15 days at a time', 'in the words of the order');
+    t.contains(ml16.error, '16 days', 'with the arithmetic shown');
+    t.contains(ml16.error, 'Collector', 'and the officer told where a longer absence is decided');
+    t.eq(env.sheets['Leave'].rows.filter(r => String(r[0]) === 'ML2').length, 0, 'and nothing is written for it');
+
+    t.eq(env.post({ kind: 'leaveDecision', token: cdm, id: 'ML1', status: 'APPROVED' }).ok, true,
+      'the fifteen days sanction — no balance stands in the way');
+
+    /* THE CAP IS ON THE SPELL, NOT ON THE APPLICATION. Fifteen days sanctioned
+       and one more beginning the very next morning is sixteen days at a time,
+       and two rows in a register do not make that two absences. */
+    const mlJoin = env.post({ kind: 'leave', token: d, leave: { id: 'ML3', from: '2027-01-16', to: '2027-01-16', days: 1, type: 'ML' } });
+    t.eq(mlJoin.ok, false, 'a day that runs straight on from a sanctioned spell is refused');
+    t.contains(mlJoin.error, 'one spell', 'because it is one spell');
+    t.contains(mlJoin.error, '16 days', 'counted together');
+
+    /* a clear day between them is a break, and a break is a new spell */
+    const mlGap = env.post({ kind: 'leave', token: d, leave: { id: 'ML4', from: '2027-01-17', to: '2027-01-17', days: 1, type: 'ML' } });
+    t.eq(mlGap.ok, true, 'with a day in between, it is a fresh spell and is taken');
+
+    /* Rule 6 — the day count comes from the DATES. The phone only asks. */
+    const mlLies = env.post({ kind: 'leave', token: d, leave: { id: 'ML5', from: '2027-05-01', to: '2027-05-20', days: 1, type: 'ML' } });
+    t.eq(mlLies.ok, false, 'twenty days sent as one is still twenty days');
+    t.contains(mlLies.error, '20 days', 'measured off the dates, not off the claim');
+
+    /* and there is no annual ceiling to run into: a second full spell later in
+       the same year is taken and sanctioned like the first */
+    const ml2nd = env.post({ kind: 'leave', token: d, leave: { id: 'ML6', from: '2027-06-01', to: '2027-06-15', days: 15, type: 'ML' } });
+    t.eq(ml2nd.ok, true, 'a second fifteen-day spell in the same year is taken');
+    t.eq(env.post({ kind: 'leaveDecision', token: cdm, id: 'ML6', status: 'APPROVED' }).ok, true,
+      'and sanctioned — thirty days of medical leave in a year is not a breach');
+
+    /* a spell sent back for correction is not counted against itself */
+    env.post({ kind: 'leave', token: d, leave: { id: 'ML7', from: '2027-09-01', to: '2027-09-10', days: 10, type: 'ML' } });
+    env.post({ kind: 'leaveDecision', token: cdm, id: 'ML7', status: 'RETURNED', remarks: 'Enclose the certificate.' });
+    const mlFix = env.post({ kind: 'leave', token: d, leave: { id: 'ML7', from: '2027-09-01', to: '2027-09-14', days: 14, type: 'ML', cert: 'Govt. Hospital, Jangaon, 31.08.2027' } });
+    t.eq(mlFix.ok, true, 'the corrected copy is measured on its own, not added to the copy it replaces');
+
+    /* THE TWIN THAT COULD NEVER BE CLEARED. Before saveLeave_ took the lock, a
+       retry racing its original put the same id on the register twice. The
+       Collector sanctioned it, the FIRST row turned APPROVED — and the twin sat
+       PENDING for ever, because every further order looked the id up, found
+       that first row already decided, and answered "orders have already been
+       passed". Reported from the district on 25.08.2026 in those words: three
+       applications standing in Awaiting your orders, leave already sanctioned.
+       An order is passed on the APPLICATION, so it must reach every row of it.
+
+       The console's payload is cached for 50 seconds, so everything this block
+       is going to assert is set up first and read once. */
+    const twinHead = env.sheets['Leave'].rows[0].map(String);
+    const ixL = k => twinHead.indexOf(k);
+    const twinRow = {
+      id:'LVtwin', phone:'9000000014', name:'D. FirstMiss', role:'PS', mandal:'Jangaon',
+      type:'CL', fromDate:'2028-02-10', toDate:'2028-02-11', days:2, status:'PENDING',
+      appliedAt:'2028-02-01T04:00:00.000Z' };
+    env.addRow('Leave', twinRow);
+    env.addRow('Leave', twinRow);                 /* the race, as it happened */
+    t.eq(env.sheets['Leave'].rows.filter(r => String(r[0]) === 'LVtwin').length, 2,
+      'the register holds the same application twice');
+
+    /* the case that was actually stuck on the district's console: the first
+       row sanctioned days ago, the second left behind and undecidable */
+    const stuck = { id:'LVstuck', phone:'9000000014', name:'D. FirstMiss', role:'PS', mandal:'Jangaon',
+      type:'CL', fromDate:'2028-03-10', toDate:'2028-03-10', days:1,
+      appliedAt:'2028-03-01T04:00:00.000Z' };
+    env.addRow('Leave', Object.assign({}, stuck, { status:'APPROVED', decidedAt:'2028-03-02T04:00:00.000Z' }));
+    env.addRow('Leave', Object.assign({}, stuck, { status:'PENDING' }));
+
+    /* A ROW WITH NO ID IS NOT AN APPLICATION. It cannot be decided — every
+       order is passed by id — so it must not stand in the waiting list as one
+       more officer, the way a blank row once became "the standing advisory". */
+    env.addRow('Leave', { id:'', phone:'9000000014', name:'', role:'', mandal:'',
+      type:'', fromDate:'', toDate:'', days:0, status:'', appliedAt:'' });
+
+    const twinOk = env.post({ kind:'leaveDecision', token:cdm, id:'LVtwin', status:'APPROVED', remarks:'Sanctioned.' });
+    t.eq(twinOk.ok, true, 'the Collector sanctions the duplicated application');
+    t.eq(twinOk.rows, 2, 'and the order is written to BOTH rows of it');
+    t.eq(env.sheets['Leave'].rows.filter(r => String(r[0]) === 'LVtwin')
+      .map(r => String(r[ixL('status')])).join(','), 'APPROVED,APPROVED',
+      'no row of it is left waiting');
+
+    /* the console, read once */
+    const dashTwin = env.get('dashboard', { token: cdm });
+    t.eq(dashTwin.leave.pending.filter(l => l.id === 'LVtwin').length, 0,
+      'Awaiting your orders does not carry the application just sanctioned');
+    t.eq(dashTwin.leave.pending.filter(l => l.id === 'LVstuck').length, 0,
+      'nor the twin of one sanctioned days ago — the row that would not clear');
+    t.eq(dashTwin.leave.recent.filter(l => l.id === 'LVstuck').length, 1,
+      'it is read as the one sanctioned application it is');
+    t.eq(dashTwin.leave.recent.filter(l => l.id === 'LVtwin').length, 1,
+      'and a duplicated application is one line in the orders, not two');
+    t.eq(dashTwin.leave.pending.filter(l => !String(l.id || '').trim()).length, 0,
+      'a blank row at the foot of the tab is not an officer awaiting orders');
+
+    /* ONE LINE PER APPLICATION on the officer's phone too */
+    const dList = env.get('leave', { token: d });
+    t.eq(dList.rows.filter(r => r.id === 'LVtwin').length, 1,
+      'a twin on the register raises one card, not two');
+
+    /* ONE SPELL, ONE DEBIT TO THE YEAR. Counting a duplicated row twice
+       refuses an officer leave he still holds — and that same arithmetic is
+       what turns the next debit into loss of pay. */
+    t.eq(c.clUsed_('9000000014', 2028), 3, 'each duplicated spell is counted once, not twice');
+
+    /* AND THE STUCK TWIN IS DECIDABLE AGAIN — the order reaches it and settles
+       it, instead of being refused as already passed. */
+    const stuckOk = env.post({ kind:'leaveDecision', token:cdm, id:'LVstuck', status:'APPROVED', remarks:'Sanctioned.' });
+    t.eq(stuckOk.ok, true, 'the order the Collector could never pass now passes');
+    t.eq(env.sheets['Leave'].rows.filter(r => String(r[0]) === 'LVstuck')
+      .map(r => String(r[ixL('status')])).join(','), 'APPROVED,APPROVED',
+      'and settles every row of it');
+    /* idempotent: passing it again changes nothing and is honest about why */
+    const stuckTwice = env.post({ kind:'leaveDecision', token:cdm, id:'LVstuck', status:'APPROVED' });
+    t.eq(stuckTwice.ok, false, 'a second order on a settled application is refused');
+    t.contains(stuckTwice.error, 'already been passed', 'in the register’s own words');
+
     /* Rule 4 — the register an applicant reads is his own */
     const mine = env.get('leave', { token: a });
     t.ok(mine.rows.every(r => r.phone === '9000000011'), 'an applicant sees his file and nobody else’s');

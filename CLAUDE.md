@@ -16,7 +16,7 @@ the rules below exist because exactly that happened in production.
 ## Run this before you finish anything
 
 ```bash
-npm test              # 749 assertions, 18 suites, against the real backend files
+npm test              # 889 assertions, 20 suites, against the real backend files
 node tests/ladder     # one suite, with its detail
 ```
 
@@ -150,6 +150,57 @@ to the year so 2027 takes the five back by itself). An order of this kind
 already APPROVED, so an officer who already holds four for 2026 keeps all four
 and is refused the next one. Nothing is reversed, no debit arises, and no
 sanction already passed is disturbed.
+
+**Medical leave answers to no yearly figure, but a spell is capped.** An
+illness does not keep to an allowance, so `ML` is 0 in `LEAVE_ENTITLEMENT`
+for that reason and not because it is free. The Collector's order is that no
+officer takes more than **fifteen days of medical leave at a time**
+(`ML_MAX_SPELL`, mirrored in the app). **The cap is on the spell, not on the
+application** — fifteen days applied for today and fifteen more beginning the
+next morning is thirty days at a time, whatever the two rows say — so
+`mlRun_` measures the unbroken run of medical leave already applied for or
+sanctioned on either side of the dates asked for, and a clear day between two
+spells makes them two. It is measured off the **dates**, never off the day
+count the phone sends. A longer absence is not forbidden here; it is simply
+not a thing this register grants, and the officer is told to take it to the
+Collector under the leave rules.
+
+**The leave account card names the kinds of leave; it does not price them.**
+By the Collector's direction (25.08.2026) it carries no allowance, no "taken"
+and no balance chip — only the names, with a line against medical leave
+because a rule is not an allowance, and one against the headquarters
+permission because it is not leave at all. What an application would leave him
+is still worked out live, against the dates he has actually picked, in the
+note under the apply form, and the district still refuses at sanction anything
+that would breach the year. The prose note explaining the 2026 casual-leave
+opening balance went with the figures: it existed to explain a number the
+screen no longer shows.
+
+**An order is passed on the APPLICATION, not on a row.** Before `saveLeave_`
+took the script lock, a retry racing its original could append the same
+application id twice. The Collector's order then settled the **first** of the
+two rows and left the twin PENDING — and that twin could never be settled
+afterwards, because every further order looked the id up, found the first row
+already APPROVED and answered *orders have already been passed*. It stood in
+the console's **Awaiting your orders** for as long as the register lasted:
+reported from the district on 25.08.2026 as *leave already sanctioned but
+still showing in waiting*. `leaveRows_` now returns every row carrying an id;
+a decision or a withdrawal is written to all of them, and an application counts
+as waiting if **any** row of it is waiting. `leaveFold_` folds twins on the way
+out of the console payload and `op=leave`, keeping the decided row, so one
+application is one line everywhere. **A leave row with no id is not an
+application** — it cannot be decided, because every order is passed by id — so
+it is left out rather than shown as one more officer awaiting orders, exactly
+as a blank row once became "the standing advisory". And a duplicated row is not
+a second absence: `clUsed_` and the sanction-time balance count an application
+once, or a twin would exhaust a year's casual leave and turn the next debit
+into loss of pay. The rows already on the register are settled by
+`showLeaveTwins` / `settleLeaveTwins` in Admin.gs, under the Collector's hand
+— copying the order that was actually passed, never inventing one, and leaving
+any application with no decision on it for his orders.
+
+Note while debugging the console: **the dashboard payload is cached for 50
+seconds** server-side, so two reads in quick succession are the same read.
 
 - Misses **1 and 2** of a calendar month → a **reminder**. Pushed at once,
   unnumbered, off the register, no lock, no debit.

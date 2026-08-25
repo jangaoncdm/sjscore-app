@@ -39,6 +39,10 @@ function onOpen(){
     .addItem('Chase the advisory and the plan — read first', 'menuShowChase')
     .addItem('Send the chase mail (asks first)',             'menuSendChase')
     .addSeparator()
+    .addSeparator()
+    .addItem('Leave shown as waiting after it was sanctioned — read first', 'menuShowLeaveTwins')
+    .addItem('Settle those duplicated applications (asks first)',           'menuSettleLeaveTwins')
+    .addSeparator()
     .addItem('Why can an officer not sign in?',          'menuWhySignIn')
     .addItem('Check the village roll',                   'menuGpSpellCheck')
     .addItem('Check the officer roll',                   'menuRosterAudit')
@@ -82,6 +86,16 @@ function menuApplyFixes3(){
     'Apply it now?', ui.ButtonSet.YES_NO);
   if(ok !== ui.Button.YES){ ui.alert('Nothing was written.'); return; }
   admShow_('Applied — copy the PINs now, they are shown once', applyFieldFixes3());
+}
+function menuShowLeaveTwins(){ admShow_('Applications appearing twice — nothing written', showLeaveTwins()); }
+function menuSettleLeaveTwins(){
+  const ui = SpreadsheetApp.getUi();
+  const ok = ui.alert('Settle the duplicated leave applications?',
+    'Each waiting duplicate is given the order another row of the SAME application already carries. ' +
+    'No row is deleted, no order is invented, and an application with no decision on it is left for your orders. ' +
+    'Read the list first.', ui.ButtonSet.YES_NO);
+  if(ok !== ui.Button.YES) return;
+  admShow_('Duplicated applications settled', settleLeaveTwins());
 }
 function menuWhySignIn(){
   const ui = SpreadsheetApp.getUi();
@@ -1846,6 +1860,128 @@ function documentChase_(send){
   L.push('');
   L.push(sent + ' officer(s) mailed' + (failed ? ', ' + failed + ' failed' : '') + '.');
   L.push('Nothing was written against anybody: no reminder, no notice, no debit.');
+  Logger.log(L.join('\n'));
+  return L.join('\n');
+}
+
+/* ============================================================================
+ * THE APPLICATION THAT WAS SANCTIONED AND WAITING AT THE SAME TIME
+ *
+ * Reported from the district on 25.08.2026: three applications standing in
+ * "Awaiting your orders" on the console for days, whose leave the Collector
+ * had already sanctioned.
+ *
+ * Before saveLeave_ took the script lock, a retry racing its original could
+ * append the SAME application id twice. The Collector's order then found the
+ * first of the two rows, sanctioned it, and left the twin PENDING — and the
+ * twin could never be settled afterwards, because every further order looked
+ * the id up, found the first row already APPROVED, and answered "orders have
+ * already been passed on this application". It sat there for ever.
+ *
+ * Code.gs now passes an order on the APPLICATION and writes it to every row
+ * carrying its id, and both the console and the app fold twins on the way out,
+ * so nothing stale can stand in the waiting list again. This pair is for the
+ * rows already on the register: showLeaveTwins() reads, settleLeaveTwins()
+ * writes the decision that was actually passed onto the row that missed it.
+ *
+ * NOTHING IS DESTROYED. No row is deleted and no status is invented: a twin is
+ * settled only where another row of the same application already carries the
+ * Collector's order, and it is given that order, that hand and that date. An
+ * application with no decision on any of its rows is left exactly as it is —
+ * it is genuinely waiting, and the Collector decides it, not this job.
+ * Run it twice and the second run writes nothing.
+ * ------------------------------------------------------------------------- */
+
+/* the register folded by id: every application, and the rows that carry it */
+function admLeaveById_(){
+  const sh = sheet_('Leave', L_HEAD), m = headMap_(sh, L_HEAD);
+  const v = sh.getDataRange().getValues();
+  const by = {}, order = [], blanks = [];
+  for(let i = 1; i < v.length; i++){
+    const id = cell_(v[i], m.ix.id);
+    if(!id){ blanks.push(i + 1); continue; }
+    if(!by[id]){ by[id] = []; order.push(id); }
+    by[id].push({ at: i + 1, row: v[i] });
+  }
+  return { sh: sh, m: m, by: by, order: order, blanks: blanks };
+}
+
+function showLeaveTwins(){
+  const t = admLeaveById_(), L = ['THE LEAVE REGISTER — applications appearing more than once', ''];
+  let dup = 0, settleable = 0;
+  t.order.forEach(id => {
+    const rows = t.by[id];
+    if(rows.length < 2) return;
+    dup++;
+    const sts = rows.map(r => String(r.row[t.m.ix.status] || 'PENDING'));
+    const decided = sts.filter(s => s !== 'PENDING');
+    const waiting = sts.filter(s => s === 'PENDING').length;
+    if(decided.length && waiting) settleable++;
+    L.push(cell_(rows[0].row, t.m.ix.name) + ' (' + cell_(rows[0].row, t.m.ix.role) + ', ' +
+           cell_(rows[0].row, t.m.ix.mandal) + ') · ' + cell_(rows[0].row, t.m.ix.type) + ' · ' +
+           dmy_(dateText_(rows[0].row[t.m.ix.fromDate])) + ' · id ' + id);
+    rows.forEach((r, k) => L.push('    row ' + r.at + ': ' + sts[k] +
+      (String(r.row[t.m.ix.decidedAt] || '') ? ' on ' + String(r.row[t.m.ix.decidedAt]).slice(0, 10) : '') +
+      (String(r.row[t.m.ix.decidedBy] || '') ? ' by ' + String(r.row[t.m.ix.decidedBy]) : '')));
+    if(decided.length && waiting) L.push('    → settleLeaveTwins() would write ' + decided[0] + ' onto the waiting row(s).');
+    else if(!decided.length) L.push('    → genuinely waiting on your orders. Nothing to settle; sanction or refuse it in the app.');
+    else L.push('    → already agreed. Nothing to do.');
+    L.push('');
+  });
+  if(!dup) L.push('No application appears twice. Nothing to settle.');
+  else L.push(dup + ' application(s) appear more than once · ' + settleable + ' can be settled.');
+  if(t.blanks.length){
+    L.push('');
+    L.push('Rows with no application id (row ' + t.blanks.join(', ') + '). These are not applications — ' +
+           'they cannot be decided, because every order is passed by id. The console and the app now ' +
+           'leave them out. Clear them by hand if they are stray.');
+  }
+  L.push('');
+  L.push('This was read only. Nothing was written.');
+  Logger.log(L.join('\n'));
+  return L.join('\n');
+}
+
+function settleLeaveTwins(){
+  const t = admLeaveById_(), L = ['SETTLING THE DUPLICATED APPLICATIONS', ''];
+  let done = 0, rowsWritten = 0;
+  t.order.forEach(id => {
+    const rows = t.by[id];
+    if(rows.length < 2) return;
+    /* the order actually passed on this application, and the hand that passed
+       it — taken from a row that carries one, never invented */
+    const lead = rows.filter(r => String(r.row[t.m.ix.status] || 'PENDING') !== 'PENDING')
+                     .sort((a, b) => String(b.row[t.m.ix.decidedAt] || '')
+                       .localeCompare(String(a.row[t.m.ix.decidedAt] || '')))[0];
+    if(!lead) return;                                   /* genuinely waiting */
+    const want = String(lead.row[t.m.ix.status]);
+    const by   = String(lead.row[t.m.ix.decidedBy] || '');
+    const when = String(lead.row[t.m.ix.decidedAt] || '');
+    const rem  = String(lead.row[t.m.ix.remarks] || '');
+    let touched = 0;
+    rows.forEach(r => {
+      if(String(r.row[t.m.ix.status] || 'PENDING') !== 'PENDING') return;
+      t.sh.getRange(r.at, t.m.ix.status + 1).setValue(want);
+      t.sh.getRange(r.at, t.m.ix.decidedBy + 1).setValue(by);
+      t.sh.getRange(r.at, t.m.ix.decidedAt + 1).setValue(when);
+      t.sh.getRange(r.at, t.m.ix.remarks + 1).setValue(rem);
+      touched++;
+    });
+    if(!touched) return;                                /* already agreed */
+    done++; rowsWritten += touched;
+    const who = cell_(rows[0].row, t.m.ix.name) + ' (' + cell_(rows[0].row, t.m.ix.role) + ', ' +
+                cell_(rows[0].row, t.m.ix.mandal) + ')';
+    L.push(who + ' · ' + cell_(rows[0].row, t.m.ix.type) + ' · ' +
+           dmy_(dateText_(rows[0].row[t.m.ix.fromDate])) + ' → ' + want + ' on ' + touched + ' row(s)');
+    admLog_('LEAVE TWIN SETTLED', id, who + ' · ' + want + ' · ' + touched +
+            ' duplicate row(s) brought into line with the order already passed');
+  });
+  L.push('');
+  L.push(done ? (done + ' application(s) settled, ' + rowsWritten + ' row(s) written.')
+              : 'Nothing to settle — every duplicated application already agrees.');
+  L.push('No row was deleted and no order was invented: each waiting twin was given the');
+  L.push('order another row of the same application already carried. Run it again and it');
+  L.push('writes nothing.');
   Logger.log(L.join('\n'));
   return L.join('\n');
 }

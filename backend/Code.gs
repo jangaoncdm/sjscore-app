@@ -247,6 +247,17 @@ const SETTLE_HOUR = 9;           /* and settled the NEXT morning, for the day be
    each a single notified date, sanctioned like any leave. Not prorated: the
    G.O. grants them for the year, whichever months the register covers. */
 const LEAVE_ENTITLEMENT = {CL:15, EL:30, HQ:0, ML:0, OH:5};
+/* MEDICAL LEAVE ANSWERS TO NO YEARLY FIGURE — an illness does not keep to an
+   allowance, and ML is 0 above for exactly that reason, not because it is
+   free. What it answers to is the spell: the Collector's order is that no
+   officer takes more than fifteen days of medical leave AT A TIME. The cap is
+   therefore on the spell and not on the application — fifteen days applied for
+   today and fifteen more beginning the next morning is thirty days at a time,
+   whatever the two rows say — so mlRun_ measures the unbroken run either side
+   of the dates asked for. A longer absence is not forbidden; it is simply not
+   a thing this register grants, and the officer is told to take it to the
+   Collector under the leave rules. */
+const ML_MAX_SPELL = 15;
 /* Annexure-II of G.O.Rt.No.1715 dt. 06.12.2025 — the only dates an OH
    application may name. Next year's G.O. replaces this map (and the app's
    copy of it) together. */
@@ -346,6 +357,20 @@ function dateText_(v){
   return String(v == null ? '' : v).trim().replace(/^'/, '');
 }
 function today_(){ return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'); }
+
+/* Two helpers that do arithmetic on a DATE and never on a moment. Both parse
+   as UTC on purpose: these strings are calendar days, and letting the script's
+   timezone near one is how nine of thirty holidays landed on the wrong date.
+   Both ends of a span are counted, because leave is taken in whole days. */
+function spanDays_(from, to){
+  const a = Date.parse(String(from) + 'T00:00:00Z'), b = Date.parse(String(to) + 'T00:00:00Z');
+  if(isNaN(a) || isNaN(b) || b < a) return 0;
+  return Math.round((b - a) / 86400000) + 1;
+}
+function dayAfter_(d){
+  const t = Date.parse(String(d) + 'T00:00:00Z');
+  return isNaN(t) ? String(d) : new Date(t + 86400000).toISOString().slice(0, 10);
+}
 
 /* all rows for a phone, folded into one login */
 function findByPhone_(phone){
@@ -1007,11 +1032,18 @@ function decideNotices_(b, u){
 function clUsed_(phone, yr){
   const sh = sheet_('Leave', L_HEAD), m = headMap_(sh, L_HEAD);
   const v = sh.getDataRange().getValues(); let used = 0;
+  const counted = {};
   for(let i = 1; i < v.length; i++){
     if(phone10_(v[i][m.ix.phone]) !== phone) continue;
     if(String(v[i][m.ix.type]) !== 'CL') continue;
     if(String(v[i][m.ix.status]) !== 'APPROVED') continue;
     if(Number(String(dateText_(v[i][m.ix.fromDate])).slice(0,4)) !== yr) continue;
+    /* ONE SPELL, ONE DEBIT. A duplicated row is not a second absence, and
+       this figure is what exhausts a year's casual leave and turns the next
+       debit into loss of pay. It must not be paid twice. */
+    const id = String(v[i][m.ix.id] || '').trim();
+    if(id && counted[id]) continue;
+    if(id) counted[id] = true;
     used += Number(v[i][m.ix.days]) || 0;
   }
   return used;
@@ -1842,14 +1874,23 @@ function doGet(e){
     const coverage = Object.keys(roll).sort().map(m => ({mandal:m, total:roll[m].total, done:roll[m].done, pending:pendByM[m] || []}));
 
     /* leave — the sheet was already read above for the cover map */
+    /* ONE LINE PER APPLICATION. Twins are folded and the decided row kept —
+       otherwise a leftover PENDING row stands in Awaiting your orders asking
+       for an order the Collector passed days ago, and no order can clear it,
+       because the order is refused as already passed. Reported from the
+       district in those words: leave already sanctioned but still showing in
+       waiting. Nothing is dropped from the Sheet; this is the reading. */
     const lp = [], lr = [];
+    const lAll = [];
     for(let i = 1; i < lv.length; i++){
-      const row = {name:cell_(lv[i], lm.ix.name), role:cell_(lv[i], lm.ix.role), mandal:cell_(lv[i], lm.ix.mandal),
+      lAll.push({id:cell_(lv[i], lm.ix.id),
+        name:cell_(lv[i], lm.ix.name), role:cell_(lv[i], lm.ix.role), mandal:cell_(lv[i], lm.ix.mandal),
         type:cell_(lv[i], lm.ix.type), from:dateText_(lv[i][lm.ix.fromDate]), to:dateText_(lv[i][lm.ix.toDate]),
         days:Number(lv[i][lm.ix.days])||0, status:String(lv[i][lm.ix.status]||'PENDING'),
-        appliedAt:String(lv[i][lm.ix.appliedAt]||'')};
-      (row.status === 'PENDING' ? lp : lr).push(row);
+        decidedAt:String(lv[i][lm.ix.decidedAt]||''),
+        appliedAt:String(lv[i][lm.ix.appliedAt]||'')});
     }
+    leaveFold_(lAll).forEach(row => { (row.status === 'PENDING' ? lp : lr).push(row); });
     lr.sort((a,b)=>String(b.appliedAt).localeCompare(String(a.appliedAt)));
 
     const gradeCount = {A:0,B:0,C:0,D:0};
@@ -1947,6 +1988,10 @@ function doGet(e){
       status:String(o.status||'PENDING'), decidedBy:String(o.decidedBy||''),
       decidedAt:String(o.decidedAt||''), remarks:String(o.remarks||'')
     }));
+    /* one line per application here too — a twin on the register must not
+       raise a second card on the phone, nor a second entry in the Collector's
+       waiting list, nor be sanctioned twice against the year */
+    rows = leaveFold_(rows);
     rows.sort((a,b) => String(b.appliedAt).localeCompare(String(a.appliedAt)));
     return json_({ ok:true, rows:rows.slice(0, 400) });
   }
@@ -2864,11 +2909,17 @@ function doPost(e){
   if(b.kind === 'leaveWithdraw'){
     const sh = sheet_('Leave', L_HEAD);
     const m = headMap_(sh, L_HEAD);
-    const found = leaveRow_(sh, m, String(b.id || ''));
-    if(!found) return json_({ ok:true, id:String(b.id||''), status:'CANCELLED', local:true });
+    /* the whole application, twins and all — see leaveRows_ */
+    const hits = leaveRows_(sh, m, String(b.id || ''));
+    if(!hits.length) return json_({ ok:true, id:String(b.id||''), status:'CANCELLED', local:true });
+    const found = hits[0];
     if(phone10_(found.row[m.ix.phone]) !== u.phone)
       return json_({ ok:false, error:'Only the officer who applied can withdraw an application.' });
-    const st = String(found.row[m.ix.status] || 'PENDING');
+    /* it still stands if ANY row of it still stands: a twin left PENDING
+       behind a sanctioned row is the same application, not a second one */
+    const sts = hits.map(h => String(h.row[m.ix.status] || 'PENDING'));
+    const st = sts.indexOf('PENDING') >= 0 ? 'PENDING'
+             : sts.indexOf('APPROVED') >= 0 ? 'APPROVED' : sts[0];
     /* A sanctioned spell may be given back — but only WHOLE and only BEFORE
        it begins: the officer simply reports for duty and the days return to
        the account by themselves (CANCELLED never counts). Once it has
@@ -2884,10 +2935,12 @@ function doPost(e){
       return json_({ ok:false, error:'Orders have already been passed (' + st + '). It can no longer be withdrawn.' });
     }
     const when = new Date().toISOString();
-    sh.getRange(found.at, m.ix.status + 1).setValue('CANCELLED');
-    sh.getRange(found.at, m.ix.decidedBy + 1).setValue(by);
-    sh.getRange(found.at, m.ix.decidedAt + 1).setValue(when);
-    return json_({ ok:true, id:String(b.id||''), status:'CANCELLED', decidedAt:when });
+    hits.forEach(h => {
+      sh.getRange(h.at, m.ix.status + 1).setValue('CANCELLED');
+      sh.getRange(h.at, m.ix.decidedBy + 1).setValue(by);
+      sh.getRange(h.at, m.ix.decidedAt + 1).setValue(when);
+    });
+    return json_({ ok:true, id:String(b.id||''), status:'CANCELLED', decidedAt:when, rows:hits.length });
   }
 
   /* THE PLAN IS THE SECRETARY'S OWN WORK, and so it stands ABOVE the guard
@@ -3090,10 +3143,78 @@ function savePhotos_(b, u){
 }
 
 /* ---------------- leave ---------------- */
-function leaveRow_(sh, m, id){
+/* EVERY ROW CARRYING THIS ID, not the first of them. An application is one
+   thing; before saveLeave_ took the lock, a retry racing its original could
+   put the same id on the register twice. The Collector then sanctioned the
+   first row and its twin stayed PENDING — and stayed PENDING for ever, because
+   every further order looked the id up, found the row already APPROVED and
+   answered 'orders have already been passed'. Three applications sat in
+   Awaiting your orders on the console for eight days that way, sanctioned and
+   waiting at the same time. An order is passed on the APPLICATION, so it is
+   written to every row that bears its id. */
+function leaveRows_(sh, m, id){
   const data = sh.getDataRange().getValues();
-  for(let i = 1; i < data.length; i++) if(String(data[i][m.ix.id]) === String(id)) return { at: i + 1, row: data[i] };
-  return null;
+  const out = [];
+  for(let i = 1; i < data.length; i++)
+    if(String(data[i][m.ix.id]) === String(id)) out.push({ at: i + 1, row: data[i] });
+  return out;
+}
+function leaveRow_(sh, m, id){ return leaveRows_(sh, m, id)[0] || null; }
+
+/* ONE LINE PER APPLICATION, whatever the register holds. Twins are folded on
+   the way out and the DECIDED one is kept, so a leftover PENDING row can no
+   longer stand in the console asking for an order that was passed a week ago,
+   and cannot be counted twice against an officer's year. Nothing is deleted:
+   both rows stay on the Sheet, and Admin.gs settles them under the
+   Collector's hand. A row with no id is not an application at all — it cannot
+   be decided, because every order is passed by id — so it is left out rather
+   than shown as one more officer awaiting orders. */
+function leaveFold_(rows){
+  const by = {}, order = [];
+  rows.forEach(r => {
+    const id = String(r.id || '').trim();
+    if(!id) return;
+    const held = by[id];
+    if(!held){ by[id] = r; order.push(id); return; }
+    const heldPending = String(held.status || 'PENDING') === 'PENDING';
+    const thisPending = String(r.status || 'PENDING') === 'PENDING';
+    /* a decision beats no decision; between two decisions, the later one */
+    if(heldPending && !thisPending) by[id] = r;
+    else if(heldPending === thisPending && String(r.decidedAt || '') > String(held.decidedAt || '')) by[id] = r;
+  });
+  return order.map(id => by[id]);
+}
+
+/* THE UNBROKEN RUN OF MEDICAL LEAVE these dates belong to — the spell asked
+   for, together with every medical leave already applied for or sanctioned
+   that touches it, directly or through another. Spells that merely adjoin are
+   one spell: an officer away from the 1st to the 15th and again from the 16th
+   to the 30th has been away thirty days at a time, and two rows in a register
+   do not make that two absences. A refused or withdrawn application is not
+   part of any run; a resubmission under the same id is the application itself
+   and is left out so that correcting one does not count it twice. */
+function mlRun_(sh, m, phone, from, to, skipId){
+  const spans = [{ f: from, t: to }];
+  const all = sh.getDataRange().getValues();
+  for(let i = 1; i < all.length; i++){
+    if(cell_(all[i], m.ix.id) === String(skipId || '')) continue;
+    if(phone10_(all[i][m.ix.phone]) !== phone) continue;
+    if(cell_(all[i], m.ix.type) !== 'ML') continue;
+    const st = cell_(all[i], m.ix.status);
+    if(st !== 'PENDING' && st !== 'APPROVED') continue;
+    const f2 = dateText_(all[i][m.ix.fromDate]), t2 = dateText_(all[i][m.ix.toDate]);
+    if(f2 && t2 && t2 >= f2) spans.push({ f: f2, t: t2 });
+  }
+  spans.sort(function(a, b){ return a.f < b.f ? -1 : a.f > b.f ? 1 : 0; });
+  const runs = [];
+  spans.forEach(function(sp){
+    const last = runs[runs.length - 1];
+    if(last && sp.f <= dayAfter_(last.t)){ if(sp.t > last.t) last.t = sp.t; }
+    else runs.push({ f: sp.f, t: sp.t });
+  });
+  for(let j = 0; j < runs.length; j++)
+    if(runs[j].f <= from && runs[j].t >= from) return spanDays_(runs[j].f, runs[j].t);
+  return spanDays_(from, to);
 }
 
 function saveLeave_(b, u){
@@ -3105,6 +3226,7 @@ function saveLeave_(b, u){
 
   /* an Optional Holiday is one NOTIFIED day — the G.O.'s list, nothing else */
   const isOH = String(l.type || '') === 'OH';
+  const isML = String(l.type || '') === 'ML';
   if(isOH){
     if(from !== to) return json_({ ok:false, error:'An optional holiday is a single day — apply for each occasion separately.' });
     if(!TS_OPTIONAL_2026[from]) return json_({ ok:false, error:'That date is not on the notified optional-holiday list. Pick one of the G.O.’s dates.' });
@@ -3152,6 +3274,24 @@ function saveLeave_(b, u){
         error: (st === 'APPROVED' ? 'Leave is already sanctioned' : 'An application is already with the Collector') +
                ' for ' + dmy_(f2) + (f2 === t2 ? '' : ' to ' + dmy_(t2)) +
                '. Open it under Leave rather than applying again.' });
+    }
+  }
+
+  /* NOT MORE THAN FIFTEEN DAYS OF MEDICAL LEAVE AT A TIME. Measured from the
+     DATES and never from the day count the phone sends — the client only
+     asks — and measured over the whole run, so a second spell that begins the
+     morning the first one ends is refused with the two counted together. The
+     officer is told what the register makes it come to, and told where a
+     longer absence is decided: by the Collector, under the leave rules, and
+     not by this table. */
+  if(isML){
+    const run = mlRun_(sh, m, u.phone, from, to, l.id);
+    if(run > ML_MAX_SPELL){
+      const own = spanDays_(from, to);
+      return json_({ ok:false, error:'Medical leave cannot be taken for more than ' + ML_MAX_SPELL + ' days at a time. ' +
+        (run === own ? 'These dates come to ' + own + ' days.'
+                     : 'These dates run on from medical leave already on the register, and come to ' + run + ' days in one spell.') +
+        ' Apply for ' + ML_MAX_SPELL + ' days or fewer. A longer absence is for the Collector to consider under the leave rules.' });
     }
   }
 
@@ -3209,7 +3349,7 @@ function decideLeave_(b, u){
   const id = String(b.id || '');
   if(!id) return json_({ ok:false, error:'bad request' });
   const r = decideOneLeave_(id, want, String(b.remarks || ''), u);
-  return json_(r.ok ? { ok:true, id:id, status:want, decidedBy:r.decidedBy, decidedAt:r.decidedAt }
+  return json_(r.ok ? { ok:true, id:id, status:want, decidedBy:r.decidedBy, decidedAt:r.decidedAt, rows:r.rows }
                     : { ok:false, error:r.error });
 }
 /* one application, one order — the checks live here so a bulk sanction
@@ -3217,11 +3357,20 @@ function decideLeave_(b, u){
 function decideOneLeave_(id, want, remarks, u){
   const sh = sheet_('Leave', L_HEAD);
   const m = headMap_(sh, L_HEAD);
-  const found = leaveRow_(sh, m, id);
-  if(!found) return { ok:false, error:'That application is not on the district record yet.' };
+  /* the APPLICATION, which may be more than one row — see leaveRows_ */
+  const hits = leaveRows_(sh, m, id);
+  if(!hits.length) return { ok:false, error:'That application is not on the district record yet.' };
+  const found = hits[0];
 
-  const st = String(found.row[m.ix.status] || 'PENDING');
-  if(st !== 'PENDING') return { ok:false, error:'Orders have already been passed on this application (' + st + ').' };
+  /* IT IS WAITING IF ANY ROW OF IT IS WAITING. Reading only the first row is
+     what left a sanctioned application sitting in the console for ever: the
+     first row said APPROVED, so the order was refused, so the twin stayed
+     PENDING, so it was still waiting the next morning. */
+  const open = hits.filter(h => String(h.row[m.ix.status] || 'PENDING') === 'PENDING');
+  if(!open.length){
+    const st = String(found.row[m.ix.status] || 'PENDING');
+    return { ok:false, error:'Orders have already been passed on this application (' + st + ').' };
+  }
 
   if(want === 'APPROVED'){
     const type = String(found.row[m.ix.type] || '');
@@ -3231,12 +3380,19 @@ function decideOneLeave_(id, want, remarks, u){
       const ph = phone10_(found.row[m.ix.phone]);
       const all = sh.getDataRange().getValues();
       let used = 0;
+      const counted = {};
       for(let i = 1; i < all.length; i++){
         if(String(all[i][m.ix.id]) === id) continue;
         if(phone10_(all[i][m.ix.phone]) !== ph) continue;
         if(String(all[i][m.ix.type]) !== type) continue;
         if(String(all[i][m.ix.status]) !== 'APPROVED') continue;
         if(Number(String(dateText_(all[i][m.ix.fromDate])).slice(0,4)) !== yr) continue;
+        /* ONE SPELL, ONE DEBIT TO THE YEAR. A duplicated row is not a second
+           absence, and counting it twice refuses an officer leave he still
+           holds — the same arithmetic that decides loss of pay. */
+        const seenId = String(all[i][m.ix.id] || '').trim();
+        if(seenId && counted[seenId]) continue;
+        if(seenId) counted[seenId] = true;
         used += Number(all[i][m.ix.days]) || 0;
       }
       const want_ = Number(found.row[m.ix.days]) || 0;
@@ -3246,11 +3402,14 @@ function decideOneLeave_(id, want, remarks, u){
     }
   }
   const when = new Date().toISOString();
-  sh.getRange(found.at, m.ix.status + 1).setValue(want);
-  sh.getRange(found.at, m.ix.decidedBy + 1).setValue(u.name + ' (' + u.role + ')');
-  sh.getRange(found.at, m.ix.decidedAt + 1).setValue(when);
-  sh.getRange(found.at, m.ix.remarks + 1).setValue(String(remarks || '').slice(0, 1000));
-  return { ok:true, decidedBy:u.name + ' (' + u.role + ')', decidedAt:when };
+  /* every row of the application, so no twin is left behind still waiting */
+  hits.forEach(h => {
+    sh.getRange(h.at, m.ix.status + 1).setValue(want);
+    sh.getRange(h.at, m.ix.decidedBy + 1).setValue(u.name + ' (' + u.role + ')');
+    sh.getRange(h.at, m.ix.decidedAt + 1).setValue(when);
+    sh.getRange(h.at, m.ix.remarks + 1).setValue(String(remarks || '').slice(0, 1000));
+  });
+  return { ok:true, decidedBy:u.name + ' (' + u.role + ')', decidedAt:when, rows:hits.length };
 }
 
 /* ================== FIELD ISSUE REGISTER · 28.07.2026 ==================

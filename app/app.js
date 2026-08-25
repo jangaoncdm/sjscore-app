@@ -2256,7 +2256,7 @@ const LEAVE_TYPES = [
   ['EL', 'Earned Leave',                     {year:30, counts:true }],
   ['OH', 'Optional Holiday',                 {year:5,  counts:true, pick:true}],
   ['HQ', 'Permission to leave Headquarters', {year:0,  counts:false}],
-  ['ML', 'Medical Leave',                    {year:0,  counts:false, cert:true}]
+  ['ML', 'Medical Leave',                    {year:0,  counts:false, cert:true, max:15}]
 ];
 /* Annexure-II of G.O.Rt.No.1715 dt. 06.12.2025 — an Optional Holiday may
    name only these dates. The district refuses any other; this list is the
@@ -2326,6 +2326,39 @@ function leaveDays(from, to){
   const a = new Date(from + 'T00:00:00'), b = new Date(to + 'T00:00:00');
   if(isNaN(a) || isNaN(b) || b < a) return 0;
   return Math.round((b - a) / 86400000) + 1;
+}
+/* The day AFTER a date, read as UTC so the handset's own timezone cannot move
+   a calendar day — the same care the district takes with the holiday tab. */
+function dayAfter(d){
+  const t = Date.parse(String(d) + 'T00:00:00Z');
+  return isNaN(t) ? String(d) : new Date(t + 86400000).toISOString().slice(0, 10);
+}
+/* THE WHOLE SPELL THESE DATES BELONG TO, read off this officer's own file.
+   Medical leave answers to no yearly figure — an illness does not keep to an
+   allowance — but it is capped at fifteen days AT A TIME, and a spell that
+   begins the morning another ends is one spell, whatever the two rows say. So
+   the medical leave already applied for or sanctioned either side of these
+   dates is counted with them. The district counts it exactly the same way and
+   is the authority; this copy exists only so the officer is told before he
+   sends, and not after a weak line has finally carried the refusal back. */
+function leaveRun(type, from, to, skipId){
+  const spans = [{ f:String(from), t:String(to) }];
+  (DB.leave || []).forEach(l => {
+    if(String(l.id || '') === String(skipId || '')) return;
+    if(String(l.type || '') !== type) return;
+    if(l.status !== 'PENDING' && l.status !== 'APPROVED') return;
+    const f = String(l.from || ''), t = String(l.to || '');
+    if(f && t && t >= f) spans.push({ f:f, t:t });
+  });
+  spans.sort((x, y) => x.f < y.f ? -1 : x.f > y.f ? 1 : 0);
+  const runs = [];
+  spans.forEach(sp => {
+    const last = runs[runs.length - 1];
+    if(last && sp.f <= dayAfter(last.t)){ if(sp.t > last.t) last.t = sp.t; }
+    else runs.push({ f:sp.f, t:sp.t });
+  });
+  const mine = runs.find(r => r.f <= from && r.t >= from);
+  return mine ? leaveDays(mine.f, mine.t) : leaveDays(from, to);
 }
 function approvedLeaveToday(){
   const t = todayStr();
@@ -2950,18 +2983,23 @@ function renderLeave(){
   }
   if(mine){
     const yr = new Date().getFullYear();
+    /* THE CARD NAMES THE KINDS OF LEAVE; IT DOES NOT PRICE THEM. By the
+       Collector's direction it carries no allowance and no arithmetic — not
+       '6 for the year', not '30 taken', not a balance chip. What an
+       application would leave him is still worked out, live and against the
+       dates he has actually picked, in the note under the apply form, and the
+       district still refuses a sanction that would breach the year. A figure
+       standing on its own here told him nothing he could act on and invited
+       him to plan against a number the server had not agreed to.
+       Medical leave carries a line because a RULE is not an allowance, and
+       the permission carries one because it is not leave at all. */
     h += `<div class="group" style="margin-top:14px"><div class="hdr">Leave account · ${yr}</div><div class="card">` +
-      LEAVE_TYPES.filter(([,,m]) => m.counts).map(([k,n]) => {
-        const b = leaveBalance(k, yr);
-        return `<div class="row"><span class="tag" style="width:44px;flex:none;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--seal);background:var(--seal-tint);border-radius:8px;min-height:34px;display:grid;place-items:center">${k}</span>
-          <span class="lbl"><b>${esc(n)}</b><span>${b.ent} for the year · ${b.used} taken${b.held?' · '+b.held+' awaiting orders':''}</span></span>
-          <span class="lvdays" style="color:${b.left?'var(--ok)':'var(--flag)'}">${b.left}<small>left</small></span></div>`;
-      }).join('') +
-      `<div class="row"><span class="lbl"><b>Medical Leave</b><span>On a certificate from a Government doctor or hospital. Not counted against a yearly figure.</span></span></div>
+      LEAVE_TYPES.filter(([,,m]) => m.counts).map(([k,n]) =>
+        `<div class="row"><span class="tag" style="width:44px;flex:none;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--seal);background:var(--seal-tint);border-radius:8px;min-height:34px;display:grid;place-items:center">${k}</span>
+          <span class="lbl"><b>${esc(n)}</b></span></div>`).join('') +
+      `<div class="row"><span class="lbl"><b>Medical Leave</b><span>On a certificate from a Government doctor or hospital. No yearly limit — but not more than ${leaveMeta('ML').max} days at a time.</span></span></div>
        <div class="row"><span class="lbl"><b>Permission to leave Headquarters</b><span>A permission, not leave. Nothing is deducted.</span></span></div>
       </div></div>`;
-    if(yr === LEAVE_OPENING_YEAR)
-      h += `<p class="lvnote">Casual leave for ${yr} is ${CL_OPENING_BALANCE} days, being the five months from August. The full 15 applies from January ${yr+1}.</p>`;
     h += `<div class="group" style="margin-top:14px"><button class="btn" id="lvNew">${ICON.plus}Apply for leave</button></div>`;
     const lv = approvedLeaveToday();
     if(lv) h += `<div class="group"><div class="card"><div class="row">
@@ -3029,7 +3067,7 @@ function openLeaveForm(edit){
         <textarea id="lvReason" rows="3" placeholder="Briefly, in your own words"></textarea></div>
       <div class="field" id="lvCertBox" hidden><label for="lvCert">Medical certificate</label>
         <input type="text" id="lvCert" placeholder="Government doctor or hospital, and the date of the certificate">
-        <p style="font-size:12px;color:var(--ink-3);margin-top:5px;line-height:1.45">Medical leave is sanctioned only on a certificate from a Government doctor or a Government hospital. Carry the original for the office record.</p></div>
+        <p style="font-size:12px;color:var(--ink-3);margin-top:5px;line-height:1.45">Medical leave is sanctioned only on a certificate from a Government doctor or a Government hospital. Carry the original for the office record. There is no yearly limit on it, but not more than ${leaveMeta('ML').max} days may be taken at a time.</p></div>
       <div class="field"><label for="lvAddr">Address during leave</label>
         <input type="text" id="lvAddr" placeholder="Where you can be reached"></div>
       <div class="row" id="lvHqRow"><span class="lbl"><b>Permission to leave headquarters</b>
@@ -3057,6 +3095,23 @@ function openLeaveForm(edit){
     if(meta.pick && !$('#lvOh').value){ box.textContent = 'No optional holidays remain this year.'; box.style.color=''; return; }
     if(!d){ box.textContent = 'The last day cannot fall before the first.'; box.style.color=''; return; }
     const word = d + (d === 1 ? ' day' : ' days');
+    /* MEDICAL LEAVE HAS NO YEARLY FIGURE TO SPEND, so there is no balance to
+       show — what there is to show is the ceiling on the spell, and the note
+       says both in the same breath. It counts the run either side of these
+       dates, because fifteen days and one more the next morning is sixteen. */
+    if(meta.max){
+      const run = leaveRun(k, $('#lvFrom').value, $('#lvTo').value, LV_EDIT && LV_EDIT.id);
+      if(run > meta.max){
+        box.innerHTML = `<b>${word} — more than ${meta.max} days at a time.</b> ${run === d
+          ? 'Medical leave is not taken for more than ' + meta.max + ' days in one spell.'
+          : 'These dates run on from medical leave already applied for, and come to ' + run + ' days in one spell.'}`;
+        box.style.color = 'var(--flag)';
+      } else {
+        box.textContent = word + ' · no yearly limit on medical leave, ' + meta.max + ' days at a time';
+        box.style.color = '';
+      }
+      return;
+    }
     if(!meta.counts){ box.textContent = word; box.style.color=''; return; }
     const b = leaveBalance(k, Number(String($('#lvFrom').value).slice(0,4)) || new Date().getFullYear());
     if(d > b.left){
@@ -3116,6 +3171,18 @@ async function submitLeave(){
   if(meta.cert && !cert){
     toast('Medical leave needs the certificate of a Government doctor or hospital.', 5000);
     $('#lvCert').focus(); return;
+  }
+  /* fifteen days at a time, counted over the whole spell. The district
+     refuses it too, but there is no sense sending an application that cannot
+     stand, and on a village road the refusal may be an hour coming back. */
+  if(meta.max){
+    const run = leaveRun(type, from, to, LV_EDIT && LV_EDIT.id);
+    if(run > meta.max){
+      toast(run === days
+        ? 'Medical leave cannot be taken for more than ' + meta.max + ' days at a time. These dates come to ' + days + ' days.'
+        : 'These dates run on from medical leave already applied for and come to ' + run + ' days in one spell — more than the ' + meta.max + ' days allowed at a time.', 7000);
+      return;
+    }
   }
   if(meta.counts){
     const b = leaveBalance(type, Number(String(from).slice(0,4)) || new Date().getFullYear());
