@@ -2126,12 +2126,15 @@ function menuResetOnePin(){
   admShow_('PIN reset — copy it now, it is shown once', resetOnePin(p));
 }
 
-/* The two resets asked for on 25.08.2026 — 9949364872, and 7981236941
-   (Ravi Kumar, PS, Ramboji Gudem, Devaruppula), who had forgotten his.
-   Select go in the editor, press Run, then Ctrl+Enter: both PINs are in the
-   log, printed once and nowhere else. Run it twice on the same day and it
-   prints the same two PINs and writes nothing the second time. */
+/* Whoever is being reset today. Select go in the editor, press Run, then
+   Ctrl+Enter: the PIN is in the log, printed once and nowhere else.
+
+   THE NUMBERS ARE REPLACED HERE, NEVER ADDED TO. The PIN is seeded from the
+   number and the DAY, so a number left in this list is re-keyed the next time
+   go() is run on a later date — and the PIN already given to that officer
+   stops working, with nobody the wiser until he telephones. 9949364872 and
+   7981236941 were reset on 25.08.2026 and are out of the list for that
+   reason. To reset one of them again, put it back deliberately. */
 function go(){
-  Logger.log(resetOnePin('9949364872'));
-  Logger.log(resetOnePin('7981236941'));
+  Logger.log(resetOnePin('9703202002'));
 }
