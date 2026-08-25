@@ -2125,3 +2125,13 @@ function menuResetOnePin(){
   if(ok !== ui.Button.YES){ ui.alert('Nothing was written.'); return; }
   admShow_('PIN reset — copy it now, it is shown once', resetOnePin(p));
 }
+
+/* The two resets asked for on 25.08.2026 — 9949364872, and 7981236941
+   (Ravi Kumar, PS, Ramboji Gudem, Devaruppula), who had forgotten his.
+   Select go in the editor, press Run, then Ctrl+Enter: both PINs are in the
+   log, printed once and nowhere else. Run it twice on the same day and it
+   prints the same two PINs and writes nothing the second time. */
+function go(){
+  Logger.log(resetOnePin('9949364872'));
+  Logger.log(resetOnePin('7981236941'));
+}
