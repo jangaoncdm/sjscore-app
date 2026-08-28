@@ -16,7 +16,7 @@ the rules below exist because exactly that happened in production.
 ## Run this before you finish anything
 
 ```bash
-npm test              # 982 assertions, 22 suites, against the real backend files
+npm test              # 989 assertions, 22 suites, against the real backend files
 node tests/ladder     # one suite, with its detail
 ```
 
@@ -236,7 +236,15 @@ to the call that made it, shown once on the console, and written nowhere —
 read, so the two can never hand out different PINs for the same officer.
 
 - Misses **1 and 2** of a calendar month → a **reminder**. Pushed at once,
-  unnumbered, off the register, no lock, no debit.
+  unnumbered, off the register, no lock, no debit. **A reminder names no
+  sanction.** By the Collector's direction (28.08.2026) it says only
+  *Attendance not marked* — it does not count his misses at him, does not
+  name the show-cause notice and does not mention casual leave. Those belong
+  to the notice, which is signed, numbered and served; a reminder is not the
+  place to rehearse a sanction that has not arisen and may never arise. The
+  occasion is still kept on the `Reminders` tab, and the ladder still counts
+  from the attendance record — only the wording changed. `reasonText_` and
+  the reminder mail carry the rule; the suites assert the words are absent.
 - Miss **3** (`SCN_FROM_MISS`) → a show-cause notice is **proposed**.
 - **Nothing is served without the Collector's approval.** The trigger only
   proposes. Approval assigns the `/SJSP-SCN/` number, locks the officer's app

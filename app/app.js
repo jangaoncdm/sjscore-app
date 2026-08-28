@@ -919,7 +919,7 @@ function renderNotices(){
     h+='<div class="group" style="padding:14px var(--pad) 0"><div class="hdr">Reminders \u00b7 not on your record</div></div><div class="pillar">'+rems.map(r=>
       `<div class="ntc"><span class="nno">${esc(dmy(r.date).slice(0,5))}</span>
        <span class="nt"><b>${esc(r.reason)}</b>
-       <span>${r.kind==='MISS'?'Reminder '+(r.miss===1?'one':'two')+' of '+(scnFrom-1)+' — a notice issues on the '+scnFrom+'rd unmarked day':'Advisory only — no notice, no deduction'}</span></span>
+       <span>${r.kind==='MISS'?'A reminder only — nothing on your record':'Advisory only — no notice, no deduction'}</span></span>
        <span class="st ok">reminder</span></div>`).join('')+'</div>';
   }
   h+=(rems.length?'<div class="group" style="padding:16px var(--pad) 0"><div class="hdr">Show-cause notices</div></div>':'');

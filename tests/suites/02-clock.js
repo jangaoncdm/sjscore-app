@@ -41,7 +41,18 @@ module.exports = {
 
     /* neither lateness is ever a miss — the reasons say so in words */
     t.contains(c.reasonText_('LATE_SYNC', 0), 'reached the district after', 'LATE_SYNC blames the signal');
-    t.contains(c.reasonText_('MISS', 1), 'first', 'first miss says first');
-    t.contains(c.reasonText_('MISS', 2), 'second', 'second miss says second');
+    /* A REMINDER SAYS WHAT IS MISSING AND NOTHING ELSE. By the Collector's
+       direction of 28.08.2026 it no longer counts his misses at him, names
+       the show-cause notice, or mentions casual leave: those belong to the
+       notice, which is signed, numbered and served. It used to read
+       'Attendance not marked — first occasion this month'. */
+    t.eq(c.reasonText_('MISS', 1), 'Attendance not marked', 'a reminder says only what is missing');
+    t.eq(c.reasonText_('MISS', 2), 'Attendance not marked', 'and says the same on the second occasion');
+    ['first', 'second', 'occasion', 'SHOW CAUSE', 'Casual Leave', 'notice'].forEach(w =>
+      t.ok(c.reasonText_('MISS', 2).indexOf(w) < 0, 'and never the word "' + w + '"'));
+    /* the occasion is not lost — the register still carries it, and the
+       ladder still counts from the attendance record, not from this line */
+    t.eq(c.reasonText_('LATE_MARK', 0), 'Attendance marked after 11:00 AM',
+      'a late mark still says what it was — it accuses nobody either way');
   }
 };

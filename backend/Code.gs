@@ -784,7 +784,15 @@ function lateness_(mark, dStr){
 function reasonText_(kind, miss){
   if(kind === 'LATE_MARK') return 'Attendance marked after ' + CUTOFF_HOUR + ':00 AM';
   if(kind === 'LATE_SYNC') return 'Marked in time, but it reached the district after ' + CUTOFF_HOUR + ':00 AM \u2014 check your signal before leaving the field';
-  return 'Attendance not marked' + (miss ? ' \u2014 ' + (miss === 1 ? 'first' : 'second') + ' occasion this month' : '');
+  /* A REMINDER SAYS WHAT IS MISSING AND NOTHING ELSE. By the Collector's
+     direction (28.08.2026) it no longer counts his misses at him, names the
+     show-cause notice, or mentions casual leave. Those belong to the NOTICE,
+     which is signed, numbered and served under the Collector's own hand — a
+     reminder is not the place to rehearse a sanction that has not arisen and
+     may never arise. The occasion is still kept: the Reminders tab carries it
+     in its own column, and the ladder still counts from the attendance record.
+     It is simply no longer read out to the officer. */
+  return 'Attendance not marked';
 }
 function noticeGaps_(dStr){
   const marked = markedSet_(dStr), onLeave = sanctionedSet_(dStr);
@@ -898,9 +906,7 @@ function issueAbsenceNotices(){
             (r.g.mandal ? ', ' + r.g.mandal : '') + '\n\nDate: ' + dmy_(today) + '\nReason: ' + r.why + '\n\n' +
             (r.kind === 'MISS'
               ? 'This is a reminder, not a notice. Attendance is due in the SJSP App by ' + CUTOFF_HOUR +
-                ':00 AM every working day, from the place of duty.\n\nThis is your ' +
-                (r.miss === 1 ? 'first' : 'second') + ' unmarked day this month. On the ' + SCN_FROM_MISS +
-                'rd unmarked day of a calendar month a SHOW CAUSE NOTICE is issued, and from that day each further day of default costs one day of Casual Leave.'
+                ':00 AM every working day, from the place of duty. Please mark it.'
               : 'This is a reminder, not a notice. Please see that attendance is marked, and received by the district, before ' +
                 CUTOFF_HOUR + ':00 AM. Where the App shows a red banner, press "Send it to the district now" on returning to signal.') +
             '\n\nOffice of the Collector & District Magistrate, Jangaon.');
