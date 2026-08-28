@@ -642,7 +642,12 @@ function drawAttendance(){
     $('#camTxt').textContent = 'Available once the location is read.';
   }
   if(!ATT || !ATT.b64){
-    box.innerHTML = `<button class="btn" id="attShoot"${canShoot?'':' disabled'}>${ICON.cam2}Take photograph</button>`;
+    box.innerHTML = `<button class="btn" id="attShoot"${canShoot?'':' disabled'}>${ICON.cam2}Take photograph</button>` +
+      /* THE TAP THE APP NEVER HEARS ABOUT. Inside WhatsApp's own browser a
+         file input does nothing whatever — no camera, no event, no error —
+         and the officer is left tapping a button that cannot work. Nothing in
+         the page can detect that, so the cure is written where he is looking. */
+      (canShoot ? `<p class="hint" style="margin-top:9px">Camera does not open? Open this app in <b>Chrome</b> rather than inside WhatsApp, and allow the camera when the phone asks.</p>` : '');
     const b = $('#attShoot'); if(b) b.addEventListener('click', () => $('#camAtt').click());
   } else {
     box.innerHTML = `<button class="btn" id="attMark">Mark attendance</button>
@@ -659,7 +664,32 @@ function drawAttendance(){
   }
 }
 $('#camAtt').addEventListener('change', async ev => {
-  const f = ev.target.files[0]; ev.target.value = ''; if(!f || !ATT) return;
+  const f = ev.target.files[0]; ev.target.value = '';
+  /* A CAMERA THAT COMES BACK WITH NOTHING USED TO SAY NOTHING. The officer
+     tapped Take photograph, the screen sat exactly as it was, and there was no
+     way for him to tell whether the app was working, whether it was thinking,
+     or whether he should tap again. Reported from Lingala Ghanpur on
+     28.08.2026 in those words: the button is pressed and the picture is not
+     captured. The app cannot open a camera the handset will not open, but it
+     can stop pretending nothing happened, and it can say the two things that
+     actually cure it. */
+  if(!f){
+    $('#attMsg').className = 'msg';
+    $('#attMsg').innerHTML = 'The camera came back without a photograph. Tap <b>Take photograph</b> again. ' +
+      'If the camera does not open at all, the app is probably running inside WhatsApp — ' +
+      'open it in Chrome instead, and allow the camera when the phone asks.';
+    return;
+  }
+  /* AND THE PHOTOGRAPH THAT CAME BACK TO AN APP THAT HAD RESTARTED. A cheap
+     handset short of memory closes the browser while the camera is in front,
+     and the page reloads when it returns — the picture then arrives with no
+     attendance in hand and used to be dropped without a word. */
+  if(!ATT){
+    $('#attMsg').className = 'msg';
+    $('#attMsg').textContent = 'The app restarted while the camera was open, so that photograph was lost. ' +
+      'Read the location again and take it once more — nothing has been marked against you.';
+    return;
+  }
   const u = user(); const ts = new Date().toISOString();
   $('#attMsg').className = 'msg info'; $('#attMsg').textContent = 'Preparing the photograph…';
   try{
