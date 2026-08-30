@@ -93,35 +93,79 @@ class MockSheet {
   setDisplay(r, c, text){ this.display[r + ':' + c] = String(text); }
 }
 
+/* A Drive iterator. Everything DriveApp hands back is one of these, and the
+   backup walks Drive rather than being handed one file, so the mock has to
+   answer getFiles/getFolders and not only getFoldersByName. */
+function mockIter(arr){ let i = 0; return { hasNext: () => i < arr.length, next: () => arr[i++] }; }
+
+class MockFile {
+  /* the PARENT IS KEPT BY NAME, never by reference: two suites assert against
+     JSON.stringify(env.driveRoot), and a child pointing back at its folder
+     makes that throw on a circular structure */
+  constructor(name, blob, parentName){
+    this.name = name; this.blob = blob; this.parentName = parentName;
+    /* Drive hands back a stable id as well as a link, and the GPDP register
+       keeps it: a link can be re-issued, the id is what finds the document
+       again years later when a plan has to be produced. */
+    this.id = 'mockfile-' + (++MockFolder.seq);
+    this.trashed = false; this.description = '';
+    this.created = new Date();
+    this.mime = (blob && blob.type) || 'application/octet-stream';
+  }
+  getId(){ return this.id; }
+  getName(){ return this.name; }
+  getBlob(){ return this.blob; }
+  getUrl(){ return 'https://drive.mock/' + this.parentName + '/' + this.name; }
+  getSize(){ const d = this.blob && this.blob.data; return d === undefined || d === null ? 0 : String(d).length; }
+  getMimeType(){ return this.mime; }
+  getDateCreated(){ return this.created; }
+  setDescription(d){ this.description = String(d); return this; }
+  getDescription(){ return this.description; }
+  setSharing(){ return this; }
+  /* trashing is not deleting: the file stays in the mock's world, exactly as
+     it stays in Drive's bin, and simply stops being listed */
+  setTrashed(t){ this.trashed = !!t; return this; }
+  isTrashed(){ return this.trashed; }
+  makeCopy(name, folder){ return folder.createFile(mockBlob('copy-of-' + this.name, this.mime, name)); }
+}
+
 class MockFolder {
-  constructor(name){ this.name = name; this.folders = {}; this.files = []; }
+  constructor(name){ this.name = name; this.folders = {}; this.files = []; this.trashed = false; }
+  getName(){ return this.name; }
+  live(){ return this.files.filter(f => !f.trashed); }
   getFoldersByName(name){
-    const hit = this.folders[name];
+    const hit = this.folders[name] && !this.folders[name].trashed ? this.folders[name] : null;
     let used = false;
     return { hasNext: () => !!hit && !used, next: () => { used = true; return hit; } };
   }
+  getFilesByName(name){ return mockIter(this.live().filter(f => f.getName() === name)); }
+  getFiles(){ return mockIter(this.live()); }
+  getFolders(){ return mockIter(Object.keys(this.folders).map(k => this.folders[k]).filter(f => !f.trashed)); }
   createFolder(name){ const f = new MockFolder(name); this.folders[name] = f; return f; }
   createFile(blob){
-    const nm = (blob && blob.name) || 'file';
-    const id = 'mockfile-' + (++MockFolder.seq);
-    const file = {
-      name: nm,
-      /* Drive hands back a stable id as well as a link, and the GPDP register
-         keeps it: a link can be re-issued, the id is what finds the document
-         again years later when a plan has to be produced. */
-      getId: () => id,
-      getName: () => nm,
-      getBlob: () => blob,
-      getUrl: () => 'https://drive.mock/' + this.name + '/' + nm,
-      setSharing: () => {}
-    };
+    const nm = (blob && (blob.name || (blob.getName && blob.getName()))) || 'file';
+    const file = new MockFile(nm, blob, this.name);
     this.files.push(file);
     return file;
   }
   getUrl(){ return 'https://drive.mock/' + this.name; }
   setSharing(){}
+  setTrashed(t){ this.trashed = !!t; return this; }
+  isTrashed(){ return this.trashed; }
 }
 MockFolder.seq = 0;
+
+/* A blob carries a name as a field (the GPDP path reads blob.name) AND as a
+   getter/setter pair (the workbook export renames what the fetch returned). */
+function mockBlob(data, type, name){
+  return {
+    data: data, type: type, name: name,
+    getName(){ return this.name; },
+    setName(n){ this.name = n; return this; },
+    getBytes(){ return Buffer.isBuffer(this.data) ? this.data : Buffer.from(String(this.data)); },
+    getDataAsString(){ return Buffer.isBuffer(this.data) ? this.data.toString('utf8') : String(this.data); }
+  };
+}
 
 /* Loads the backend from disk into a fresh mocked world and returns it.
    opts: now (ISO), scriptTz, sheetTz, admin (also load Admin.gs). */
@@ -133,8 +177,12 @@ function load(opts){
     scriptTz: opts.scriptTz || 'Asia/Calcutta',
     sheetTz: opts.sheetTz || opts.scriptTz || 'Asia/Calcutta',
     adminEmail: 'collector.jangaon@mock.example',
-    driveRoot: new MockFolder('root')
+    driveRoot: new MockFolder('root'),
+    installed: [],
+    ssId: 'mock-spreadsheet-id'
   };
+  /* the register as Drive sees it — what makeCopy is called on */
+  env.ssFile = new MockFile('SJGP register', mockBlob('register', 'application/vnd.google-apps.spreadsheet', 'SJGP register'), 'root');
   const clock = { now: Date.parse(opts.now || '2026-08-14T18:05:00+05:30') };
   env.setNow = iso => { clock.now = Date.parse(iso); };
 
@@ -147,7 +195,9 @@ function load(opts){
   const ss = {
     getSheetByName: n => env.sheets[n] || null,
     insertSheet: n => { env.sheets[n] = new MockSheet(n, env); return env.sheets[n]; },
-    getSpreadsheetTimeZone: () => env.sheetTz
+    getSpreadsheetTimeZone: () => env.sheetTz,
+    getId: () => env.ssId,
+    getName: () => 'SJGP register'
   };
 
   const sandbox = {
@@ -158,7 +208,8 @@ function load(opts){
       getScriptProperties: () => ({
         getProperty: k => (env.props[k] === undefined ? null : env.props[k]),
         setProperty: (k, v) => { env.props[k] = String(v); },
-        deleteProperty: k => { delete env.props[k]; }
+        deleteProperty: k => { delete env.props[k]; },
+        getProperties: () => Object.assign({}, env.props)
       })
     },
     CacheService: {
@@ -174,7 +225,7 @@ function load(opts){
       base64Encode: x => Buffer.isBuffer(x) ? x.toString('base64') : Buffer.from(x).toString('base64'),
       base64Decode: s => Buffer.from(String(s), 'base64'),
       computeDigest: (alg, s) => crypto.createHash('sha256').update(String(s)).digest(),
-      newBlob: (data, type, name) => ({ data: data, type: type, name: name }),
+      newBlob: (data, type, name) => mockBlob(data, type, name),
       DigestAlgorithm: { SHA_256: 'SHA_256' }
     },
     Session: {
@@ -190,16 +241,24 @@ function load(opts){
     GmailApp: { sendEmail: (to, subject, body, options) => { env.outbox.push({ to: to, subject: subject, body: body, htmlBody: options && options.htmlBody, attachments: (options && options.attachments) || [] }); } },
     DriveApp: {
       getRootFolder: () => env.driveRoot,
+      /* the live register itself is a Drive file: the backup copies it by id */
+      getFileById: id => {
+        if(id !== env.ssId) throw new Error('no such file: ' + id);
+        return env.ssFile;
+      },
       Access: { ANYONE_WITH_LINK: 'ANYONE_WITH_LINK' },
       Permission: { VIEW: 'VIEW' }
     },
     ScriptApp: {
-      getProjectTriggers: () => [],
-      deleteTrigger: () => {},
+      getProjectTriggers: () => env.installed.map(name => ({ getHandlerFunction: () => name })),
+      deleteTrigger: t => { env.installed = env.installed.filter(n => n !== t.getHandlerFunction()); },
       newTrigger: name => ({
         timeBased(){ return this; }, everyDays(){ return this; },
-        atHour(){ return this; }, create(){ env.triggers.push(name); }
-      })
+        atHour(){ return this; },
+        create(){ env.triggers.push(name); env.installed.push(name); }
+      }),
+      getScriptId: () => 'mock-script-id',
+      getOAuthToken: () => 'mock-oauth-token'
     },
     UrlFetchApp: {
       fetch: (url, o) => {
@@ -208,9 +267,16 @@ function load(opts){
            weather suite answers one endpoint and the briefing another, and a
            single canned reply cannot serve both. */
         const r = (typeof env.fetchReply === 'function') ? env.fetchReply(url, o) : env.fetchReply;
+        const body = r === undefined || r === null ? '{"content":[{"type":"text","text":"mock"}]}' : r;
+        /* env.fetchCodeFor may answer per-URL: the backup asks the published
+           site for seven files and the repository for three, and one of them
+           being absent must not read as all of them failing */
+        const code = (typeof env.fetchCodeFor === 'function' && env.fetchCodeFor(url) != null)
+          ? env.fetchCodeFor(url) : (env.fetchCode || 200);
         return {
-          getContentText: () => r || '{"content":[{"type":"text","text":"mock"}]}',
-          getResponseCode: () => env.fetchCode || 200
+          getContentText: () => body,
+          getResponseCode: () => code,
+          getBlob: () => mockBlob(body, 'application/octet-stream', 'download')
         };
       }
     },

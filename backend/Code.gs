@@ -222,6 +222,14 @@ const SCN_FROM_MISS   = 3;   /* misses 1 and 2 remind; the 3rd serves notice */
 const DEBIT_FROM_MISS = 3;   /* and the 3rd is where the leave account starts to pay.
                                 Set to 4 to make the first notice a pure warning. */
 const CUTOFF_HOUR     = 11;  /* attendance is due by 11:00 from the place of duty */
+/* The village filing reminder opens on this day of the month and then goes
+   EVERY working day until the month closes — the Collector's direction of
+   29.08.2026, asked in those words: the reminder was not going out that day.
+   It had been the 16th and every third day after, so four days in six sent
+   nothing and the pendency looked unwatched from the district. The first
+   half of the month is still the mandals' own: move this to 1 and the
+   reminder runs the whole month, and nothing else has to change. */
+const FILING_REMIND_FROM = 16;
 const R_HEAD = ['id','date','phone','name','role','mandal','miss','kind','reason','sentAt','emailedAt'];
 /* Seen pings: an officer who OPENED the app on a working day without having
    marked. The app says so on its screen — nothing here is collected quietly —
@@ -1126,12 +1134,14 @@ function installNoticeTriggers(){
 
 /* ================== REPORTS & FILING REMINDERS · 21.08.2026 ==================
    Two daily jobs, installed once by installReportTriggers():
-     villageFilingReminders ~10:00 — from the 16th of the month, and every
-       third day after it, each officer whose village stands unevaluated is
-       told: the MSO and the MPDO for ACTION, the Panchayat Secretary for
-       INFORMATION (the Secretary cannot file). One consolidated message per
-       officer — in the app as a reminder row, and by mail. Never a notice,
-       never a debit: filing discipline is the mandal chain's to manage.
+     villageFilingReminders ~10:00 — from FILING_REMIND_FROM (the 16th) and
+       then EVERY working day of the month, each officer whose village stands
+       unevaluated is told: the MSO and the MPDO for ACTION, the Panchayat
+       Secretary for INFORMATION (the Secretary cannot file). One consolidated
+       message per officer — in the app as a reminder row, and by mail. Never
+       a notice, never a debit: filing discipline is the mandal chain's to
+       manage. One reminder per officer per day: the day's rows are read
+       first, so a re-fired trigger reminds nobody twice.
      dailyCollectorReport   ~19:00 — one structured mail to the Collector
        with the day whole: attendance, filing progress and the forecast at
        the current rate, grades, notices and leave. Guarded so a re-fired
@@ -1267,8 +1277,11 @@ function monthWd_(dStr){
 function villageFilingReminders(){
   const today = today_();
   const d = Number(today.slice(8, 10));
-  if(d <= 15){ Logger.log('Before the 16th — the mandals have the month to themselves.'); return; }
-  if((d - 16) % 3 !== 0){ Logger.log('Not a reminder day (the 16th, then every third day).'); return; }
+  if(d < FILING_REMIND_FROM){ Logger.log('Before the ' + FILING_REMIND_FROM + 'th — the mandals have the month to themselves.'); return; }
+  /* EVERY working day from here, by the Collector's direction of 29.08.2026.
+     Working days only: Sundays and the Holidays tab are off for this as for
+     everything else on the register, and a filing reminder on a declared
+     holiday asks for work the district is not sitting for. */
   if(!isWorkingDay_(today)){ Logger.log('Off day — no reminders.'); return; }
   const ym = today.slice(0, 7);
   const unfiled = unfiledVillages_(ym);
@@ -1578,8 +1591,327 @@ function installReportTriggers(){
   ScriptApp.newTrigger('villageFilingReminders').timeBased().everyDays(1).atHour(10).create();
   ScriptApp.newTrigger('dailyCollectorReport').timeBased().everyDays(1).atHour(19).create();
   Logger.log('Report triggers installed (Asia/Calcutta):\n' +
-    '  villageFilingReminders ~10:00 — from the 16th, every third day, on working days.\n' +
+    '  villageFilingReminders ~10:00 — from the ' + FILING_REMIND_FROM + 'th, every working day.\n' +
     '  dailyCollectorReport   ~19:00 — one structured mail, once a day, guarded against double sends.');
+}
+
+/* ================== THE BACKUP · 29.08.2026 ==================================
+   Asked for from the district in these words: "backup entire system and run
+   daily backup for all sheet, app script, code and all things."
+
+   WHAT A BACKUP OF THIS SYSTEM ACTUALLY IS. Six things, and they live in six
+   different places, which is why nothing until now backed up "the system":
+     1. the register — the Google Sheet, fifteen tabs, the government record;
+     2. the server — Code.gs and Admin.gs, deployed on Apps Script;
+     3. the field app and the console — published as static files;
+     4. the documents — the plans, the circulars and the attendance photos,
+        which are in Drive already and are the bulk of the whole thing;
+     5. the salt in Script Properties, without which not one PIN verifies;
+     6. the knowledge of what a good backup even looked like on a given day.
+   Copying (1) alone and calling it a backup is how a district discovers, on
+   the day it matters, that it holds a spreadsheet and no way to run it.
+
+   WHAT THIS TAKES, AND WHAT IT DELIBERATELY DOES NOT.
+   The register is copied twice — a native Sheets copy, which restores in one
+   click, and an .xlsx, which opens on a machine that has never heard of
+   Google. The server and the app are fetched from the published sources, so
+   what is stored is the code that was actually running that morning. The
+   documents are INVENTORIED, not copied: seventy thousand attendance photos
+   cannot be duplicated nightly, and a manifest naming every file, its id and
+   its size is what tells you whether one has gone missing — which is the
+   thing a copy of Drive inside Drive was never going to protect you from
+   anyway. The salt is NEVER written: only a fingerprint of it, so a salt
+   restored by hand can be PROVED to be the right one. A backup that carries
+   the district's secret is a second place to lose it from.
+
+   NOTHING IS DESTROYED (rule 7). Retention trashes; it does not delete, so a
+   wrong call is recoverable for a further thirty days in Drive's own bin. The
+   first of every month is kept for good. Only files this job made, only
+   inside the backup folder, only ones whose name carries a date, are ever
+   touched — the live register is not in that folder and cannot be reached
+   from it.
+
+   IT RUNS TWICE WITHOUT DOUBLING (rule 8). Every step asks whether its own
+   output is already there for today, so a nervous second run costs nothing
+   and — more usefully — a run that failed halfway is completed by the next
+   one instead of starting over.
+
+   AND IT SAYS SO WHEN IT FAILS. Each step is caught on its own: one broken
+   step never costs the other six, and the morning mail carries the failure in
+   its subject line. A backup that fails quietly is not a backup, it is a
+   belief. */
+const BACKUP_FOLDER    = 'SJ-SCORE Backups';
+const BACKUP_KEEP_DAYS = 30;   /* dailies; set to 0 to keep every one for ever */
+const BACKUP_MARK      = 'SJGP-BACKUP';
+/* The published app — the exact bytes an officer's handset loads. */
+const APP_BASE_URL = 'https://jangaoncdm.github.io/sjscore-app/';
+const APP_FILES    = ['index.html','app.js','dashboard.html','sw.js','config.js',
+                      'manifest.webmanifest','privacy.html'];
+/* The server, read from the repository the deploy pipeline pushes FROM, so no
+   new OAuth scope is needed and the live web app is never sent back for
+   re-authorisation — on a district system in daily use that is not a small
+   thing. Set the script property SCRIPT_API to 1 to take the live project
+   through the Apps Script API instead, once that API has been switched on. */
+const CODE_BASE_URL = 'https://raw.githubusercontent.com/jangaoncdm/sjscore-app/main/backend/';
+const CODE_FILES    = ['Code.gs','Admin.gs','appsscript.json'];
+
+function backupRoot_(){ return getFolder_(DriveApp.getRootFolder(), BACKUP_FOLDER); }
+function fileIn_(folder, name){
+  const it = folder.getFilesByName(name);
+  return it.hasNext() ? it.next() : null;
+}
+/* first twelve hex of the SHA-256 — enough to prove two values are the same,
+   nowhere near enough to be one of them */
+function fingerprint_(s){
+  const b = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(s));
+  let h = '';
+  for(let i = 0; i < 6; i++) h += ('0' + (b[i] & 0xFF).toString(16)).slice(-2);
+  return h;
+}
+function collectorEmail_(){
+  const t = uidx_(), v = t.sh.getDataRange().getValues();
+  for(let i = 1; i < v.length; i++)
+    if(cell_(v[i], t.ix.role).toUpperCase() === 'COLLECTOR')
+      return String(v[i][t.ix.email] || '').trim();
+  return '';
+}
+
+/* ---- the register: the copy that restores, and the copy that travels ---- */
+function backupRegister_(root, today){
+  const dir = getFolder_(getFolder_(root, 'register'), today.slice(0, 7));
+  const name = 'SJGP-register-' + today;
+  if(fileIn_(dir, name)) return 'already taken today';
+  const copy = DriveApp.getFileById(SpreadsheetApp.getActiveSpreadsheet().getId()).makeCopy(name, dir);
+  try{ copy.setDescription(BACKUP_MARK + ' ' + today); }catch(err){}
+  return 'Sheets copy taken';
+}
+function backupRegisterXlsx_(root, today){
+  const dir = getFolder_(getFolder_(root, 'register'), today.slice(0, 7));
+  const name = 'SJGP-register-' + today + '.xlsx';
+  if(fileIn_(dir, name)) return 'already taken today';
+  const id = SpreadsheetApp.getActiveSpreadsheet().getId();
+  const res = UrlFetchApp.fetch('https://docs.google.com/spreadsheets/d/' + id + '/export?format=xlsx',
+    { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+  if(res.getResponseCode() !== 200) throw new Error('the export answered ' + res.getResponseCode());
+  const f = dir.createFile(res.getBlob().setName(name));
+  try{ f.setDescription(BACKUP_MARK + ' ' + today); }catch(err){}
+  return 'workbook exported';
+}
+
+/* ---- the server, and the app the handsets actually load ---- */
+function backupCode_(root, today){
+  const dir = getFolder_(getFolder_(root, 'code'), today);
+  if(fileIn_(dir, 'Code.gs')) return 'already taken today';
+  if(PropertiesService.getScriptProperties().getProperty('SCRIPT_API') === '1'){
+    const res = UrlFetchApp.fetch('https://script.googleapis.com/v1/projects/' + ScriptApp.getScriptId() + '/content',
+      { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+    if(res.getResponseCode() !== 200)
+      throw new Error('the Apps Script API answered ' + res.getResponseCode() +
+        ' - switch it on once at script.google.com/home/usersettings, or clear the SCRIPT_API property to read the repository instead');
+    const files = JSON.parse(res.getContentText()).files || [];
+    files.forEach(f => {
+      const ext = f.type === 'JSON' ? '.json' : (f.type === 'HTML' ? '.html' : '.gs');
+      dir.createFile(Utilities.newBlob(String(f.source || ''), 'text/plain', f.name + ext));
+    });
+    return files.length + ' file(s), live from the project';
+  }
+  let n = 0;
+  CODE_FILES.forEach(f => {
+    const res = UrlFetchApp.fetch(CODE_BASE_URL + f, { muteHttpExceptions: true });
+    if(res.getResponseCode() !== 200) return;
+    dir.createFile(Utilities.newBlob(res.getContentText(), 'text/plain', f)); n++;
+  });
+  if(!n) throw new Error('the repository answered for none of ' + CODE_FILES.join(', '));
+  return n + ' file(s), from the repository';
+}
+function backupApp_(root, today){
+  const dir = getFolder_(getFolder_(root, 'app'), today);
+  if(fileIn_(dir, 'index.html')) return 'already taken today';
+  let n = 0; const missed = [];
+  APP_FILES.forEach(f => {
+    const res = UrlFetchApp.fetch(APP_BASE_URL + f, { muteHttpExceptions: true });
+    if(res.getResponseCode() !== 200){ missed.push(f); return; }
+    dir.createFile(Utilities.newBlob(res.getContentText(), 'text/plain', f)); n++;
+  });
+  if(!n) throw new Error('the published site answered for nothing at ' + APP_BASE_URL);
+  return n + ' file(s)' + (missed.length ? ' · not published: ' + missed.join(', ') : '');
+}
+
+/* ---- the documents: named one by one where they are few, counted where they
+        are many. A manifest is what proves a file was there. ---- */
+function backupDriveManifest_(root, today){
+  const dir = getFolder_(root, 'manifest');
+  const name = 'drive-' + today + '.csv';
+  if(fileIn_(dir, name)) return 'already taken today';
+  const t0 = Date.now(), BUDGET = 120000;   /* the six-minute wall is real */
+  const rows = [['area','path','name','id','mime','bytes','created','url']];
+  let listed = 0, counted = 0, bytes = 0, partial = false;
+  const q = s => '"' + String(s === null || s === undefined ? '' : s).replace(/"/g, '""') + '"';
+
+  const walk = (folder, areaName, path, listFiles) => {
+    if(Date.now() - t0 > BUDGET){ partial = true; return; }
+    const fit = folder.getFiles();
+    while(fit.hasNext()){
+      if(Date.now() - t0 > BUDGET){ partial = true; return; }
+      const f = fit.next();
+      let sz = 0; try{ sz = Number(f.getSize()) || 0; }catch(err){}
+      counted++; bytes += sz;
+      if(listFiles){
+        let made = ''; try{ made = dateText_(f.getDateCreated()); }catch(err){}
+        let mime = ''; try{ mime = f.getMimeType(); }catch(err){}
+        rows.push([areaName, path, f.getName(), f.getId(), mime, sz, made, f.getUrl()]); listed++;
+      }
+    }
+    const dit = folder.getFolders();
+    while(dit.hasNext()){
+      const sub = dit.next();
+      walk(sub, areaName, path + '/' + sub.getName(), listFiles);
+    }
+  };
+  const area = (folderName, listFiles) => {
+    const it = DriveApp.getRootFolder().getFoldersByName(folderName);
+    if(!it.hasNext()) return;
+    const before = counted;
+    walk(it.next(), folderName, folderName, listFiles);
+    if(!listFiles) rows.push([folderName, folderName, '(counted, not listed)', '', '', '', '', (counted - before) + ' file(s)']);
+  };
+  /* the plans and the circulars are hundreds and are named; the attendance
+     photos are tens of thousands and are counted — a nightly copy of those is
+     not a backup, it is a second bill */
+  area(GPDP_FOLDER, true);
+  area(ADV_FOLDER,  true);
+  area(ATT_FOLDER,  false);
+  area(PHOTO_FOLDER, false);
+
+  dir.createFile(Utilities.newBlob(rows.map(r => r.map(q).join(',')).join('\n'), 'text/csv', name));
+  return counted + ' file(s) seen, ' + listed + ' named, ' +
+    Math.round(bytes / 1048576) + ' MB' + (partial ? ' - PARTIAL, the walk ran out of time' : '');
+}
+
+/* ---- the properties: the names, and proof of the values. Never a value.
+        Lose the salt and not one PIN on the register verifies; every officer
+        needs a fresh one. The fingerprint is what lets a salt typed back in
+        by hand be checked before 280 people are locked out over a typo. ---- */
+function backupProps_(root, today){
+  const dir = getFolder_(root, 'manifest');
+  const name = 'properties-' + today + '.json';
+  if(fileIn_(dir, name)) return 'already taken today';
+  const all = PropertiesService.getScriptProperties().getProperties() || {};
+  const out = {};
+  Object.keys(all).sort().forEach(k => {
+    const v = String(all[k] === null || all[k] === undefined ? '' : all[k]);
+    out[k] = { chars: v.length, fingerprint: fingerprint_(v) };
+  });
+  dir.createFile(Utilities.newBlob(JSON.stringify({
+    note: 'Names and fingerprints only. No value of any property is stored here, and none should ever be. ' +
+          'To verify a restored value, fingerprint it the same way: the first 12 hex of its SHA-256.',
+    taken: today, properties: out }, null, 2), 'application/json', name));
+  return Object.keys(out).length + ' property name(s), no values';
+}
+
+/* ---- retention: trashed, never destroyed; the 1st of the month for ever ---- */
+function pruneBackups_(root, today){
+  if(!BACKUP_KEEP_DAYS) return 'retention off - every backup is kept';
+  /* pure UTC arithmetic on the date string. A Date built from a local string
+     and shifted is exactly the day-out-by-one this register has been bitten
+     by before (rule 3) - and here it would bin a copy a day early. */
+  const cut = new Date(Date.UTC(Number(today.slice(0,4)), Number(today.slice(5,7)) - 1,
+                                Number(today.slice(8,10))) - BACKUP_KEEP_DAYS * 86400000)
+                .toISOString().slice(0, 10);
+  const RX = /(\d{4}-\d{2}-\d{2})/;
+  let gone = 0, kept = 0;
+  const consider = (nm, trash) => {
+    const m = RX.exec(String(nm));
+    if(!m) return;                                      /* no date: not ours, not touched */
+    if(m[1].slice(8, 10) === '01'){ kept++; return; }   /* the month's own copy stands */
+    if(m[1] >= cut){ kept++; return; }
+    try{ trash(); gone++; }catch(err){}
+  };
+  const scan = (folder, depth) => {
+    const fit = folder.getFiles();
+    while(fit.hasNext()){ const f = fit.next(); consider(f.getName(), () => f.setTrashed(true)); }
+    if(depth >= 3) return;
+    const dit = folder.getFolders();
+    while(dit.hasNext()){
+      const sub = dit.next();
+      if(RX.test(String(sub.getName()))) consider(sub.getName(), () => sub.setTrashed(true));
+      else scan(sub, depth + 1);
+    }
+  };
+  scan(root, 0);
+  return gone + ' put in the bin (recoverable), ' + kept + ' kept';
+}
+
+/* ---- the job itself ---- */
+function dailyBackup(){
+  const today = today_();
+  const root = backupRoot_();
+  const done = [], failed = [];
+  const step = (what, fn) => {
+    try{ done.push({ what: what, note: String(fn() || 'done') }); }
+    catch(err){ failed.push({ what: what, why: String((err && err.message) || err) }); }
+  };
+  /* order matters: the register, the code and the app are what a district
+     cannot rebuild, so they are taken first. The Drive walk is last because
+     it is the only step that can run out of time, and when it does it must
+     cost nothing but itself. */
+  step('The register · Sheets copy', () => backupRegister_(root, today));
+  step('The register · workbook',    () => backupRegisterXlsx_(root, today));
+  step('The server code',            () => backupCode_(root, today));
+  step('The app and the console',    () => backupApp_(root, today));
+  step('Script properties',          () => backupProps_(root, today));
+  step('Retention',                  () => pruneBackups_(root, today));
+  step('Drive inventory',            () => backupDriveManifest_(root, today));
+
+  const summary = { taken: today, at: new Date().toISOString(), ok: done, failed: failed };
+  try{
+    const nm = 'MANIFEST-' + today + '.json';
+    const old = fileIn_(root, nm); if(old) old.setTrashed(true);
+    root.createFile(Utilities.newBlob(JSON.stringify(summary, null, 2), 'application/json', nm));
+  }catch(err){}
+
+  try{
+    const to = collectorEmail_() || Session.getEffectiveUser().getEmail();
+    if(to){
+      const secs =
+        emailSec_('Taken', emailTable_(['What', 'Result'], done.map(d => [d.what, d.note]), '#EAF7EF')) +
+        (failed.length
+          ? emailSec_('NOT taken - this needs attention',
+              emailTable_(['What', 'Why'], failed.map(f => [f.what, f.why]), '#FDF0EF'), '#B91C1C', '#F4D6D3')
+          : emailSec_('Nothing failed', 'Every part of the system was backed up this morning.')) +
+        emailSec_('Where it is',
+          'Drive &#9656; <b>' + BACKUP_FOLDER + '</b> &mdash; <code>register/</code> the record, <code>code/</code> the server, ' +
+          '<code>app/</code> what the handsets load, <code>manifest/</code> the Drive inventory and the property fingerprints.<br>' +
+          'Daily copies are kept ' + BACKUP_KEEP_DAYS + ' days; the 1st of each month is kept permanently. ' +
+          'Nothing is deleted &mdash; what falls out of the window goes to Drive&rsquo;s bin.');
+      MailApp.sendEmail(to,
+        'SJSP · ' + (failed.length ? 'BACKUP INCOMPLETE' : 'backup taken') + ' · ' + dmy_(today),
+        (failed.length ? failed.length + ' part(s) of the backup failed: ' + failed.map(f => f.what).join(', ')
+                       : 'The whole system was backed up.'),
+        { htmlBody: emailShell_(failed.length ? 'Backup incomplete' : 'Backup taken',
+            dmy_(today) + ' · ' + BACKUP_FOLDER, secs) });
+    }
+  }catch(err){}
+
+  PropertiesService.getScriptProperties().setProperty('LAST_BACKUP', today);
+  Logger.log('Backup ' + today + ': ' + done.length + ' step(s) done, ' + failed.length + ' failed.\n' +
+    done.map(d => '  [ok] ' + d.what + ' - ' + d.note).join('\n') +
+    (failed.length ? '\n' + failed.map(f => '  [FAILED] ' + f.what + ' - ' + f.why).join('\n') : ''));
+  return summary;
+}
+/* The one to press by hand for the first full backup. It is the same job:
+   idempotent, so pressing it twice on the same day costs nothing, and a run
+   that failed halfway is finished rather than restarted. */
+function backupNow(){ return dailyBackup(); }
+function installBackupTrigger(){
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if(t.getHandlerFunction() === 'dailyBackup') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('dailyBackup').timeBased().everyDays(1).atHour(1).create();
+  Logger.log('Backup trigger installed (Asia/Calcutta):\n' +
+    '  dailyBackup ~01:00 - the register, the server, the app, the Drive inventory and the property fingerprints.\n' +
+    '  Kept ' + BACKUP_KEEP_DAYS + ' days; the 1st of each month for ever; nothing is ever deleted, only binned.\n' +
+    '  Any older copy of this trigger was removed.');
 }
 
 /* ---------------- GET ---------------- */

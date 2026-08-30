@@ -1,6 +1,9 @@
-/* The reporting engine: filing reminders after the 15th — MSO and MPDO for
-   action, the Secretary for information, the MPO never chased twice — and
-   the Collector's one structured mail a day, guarded against doubles. */
+/* The reporting engine: filing reminders after the 15th, EVERY working day
+   from there (the Collector's direction of 29.08.2026 — it had been every
+   third day, and the day he looked was one of the four in six that sent
+   nothing) — MSO and MPDO for action, the Secretary for information, the MPO
+   never chased twice — and the Collector's one structured mail a day, both
+   guarded against doubles. */
 'use strict';
 const mock = require('../gasmock.js');
 
@@ -26,7 +29,7 @@ function seed(env){
 module.exports = {
   name: 'reports (villageFilingReminders, dailyCollectorReport)',
   run(t){
-    /* 19.08.2026 — a Wednesday, past the 15th, on the every-third-day beat */
+    /* 19.08.2026 — a Wednesday, past the 15th, so a reminder day */
     const env = mock.load({ now: '2026-08-19T10:05:00+05:30' });
     const c = env.ctx;
     seed(env);
@@ -59,9 +62,24 @@ module.exports = {
     const env2 = mock.load({ now: '2026-08-14T10:00:00+05:30' }); seed(env2);
     env2.ctx.villageFilingReminders();
     t.ok(!env2.sheets['Reminders'] || env2.sheets['Reminders'].rows.length <= 1, 'before the 16th, the mandals have the month to themselves');
-    const env3 = mock.load({ now: '2026-08-18T10:00:00+05:30' }); seed(env3);
-    env3.ctx.villageFilingReminders();
-    t.ok(!env3.sheets['Reminders'] || env3.sheets['Reminders'].rows.length <= 1, 'the 18th is not on the every-third-day beat');
+    /* EVERY working day from the 16th, not every third. The 18th and the
+       29th both used to fall in the gap; the 29th is the day it was reported
+       from the district that no reminder had gone. */
+    [['2026-08-18', 'the day after a reminder day still reminds'],
+     ['2026-08-29', 'and so does the 29th, which the old beat skipped']].forEach(([day, why]) => {
+      const e = mock.load({ now: day + 'T10:00:00+05:30' }); seed(e);
+      e.ctx.villageFilingReminders();
+      t.eq((e.sheets['Reminders'] ? e.sheets['Reminders'].rows.length : 1) - 1, 3, why);
+    });
+    /* but a Sunday is nobody's filing day */
+    const env4 = mock.load({ now: '2026-08-23T10:00:00+05:30' }); seed(env4);
+    env4.ctx.villageFilingReminders();
+    t.ok(!env4.sheets['Reminders'] || env4.sheets['Reminders'].rows.length <= 1, 'Sunday the 23rd sends nothing — working days only');
+    /* and a declared holiday is not a filing day either */
+    const env5 = mock.load({ now: '2026-08-20T10:00:00+05:30' });
+    seed(env5); env5.sheets['Holidays'].rows.push(['2026-08-20', 'Declared holiday']);
+    env5.ctx.villageFilingReminders();
+    t.ok(!env5.sheets['Reminders'] || env5.sheets['Reminders'].rows.length <= 1, 'a declared holiday sends nothing');
 
     /* ---- the Collector's daily mail ---- */
     env.mark('9000000032', '2026-08-19', '2026-08-19T09:10:00+05:30');

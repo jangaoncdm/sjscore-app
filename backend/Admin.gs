@@ -48,6 +48,8 @@ function onOpen(){
     .addItem('Reset one officer’s PIN (asks first)',     'menuResetOnePin')
     .addItem('Check the village roll',                   'menuGpSpellCheck')
     .addItem('Check the officer roll',                   'menuRosterAudit')
+    .addSeparator()
+    .addItem('Is the backup real? — read only',          'menuShowBackups')
     .addToUi();
 }
 
@@ -2140,3 +2142,86 @@ function menuResetOnePin(){
 function go(){
   Logger.log(resetOnePin('9703202002'));
 }
+
+/* ================== IS THE BACKUP REAL? · 29.08.2026 =========================
+   A backup nobody has ever looked at is a promise, not a record. This reads
+   the backup folder and reports what is actually in it, day by day, and —
+   more to the point — WHICH WORKING DAYS ARE MISSING. A job that has been
+   silently failing for three weeks looks exactly like a job that is working,
+   right up until the morning the register is needed.
+
+   It reads. It writes nothing, moves nothing and repairs nothing, so it is
+   safe to press at any hour. Restoring is deliberately NOT here: putting a
+   backup back over a live government register is the Collector's own act,
+   done by hand with the file in front of him, and never a menu item that
+   could be pressed by mistake. */
+function showBackups(){
+  const root = backupRoot_();
+  const today = today_();
+  const L = ['BACKUPS — ' + BACKUP_FOLDER, ''];
+
+  const dated = {}, note = (d, what) => { (dated[d] = dated[d] || []).push(what); };
+  const RX = /(\d{4}-\d{2}-\d{2})/;
+  const area = (name, depth) => {
+    const it = root.getFoldersByName(name);
+    if(!it.hasNext()){ L.push('  ' + name + '/ — NOT THERE. Nothing of this kind has ever been backed up.'); return; }
+    const scan = (f, d) => {
+      const fit = f.getFiles();
+      while(fit.hasNext()){ const m = RX.exec(fit.next().getName()); if(m) note(m[1], name); }
+      if(d >= depth) return;
+      const dit = f.getFolders();
+      while(dit.hasNext()){
+        const sub = dit.next(), m = RX.exec(sub.getName());
+        if(m) note(m[1], name); else scan(sub, d + 1);
+      }
+    };
+    scan(it.next(), 0);
+  };
+  ['register', 'code', 'app', 'manifest'].forEach(a => area(a, 2));
+
+  const days = Object.keys(dated).sort();
+  if(!days.length){
+    L.push('  NOTHING HAS EVER BEEN BACKED UP.');
+    L.push('  Run backupNow() once from the script editor, then installBackupTrigger().');
+    return admShow_('Backups', admSay_(L));
+  }
+  L.push('  First backup: ' + dmy_(days[0]) + '     Last backup: ' + dmy_(days[days.length - 1]));
+  L.push('  Days held: ' + days.length);
+  L.push('');
+  L.push('  THE LAST FOURTEEN DAYS');
+  /* walked backwards off the calendar, not off what is in the folder — the
+     whole point is to find the days that are NOT there */
+  const back = [];
+  for(let i = 0; i < 14; i++){
+    const d = new Date(Date.UTC(Number(today.slice(0,4)), Number(today.slice(5,7)) - 1,
+                                Number(today.slice(8,10))) - i * 86400000).toISOString().slice(0, 10);
+    back.push(d);
+  }
+  let gaps = 0;
+  back.forEach(d => {
+    const got = dated[d] || [];
+    const missing = ['register', 'code', 'app', 'manifest'].filter(a => got.indexOf(a) < 0);
+    if(!isWorkingDay_(d) && !got.length){ L.push('    ' + dmy_(d) + '  (off day)'); return; }
+    if(!got.length){ gaps++; L.push('    ' + dmy_(d) + '  NOTHING'); return; }
+    if(missing.length){ gaps++; L.push('    ' + dmy_(d) + '  partial — missing ' + missing.join(', ')); return; }
+    L.push('    ' + dmy_(d) + '  complete');
+  });
+  L.push('');
+  L.push(gaps ? '  ' + gaps + ' day(s) in the last fortnight are missing or partial. Read the backup mail for those days.'
+              : '  Every day of the last fortnight is complete.');
+  const last = PropertiesService.getScriptProperties().getProperty('LAST_BACKUP');
+  L.push('  The job last ran on: ' + (last ? dmy_(last) : 'never — the trigger has not been installed'));
+  L.push('');
+  L.push('  Retention: dailies kept ' + BACKUP_KEEP_DAYS + ' days, the 1st of each month for ever.');
+  L.push('  Nothing is ever deleted — what falls out of the window goes to Drive’s bin.');
+  L.push('');
+  L.push('  TO RESTORE, by hand and by the Collector:');
+  L.push('   1. the record — open the day’s SJGP-register-… copy, File ▸ Make a copy, and point');
+  L.push('      the deployment at it. The .xlsx beside it is the copy that opens without Google.');
+  L.push('   2. the server — the .gs files under code/ go back into the script project.');
+  L.push('   3. the salt — it is NOT in the backup, by design. Put the district’s salt back into');
+  L.push('      Script Properties by hand and check it against the fingerprint in');
+  L.push('      manifest/properties-….json before anyone signs in. A wrong salt fails every PIN.');
+  return admShow_('Backups', admSay_(L));
+}
+function menuShowBackups(){ showBackups(); }

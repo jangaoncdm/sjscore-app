@@ -16,7 +16,7 @@ the rules below exist because exactly that happened in production.
 ## Run this before you finish anything
 
 ```bash
-npm test              # 989 assertions, 22 suites, against the real backend files
+npm test              # 1038 assertions, 23 suites, against the real backend files
 node tests/ladder     # one suite, with its detail
 ```
 
@@ -47,8 +47,9 @@ Sheet tabs: `Users` `GPs` `Inspections` `Attendance` `Leave` `Notices`
 `Reminders` `Holidays` `Tokens` `Audit` `Voided` `Seen` `GPDP` `Advisories`
 `AdvAck`.
 
-Drive holds three areas, each made on first use: `SJ-SCORE Attendance`,
-`SJ-SCORE GPDP` (by plan year, then mandal) and `SJ-SCORE Advisories`.
+Drive holds four areas, each made on first use: `SJ-SCORE Attendance`,
+`SJ-SCORE GPDP` (by plan year, then mandal), `SJ-SCORE Advisories` and
+`SJ-SCORE Backups`.
 
 Columns are matched **by header name** (`headMap_`), never by position, and
 `ensureHeaders_` appends new ones automatically. Adding a field to a `*_HEAD`
@@ -358,6 +359,51 @@ goes out by itself. The console *drafts* a message from the figures and the
 Collector passes it — and it is published through the **advisory** pipeline, so
 a weather warning opens on every home screen and the district can see who has
 read it. One pipeline, one acknowledgement register.
+
+## The backup
+
+Ordered on 29.08.2026: *backup entire system and run daily backup for all
+sheet, app script, code and all things.* `dailyBackup()` at ~01:00 takes the
+six things that are the system, and they live in six places — which is why
+nothing before it backed up "the system":
+
+- the **register**, twice: a native Sheets copy that restores in one click,
+  and an `.xlsx` that opens on a machine that has never heard of Google;
+- the **server**, fetched from the repository the deploy pipeline pushes
+  *from*, so no new OAuth scope is needed and the live web app is never sent
+  back for re-authorisation. Set the script property `SCRIPT_API=1` to read
+  the live project through the Apps Script API instead, once that API is on;
+- the **app and the console**, fetched from the published site — the exact
+  bytes a handset loaded that morning, not what the repository says they were;
+- the **documents**, *inventoried and not copied*. Seventy thousand attendance
+  photos cannot be duplicated nightly, and a manifest naming every file, its
+  id and its size is what tells you one has gone missing — which a copy of
+  Drive inside Drive was never going to protect you from. Plans and circulars
+  are named one by one; the photo areas are counted;
+- the **script properties**, as names and **fingerprints only**. The salt is
+  never written. Lose it and not one PIN verifies and 280 officers need a
+  reset; the fingerprint is what lets a salt typed back by hand be *proved*
+  right before anybody is locked out. A backup carrying the district's secret
+  is a second place to lose it from.
+
+**Nothing is destroyed** (rule 7). Retention bins; it does not delete, so it
+is recoverable for a further thirty days in Drive's own bin. Dailies are kept
+`BACKUP_KEEP_DAYS` (30); the **1st of every month is kept for good**. Only
+files this job made, only inside `SJ-SCORE Backups`, only ones whose name
+carries a date, are ever touched — the live register is not in that folder.
+
+**It runs twice without doubling** (rule 8), and each step asks whether its
+own output is already there, so a run that failed halfway is *completed* by
+the next one rather than restarted. **Each step is caught on its own**: one
+broken step never costs the other six, and the morning mail carries the
+failure in its subject line. A backup that fails quietly is a belief, not a
+backup — and for the same reason `showBackups()` in Admin.gs reads the folder
+and names the days that are **missing**, walking the calendar rather than the
+folder. A job that has been failing for three weeks looks exactly like one
+that is working.
+
+Restoring is deliberately not a menu item. Putting a backup back over a live
+government register is the Collector's own act, done by hand.
 
 ## House style
 
