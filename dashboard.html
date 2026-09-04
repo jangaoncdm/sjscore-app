@@ -1265,7 +1265,8 @@ async function pull(){
     $('#g').removeAttribute('aria-busy');
     $('#hisub').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' · Jangaon District'
       +(j.off&&j.off.today?' · HOLIDAY — '+(j.off.why||''):'')
-      +(MONTH&&MONTH!==new Date().toISOString().slice(0,7)?' · REVIEWING '+monName(MONTH):'');
+      +(j.ym?' · FILING MONTH '+monName(j.ym)+' ('+((j.ymFrom&&j.ymTo)?dm(j.ymFrom)+' – '+dm(j.ymTo):monWin(j.ym))+')':'')
+      +(MONTH&&j.ymCur&&MONTH!==j.ymCur?' · REVIEWING a closed month':'');
     monPick(j);
     whatsNew(j);
     render(j);
@@ -1319,14 +1320,25 @@ function whatsNew(j){
 }
 /* ---------------- helpers ---------------- */
 const monName=ym=>{const d=new Date(ym+'-02T00:00:00');return isNaN(d)?ym:d.toLocaleDateString('en-IN',{month:'long',year:'numeric'});};
+/* THE REPORTING MONTH runs the 10th to the 9th and is named for the month it
+   opens in — see Code.gs, which is where the rule lives. The console prints
+   the window beside the name everywhere it offers a month: "2026-08" read on
+   the 3rd of September is a puzzle, "10 Aug – 9 Sep" is a fact. */
+const CYCLE_DAY=10, CYCLE_FIRST='2026-07-20';
+const ymFromOf=ym=>ym===CYCLE_FIRST.slice(0,7)?CYCLE_FIRST:ym+'-'+String(CYCLE_DAY).padStart(2,'0');
+const ymToOf=ym=>{let[y,m]=String(ym).split('-').map(Number);m++;if(m>12){m=1;y++;}
+  return new Date(Date.UTC(y,m-1,CYCLE_DAY)-86400000).toISOString().slice(0,10);};
+const monWin=ym=>{const f=d=>new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+  return /^\d{4}-\d{2}$/.test(String(ym))?f(ymFromOf(ym))+' – '+f(ymToOf(ym)):'';};
 function monPick(j){
   const sel=$('#monPick'); if(!sel) return;
-  const cur=new Date().toISOString().slice(0,7);
+  const cur=j.ymCur||j.ym;   /* the reporting month running today — the
+                                    calendar month is no longer the answer */
   const set={}; set[cur]=1; (j.trend||[]).forEach(t=>set[t.ym]=1); if(j.ym) set[j.ym]=1;
   const yms=Object.keys(set).sort().reverse();
   const want=yms.map(y=>y+'|'+(MONTH||cur)).join(',');
   if(sel.dataset.k===want) return; sel.dataset.k=want;
-  sel.innerHTML=yms.map(y=>`<option value="${y}" ${(MONTH||cur)===y?'selected':''}>${y===cur?'This month':monName(y)}</option>`).join('');
+  sel.innerHTML=yms.map(y=>`<option value="${y}" ${(MONTH||cur)===y?'selected':''}>${y===cur?'This month':monName(y)} · ${monWin(y)}</option>`).join('');
   sel.onchange=()=>{ MONTH=sel.value===cur?'':sel.value; DATA=null; $('#g').setAttribute('aria-busy','true'); pull(); };
 }
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -2115,10 +2127,10 @@ function askFacts(j,A){
   L.push('RED-FLAG VILLAGES ('+fl.length+'): '+(fl.map(r=>r.gp+' ('+r.mandal+') RF '+r.rf+' score '+r.score).join('; ')||'none')+'.');
   if(A.off) L.push('TODAY IS OFF: '+A.off+'. Attendance is optional and not counted; no notice can arise today; any marks are voluntary.');
   if(j.notices){ const nth=x=>x+(x===1?'st':x===2?'nd':x===3?'rd':'th');
-    if(j.notices.reminders) L.push('REMINDERS (informal, sent automatically, never on the register, never a deduction): sent today '+j.notices.reminders.today+', this month '+j.notices.reminders.month+'. Latest: '+((j.notices.reminders.rows||[]).slice(0,20).map(r=>r.name+' ('+(r.mandal||'—')+') '+r.date+' \u2014 '+r.reason).join('; ')||'none')+'.');
+    if(j.notices.reminders) L.push('REMINDERS (informal, sent automatically, never on the register, never a deduction): sent today '+j.notices.reminders.today+', this calendar month '+j.notices.reminders.month+'. Latest: '+((j.notices.reminders.rows||[]).slice(0,20).map(r=>r.name+' ('+(r.mandal||'—')+') '+r.date+' \u2014 '+r.reason).join('; ')||'none')+'.');
     L.push('SHOW-CAUSE NOTICES (lifecycle: the 1st and 2nd unmarked days of a month draw reminders only; the '+(j.notices.scnFrom||3)+'rd unmarked day PROPOSES a notice; nothing is served, numbered or emailed until the Collector approves on the console; from that '+(j.notices.scnFrom||3)+'rd unmarked day each further unmarked working day debits 1 CL after the day closes): awaiting the Collector\u2019s approval '+((j.notices.proposed||[]).length)+
       (((j.notices.proposed||[]).length)?' ('+j.notices.proposed.slice(0,30).map(p=>p.name+' ('+(p.mandal||'—')+') for '+p.date).join('; ')+')':'')+
-      '; served today '+j.notices.today+'; served awaiting acknowledgement '+j.notices.pending+'; served this month '+j.notices.month+' with '+j.notices.debitsMonth+' CL debit(s). Latest register entries: '+
+      '; served today '+j.notices.today+'; served awaiting acknowledgement '+j.notices.pending+'; served this calendar month '+j.notices.month+' with '+j.notices.debitsMonth+' CL debit(s). Latest register entries: '+
       ((j.notices.rows||[]).slice(0,25).map(n=>(n.no||'unnumbered')+' '+n.name+' ('+(n.mandal||'—')+') for '+n.date+', '+
         (n.status==='PROPOSED'?'PROPOSED (unserved)':n.status==='DROPPED'?'dropped':nth(n.seq)+' of month, '+(n.status==='ACK'?'acknowledged':'PENDING'))+
         (n.clDebited?', 1 CL debited':'')).join('; ')||'none')+'.'); }
@@ -2795,8 +2807,8 @@ function vNotices(j,A){
   h+=kpi('Awaiting your approval',IC.f,P.length,'','3rd unmarked day or beyond');
   h+=kpi('Reminders sent today',IC.f,R.today,'',R.lateToday?R.lateToday+' for late marking or late sync':'1st and 2nd misses');
   h+=kpi('Served, awaiting ack',IC.f,N.pending,'','locks the officer\u2019s app');
-  h+=kpi('Served this month',IC.f,N.month,'','on the register');
-  h+=kpi('CL debits this month',IC.f,N.debitsMonth,'','from the '+(N.scnFrom||3)+'rd unmarked day');
+  h+=kpi('Served this calendar month',IC.f,N.month,'','on the register');
+  h+=kpi('CL debits this calendar month',IC.f,N.debitsMonth,'','from the '+(N.scnFrom||3)+'rd unmarked day');
   h+='</div>';
   if(P.length){
     const chk=id=>NTC_UNCHK[id]?'':' checked';
