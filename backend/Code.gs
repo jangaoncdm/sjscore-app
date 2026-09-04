@@ -222,13 +222,15 @@ const SCN_FROM_MISS   = 3;   /* misses 1 and 2 remind; the 3rd serves notice */
 const DEBIT_FROM_MISS = 3;   /* and the 3rd is where the leave account starts to pay.
                                 Set to 4 to make the first notice a pure warning. */
 const CUTOFF_HOUR     = 11;  /* attendance is due by 11:00 from the place of duty */
-/* The village filing reminder opens on this day of the month and then goes
+/* The village filing reminder opens on this day of the REPORTING month —
+   which opens on the 10th, so day 16 is the 25th of the calendar — and goes
    EVERY working day until the month closes — the Collector's direction of
    29.08.2026, asked in those words: the reminder was not going out that day.
    It had been the 16th and every third day after, so four days in six sent
    nothing and the pendency looked unwatched from the district. The first
    half of the month is still the mandals' own: move this to 1 and the
-   reminder runs the whole month, and nothing else has to change. */
+   reminder runs the whole month, and nothing else has to change. Make it a
+   day of the CALENDAR again only by deciding that, never by accident. */
 const FILING_REMIND_FROM = 16;
 const R_HEAD = ['id','date','phone','name','role','mandal','miss','kind','reason','sentAt','emailedAt'];
 /* Seen pings: an officer who OPENED the app on a working day without having
@@ -378,6 +380,86 @@ function spanDays_(from, to){
 function dayAfter_(d){
   const t = Date.parse(String(d) + 'T00:00:00Z');
   return isNaN(t) ? String(d) : new Date(t + 86400000).toISOString().slice(0, 10);
+}
+
+/* ---- THE REPORTING MONTH ------------------------------------------------
+   The month a village evaluation is filed FOR is not the calendar month. A
+   month's returns cannot be complete before the month itself is over — the
+   last week's inspections are still being written when the 1st comes round —
+   so by the Collector's direction the reporting month runs from the 10th to
+   the 9th and carries the name of the month it OPENS in. August 2026 is
+   10.08.2026 to 09.09.2026, and a village evaluated on 3 September is filed
+   against August.
+
+   The first one is short at the top and not at the bottom: the district
+   adopted the register on 20.07.2026, so July 2026 opens on the 20th,
+   because there was nothing to file into before that date.
+
+   THIS IS THE FILING MONTH AND NOTHING ELSE. Attendance, its misses, its
+   reminders and the show-cause ladder are counted over the CALENDAR month
+   and stay there — a served notice recites the officer's third unmarked
+   working day "of the calendar month" under Rule 3 of the Conduct Rules, and
+   a register does not re-cut a rule it did not make. Nothing below is read
+   by monthMarks_, activeDaysUpto_, workingDaysUpto_ or the notice engine. */
+const CYCLE_DAY   = 10;            /* the reporting month opens on the 10th */
+const CYCLE_FIRST = '2026-07-20';  /* adopted mid-month; July 2026 opens here */
+
+/* The reporting month a date falls in. '' for a date before the register
+   existed, because a filing dated before adoption is a mistyped date and not
+   a month — the caller says what to do about it rather than being handed a
+   month that never opened. */
+function cycleYm_(dStr){
+  const s = dateText_(dStr);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(s) || s < CYCLE_FIRST) return '';
+  let y = Number(s.slice(0, 4)), m = Number(s.slice(5, 7));
+  if(Number(s.slice(8, 10)) < CYCLE_DAY){ m--; if(m < 1){ m = 12; y--; } }
+  return y + '-' + ('0' + m).slice(-2);
+}
+/* the first and the last day of a reporting month, both inclusive */
+function cycleFrom_(ym){
+  const y = ymText_(ym);
+  return y === CYCLE_FIRST.slice(0, 7) ? CYCLE_FIRST : y + '-' + ('0' + CYCLE_DAY).slice(-2);
+}
+function cycleTo_(ym){
+  const y = ymText_(ym);
+  let yy = Number(y.slice(0, 4)), mm = Number(y.slice(5, 7)) + 1;
+  if(mm > 12){ mm = 1; yy++; }
+  const nxt = yy + '-' + ('0' + mm).slice(-2) + '-' + ('0' + CYCLE_DAY).slice(-2);
+  const t = Date.parse(nxt + 'T00:00:00Z');
+  return isNaN(t) ? y : new Date(t - 86400000).toISOString().slice(0, 10);
+}
+/* WHICH MONTH A FILING BELONGS TO IS THE DISTRICT'S TO DECIDE, NOT THE
+   HANDSET'S (rule 6), AND IT IS DECIDED THE SAME WAY ON THE WAY IN AND ON THE
+   WAY OUT. The month is derived from the DATE OF THE VISIT, which is the fact
+   on the record and the officer's own entry; what the phone sent stands only
+   when there is no readable date, because a blank month is a row no view finds.
+
+   THIS IS READ AS WELL AS WRITTEN, and the first cut of this change was wrong
+   for exactly that reason. Only the write path derived the month, so a village
+   evaluated on 3 September still carried the label "2026-09" that the old rule
+   had stamped on it, every count still matched on that stored label, and the
+   August figure on the console did not move by a single village — the month
+   had been widened to 10 Aug – 9 Sept and the console went on reporting the
+   calendar month's worth. Reported from the district in those words: the
+   villages evaluated for August should have gone UP. A stored label is a
+   record of what some handset once believed; the date of the visit is the
+   fact, and the fact is what the register counts. The Admin re-stamp now
+   tidies the labels away rather than being the thing that makes them true. */
+function fileYm_(r){
+  return cycleYm_(r && r.date) || ymText_(r && r.ym);
+}
+/* the same, off a raw Inspections row and its header map */
+function rowYm_(row, ix){
+  return fileYm_({ date: row[ix.date], ym: row[ix.ym] });
+}
+/* Which day of its OWN reporting month a date is — 1 on the day it opens.
+   The filing reminder counts in these and no longer in days of the calendar:
+   the 16th of a calendar month is day 7 of a month that opened on the 10th,
+   and the first half the mandals are left to themselves would have been cut
+   to six days without anybody deciding it. */
+function cycleDay_(dStr){
+  const ym = cycleYm_(dStr);
+  return ym ? spanDays_(cycleFrom_(ym), dateText_(dStr)) : 0;
 }
 
 /* all rows for a phone, folded into one login */
@@ -1257,33 +1339,39 @@ function unfiledVillages_(ym){
   const ish = sheet_('Inspections', HEADERS), im = headMap_(ish, HEADERS);
   const iv = ish.getDataRange().getValues();
   for(let i = 1; i < iv.length; i++){
-    if(ymText_(iv[i][im.ix.ym]) !== ym) continue;
+    if(rowYm_(iv[i], im.ix) !== ym) continue;
     filed[String(iv[i][im.ix.mandal]).trim().toLowerCase() + '|' + String(iv[i][im.ix.gp]).trim().toLowerCase()] = true;
   }
   return gpRoll_().filter(r => !filed[r.mandal.toLowerCase() + '|' + r.gp.toLowerCase()]);
 }
-/* working days of the month around a date — Sundays and the Holidays tab out */
+/* Working days of the REPORTING month around a date — Sundays and the
+   Holidays tab out, as everywhere else on this register. The window is the
+   10th to the 9th, so this walks the dates between two ends and no longer
+   the days 1..last of a calendar month: a reporting month straddles two of
+   those, and the old loop would have counted the wrong half of each and told
+   the district it had a fortnight left when the month closed on Tuesday. */
 function monthWd_(dStr){
-  const ym = String(dStr).slice(0, 7), hs = holidaySet_(), day = Number(String(dStr).slice(8, 10));
-  const last = new Date(Number(ym.slice(0,4)), Number(ym.slice(5,7)), 0).getDate();
+  const today = dateText_(dStr), ym = cycleYm_(today);
+  if(!ym) return { gone: 1, left: 0, total: 1 };
+  const hs = holidaySet_(), to = cycleTo_(ym);
   let gone = 0, left = 0;
-  for(let i = 1; i <= last; i++){
-    const key = ym + '-' + (i < 10 ? '0' + i : String(i));
-    if(new Date(key + 'T00:00:00').getDay() === 0 || hs[key]) continue;
-    if(i <= day) gone++; else left++;
+  for(let k = cycleFrom_(ym); k <= to; k = dayAfter_(k)){
+    if(new Date(k + 'T00:00:00').getDay() === 0 || hs[k]) continue;
+    if(k <= today) gone++; else left++;
   }
   return { gone: Math.max(1, gone), left: left, total: gone + left };
 }
 function villageFilingReminders(){
   const today = today_();
-  const d = Number(today.slice(8, 10));
-  if(d < FILING_REMIND_FROM){ Logger.log('Before the ' + FILING_REMIND_FROM + 'th — the mandals have the month to themselves.'); return; }
+  const d = cycleDay_(today);
+  if(!d){ Logger.log('Before the register opened on ' + CYCLE_FIRST + ' — there is no month to file into.'); return; }
+  if(d < FILING_REMIND_FROM){ Logger.log('Day ' + d + ' of the reporting month — the mandals have the first half to themselves.'); return; }
   /* EVERY working day from here, by the Collector's direction of 29.08.2026.
      Working days only: Sundays and the Holidays tab are off for this as for
      everything else on the register, and a filing reminder on a declared
      holiday asks for work the district is not sitting for. */
   if(!isWorkingDay_(today)){ Logger.log('Off day — no reminders.'); return; }
-  const ym = today.slice(0, 7);
+  const ym = cycleYm_(today);
   const unfiled = unfiledVillages_(ym);
   if(!unfiled.length){ Logger.log('Every village is filed for ' + ym + '. Nothing to remind.'); return; }
   const wd = monthWd_(today);
@@ -1380,7 +1468,7 @@ function dailyCollectorReport(){
   const today = today_();
   const props = PropertiesService.getScriptProperties();
   if(props.getProperty('LAST_DAILY_REPORT') === today){ Logger.log('The ' + today + ' report has already gone.'); return; }
-  const ym = today.slice(0, 7), wd = monthWd_(today);
+  const ym = cycleYm_(today), wd = monthWd_(today);
 
   /* the roll, and the day's attendance against it */
   const t = uidx_(), uv = t.sh.getDataRange().getValues();
@@ -1415,7 +1503,7 @@ function dailyCollectorReport(){
   const grades = { A:0, B:0, C:0, D:0 }, doneKeys = {}, mAgg = {}, vDone = [];
   const nrm = s => String(s || '').trim().toLowerCase();
   for(let i = 1; i < iv.length; i++){
-    if(ymText_(iv[i][im.ix.ym]) !== ym) continue;
+    if(rowYm_(iv[i], im.ix) !== ym) continue;
     filed++;
     doneKeys[nrm(iv[i][im.ix.mandal]) + '|' + nrm(iv[i][im.ix.gp])] = true;
     const sc = Number(iv[i][im.ix.score]) || 0;
@@ -1991,7 +2079,7 @@ function doGet(e){
     const sh = sheet_('Inspections', HEADERS), m = headMap_(sh, HEADERS);
     const v = sh.getDataRange().getValues();
     for(let i = 1; i < v.length; i++){
-      if(String(v[i][m.ix.gp]) === String(p.gp || '') && String(v[i][m.ix.ym]) === String(p.ym || '')){
+      if(String(v[i][m.ix.gp]) === String(p.gp || '') && rowYm_(v[i], m.ix) === ymText_(p.ym || '')){
         const o = {}; HEADERS.forEach(h => { if(m.ix[h] != null) o[h] = v[i][m.ix[h]]; });
         return json_({ ok:true, row:o });
       }
@@ -2018,7 +2106,7 @@ function doGet(e){
     if(hit) return ContentService.createTextOutput(hit).setMimeType(ContentService.MimeType.JSON);
 
     const today = today_();
-    const ymN = ymReq || today.slice(0,7);
+    const ymN = ymReq || cycleYm_(today);
 
     /* officers */
     const t = uidx_(), uv = t.sh.getDataRange().getValues();
@@ -2177,7 +2265,7 @@ function doGet(e){
     const iv = ish.getDataRange().getValues();
     const monthRows = [], trend = {};
     for(let i = 1; i < iv.length; i++){
-      const ym = String(iv[i][im.ix.ym] || ''); if(!ym) continue;
+      const ym = rowYm_(iv[i], im.ix); if(!ym) continue;
       const sc = Number(iv[i][im.ix.score]) || 0;
       trend[ym] = trend[ym] || {sum:0, n:0};
       trend[ym].sum += sc; trend[ym].n++;
@@ -2274,6 +2362,7 @@ function doGet(e){
     }
 
     const out = { ok:true, at:new Date().toISOString(), today:today, tz:Session.getScriptTimeZone(), ym:ymN,
+      ymCur:cycleYm_(today), ymFrom:cycleFrom_(ymN), ymTo:cycleTo_(ymN),
       /* officers = every active row. due = those the register actually expects
          a mark from: not the Collector, and not a role whose attendance is
          voluntary. The console divided by officers-1 and so counted the MSOs
@@ -2365,7 +2454,9 @@ function doGet(e){
   const head = data[0];
   let rows = data.slice(1).map(r => {
       const o = {}; head.forEach((h,i)=>o[h]=r[i]);
-      o.ym = ymText_(o.ym); o.date = dateText_(o.date);
+      o.date = dateText_(o.date); o.ym = fileYm_(o);   /* the date decides, not
+                                                          the label some handset
+                                                          left on the row */
       o.mandal = String(o.mandal == null ? '' : o.mandal).trim();
       o.gp = String(o.gp == null ? '' : o.gp).trim();
       o.rf = String(o.rf == null ? '' : o.rf).trim();
@@ -3630,7 +3721,7 @@ function saveInspection_(b, u){
   HEADERS.forEach(h => {
     if(m.ix[h] < 0) return;
     let v;
-    if(h === 'ym')               v = "'" + ymText_(r.ym);      // leading quote keeps it text
+    if(h === 'ym')               v = "'" + fileYm_(r);         // leading quote keeps it text
     else if(h === 'officer')     v = u.name + ' (' + u.phone + ')';
     else if(h === 'role')        v = u.role;
     else if(h === 'photoCount')  v = Number(r.photoCount) || 0;

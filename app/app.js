@@ -19,7 +19,7 @@
    pasted back by hand after every publish. The empty string below is only a
    fallback for the case where config.js is missing. */
 const SERVER_URL = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
-const APP_VERSION = '6.9.8';
+const APP_VERSION = '6.10.0';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -201,7 +201,25 @@ const BLOBS = (function(){
   };
 })();
 
-const ymNow = () => { const d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth()+1); };
+/* THE REPORTING MONTH — the same rule as Code.gs, and it must stay the same.
+   A village evaluation is filed for a month that runs from the 10th to the
+   9th and carries the name of the month it opens in, because a month's
+   returns cannot be complete before the month itself is over. On 3 September
+   an officer is therefore still filing for August. July 2026 opens on the
+   20th, the day the district adopted the register.
+   ATTENDANCE IS NOT COUNTED THIS WAY — misses, reminders and the show-cause
+   ladder are the calendar month's, and nothing here goes near them. */
+const CYCLE_DAY = 10, CYCLE_FIRST = '2026-07-20';
+const ymOf = d => { let y = d.getFullYear(), m = d.getMonth() + 1;
+  if(d.getDate() < CYCLE_DAY){ m--; if(m < 1){ m = 12; y--; } } return y + '-' + pad2(m); };
+const ymNow = () => ymOf(new Date());
+const ymFromOf = ym => ym === CYCLE_FIRST.slice(0,7) ? CYCLE_FIRST : ym + '-' + pad2(CYCLE_DAY);
+const ymToOf = ym => { let [y,m] = ym.split('-').map(Number); m++; if(m > 12){ m = 1; y++; }
+  return new Date(Date.UTC(y, m-1, CYCLE_DAY) - 86400000).toISOString().slice(0,10); };
+/* "10 Aug – 9 Sep". An officer reading "August" on the 3rd of September has
+   to be told what it means, or he files nothing and believes he is early. */
+const monthSpan = ym => { const f = d => new Date(d + 'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+  return f(ymFromOf(ym)) + ' – ' + f(ymToOf(ym)); };
 function prevYm(ym,n){ let [y,m]=ym.split('-').map(Number); m-=n; while(m<1){m+=12;y--;} return y+'-'+pad2(m); }
 const fyMonths = ym => { const m = +ym.split('-')[1]; return m>=4 ? m-3 : m+9; };
 const monthName = ym => new Date(+ym.split('-')[0], +ym.split('-')[1]-1, 1).toLocaleString('en-IN',{month:'long',year:'numeric'});
@@ -1061,7 +1079,7 @@ function attendanceStrip(){
 function viewerHome(u, ym){
   const gps = myGps();
   let h = banner('info', ICON.eye, 'You have view access. The evaluation is recorded by the Mandal Sanitation Task Force; what they file appears here.');
-  h += `<div class="group"><div class="hdr">${esc(monthName(ym))}</div><div class="card">`;
+  h += `<div class="group"><div class="hdr">${esc(monthName(ym))} · ${esc(monthSpan(ym))}</div><div class="card">`;
   gps.forEach(gp => {
     const rows = viewerRows(gp), cur = rows.find(r => r.ym === ym);
     if(cur){
@@ -1140,7 +1158,7 @@ function districtHome(u, ym){
   const startBtn = `<div class="group" style="margin-top:16px"><button class="btn${isDistrict(u.role)?' quiet':''}" id="homeStart">${ICON.plus}Start an inspection</button></div>`;
   if(isMandal(u.role)) h += startBtn;
   h += `<div class="kpis" style="margin-top:18px">
-    <div class="kpi"><div class="n num">${rows.length}${totalGps?`<span style="font-size:16px;color:var(--ink-3)"> / ${totalGps}</span>`:''}</div><div class="l">Gram Panchayats reported<br>${esc(monthName(ym))}</div></div>
+    <div class="kpi"><div class="n num">${rows.length}${totalGps?`<span style="font-size:16px;color:var(--ink-3)"> / ${totalGps}</span>`:''}</div><div class="l">Gram Panchayats reported<br>${esc(monthName(ym))}<br><span style="color:var(--ink-3)">${esc(monthSpan(ym))}</span></div></div>
     <div class="kpi"><div class="n num" style="color:var(--gold-ink)">${avg==null?'—':avg}</div><div class="l">Average SJ-SCORE<br>across ${esc(scope)}</div></div>
     <div class="kpi"><div class="n num" style="color:var(--ok)">${grades.A||0}</div><div class="l">Grade A</div></div>
     <div class="kpi"><div class="n num" style="color:var(--flag)">${grades.D||0}</div><div class="l">Grade D, including red-flag caps</div></div></div>`;
@@ -1245,7 +1263,7 @@ function openPicker(){
   if(!list.length){ toast('No Gram Panchayat is loaded. Open More ▸ Refresh village list.'); return; }
   if(list.length===1){ openRecord(list[0], ym); return; }
   showSheet(`<div style="padding:6px 20px 10px"><h2>Choose a Gram Panchayat</h2>
-    <p style="font-size:14px;color:var(--ink-2);margin-top:4px">${esc(monthName(ym))}</p></div>
+    <p style="font-size:14px;color:var(--ink-2);margin-top:4px">${esc(monthName(ym))} · ${esc(monthSpan(ym))}</p></div>
     <div class="field" style="margin:0 20px;border-radius:12px;box-shadow:var(--shadow)">
       <label for="gpq">Search</label><input type="search" id="gpq" placeholder="Type a village name" autocomplete="off"></div>
     <div class="group" style="margin-top:12px"><div class="card" id="gpList">${pickRows(list, ym)}</div></div>`);
@@ -1861,7 +1879,7 @@ function openFileSheet(){
   const {blockers, advice}=readiness(r);
   const sc=gpTotal(r), gr=gradeOf(sc,r.rf);
   showSheet(`<div style="padding:6px 20px 6px"><h2>File ${esc(r.gp)}</h2>
-    <p style="font-size:14px;color:var(--ink-2);margin-top:5px">${esc(monthName(r.ym))} · ${sc}/100 · Grade ${gr}${r.rf.length?' · capped by red flag':''}</p></div>
+    <p style="font-size:14px;color:var(--ink-2);margin-top:5px">${esc(monthName(r.ym))} (${esc(monthSpan(r.ym))}) · ${sc}/100 · Grade ${gr}${r.rf.length?' · capped by red flag':''}</p></div>
     ${blockers.length ? `<div class="group" style="margin-top:10px"><div class="hdr">Still needed</div><div class="card checklist">` +
       blockers.map(([t,s])=>`<div class="chk n"><span class="m">!</span><span class="tx">${esc(t)}<span>${esc(s)}</span></span></div>`).join('') +
       `</div></div>` : `<div class="banner ok" style="margin-top:12px">${ICON.tickC}<span>Everything required is in place.</span></div>`}
@@ -1905,7 +1923,7 @@ function renderView(){
   h += `<div class="banner info" style="margin-top:14px">${ICON.eye}<span>Filed by ${esc(String(row.officer||'the Task Force').replace(/\s*\(\d+\)$/,''))} on ${esc(niceDate(row.date))}. This is a read-only copy.</span></div>`;
 
   h += `<div class="group"><div class="hdr">The record</div><div class="card">
-    <div class="row"><span class="lbl"><b>Month</b></span><span class="val">${esc(monthName(row.ym))}</span></div>
+    <div class="row"><span class="lbl"><b>Month</b></span><span class="val">${esc(monthName(row.ym))} · ${esc(monthSpan(row.ym))}</span></div>
     <div class="row"><span class="lbl"><b>Mandal</b></span><span class="val">${esc(row.mandal||'')}</span></div>
     <div class="row"><span class="lbl"><b>Total</b></span><span class="val"><span class="grade g${esc(gr)}" style="padding:3px 11px">${sc} · Grade ${esc(gr)}</span></span></div>
     <div class="row"><span class="lbl"><b>Secretary&rsquo;s own score</b><span>Section 43, out of 100</span></span><span class="val num">${psTotal(rec)}</span></div>

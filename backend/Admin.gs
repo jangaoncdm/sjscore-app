@@ -49,6 +49,9 @@ function onOpen(){
     .addItem('Check the village roll',                   'menuGpSpellCheck')
     .addItem('Check the officer roll',                   'menuRosterAudit')
     .addSeparator()
+    .addItem('Filings under the old calendar month — read first', 'menuShowFilingMonths')
+    .addItem('Re-stamp them to the reporting month (asks first)', 'menuRestampFilingMonths')
+    .addSeparator()
     .addItem('Is the backup real? — read only',          'menuShowBackups')
     .addToUi();
 }
@@ -924,13 +927,15 @@ function admGpRoll_(commit){
     straddle.forEach(g => L.push('  ' + g + ': ' + byGp[g].join(' / ')));
     L.push('');
   }
-  /* filings this month whose spelling matches no roll row */
-  const ym = today_().slice(0, 7);
+  /* filings this month whose spelling matches no roll row. THE REPORTING
+     month — the same window the console counts over — or the check would ask
+     about a month nobody is filing into. */
+  const ym = cycleYm_(today_());
   const ish = sheet_('Inspections', HEADERS), im = headMap_(ish, HEADERS);
   const iv = ish.getDataRange().getValues();
   const stray = {};
   for(let i = 1; i < iv.length; i++){
-    if(ymText_(iv[i][im.ix.ym]) !== ym) continue;
+    if(rowYm_(iv[i], im.ix) !== ym) continue;
     const k = nrm(iv[i][im.ix.mandal]) + '|' + nrm(iv[i][im.ix.gp]);
     if(!seen[k]) stray[cell_(iv[i], im.ix.mandal) + ' / ' + cell_(iv[i], im.ix.gp)] = true;
   }
@@ -2225,3 +2230,125 @@ function showBackups(){
   return admShow_('Backups', admSay_(L));
 }
 function menuShowBackups(){ showBackups(); }
+
+/* -------------------------------------------------------------------------
+ * THE REPORTING MONTH — re-stamping what was filed before the rule existed
+ *
+ * The register used to stamp a village evaluation with the CALENDAR month it
+ * was filed in. From 03.09.2026 the reporting month runs from the 10th to the
+ * 9th and is named for the month it opens in (cycleYm_ in Code.gs), and the
+ * server now derives it from the date of the visit. The rows already on the
+ * Inspections tab still carry the old label, and most of them are unaffected:
+ * a visit on the 12th was August under both rules. The ones that move are the
+ * visits between the 1st and the 9th — filed under, say, "2026-08" when by
+ * the new rule they belong to July, whose month ran to the 9th of August.
+ *
+ * Left alone they are counted twice over: missing from the month they belong
+ * to, so those villages read as never evaluated, and swelling the month that
+ * follows. This is what puts that right.
+ *
+ * It changes a LABEL and destroys nothing (rule 7): the date, the score, the
+ * officer, the photographs and the payload are not touched, the old label is
+ * written to the Audit tab against each row, and a row whose date cannot be
+ * read is named and left exactly as it is. It runs twice without doing
+ * anything the second time (rule 8), because the second run finds every row
+ * already carrying the month its own date gives it.
+ *
+ * Read showFilingMonths() first. It writes nothing.
+ * ------------------------------------------------------------------------- */
+function showFilingMonths(){ return admFilingMonths_(false); }
+function restampFilingMonths(){ return admFilingMonths_(true); }
+
+function admFilingMonths_(commit){
+  const sh = sheet_('Inspections', HEADERS), m = headMap_(sh, HEADERS);
+  const v = sh.getDataRange().getValues();
+  const L = [commit ? 'RE-STAMPING FILINGS TO THE REPORTING MONTH' : 'FILINGS UNDER THE OLD CALENDAR MONTH — read only', ''];
+  L.push('  The reporting month runs the ' + CYCLE_DAY + 'th to the ' + (CYCLE_DAY - 1) +
+         'th and is named for the month it opens in.');
+  L.push('  July 2026 opens on ' + dmy_(CYCLE_FIRST) + ', the day the district adopted the register.');
+  L.push('');
+
+  const move = [], stuck = [], already = [];
+  for(let i = 1; i < v.length; i++){
+    const id = String(v[i][m.ix.id] || '').trim(); if(!id) continue;
+    const date = dateText_(v[i][m.ix.date]), was = ymText_(v[i][m.ix.ym]);
+    const want = cycleYm_(date);
+    const line = '    ' + (String(v[i][m.ix.mandal] || '') + ' / ' + String(v[i][m.ix.gp] || '')).padEnd(38).slice(0, 38) +
+                 ' visited ' + (date ? dmy_(date) : '(no date)');
+    if(!want){ stuck.push(line + '   label ' + (was || '(blank)')); continue; }
+    if(want === was){ already.push(line); continue; }
+    move.push({ row: i + 1, id: id, was: was, want: want,
+                who: String(v[i][m.ix.mandal] || '') + ' / ' + String(v[i][m.ix.gp] || ''),
+                line: line + '   ' + (was || '(blank)') + '  →  ' + want });
+  }
+
+  L.push('  ' + (v.length - 1) + ' filing(s) on the register; ' + already.length + ' already carry the month their own date gives them.');
+  L.push('');
+
+  /* WHAT EACH MONTH GAINS AND LOSES. Asked from the district in these words:
+     the villages evaluated for August should have gone UP. Widening August to
+     10 Aug - 9 Sept does two things at once — it takes in the filings of the
+     first days of September, and it gives up the filings of the first nine
+     days of August to July. Whether the figure rises or falls is arithmetic,
+     not a fault, and this is the arithmetic. The COUNTS ARE OF ROWS; the
+     console counts villages, so a mandal that filed one village twice moves
+     two rows and one village. */
+  const net = {};
+  const bump = (ym, k) => { if(!ym) return; net[ym] = net[ym] || { in:0, out:0 }; net[ym][k]++; };
+  move.forEach(r => { bump(r.was, 'out'); bump(r.want, 'in'); });
+  const months = Object.keys(net).sort();
+  if(months.length){
+    L.push('  WHAT EACH MONTH GAINS AND LOSES (rows, not villages):');
+    months.forEach(ym => {
+      const n = net[ym], d = n.in - n.out;
+      L.push('    ' + ym + '  ' + dmy_(cycleFrom_(ym)) + ' to ' + dmy_(cycleTo_(ym)) +
+             '   takes in ' + n.in + ', gives up ' + n.out +
+             '   net ' + (d > 0 ? '+' : '') + d);
+    });
+    L.push('    A month can fall as well as rise: it takes in the first days of the');
+    L.push('    next calendar month and gives up the first nine days of its own.');
+    L.push('');
+  }
+  if(!move.length) L.push('  NOTHING TO MOVE. Every dated filing is already stamped correctly.');
+  else{
+    L.push('  ' + move.length + ' filing(s) ' + (commit ? 'moved' : 'would move') + ':');
+    move.forEach(r => L.push(r.line));
+  }
+  if(stuck.length){
+    L.push('');
+    L.push('  ' + stuck.length + ' filing(s) carry a date this register cannot read — before ' + dmy_(CYCLE_FIRST) +
+           ', or not a date at all. They are LEFT AS THEY ARE:');
+    stuck.forEach(l => L.push(l));
+    L.push('    → fix the date on the row and run this again; the month follows the date.');
+  }
+
+  if(!commit){
+    L.push('');
+    L.push('  This was read only. Nothing has been written.');
+    return admSay_(L);
+  }
+
+  move.forEach(r => {
+    sh.getRange(r.row, m.ix.ym + 1).setValue("'" + r.want);
+    admLog_('FILING MONTH RE-STAMPED', r.id, r.who + ' · ' + (r.was || '(blank)') + ' → ' + r.want);
+  });
+  L.push('');
+  L.push('  ' + move.length + ' label(s) written. The date, the score, the officer and the photographs');
+  L.push('  were not touched, and every change is on the Audit tab with the month it came from.');
+  L.push('  Run this again — it should now find nothing to move.');
+  return admSay_(L);
+}
+
+function menuShowFilingMonths(){
+  admShow_('Filings under the old calendar month — nothing written', showFilingMonths());
+}
+function menuRestampFilingMonths(){
+  const ui = SpreadsheetApp.getUi();
+  const ok = ui.alert('Re-stamp filings to the reporting month?',
+    'This changes the month LABEL on evaluations whose date puts them in a different reporting ' +
+    'month — nothing else on the row moves, and every change goes to the Audit tab with the label ' +
+    'it came from. Read "Filings under the old calendar month" first if you have not.',
+    ui.ButtonSet.YES_NO);
+  if(ok !== ui.Button.YES){ ui.alert('Nothing was written.'); return; }
+  admShow_('Filing months re-stamped', restampFilingMonths());
+}

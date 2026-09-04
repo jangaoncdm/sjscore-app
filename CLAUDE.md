@@ -16,7 +16,7 @@ the rules below exist because exactly that happened in production.
 ## Run this before you finish anything
 
 ```bash
-npm test              # 1038 assertions, 23 suites, against the real backend files
+npm test              # 1092 assertions, 24 suites, against the real backend files
 node tests/ladder     # one suite, with its detail
 ```
 
@@ -264,6 +264,79 @@ Misses are counted from the **attendance record**, over days the district was
 demonstrably running (`activeDaysUpto_`), not from reminders sent. So a late
 sync lowers the count by itself, and switching the rule on mid-month cannot
 manufacture a fortnight of misses.
+
+---
+
+## The reporting month
+
+**The month a village is evaluated FOR is not the calendar month.** By the
+Collector's direction (03.09.2026) it runs from the **10th to the 9th** and
+carries the name of the month it *opens* in: August 2026 is 10.08.2026 to
+09.09.2026, so a village evaluated on 3 September is filed against August. A
+month's returns cannot be complete before the month itself is over — the last
+week's inspections are still being written when the 1st comes round, and a
+clock that closed on the 31st was closing on work nobody had had time to do.
+
+The first one is short **at the top and not at the bottom**: the district
+adopted the register on **20.07.2026**, so July 2026 runs 20 July – 9 August,
+because there was nothing to file into before that date. `CYCLE_DAY` and
+`CYCLE_FIRST` in `Code.gs` carry the rule and are mirrored in the app and the
+console; `cycleYm_`, `cycleFrom_`, `cycleTo_` and `cycleDay_` are the only
+things that know it.
+
+**It is the filing month and nothing else.** Attendance, its misses, its
+reminders and the whole show-cause ladder are counted over the **calendar**
+month and stay there — a served notice recites the officer's third unmarked
+working day *of the calendar month* under Rule 3, and the register does not
+re-cut a rule it did not make. `monthMarks_`, `activeDaysUpto_` and the notice
+engine never touch the cycle. Suite 24 asserts the separation; if it is ever to
+change, change it there first.
+
+**The month is the district's, not the handset's** (rule 6), **and it is
+decided the same way on the way in and on the way out.** `saveInspection_`
+stamps it from the **date of the visit** through `fileYm_`, and every count
+reads it back the same way through `rowYm_` — the pendency, the daily mail,
+the console's month and trend, the drill-down and `op=list`. The first cut of
+this change derived the month only when writing, so a village evaluated on
+3 September still carried the `2026-09` the old rule had stamped on it, every
+count still matched on that stored label, and **the August figure on the
+console did not move by a single village** while the window had been widened
+to 10 Aug – 9 Sept. Reported from the district in those words: the villages
+evaluated for August should have gone up. A stored label records what some
+handset once believed; the date of the visit is the fact, and the fact is what
+the register counts. What the phone sent stands only where there is no
+readable date, because a blank month is a row no view ever finds.
+
+**A month can fall as well as rise, and that is the rule working.** Widening
+August to 10 Aug – 9 Sept does two things at once: it takes in the filings of
+the first days of September and it gives up the filings of the first nine days
+of August to July. `showFilingMonths` prints that arithmetic per month — takes
+in, gives up, net — because "why did my figure not go up" is a question about
+the window and not about a defect.
+
+`FILING_REMIND_FROM = 16` is now a day of the **reporting** month and not of
+the calendar — day 16 is the 25th — so "the first half of the month is the
+mandals' own" still means what it said, and the chase runs on into the next
+calendar month until the month closes on the 9th. `monthWd_` walks the window
+between two dates rather than the days 1..last of a calendar month; read off
+the calendar it told the district it had five working days left when it had
+thirteen.
+
+Everywhere a month is offered to a person it is offered **with its window** —
+"August 2026 · 10 Aug – 9 Sept" — on the officer's home screen, in the village
+picker, on the filing sheet, in the console header and in every option of the
+console's month picker. `2026-08` read on the 3rd of September is a puzzle; the
+window is a fact.
+
+Rows filed before the rule existed still carry the old label on the sheet, and
+**nothing depends on it any more** — every count reads the date. The re-stamp
+is therefore housekeeping and not a repair: `showFilingMonths` /
+`restampFilingMonths` in Admin.gs bring the stored labels into line under the
+Collector's hand, so the Inspections tab read by eye says what the console
+says. They move a **label** and nothing else, print what each month gains and
+loses before anything is written, name every row whose date cannot be read
+rather than guessing at it, write the old label to `Audit` against each change,
+and find nothing to do on a second run.
 
 ---
 

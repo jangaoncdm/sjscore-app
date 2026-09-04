@@ -1,9 +1,14 @@
-/* The reporting engine: filing reminders after the 15th, EVERY working day
-   from there (the Collector's direction of 29.08.2026 — it had been every
-   third day, and the day he looked was one of the four in six that sent
-   nothing) — MSO and MPDO for action, the Secretary for information, the MPO
-   never chased twice — and the Collector's one structured mail a day, both
-   guarded against doubles. */
+/* The reporting engine: filing reminders from day 16 of the REPORTING month,
+   EVERY working day from there (the Collector's direction of 29.08.2026 — it
+   had been every third day, and the day he looked was one of the four in six
+   that sent nothing) — MSO and MPDO for action, the Secretary for
+   information, the MPO never chased twice — and the Collector's one
+   structured mail a day, both guarded against doubles.
+
+   THE MONTH HERE IS THE REPORTING MONTH, not the calendar. August 2026 runs
+   10.08 to 09.09, so day 16 of it is the 25th of August and the chase runs on
+   into September until the month closes on the 9th. The dates below moved
+   with the rule; they are days of that window and not of the calendar. */
 'use strict';
 const mock = require('../gasmock.js');
 
@@ -29,8 +34,9 @@ function seed(env){
 module.exports = {
   name: 'reports (villageFilingReminders, dailyCollectorReport)',
   run(t){
-    /* 19.08.2026 — a Wednesday, past the 15th, so a reminder day */
-    const env = mock.load({ now: '2026-08-19T10:05:00+05:30' });
+    /* 25.08.2026 — a Tuesday, and day 16 of the August reporting month
+       (which opened on the 10th), so the first reminder day of that month */
+    const env = mock.load({ now: '2026-08-25T10:05:00+05:30' });
     const c = env.ctx;
     seed(env);
     c.villageFilingReminders();
@@ -59,43 +65,44 @@ module.exports = {
     t.ok(env.outbox.length <= mailN + 1, 'and at most re-summarises');
 
     /* the calendar guards */
-    const env2 = mock.load({ now: '2026-08-14T10:00:00+05:30' }); seed(env2);
+    const env2 = mock.load({ now: '2026-08-24T10:00:00+05:30' }); seed(env2);
     env2.ctx.villageFilingReminders();
-    t.ok(!env2.sheets['Reminders'] || env2.sheets['Reminders'].rows.length <= 1, 'before the 16th, the mandals have the month to themselves');
-    /* EVERY working day from the 16th, not every third. The 18th and the
-       29th both used to fall in the gap; the 29th is the day it was reported
-       from the district that no reminder had gone. */
-    [['2026-08-18', 'the day after a reminder day still reminds'],
-     ['2026-08-29', 'and so does the 29th, which the old beat skipped']].forEach(([day, why]) => {
+    t.ok(!env2.sheets['Reminders'] || env2.sheets['Reminders'].rows.length <= 1,
+      'the 24th is day 15 of the reporting month — the mandals still have the first half to themselves');
+    /* EVERY working day from day 16, not every third. And the chase does not
+       stop when the calendar month does: the August reporting month closes on
+       9 September, and a village unfiled on the 9th is still being chased. */
+    [['2026-08-26', 'the day after a reminder day still reminds'],
+     ['2026-09-09', 'and the 9th of September, the last day of the August reporting month, still reminds']].forEach(([day, why]) => {
       const e = mock.load({ now: day + 'T10:00:00+05:30' }); seed(e);
       e.ctx.villageFilingReminders();
       t.eq((e.sheets['Reminders'] ? e.sheets['Reminders'].rows.length : 1) - 1, 3, why);
     });
     /* but a Sunday is nobody's filing day */
-    const env4 = mock.load({ now: '2026-08-23T10:00:00+05:30' }); seed(env4);
+    const env4 = mock.load({ now: '2026-08-30T10:00:00+05:30' }); seed(env4);
     env4.ctx.villageFilingReminders();
-    t.ok(!env4.sheets['Reminders'] || env4.sheets['Reminders'].rows.length <= 1, 'Sunday the 23rd sends nothing — working days only');
+    t.ok(!env4.sheets['Reminders'] || env4.sheets['Reminders'].rows.length <= 1, 'Sunday the 30th sends nothing — working days only');
     /* and a declared holiday is not a filing day either */
-    const env5 = mock.load({ now: '2026-08-20T10:00:00+05:30' });
-    seed(env5); env5.sheets['Holidays'].rows.push(['2026-08-20', 'Declared holiday']);
+    const env5 = mock.load({ now: '2026-08-27T10:00:00+05:30' });
+    seed(env5); env5.sheets['Holidays'].rows.push(['2026-08-27', 'Declared holiday']);
     env5.ctx.villageFilingReminders();
     t.ok(!env5.sheets['Reminders'] || env5.sheets['Reminders'].rows.length <= 1, 'a declared holiday sends nothing');
 
     /* ---- the Collector's daily mail ---- */
-    env.mark('9000000032', '2026-08-19', '2026-08-19T09:10:00+05:30');
+    env.mark('9000000032', '2026-08-25', '2026-08-25T09:10:00+05:30');
     /* one clean early mark and one late one whose fix is an area, not a place —
        so the summary tiles the mail now carries have something real to count */
-    env.mark('9000000033', '2026-08-19', '2026-08-19T09:12:00+05:30', null,
+    env.mark('9000000033', '2026-08-25', '2026-08-25T09:12:00+05:30', null,
       { lat: 17.72, lng: 79.15, accuracy: 18, verified: 'true', timezone: 'Asia/Calcutta' });
-    env.mark('9000000034', '2026-08-19', '2026-08-19T10:40:00+05:30', null,
+    env.mark('9000000034', '2026-08-25', '2026-08-25T10:40:00+05:30', null,
       { lat: 17.72, lng: 79.15, accuracy: 900, verified: 'false', timezone: 'Asia/Calcutta' });
     c.dailyCollectorReport();
     const rep = env.outbox.find(m => m.to === 'cdm@mock.example' && /daily report/.test(m.subject));
     t.ok(!!rep, 'the report goes to the Collector’s own address off the roll');
-    t.contains(rep.subject, '19.08.2026', 'dated the district’s way');
+    t.contains(rep.subject, '25.08.2026', 'dated the district’s way');
     t.contains(rep.body, 'villages', 'and carries the filing figures');
     /* the dashboard panel inside the mail: six stat tiles, then the Gantt */
-    t.contains(rep.htmlBody, 'The district at 19.08.2026', 'the stat tiles lead the mail');
+    t.contains(rep.htmlBody, 'The district at 25.08.2026', 'the stat tiles lead the mail');
     t.contains(rep.htmlBody, 'Villages done', 'a tile counts villages done');
 
     /* THE MAIL AND THE CONSOLE MUST QUOTE ONE MORNING, NOT TWO. The summary
@@ -112,7 +119,12 @@ module.exports = {
     /* the MSO marked at 09:10 and his mark must not swell the count of the due */
     t.ok(rep.htmlBody.indexOf('of 4 due') < 0, 'the exempt officer is never counted among the due');
     t.contains(rep.htmlBody, 'Filing progress', 'the Gantt panel follows');
-    t.contains(rep.htmlBody, 'wd 16 of', 'with the day marker at the sixteenth working day of August');
+    /* 14 working days of the August REPORTING month have gone by the 25th —
+       10..25 August less the Sundays — out of the 27 it holds in all, and the
+       month still has a fortnight to run because it closes on 9 September.
+       Read off the calendar month this said 16 of 21 and the district would
+       have believed it had five days left when it had thirteen. */
+    t.contains(rep.htmlBody, 'wd 14 of 27', 'the day marker counts working days of the reporting month, 10 Aug to 9 Sep');
     t.contains(rep.htmlBody, 'DISTRICT', 'and the district total as its last bar');
     t.contains(rep.htmlBody, '1 of 3</b> villages evaluated', 'the prose counts villages, not filings');
     /* the evaluations stand before the attendance, as a mandal table */
@@ -123,13 +135,13 @@ module.exports = {
     /* names travel in the attachment, never in the body */
     t.ok(rep.htmlBody.indexOf('P. Sec Konne') < 0, 'no officer is named in the mail body');
     t.eq(rep.attachments.length, 2, 'both registers ride along — the officers and the villages');
-    t.eq(rep.attachments[0].name, 'SJGP_attendance_2026-08-19.csv', 'the attendance register, named for the day');
+    t.eq(rep.attachments[0].name, 'SJGP_attendance_2026-08-25.csv', 'the attendance register, named for the day');
     t.contains(rep.attachments[0].data, 'NOT MARKED,Jangaon,P. Sec Konne,PS,9000000031',
       'the register names the unmarked, mandal and number against each');
-    t.eq(rep.attachments[1].name, 'SJGP_villages_2026-08.csv', 'the village register, named for the month');
+    t.eq(rep.attachments[1].name, 'SJGP_villages_2026-08.csv', 'the village register, named for the reporting month');
     t.contains(rep.attachments[1].data, 'PENDING,Jangaon,Konne', 'a pending village leads with its mandal');
     t.contains(rep.attachments[1].data, 'Evaluated,Jangaon,Malkapur,80,B', 'a filed village carries score and grade');
-    t.eq(env.props['LAST_DAILY_REPORT'], '2026-08-19', 'the guard remembers the day');
+    t.eq(env.props['LAST_DAILY_REPORT'], '2026-08-25', 'the guard remembers the day');
     const mails = env.outbox.length;
     c.dailyCollectorReport();
     t.eq(env.outbox.length, mails, 'a re-fired trigger cannot send it twice');
