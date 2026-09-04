@@ -206,5 +206,42 @@ module.exports = {
     t.eq(env2.sheets['Audit'].rows.slice(1)
       .filter(r => /FILING MONTH RE-STAMPED/.test(r.join(' '))).length, 1,
       'nothing is written to Audit a second time either');
+    /* ---- 6. A DIALOG IS A COURTESY, NEVER THE ANSWER ----
+       The manifest declares an explicit oauthScopes list and script.container.ui
+       is deliberately not on it: a new scope sends the live web app back for
+       re-authorisation and 280 officers lose it until the Collector re-consents.
+       So a menu item may not be able to draw a window. It threw in the district's
+       face — "Specified permissions are not sufficient to call Ui.showModalDialog"
+       — with the report already written and nowhere to be seen. The report must
+       survive the window, and a WRITE must not happen when it could not ask. */
+    const env4 = mock.load({ now: '2026-09-04T09:00:00+05:30', admin: true });
+    seed(env4);
+    env4.mkSheet('Inspections', env4.eval('HEADERS'), [
+      { id: 'B', ym: '2026-08', mandal: 'Jangaon', gp: 'Konne', date: '2026-08-04', score: 71, grade: 'B' }
+    ]);
+    const logged = () => env4.logs.join('\n');
+
+    env4.ctx.menuShowFilingMonths();
+    t.contains(logged(), 'WHAT EACH MONTH GAINS AND LOSES',
+      'the reading reaches the log even when no window may be opened');
+    t.contains(logged(), 'may not open dialogs',
+      'and says why there was no window, and where to read it');
+
+    /* and the write refuses, because it could not ask */
+    const ymCol4 = env4.sheets['Inspections'].rows[0].map(String).indexOf('ym');
+    env4.ctx.menuRestampFilingMonths();
+    t.eq(String(env4.sheets['Inspections'].rows[1][ymCol4]).replace(/^'/, ''), '2026-08',
+      'nothing is written when the script could not ask — a record is not changed because a dialog failed');
+    t.contains(logged(), 'NOTHING WAS WRITTEN', 'and it says so in those words');
+    t.contains(logged(), 'run restampFilingMonths() yourself',
+      'naming the function to run from the editor, which is the Collector pressing the button');
+    t.eq((env4.sheets['Audit'] ? env4.sheets['Audit'].rows.length : 1) - 1, 0,
+      'and nothing reaches the Audit tab either');
+
+    /* run directly, as from the editor, it does the work */
+    env4.ctx.restampFilingMonths();
+    t.eq(String(env4.sheets['Inspections'].rows[1][ymCol4]).replace(/^'/, ''), '2026-07',
+      'run from the editor it moves the label, dialog or no dialog');
+
   }
 };

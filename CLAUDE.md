@@ -16,7 +16,7 @@ the rules below exist because exactly that happened in production.
 ## Run this before you finish anything
 
 ```bash
-npm test              # 1092 assertions, 24 suites, against the real backend files
+npm test              # 1099 assertions, 24 suites, against the real backend files
 node tests/ladder     # one suite, with its detail
 ```
 
@@ -337,6 +337,20 @@ says. They move a **label** and nothing else, print what each month gains and
 loses before anything is written, name every row whose date cannot be read
 rather than guessing at it, write the old label to `Audit` against each change,
 and find nothing to do on a second run.
+**A dialog is a courtesy; the log is the answer.** `backend/appsscript.json`
+declares an explicit `oauthScopes` list and **`script.container.ui` is
+deliberately not on it** — adding a scope sends the live web app back for
+re-authorisation and 280 officers lose the app until the Collector re-consents,
+the same reason the backup fetches the server from the repository rather than
+through the Apps Script API. So a menu item may not be able to draw a window,
+and on 04.09.2026 one didn't: *Specified permissions are not sufficient to call
+`Ui.showModalDialog`* — thrown in the district's face with the report already
+written and nowhere visible, because the old guard wrapped `getUi()` alone and
+not the dialog call after it. Every report goes through `admSay_`, which logs
+it first, so a refused window now costs the presentation and never the answer.
+`admConfirm_` is the other half: where it cannot ask, **it does not write** —
+it names the function to run from the editor instead, which is the Collector
+pressing the button as surely as a menu item is.
 
 ---
 

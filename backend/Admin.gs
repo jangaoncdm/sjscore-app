@@ -66,9 +66,20 @@ function admSay_(lines){
 /* A dialog wide enough to read a register in, and selectable so the PINs can
    be copied out in one go. Falls back to the log when there is no UI — a
    function run from the editor must not die for want of a window. */
+/* A DIALOG IS A COURTESY AND NEVER THE ANSWER ITSELF. The manifest declares
+   an explicit oauthScopes list and script.container.ui is deliberately NOT on
+   it: adding a scope sends the live web app back for re-authorisation, and
+   280 officers lose the app until the Collector re-consents — the same reason
+   the backup fetches the server from the repository rather than through the
+   Apps Script API. So getUi() may be refused, and showModalDialog may be
+   refused even when getUi() succeeded, which is the case the old guard missed:
+   it wrapped getUi() alone and the district got "Specified permissions are not
+   sufficient to call Ui.showModalDialog" with the report already written and
+   nowhere visible. Every report is logged by admSay_ before it ever reaches
+   here, so a refused window costs the presentation and never the answer. */
 function admShow_(title, text){
   let ui;
-  try{ ui = SpreadsheetApp.getUi(); }catch(err){ Logger.log(text); return; }
+  try{ ui = SpreadsheetApp.getUi(); }catch(err){ admNoUi_(text); return; }
   const esc = String(text || '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const html = HtmlService.createHtmlOutput(
@@ -78,7 +89,35 @@ function admShow_(title, text){
     esc + '</textarea>' +
     '<p style="color:#5B6B84;margin:8px 2px 0">Select all and copy before closing. A PIN is shown once.</p></div>')
     .setWidth(880).setHeight(520);
-  ui.showModalDialog(html, title);
+  try{ ui.showModalDialog(html, title); }catch(err){ admNoUi_(text); }
+}
+/* the report, and how to read it when no window may be opened */
+function admNoUi_(text){
+  Logger.log(text);
+  Logger.log('— This ran without a window: the script may not open dialogs. The whole ' +
+             'report is above, in this log. Run the function itself from the editor — ' +
+             'Extensions ▸ Apps Script, pick it in the dropdown, Run — and read it here.');
+}
+/* Ask before writing. If no window may be opened the answer is NO: a change to
+   the district's records is not made because a dialog could not be drawn.
+   The Collector runs the write function itself from the editor instead, which
+   is him pressing the button as surely as a menu item is. */
+function admConfirm_(title, body, runFn){
+  let ui;
+  try{ ui = SpreadsheetApp.getUi(); }catch(err){ ui = null; }
+  if(ui){
+    try{
+      const ok = ui.alert(title, body, ui.ButtonSet.YES_NO);
+      if(ok !== ui.Button.YES){ admShow_(title, 'Nothing was written.'); return false; }
+      return true;
+    }catch(err){}
+  }
+  admSay_(['NOTHING WAS WRITTEN.', '', title, '', body, '',
+    'This script may not open a dialog, so it could not ask — and it does not write to the',
+    'district’s records without asking. To go ahead, run ' + runFn + '() yourself from the',
+    'editor — Extensions ▸ Apps Script, pick it in the dropdown, Run — and read the result',
+    'in this log. Running it there is you pressing the button as surely as a menu item is.']);
+  return false;
 }
 
 function menuShowFixes3(){
@@ -2343,12 +2382,10 @@ function menuShowFilingMonths(){
   admShow_('Filings under the old calendar month — nothing written', showFilingMonths());
 }
 function menuRestampFilingMonths(){
-  const ui = SpreadsheetApp.getUi();
-  const ok = ui.alert('Re-stamp filings to the reporting month?',
+  if(!admConfirm_('Re-stamp filings to the reporting month?',
     'This changes the month LABEL on evaluations whose date puts them in a different reporting ' +
     'month — nothing else on the row moves, and every change goes to the Audit tab with the label ' +
     'it came from. Read "Filings under the old calendar month" first if you have not.',
-    ui.ButtonSet.YES_NO);
-  if(ok !== ui.Button.YES){ ui.alert('Nothing was written.'); return; }
+    'restampFilingMonths')) return;
   admShow_('Filing months re-stamped', restampFilingMonths());
 }
