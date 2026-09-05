@@ -16,7 +16,7 @@ the rules below exist because exactly that happened in production.
 ## Run this before you finish anything
 
 ```bash
-npm test              # 1099 assertions, 24 suites, against the real backend files
+npm test              # 1104 assertions, 24 suites, against the real backend files
 node tests/ladder     # one suite, with its detail
 ```
 
@@ -351,6 +351,26 @@ it first, so a refused window now costs the presentation and never the answer.
 `admConfirm_` is the other half: where it cannot ask, **it does not write** —
 it names the function to run from the editor instead, which is the Collector
 pressing the button as surely as a menu item is.
+**The second Saturday is the calendar's, and stays there.** It is a fixed date
+on the `Holidays` tab, put there by `applyTsHolidays()` off the G.O., and every
+count excludes it by that date wherever it falls — the reporting month does not
+move it and cannot. What the 10th-to-9th window does is distribute them
+unevenly: a second Saturday always falls on the **8th to the 14th**, so one
+landing on the 8th or 9th sits in the *previous* reporting month. **August 2026
+therefore has none** — 08.08.2026 went to July's window and 12.09.2026 falls in
+September's — and August's working-day count is honestly one higher, because
+between 10 August and 9 September the office was never shut for one. Over a
+year not one is lost and not one is counted twice; only the spread is uneven,
+and April 2026 would have held two.
+
+Nothing turns on it that could accuse anybody: the filing reminder skips a
+second Saturday by its own date whichever window holds it, and no notice, no
+debit and no lock reads this count at all — it feeds the pace forecast and the
+Gantt marker, which are estimates and not orders. If the district ever wants
+exactly one to a reporting month, **`CYCLE_DAY = 15`** does it — every second
+Saturday would then sit inside the window of its own calendar month — but that
+is a change to the Collector's order, not a repair, and the 10th is what was
+directed. Suite 24 holds all of this.
 
 ---
 

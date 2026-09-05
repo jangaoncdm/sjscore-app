@@ -243,5 +243,54 @@ module.exports = {
     t.eq(String(env4.sheets['Inspections'].rows[1][ymCol4]).replace(/^'/, ''), '2026-07',
       'run from the editor it moves the label, dialog or no dialog');
 
+    /* ---- 7. THE SECOND SATURDAY IS THE CALENDAR'S, AND STAYS THERE ----
+       Asked from the district: the second Saturday is not a 10-to-10 thing,
+       it belongs entirely to the calendar month. It does, and nothing here
+       moves it — a second Saturday is a fixed date on the Holidays tab, put
+       there by applyTsHolidays off the G.O., and every count excludes it by
+       that date wherever it falls.
+
+       What the 10th-to-9th window does do is distribute them unevenly, and
+       that is arithmetic rather than a fault. A second Saturday always falls
+       on the 8th to the 14th, so one on the 8th or 9th sits in the PREVIOUS
+       reporting month. August 2026 therefore has none — 08.08 went to July
+       and 12.09 goes to September — and its working-day count is honestly one
+       higher, because within 10 Aug to 9 Sept the office was never shut for
+       one. Over a year not one is lost and not one is counted twice.
+
+       Nothing here accuses anybody: the filing reminder skips a second
+       Saturday by its own date whichever window holds it, and no notice, no
+       debit and no lock reads this count at all. If the district ever wants
+       exactly one to a reporting month, CYCLE_DAY = 15 does it — every second
+       Saturday would then sit inside the window of its own calendar month —
+       and that is a change to the Collector's order, not a repair. */
+    const env5 = mock.load({ now: '2026-09-05T09:00:00+05:30', admin: true });
+    const c5 = env5.ctx;
+    seed(env5);
+    const sats = c5.TS_SECOND_SATURDAYS_2026;
+    env5.sheets['Holidays'].rows = [['Date','Occasion']].concat(
+      c5.TS_HOLIDAYS_2026.map(r => [r[0], r[1]]).concat(sats.map(d => [d, 'Second Saturday'])));
+
+    t.eq(sats.filter(d => c5.cycleYm_(d) === '2026-08').length, 0,
+      'the August reporting month holds no second Saturday: 08.08 is before it opens, 12.09 after it closes');
+    t.eq(sats.filter(d => c5.cycleYm_(d) === '2026-07').join(','), '2026-08-08',
+      'the August calendar month’s own second Saturday sits in the July reporting month');
+    t.eq(sats.filter(d => c5.cycleYm_(d) === '2026-09').join(','), '2026-09-12',
+      'and September’s sits in September, because it falls after the 10th');
+
+    /* nothing lost, nothing doubled: each lands in exactly one month */
+    const landed = {};
+    sats.forEach(d => { const ym = c5.cycleYm_(d); if(ym) landed[ym] = (landed[ym] || 0) + 1; });
+    t.eq(sats.filter(d => c5.cycleYm_(d)).length,
+         Object.keys(landed).reduce((s,k) => s + landed[k], 0),
+      'every second Saturday the register covers lands in exactly one reporting month');
+
+    /* and one inside the window is genuinely taken off the working days */
+    const sepWd = c5.monthWd_(c5.cycleTo_('2026-09'));
+    env5.sheets['Holidays'].rows = env5.sheets['Holidays'].rows
+      .filter(r => String(r[0]) !== '2026-09-12');
+    t.ok(c5.monthWd_(c5.cycleTo_('2026-09')).total === sepWd.total + 1,
+      'a second Saturday inside the window is a working day fewer — it is excluded by its date, as every holiday is');
+
   }
 };
