@@ -838,6 +838,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .panel{background:var(--panel);border:0;border-top:3px solid var(--acc,var(--pri));border-radius:var(--r);box-shadow:var(--nm-out);min-width:0}
 #g[data-view="attendance"] .panel{--acc:var(--teal)}
 #g[data-view="villages"] .panel{--acc:var(--violet)}
+#g[data-view="schedule"] .panel{--acc:var(--green)}
 #g[data-view="leave"] .panel{--acc:var(--amber)}
 #g[data-view="notices"] .panel{--acc:var(--red)}
 #g[data-view="map"] .panel{--acc:var(--blue)}
@@ -1129,6 +1130,7 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
       <button data-v="overview" aria-current="page"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Overview</button>
       <button data-v="attendance"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M4.5 20c1.2-3.6 4-5.4 7.5-5.4s6.3 1.8 7.5 5.4"/></svg>Attendance</button>
       <button data-v="villages"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V9l7-5 7 5v12M9.5 21v-6h5v6"/></svg>Villages</button>
+      <button data-v="schedule"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4"/><path d="M8.2 14.2l2.2 2.2 4.4-4.4"/></svg>Schedule</button>
       <button data-v="leave"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>Leave</button>
       <button data-v="notices"><svg viewBox="0 0 24 24"><path d="M12 3a5.5 5.5 0 0 0-5.5 5.5V12l-1.8 3.4h14.6L17.5 12V8.5A5.5 5.5 0 0 0 12 3z"/><path d="M9.8 17.8a2.3 2.3 0 0 0 4.4 0"/></svg>Notices</button>
       <button data-v="map"><svg viewBox="0 0 24 24"><path d="M9 4 3.8 6v14L9 18l6 2 5.2-2V4L15 6 9 4zM9 4v14M15 6v14"/></svg>Map</button>
@@ -2797,6 +2799,279 @@ function wireAdmin(){
   });
 }
 
+/* ================= THE FILING SCHEDULE, ON THE CONSOLE ==================
+   Ordered 17.09.2026. Who was given which villages, by which day, what has
+   actually been filed against them, and the two things the Collector can do
+   about it from here: send a reminder, or send a message in his own words.
+
+   IT ACCUSES NOBODY, and this screen says so where it can be read. Nothing on
+   it raises a show-cause notice, debits a day of casual leave or locks an
+   officer's app. A district officer behind his schedule may be at a mandal
+   meeting, at the Collectorate or on tour; a table cannot know which, and a
+   table must not decide it. What the pace is, is a fact; what it means is the
+   Collector's to read.
+
+   ON THE WORD "PUSH". There is no push sender behind this register — a true
+   push needs a VAPID key signed ES256 and Apps Script signs RSA and HMAC
+   only. The button therefore says what it does: the message goes by mail at
+   once and opens in the officer's app the next time he opens it, and the
+   column beside it prints the moment he saw it. Sent is not the same as
+   landed, and this screen does not let the two be confused. */
+let SCHED=null, SCHEDBUSY=false, SCHEDMSG='', SCHEDBAD=false, SCHEDCOMPOSE=false;
+const SCHEDFORM={to:'', text:''};
+
+function pullSched(){
+  return fetch(ST.url+'?op=schedule&all=1&token='+encodeURIComponent(ST.token))
+    .then(r=>r.json()).then(j=>{ if(j&&j.ok){ SCHED=j; if(VIEW==='schedule'&&DATA) render(DATA); } })
+    .catch(()=>{});
+}
+function schedSay(t,bad){ SCHEDMSG=t||''; SCHEDBAD=!!bad; if(DATA) render(DATA); }
+function schedPost(body,after){
+  if(SCHEDBUSY) return;
+  SCHEDBUSY=true; schedSay('Sending to the district…');
+  fetch(ST.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify(Object.assign({token:ST.token},body))})
+    .then(r=>r.json()).then(j=>{
+      SCHEDBUSY=false;
+      if(!j||j.ok===false){ schedSay((j&&j.error)||'The district refused it.',true); return; }
+      after(j);
+      pullSched().then(()=>{ if(DATA) render(DATA); });
+    })
+    .catch(err=>{ SCHEDBUSY=false; schedSay('It did not get through: '+err,true); });
+}
+
+function vSchedule(j,A){
+  if(String(ST.user.role||'').toUpperCase()!=='COLLECTOR')
+    return panel('c12','The filing schedule','',
+      '<div class="empty">The schedule is published and chased by the Collector. Your login can read the district, not order its work.</div>');
+  if(!SCHED) return panel('c12','The filing schedule','reading…','<div class="empty">Reading the schedule…</div>');
+
+  const d=SCHED.district||{officers:[],mandals:[],plan:[]};
+  const offs=d.officers||[], mand=d.mandals||[], plan=d.plan||[];
+  /* THE DISTRICT'S DAY, NOT THE BROWSER'S — and not j.today either, which is
+     the day's attendance roster: the dashboard payload sets the key "today"
+     twice and the object wins, so the date string never reaches this page.
+     schPace_ returns the district's own reading of the day and that is what
+     every comparison below is made against. A console open on a laptop whose
+     clock is a day out must not draw a different schedule from the register's. */
+  const today=String(d.today||'');
+  const ackN=Number(SCHED.acknowledged)||0;
+  const win=(SCHED.cycle&&SCHED.cycle.from)?dm(SCHED.cycle.from)+' – '+dm(SCHED.cycle.to):'';
+
+  let h='';
+  if(SCHEDMSG) h+=panel('c12', SCHEDBAD?'The district refused it':'The district says','',
+    '<div style="font-size:13px;line-height:1.65;color:'+(SCHEDBAD?'var(--red)':'var(--tx-2)')+'">'+esc(SCHEDMSG)+'</div>');
+
+  /* ---- nothing published yet ---- */
+  if(!offs.length){
+    h+=panel('c12','No schedule for '+esc(SCHED.ym||''), esc(win),
+      `<div class="empty">Nothing has been assigned for this reporting month.</div>
+       <div class="expbar" style="margin-top:12px">
+         <button class="tbtn pri" data-sc="publish">Publish the schedule for ${esc(SCHED.ym||'')}</button>
+         <span class="expnote">Sixty villages to the DPO, sixty to the DLPO — whole mandals each, so a district
+           officer works a mandal through rather than crossing the district — and the rest of every mandal to its
+           own MPO and MPDO together, either of whom may file. Nothing to the Panchayat Secretary, who may not
+           file an evaluation. Each officer&rsquo;s villages are then spread over the working days that remain.</span>
+       </div>`);
+    return h;
+  }
+
+  /* ---- where the district stands ---- */
+  const behindOff=offs.filter(o=>o.behind>0);
+  h+='<div class="kpirow">';
+  h+=kpi('Villages scheduled',IC.h,d.villages,'',esc(SCHED.ym||'')+(win?' · '+esc(win):''));
+  h+=kpi('Filed against it',IC.s,d.filed,'',pct(d.filed,d.villages)+'% of the schedule');
+  h+=kpi('Behind the day',IC.f,d.behind,'',d.behind?behindOff.length+' officer'+(behindOff.length===1?'':'s')+' behind':'the district is on pace');
+  h+=kpi('Needed per day',IC.h,d.needPerDay,'',d.workingDaysLeft+' working day'+(d.workingDaysLeft===1?'':'s')+' left');
+  h+=kpi('Have read it',IC.u,ackN+' / '+offs.length,'','officers who acknowledged the schedule');
+  h+='</div>';
+
+  /* A RATIO AGAINST A LIMIT IS A METER — never a two-slice ring. What was due
+     by today against what has actually been filed: the one number that says
+     whether the month closes. */
+  h+=panel('c5','Pace','filed against what was due by today',
+    '<div class="plot">'+Charts.meter(d.filed, Math.max(1,d.dueByToday),
+      {color:d.filed>=d.dueByToday?'var(--st-ok)':d.filed>=d.dueByToday*0.8?'var(--st-warn)':'var(--st-bad)',
+       sub:d.filed+' filed of '+d.dueByToday+' due by '+dm(today),
+       foot:d.behind? '<b>'+d.behind+'</b> village'+(d.behind===1?'':'s')+' past the day set for them. A reminder is the whole of what this raises — no notice, no debit, no lock.'
+                    : 'The district is level with its own plan.'})+'</div>');
+
+  /* the days that remain, as magnitudes. One series, one colour: these are
+     villages on a day, not eight different things. */
+  const ahead=plan.filter(p=>p.date>=today).slice(0,14);
+  h+=panel('c7','The days that remain','villages set for each working day',
+    '<div class="plot">'+Charts.bar(ahead.map(p=>({label:dm(p.date), value:p.due,
+      color:p.date===today?'var(--cs2)':'var(--cs1)',
+      title:dm(p.date)+': '+p.due+' village'+(p.due===1?'':'s')+' set, '+p.filed+' already filed'})),
+      {emptyMsg:'The month has no working days left.'})+'</div>');
+
+  /* ---- what the Collector can do ---- */
+  h+=panel('c12','Orders','the schedule is yours to publish and to chase',
+    `<div class="expbar">
+      <button class="tbtn" data-sc="publish">Take in newly pending villages</button>
+      <button class="tbtn" data-sc="respread">Re-spread the remaining dates</button>
+      <button class="tbtn pri" data-sc="remind"${behindOff.length?'':' disabled'}>Remind the ${behindOff.length} officer${behindOff.length===1?'':'s'} behind</button>
+      <button class="tbtn" data-sc="compose">Send a message</button>
+      <span class="expnote">Taking in newly pending villages never moves an assignment or a date already given —
+        an officer told on Tuesday that a village is his for Thursday keeps Thursday. Re-spreading moves the
+        dates of everything still unfiled onto the days that are left, and is the only thing that does.
+        A message goes by mail at once and opens in the officer&rsquo;s app the next time he opens it;
+        there is no push sender behind this register, and the column below prints when he actually saw it.</span>
+    </div>` +
+    (SCHEDCOMPOSE ? `<div style="display:grid;gap:12px;max-width:760px;margin-top:14px">
+      <label style="font-size:12px;color:var(--tx-2)">Who it goes to
+        <select class="rsel" id="scTo" style="display:block;margin-top:5px;width:340px">
+          <option value="behind">Every officer behind his days (${behindOff.length})</option>
+          <option value="left">Every officer with villages still to file (${offs.filter(o=>o.left>0).length})</option>
+          <option value="all">Every officer on the schedule (${offs.length})</option>
+          ${offs.map(o=>`<option value="${esc(o.phone)}">${esc(o.name)} · ${esc(o.role)}</option>`).join('')}
+        </select></label>
+      <label style="font-size:12px;color:var(--tx-2)">The line he is shown
+        <input class="find" id="scText" style="max-width:none;margin-top:5px"
+          placeholder="In your own words — this is the whole of what he reads."
+          value="${esc(SCHEDFORM.text||'')}"></label>
+      <div class="expbar">
+        <button class="tbtn pri" data-sc="send"${SCHEDBUSY?' disabled':''}>Send it</button>
+        <button class="tbtn" data-sc="cancel">Cancel</button>
+      </div></div>` : ''));
+
+  /* ---- officer by officer ---- */
+  const tone=o=>o.behind?'bad':(o.left?'':'ok');
+  h+=panel('c12','Officer by officer · '+esc(SCHED.ym||''), offs.length+' officers hold the month between them',
+    `<div class="twrap" style="max-height:460px"><table><thead><tr>
+       <th>Officer</th><th>Charge</th><th>Mandals</th><th class="num">Assigned</th><th class="num">Filed</th>
+       <th class="num">Due by today</th><th class="num">Behind</th><th>Read it</th><th>Chase</th></tr></thead><tbody>` +
+    offs.map(o=>`<tr>
+      <td>${esc(o.name)}</td>
+      <td class="mut">${esc(o.role)}</td>
+      <td class="mut">${esc((o.mandals||[]).join(', '))}</td>
+      <td class="num">${o.assigned}</td>
+      <td class="num">${o.filed}</td>
+      <td class="num mut">${o.dueByToday}</td>
+      <td class="num">${o.behind?'<span class="pill bad">'+o.behind+'</span>':'<span class="pill ok">0</span>'}</td>
+      <td>${o.ackAt?'<span class="pill ok">'+esc(dm(String(o.ackAt).slice(0,10)))+'</span>':'<span class="pill warn">not yet</span>'}</td>
+      <td><button class="fchip" data-scone="${esc(o.phone)}">Remind</button></td></tr>`).join('') +
+    `</tbody></table></div>
+     <div class="expnote" style="margin-top:10px">An officer behind his days may be at a mandal meeting, at the
+       Collectorate or on tour. Nothing here raises a notice, debits a day of leave or locks an app — whether a
+       figure on this table is a default is yours to read, on the facts.</div>`,'scoff');
+
+  /* ---- mandal by mandal ---- */
+  h+=panel('c7','Mandal by mandal','filed against scheduled',
+    '<div class="plot">'+Charts.stackRows(mand.map(m=>({label:m.mandal,
+      parts:[{value:m.done,color:'var(--st-ok)'},{value:Math.max(0,m.total-m.done),color:'var(--st-idle)'}],
+      right:m.done+' / '+m.total, tone:m.done>=m.total?'ok':'',
+      title:m.mandal+': '+m.done+' of '+m.total+' filed · '+(m.officers||[]).join(', ')})),
+      {legend:[{label:'Filed',color:'var(--st-ok)'},{label:'Still to file',color:'var(--st-idle)'}],
+       emptyMsg:'No mandal is on the schedule.'})+'</div>');
+
+  /* ---- the whole plan, day by day ---- */
+  h+=panel('c5','The month, day by day','set / filed',
+    plan.length?`<div class="twrap" style="max-height:300px"><table><thead><tr><th>Day</th><th class="num">Set</th><th class="num">Filed</th></tr></thead><tbody>`+
+      plan.map(p=>`<tr><td${p.date<today?' class="mut"':''}>${esc(dm(p.date))}${p.date===today?' · today':''}</td>
+        <td class="num">${p.due}</td><td class="num">${p.filed>=p.due?'<span class="pill ok">'+p.filed+'</span>':p.filed}</td></tr>`).join('')+
+      `</tbody></table></div>`:'<div class="empty">Nothing is dated yet.</div>','scplan');
+
+  /* ---- what has been sent, and whether it landed ---- */
+  const nud=(SCHED.nudges||[]).slice(0,40);
+  h+=panel('c12','Reminders and messages sent', nud.length?nud.length+' this month':'nothing sent yet',
+    nud.length?`<div class="twrap" style="max-height:320px"><table><thead><tr>
+      <th>Sent</th><th>Officer</th><th>Kind</th><th>What it said</th><th>Seen</th></tr></thead><tbody>`+
+      nud.map(n=>`<tr><td class="num mut">${esc(dm(n.date))}</td><td>${esc(n.name)}</td>
+        <td>${n.kind==='MESSAGE'?'<span class="pill mut">message</span>':'<span class="pill warn">reminder</span>'}</td>
+        <td class="mut">${esc(String(n.text||'').slice(0,140))}</td>
+        <td>${n.seenAt?'<span class="pill ok">'+esc(istHour(n.seenAt))+'</span>':'<span class="pill mut">not yet</span>'}</td></tr>`).join('')+
+      `</tbody></table></div>`
+    :'<div class="empty">The daily reminder goes out by itself each working morning to an officer who is behind. Nothing has been sent by hand this month.</div>','scnud');
+
+  return h;
+}
+
+function wireSchedule(){
+  const bind=(id,k)=>{ const el=$(id); if(el) el.oninput=el.onchange=()=>{ SCHEDFORM[k]=el.value; }; };
+  /* THE TYPED MESSAGE MUST SURVIVE A RE-RENDER. The console polls every minute
+     and re-renders under whatever is on the screen; the advisory composer lost
+     a typed circular that way and the Collector would have written it twice. */
+  const to=$('#scTo'); if(to){ if(SCHEDFORM.to) to.value=SCHEDFORM.to; else SCHEDFORM.to=to.value; }
+  const tx=$('#scText'); if(tx && SCHEDFORM.text) tx.value=SCHEDFORM.text;
+  bind('#scTo','to'); bind('#scText','text');
+
+  document.querySelectorAll('#g [data-sc]').forEach(b=>b.onclick=()=>{
+    const a=b.dataset.sc;
+    if(a==='compose'){ SCHEDCOMPOSE=true; SCHEDMSG=''; if(DATA) render(DATA); return; }
+    if(a==='cancel'){ SCHEDCOMPOSE=false; SCHEDFORM.text=''; if(DATA) render(DATA); return; }
+    if(a==='publish'){
+      if(!confirm('Publish the filing schedule for '+(SCHED&&SCHED.ym||'this month')+'?\n\n'+
+        'Villages pending and not yet on anybody’s list are assigned: whole mandals to the DPO and the DLPO up '+
+        'to sixty each, the rest of each mandal to its own MPO and MPDO together. Nothing already assigned moves, '+
+        'and no date already given to an officer is changed.')) return;
+      schedPost({kind:'schedulePublish'}, r=>{
+        SCHEDMSG=schedPubWords(r); SCHEDBAD=false;
+      });
+      return;
+    }
+    if(a==='respread'){
+      if(!confirm('Re-spread the dates for '+(SCHED&&SCHED.ym||'this month')+'?\n\n'+
+        'Every village still unfiled is given a new day, spread over the working days that remain. Assignments do '+
+        'not change — only the days. An officer who was told a village was his for a day already past will be told '+
+        'a new one, and an officer working to his old list will find it has moved.')) return;
+      schedPost({kind:'schedulePublish', respread:true}, r=>{
+        SCHEDMSG=schedPubWords(r); SCHEDBAD=false;
+      });
+      return;
+    }
+    if(a==='remind'){
+      const n=((SCHED.district||{}).officers||[]).filter(o=>o.behind>0).length;
+      if(!confirm('Send a reminder to the '+n+' officer'+(n===1?'':'s')+' behind the schedule?\n\n'+
+        'It goes by mail at once and opens in the app. It is a reminder and nothing more — it raises no notice, '+
+        'debits no leave and locks nothing.')) return;
+      schedPost({kind:'schedNudge', to:'behind'}, r=>{
+        SCHEDMSG='Reminded '+r.sent+' officer'+(r.sent===1?'':'s')+' ('+r.mailed+' by mail).'; SCHEDBAD=false; });
+      return;
+    }
+    if(a==='send'){
+      const txt=String(SCHEDFORM.text||'').trim();
+      if(!txt){ schedSay('A message needs something in it — that is the whole of what he reads.',true); return; }
+      const who=String(SCHEDFORM.to||'behind');
+      const offs=((SCHED.district||{}).officers||[]);
+      const label = who==='behind' ? offs.filter(o=>o.behind>0).length+' officers behind'
+        : who==='left' ? offs.filter(o=>o.left>0).length+' officers with villages left'
+        : who==='all' ? offs.length+' officers'
+        : ((offs.find(o=>o.phone===who)||{}).name||who);
+      if(!confirm('Send this to '+label+'?\n\n"'+txt+'"')) return;
+      schedPost({kind:'schedNudge', nudge:'MESSAGE', to:who, text:txt}, r=>{
+        SCHEDMSG='Sent to '+r.sent+' officer'+(r.sent===1?'':'s')+' ('+r.mailed+' by mail). It opens in the app the next time each of them opens it.';
+        SCHEDBAD=false; SCHEDCOMPOSE=false; SCHEDFORM.text=''; });
+      return;
+    }
+  });
+
+  document.querySelectorAll('#g [data-scone]').forEach(b=>b.onclick=()=>{
+    const p=b.dataset.scone;
+    const o=((SCHED.district||{}).officers||[]).find(x=>x.phone===p)||{};
+    if(!confirm('Send '+(o.name||p)+' a reminder against his schedule?\n\n'+
+      (o.assigned||0)+' assigned · '+(o.filed||0)+' filed · '+(o.behind||0)+' past the day set for them.\n\n'+
+      'A reminder and nothing more.')) return;
+    schedPost({kind:'schedNudge', to:p}, r=>{
+      SCHEDMSG='Reminded '+((r.to&&r.to[0]&&r.to[0].name)||o.name||p)+'.'; SCHEDBAD=false; });
+  });
+}
+
+/* WHAT THE PUBLISH ACTUALLY DID, in the district's own figures. Sixty is a
+   target that whole mandals cannot hit exactly, so the arithmetic is printed
+   rather than the order being reported as carried out. */
+function schedPubWords(r){
+  const bits=[];
+  bits.push(r.added+' line'+(r.added===1?'':'s')+' added');
+  if(r.moved) bits.push(r.moved+' date'+(r.moved===1?'':'s')+(r.respread?' re-spread':' set'));
+  if(r.dropped) bits.push(r.dropped+' dropped from the roll');
+  bits.push(r.villages+' village'+(r.villages===1?'':'s')+' now under schedule');
+  bits.push(r.workingDaysLeft+' working day'+(r.workingDaysLeft===1?'':'s')+' left');
+  const off=(r.offices||[]).map(o=>o.role+' '+o.villages+(o.cap!=null?' of '+o.cap+' asked for':'')).join(' · ');
+  return bits.join(' · ') + (off?'.  '+off+'.':'.') +
+    ((r.notes||[]).length?'  '+r.notes.join('  '):'');
+}
+
 function vNotices(j,A){
   const N=j.notices;
   if(!N) return panel('c12','Show-cause notices','needs the 6.7 backend',
@@ -3306,6 +3581,7 @@ function render(j){
   $('#g').innerHTML = VIEW==='overview'?vOverview(j,A)
     : VIEW==='attendance'?vAttendance(j,A)
     : VIEW==='villages'?vVillages(j,A)
+    : VIEW==='schedule'?vSchedule(j,A)
     : VIEW==='leave'?vLeave(j,A)
     : VIEW==='notices'?vNotices(j,A)
     : VIEW==='gpdp'?vGpdp(j,A)
@@ -3317,6 +3593,8 @@ function render(j){
   if(VIEW==='advisory' && !ADV) pullAdv(ADV_OPEN);
   if(VIEW==='admin' && !ROLL) pullRoll();
   if(VIEW==='admin') wireAdmin();
+  if(VIEW==='schedule' && !SCHED) pullSched();
+  if(VIEW==='schedule') wireSchedule();
   if(VIEW==='overview') drawMap('map','main');
   if(VIEW==='map'){ const m2=drawMap('map2','full'); drawWeather(m2 || MAP2); }
   const mf=$('#mFind'); if(mf) mf.onchange=()=>{ if(mf.value) flyTo(mf.value); };

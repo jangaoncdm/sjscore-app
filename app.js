@@ -162,6 +162,12 @@ function load(){
   DB.holidays = DB.holidays || {};          /* the year's off days, from the district */
   DB.noticeAckQ = DB.noticeAckQ || [];      /* acknowledged on the phone, awaiting signal */
   DB.noticeDone = DB.noticeDone || {};      /* ids acknowledged locally — the gate lifts at once */
+  /* the filing schedule. What this phone has recorded beats the district's
+     answer, so the receipts live here and are read before DB.sched is. */
+  DB.schedDone  = DB.schedDone  || {};      /* reporting months acknowledged on this handset */
+  DB.schedAckQ  = DB.schedAckQ  || [];      /* receipts the signal has not carried yet */
+  DB.schedSeen  = DB.schedSeen  || {};      /* messages read on this handset */
+  DB.schedSeenQ = DB.schedSeenQ || [];
   Object.values(DB.records).forEach(r => { if(r.filed === undefined) r.filed = (r.sync === 'synced'); });
 }
 let st;
@@ -226,6 +232,11 @@ const monthName = ym => new Date(+ym.split('-')[0], +ym.split('-')[1]-1, 1).toLo
 const dayName = d => new Date(d+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long', day:'numeric', month:'long', year:'numeric'});
 const niceDate = d => { if(!d) return ''; const t=new Date(String(d).length>10?d:d+'T00:00:00');
   return isNaN(t) ? String(d) : t.toLocaleDateString('en-IN',{day:'numeric', month:'long', year:'numeric'}); };
+/* "24 Aug 2026" — short enough that a day heading on a 390px screen does not
+   wrap onto a second line, which is what "24 August 2026 · the day has passed
+   · 1 of 1 filed" did on the filing schedule. */
+const shortDate = d => { if(!d) return ''; const t=new Date(String(d).length>10?d:d+'T00:00:00');
+  return isNaN(t) ? String(d) : t.toLocaleDateString('en-IN',{day:'numeric', month:'short', year:'numeric'}); };
 const rid = (gp,ym) => gp + '|' + ym;
 const user = () => (DB.session && DB.session.user) || null;
 const myGps = () => { const u = user(); if(!u) return []; return (u.gps && u.gps.length) ? u.gps : (u.gp ? [u.gp] : []); };
@@ -977,8 +988,10 @@ function renderHome(){
     if(!isViewer(u.role)) get({op:'attendance'}).then(r=>{ if(r&&r.ok){ DB.attToday=r.rows; if(TAB==='home') renderHome(); } }).catch(()=>{});
     refreshGpdp();      /* so the plan card states the district's record, not a guess */
     refreshAdvisory();  /* and the circular is put up the moment it is issued */
+    refreshSchedule();  /* his own villages, his own days, and what the district has sent him */
     refreshWeather();   /* the sky over his own mandal, from the district's one call */
     flushAdvAcks();     /* any receipt the signal swallowed goes up now */
+    flushSchedAcks();   /* and the same for the schedule's */
   }
   const h=new Date().getHours();
   const greet = (h<12?'Good morning':h<17?'Good afternoon':'Good evening');
@@ -994,6 +1007,10 @@ function renderHome(){
   const gpPin = gpdpPending();
   if(gpPin) h2 += gpdpCard();
   h2 += advisoryCard();
+  /* the schedule sits with the circular and the plan, above the district's
+     figures: it is what he is being asked to DO, and the figures are what has
+     been done. It carries its own pin while the district is waiting on it. */
+  h2 += scheduleCard();
   if(!gpPin) h2 += gpdpCard();
   h2 += weatherCard();
 
@@ -1029,10 +1046,14 @@ function renderHome(){
   body.querySelectorAll('[data-leave]').forEach(el=>el.addEventListener('click', openLeave));
   body.querySelectorAll('[data-gpdp]').forEach(el=>el.addEventListener('click', openGpdp));
   body.querySelectorAll('[data-adv]').forEach(el=>el.addEventListener('click', advSheet));
+  body.querySelectorAll('[data-sched]').forEach(el=>el.addEventListener('click', schedSheet));
+  body.querySelectorAll('[data-schedlist]').forEach(el=>el.addEventListener('click', schedListSheet));
   /* the circular goes up in front of him once each time the app is opened,
      and keeps going up until he tells the district he has read it */
   maybePopAdvisory();
-  /* and if the circular is dealt with, the plan is the next thing he is asked
+  /* then the month's filing schedule, until he has seen it */
+  maybePopSchedule();
+  /* and if both are dealt with, the plan is the next thing he is asked
      about — once per opening of the app, never twice */
   maybePopGpdp();
   notifyPending();
@@ -1278,9 +1299,23 @@ function openPicker(){
 }
 function pickRows(list, ym){
   if(!list.length) return `<div class="row"><span class="lbl"><b>No village matches</b><span>Check the spelling, or refresh the village list from More.</span></span></div>`;
-  return list.map(gp=>{ const r=DB.records[rid(gp,ym)];
+  const today = schedToday();
+  return list.map(gp=>{ const r=DB.records[rid(gp,ym)], s=schedDayOf(gp);
+    const started = r?('Started · '+gpTotal(r)+'/100 so far'):'Not started';
+    /* THE DAY THE DISTRICT SET, where it set one. An officer choosing from a
+       list of eighty should see which are his for this week without leaving
+       the picker for another screen. */
+    const day = s && s.dueDate
+      ? ` · <b style="color:${s.dueDate < today ? 'var(--flag)' : s.dueDate === today ? 'var(--seal)' : 'var(--ink-2)'}">${s.dueDate === today ? 'on your schedule for today' : 'scheduled ' + esc(shortDate(s.dueDate))}</b>`
+      : '';
     return `<div class="row tap" data-pick="${esc(gp)}"><span class="lbl"><b>${esc(gp)}</b>
-      <span>${r?('Started · '+gpTotal(r)+'/100 so far'):'Not started'}</span></span><span class="chev"></span></div>`;}).join('');
+      <span>${started}${day}</span></span><span class="chev"></span></div>`;}).join('');
+}
+/* the day the district set for one village, if it set one and it is not filed */
+function schedDayOf(gp){
+  const st = schedState();
+  if(!st || !st.mine) return null;
+  return ((st.mine.rows || []).filter(r => r.gp === gp && !r.filed)[0] || null);
 }
 
 /* ---------------- record ---------------- */
@@ -2168,6 +2203,9 @@ async function renderMore(){
     <div class="row tap" id="mAdv"><span class="ico" style="background:var(--seal)">${ICON.file}</span>
       <span class="lbl"><b>Advisories</b><span>Circulars the District Collector has issued to you</span></span>
       ${advPending() ? '<i class="badge">1</i>' : '<span class="chev">›</span>'}</div>
+    ${(schedState() && schedState().mine && schedState().mine.assigned) ? `<div class="row tap" id="mSched"><span class="ico" style="background:var(--seal-deep)">${ICON.cal}</span>
+      <span class="lbl"><b>Filing schedule</b><span>${schedState().mine.filed} of ${schedState().mine.assigned} villages filed${schedBehind() ? ' · ' + schedBehind() + (schedBehind() === 1 ? ' past its day' : ' past their day') : ''}</span></span>
+      ${schedPending() ? '<i class="badge">1</i>' : '<span class="chev">›</span>'}</div>` : ''}
     <div class="row tap" id="mGpdp"><span class="ico" style="background:var(--gold-ink)">${ICON.file}</span>
       <span class="lbl"><b>Development plan</b><span>Send the Gram Panchayat Development Plan the district has called for</span></span>
       ${gpdpPending() ? '<i class="badge">1</i>' : '<span class="chev">›</span>'}</div>
@@ -2225,6 +2263,7 @@ async function renderMore(){
   const iosRow=$('#mIos'); if(iosRow) iosRow.addEventListener('click', ()=>$('#iosTip').classList.add('on'));
   const advRow=$('#mAdv'); if(advRow) advRow.addEventListener('click', advListSheet);
   const gpRow=$('#mGpdp'); if(gpRow) gpRow.addEventListener('click', openGpdp);
+  const scRow=$('#mSched'); if(scRow) scRow.addEventListener('click', () => schedPending() ? schedSheet() : schedListSheet());
   const lvRow=$('#mLeave'); if(lvRow) lvRow.addEventListener('click', openLeave);
   const attNow=$('#mAttNow'); if(attNow) attNow.addEventListener('click', () => { $('#app').hidden = true; openAttendance(); });
   const syncRow=$('#mSync'); if(syncRow) syncRow.addEventListener('click', syncAll);
@@ -2543,7 +2582,7 @@ function advPending(){
    a tab that cannot be cleared by doing anything is a number an officer learns
    to ignore. */
 function docsPending(){
-  return (advPending() ? 1 : 0) + (gpdpPending() ? 1 : 0);
+  return (advPending() ? 1 : 0) + (gpdpPending() ? 1 : 0) + (schedPending() ? 1 : 0);
 }
 function updateDocBadges(){
   const n = docsPending();
@@ -2561,6 +2600,8 @@ function notifyPending(){
   if(NOTIFIED) return;
   const bits = [];
   if(advPending()) bits.push('an advisory to read');
+  if(schedPending()) bits.push('this month’s filing schedule to read');
+  else if(schedBehind()) bits.push(schedBehind() + ' village' + (schedBehind() === 1 ? '' : 's') + ' past the day they were set for');
   if(gpdpPending()) bits.push('your development plan to send');
   if(!bits.length) return;
   NOTIFIED = true;
@@ -2585,8 +2626,9 @@ function maybePopGpdp(){
      then replaced it on screen — so the officer was shown the plan for an
      instant and never asked about it again that opening. */
   if(!advState()) return;
-  /* one sheet at a time — the circular outranks the plan */
-  if(advPending()) return;
+  /* one sheet at a time — the circular outranks the schedule, and the schedule
+     outranks the plan. Two of them in a row is two chances to dismiss unread. */
+  if(advPending() || SCHED_SHOWN || schedPending()) return;
   GPDP_SHOWN = true;
   DB.gpdpPrompt = today; save();
   gpdpSheet();
@@ -2874,6 +2916,297 @@ function gpdpCard(){
       <span class="ico" style="background:var(--flag)">${ICON.file}</span>
       <span class="lbl"><b>Your GPDP has not been sent</b><span>The district has called for the Gram Panchayat Development Plan for ${yr}. Tap to send it — PDF, Word or Excel.</span></span>
       <span class="chev">›</span></div></div></div>`;
+}
+
+/* ============================================================================
+ * THE FILING SCHEDULE, ON THE OFFICER'S PHONE · 17.09.2026
+ *
+ * The district's plan of work for the month, his own lines out of it, and the
+ * receipt that tells the Collector he has seen it.
+ *
+ * IT IS A PLAN OF WORK, NOT A CHARGE, and the screen says so once, plainly:
+ * falling behind draws a reminder and nothing else — no show-cause notice, no
+ * debit, no lock. The app opens exactly as it did before, whatever the pace.
+ * A schedule that locked the app would be a sanction applied by software, and
+ * a sanction is the Collector's written order.
+ *
+ * THE RECEIPT IS WRITTEN ON THIS PHONE BEFORE THE WIRE IS TRIED, and what this
+ * phone holds beats the district's answer everywhere — not only in the modal.
+ * That is the advisory's lesson, and it had to be learnt twice: refreshAdvisory
+ * once overwrote the whole state, so a receipt still queued came back as
+ * "not acknowledged" and the pinned card and the badge went back to chasing an
+ * officer who had pressed the button on a village road. Everything below reads
+ * schedDone() first.
+ * ========================================================================== */
+let SCHED_SHOWN = false, SCHED_SENDING = false;
+
+function schedState(){ return (DB.sched && typeof DB.sched === 'object') ? DB.sched : null; }
+function schedDone(ym){ return !!(ym && DB.schedDone && DB.schedDone[ym]); }
+function schedMarkDone(ym, at){
+  if(!ym) return;
+  DB.schedDone = DB.schedDone || {};
+  DB.schedDone[ym] = at || new Date().toISOString();
+  save();
+}
+function schedQueue(ym){
+  if(!ym) return;
+  DB.schedAckQ = DB.schedAckQ || [];
+  if(DB.schedAckQ.indexOf(ym) < 0) DB.schedAckQ.push(ym);
+  save();
+}
+function flushSchedAcks(){
+  if(!navigator.onLine) return;
+  (DB.schedAckQ || []).slice().forEach(ym => {
+    post({ kind:'schedAck', token:(DB.session||{}).token, ym:ym, at:(DB.schedDone||{})[ym] })
+      .then(r => { if(r && r.ok !== false) DB.schedAckQ = (DB.schedAckQ || []).filter(x => x !== ym); })
+      .catch(()=>{}).then(()=>save());
+  });
+  /* the same for messages he has read — the district wants to know it landed */
+  const seen = (DB.schedSeenQ || []).slice();
+  if(seen.length) post({ kind:'schedSeen', token:(DB.session||{}).token, ids:seen })
+    .then(r => { if(r && r.ok !== false) DB.schedSeenQ = (DB.schedSeenQ || []).filter(x => seen.indexOf(x) < 0); })
+    .catch(()=>{}).then(()=>save());
+}
+
+function refreshSchedule(){
+  if(!navigator.onLine) return Promise.resolve();
+  return get({ op:'schedule' }).then(r => {
+    if(r && r.ok){
+      const ym = r.ym || '';
+      DB.sched = { ym:ym, from:r.from || '', to:r.to || '',
+                   /* THE DISTRICT'S DAY, NOT THIS HANDSET'S (rule 1). A phone a
+                      day out would tell an honest officer that today's village
+                      was due yesterday and paint his whole list red. */
+                   today:r.today || '',
+                   mine:r.mine || null,
+                   /* THE PHONE'S RECEIPT STANDS. Never let the district's answer
+                      erase a press this handset has already recorded. */
+                   acknowledged: !!r.acknowledged || schedDone(ym),
+                   ackAt:r.ackAt || (DB.schedDone||{})[ym] || '',
+                   workingDaysLeft:Number(r.workingDaysLeft) || 0,
+                   district:r.district || null,
+                   nudges:(r.nudges || []).filter(n => n && n.id && !schedSeenLocal(n.id)),
+                   sanction: r.sanction === true,
+                   at:new Date().toISOString() };
+      save();
+      if(TAB === 'home'){ renderHome(); maybePopSchedule(); }
+    }
+  }).catch(()=>{});
+}
+
+/* ONE READING OF THE DAY, for everything the schedule judges by days. The
+   district's, where the district has said; this handset's only when it has
+   not been reached yet, and then it is a guess and not a finding. */
+function schedToday(){
+  const st = schedState();
+  return (st && st.today) || todayStr();
+}
+function schedSeenLocal(id){ return !!(id && DB.schedSeen && DB.schedSeen[id]); }
+function schedMarkSeen(ids){
+  if(!ids || !ids.length) return;
+  DB.schedSeen = DB.schedSeen || {}; DB.schedSeenQ = DB.schedSeenQ || [];
+  ids.forEach(id => { if(!id) return; DB.schedSeen[id] = new Date().toISOString();
+    if(DB.schedSeenQ.indexOf(id) < 0) DB.schedSeenQ.push(id); });
+  const st = schedState();
+  if(st) DB.sched = Object.assign({}, st, { nudges:(st.nudges || []).filter(n => !schedSeenLocal(n.id)) });
+  save();
+  flushSchedAcks();
+}
+
+/* he holds villages this month and has not told the district he has seen it */
+function schedPending(){
+  const st = schedState();
+  if(!st || !st.ym || !st.mine || !st.mine.assigned) return false;
+  return !st.acknowledged && !schedDone(st.ym);
+}
+/* and what, if anything, is actually late */
+function schedBehind(){
+  const st = schedState();
+  return (st && st.mine && Number(st.mine.behind)) || 0;
+}
+function schedNudges(){
+  const st = schedState();
+  return ((st && st.nudges) || []).filter(n => n && n.id && !schedSeenLocal(n.id));
+}
+
+/* ONCE, UNTIL HE ACKNOWLEDGES IT — and one sheet to an opening. The circular
+   outranks the schedule and the schedule outranks the plan, because that is
+   the order of what the district is waiting for. A modal every single opening
+   is how an officer learns to dismiss things unread. */
+function maybePopSchedule(){
+  if(SCHED_SHOWN || !schedPending()) return;
+  const st = schedState();
+  if(!st.ym) return;                 /* no month, nothing to remember it by */
+  if(ADV_SHOWN || advPending()) return;
+  SCHED_SHOWN = true;
+  schedSheet();
+}
+
+function schedSheet(){
+  const st = schedState(); if(!st || !st.mine) return;
+  const m = st.mine, ym = st.ym;
+  const late = Number(m.behind) || 0;
+  const nud = schedNudges();
+  const next = (m.rows || []).filter(r => !r.filed).slice(0, 6);
+  showSheet(`<div style="padding:6px 20px 4px">
+      <p class="eyebrow">From the District Collector</p>
+      <h2>Your village filing schedule</h2>
+      <p style="font-size:13.5px;color:var(--ink-3);margin-top:5px">${esc(monthName(ym))} &middot; ${esc(monthSpan(ym))}</p>
+      <div class="kpis" style="margin-top:14px">
+        <div class="kpi"><div class="n num">${m.assigned}</div><div class="l">Villages assigned<br>to you</div></div>
+        <div class="kpi"><div class="n num" style="color:var(--ok)">${m.filed}</div><div class="l">Filed<br>so far</div></div>
+        <div class="kpi"><div class="n num" style="color:${late?'var(--flag)':'var(--ink-3)'}">${late}</div><div class="l">Past the day<br>they were set for</div></div>
+        <div class="kpi"><div class="n num">${st.workingDaysLeft}</div><div class="l">Working days<br>left this month</div></div>
+      </div>
+    </div>
+    ${nud.length ? `<div style="padding:8px 20px 0">${nud.map(n => `
+      <div class="banner ${n.kind === 'MESSAGE' ? 'info' : 'warn'}" style="align-items:flex-start">
+        ${n.kind === 'MESSAGE' ? ICON.text : ICON.warn}
+        <span><b style="display:block">${n.kind === 'MESSAGE' ? 'A message from the Collector' : 'Reminder from the district'}</b>${esc(n.text)}</span>
+      </div>`).join('')}</div>` : ''}
+    ${next.length ? `<div class="group" style="margin-top:12px"><div class="hdr">Next on your list</div><div class="card">` +
+      next.map(r => `<div class="row"><span class="lbl"><b>${esc(r.gp)}</b>
+        <span>${esc(r.mandal)}${r.dueDate ? ' · set for ' + esc(shortDate(r.dueDate)) : ''}</span></span></div>`).join('') +
+      (m.left > next.length ? `<div class="row"><span class="lbl"><span>…and ${m.left - next.length} more.</span></span></div>` : '') +
+      `</div></div>` : ''}
+    <div style="padding:12px 20px 4px">
+      <button class="btn" id="schedAckBtn"${SCHED_SENDING ? ' disabled' : ''}>${SCHED_SENDING ? '<span class="spin"></span>Sending' : 'I have seen this'}</button>
+      <button class="btn quiet" id="schedOpenList">See all ${m.assigned} villages</button>
+      <button class="btn quiet" id="schedLater">Later</button>
+      <p style="font-size:12.5px;color:var(--ink-3);margin-top:12px;line-height:1.55">
+        This is the district&rsquo;s plan of work for the month. Pressing <b>I have seen this</b>
+        tells the Collector you have read it &mdash; it is a receipt, not a report that the work is done.
+        ${st.sanction ? '' : 'Falling behind the schedule draws a reminder and nothing more; it does not lock this app.'}</p>
+    </div>`);
+  $('#schedLater').addEventListener('click', hideSheet);
+  $('#schedOpenList').addEventListener('click', () => { hideSheet(); setTimeout(schedListSheet, 60); });
+  $('#schedAckBtn').addEventListener('click', () => sendSchedAck());
+  if(nud.length) schedMarkSeen(nud.map(n => n.id));
+}
+
+/* HE PRESSED IT ONCE, AND ONCE IS ENOUGH. Written on the phone first, the
+   sheet closes at once, and the receipt goes up by itself with the next line.
+   He is told what happened; he is never asked to press it a second time. */
+async function sendSchedAck(){
+  const st = schedState(); if(!st || !st.ym || SCHED_SENDING) return;
+  const ym = st.ym, at = new Date().toISOString();
+  schedMarkDone(ym, at);
+  DB.sched = Object.assign({}, st, { acknowledged:true, ackAt:at });
+  save();
+  hideSheet();
+  if(TAB === 'home') renderHome();
+
+  if(!navigator.onLine){
+    schedQueue(ym);
+    toast('Noted on this phone. It goes to the district by itself when there is signal.', 6500);
+    return;
+  }
+  SCHED_SENDING = true;
+  try{
+    const r = await post({ kind:'schedAck', token:(DB.session||{}).token, ym:ym, at:at });
+    if(!r || r.ok === false) throw new Error((r && r.error) || 'The district did not record it.');
+    toast('Noted. The district has your acknowledgement.', 5000);
+  }catch(err){
+    schedQueue(ym);
+    toast('Noted on this phone. The district has not been told yet — it will go by itself when there is signal.', 6500);
+  }finally{
+    SCHED_SENDING = false;
+    if(TAB === 'home') renderHome();
+  }
+}
+
+/* ---- his whole list, day by day, and each village opens its evaluation ---- */
+function schedListSheet(){
+  const st = schedState();
+  if(!st || !st.mine || !st.mine.assigned){
+    showSheet(`<div style="padding:6px 20px 18px"><h2>Filing schedule</h2>
+      <p style="font-size:14.5px;color:var(--ink-2);margin-top:9px;line-height:1.55">
+        No villages are on your schedule for this month. If the district publishes one, it opens here.</p></div>`);
+    return;
+  }
+  const m = st.mine, ym = st.ym, today = schedToday();
+  const byDay = {};
+  (m.rows || []).forEach(r => { (byDay[r.dueDate || ''] = byDay[r.dueDate || ''] || []).push(r); });
+  const days = Object.keys(byDay).sort();
+  showSheet(`<div style="padding:6px 20px 8px">
+      <h2>Your filing schedule</h2>
+      <p style="font-size:13.5px;color:var(--ink-3);margin-top:5px">${esc(monthName(ym))} &middot; ${esc(monthSpan(ym))} &middot;
+        ${m.filed} of ${m.assigned} filed</p>
+      ${(m.mandals||[]).length ? `<p style="font-size:12.5px;color:var(--ink-3);margin-top:3px">${esc((m.mandals||[]).join(' · '))}</p>` : ''}
+    </div>
+    <div style="padding:2px 16px 8px">` +
+    days.map(d => {
+      const list = byDay[d];
+      const doneN = list.filter(r => r.filed).length;
+      const all = doneN === list.length;
+      const label = d ? shortDate(d) : 'No day set';
+      const tone = !d ? 'var(--ink-3)' : all ? 'var(--ok)' : (d < today ? 'var(--flag)' : (d === today ? 'var(--seal)' : 'var(--ink-3)'));
+      /* A DAY THAT IS DONE IS NOT A DAY THAT HAS PASSED. The list once said
+         "the day has passed" against a village filed on the day it was set
+         for, which reads as a reproach for work done on time. The words are
+         for a day with something still open on it, and nothing else. */
+      const when = !d || all ? '' : d === today ? ' · today' : d < today ? ' · the day has passed' : '';
+      return `<div class="group" style="margin-top:10px">
+        <div class="hdr" style="color:${tone}">${esc(label)}${esc(when)} &middot; ${doneN} of ${list.length} filed</div>
+        <div class="card">` +
+        list.map(r => r.filed
+          ? `<div class="row"><span class="ico" style="background:var(--ok)">${ICON.tickC}</span>
+               <span class="lbl"><b>${esc(r.gp)}</b><span>${esc(r.mandal)} · filed${r.filedOn ? ' ' + esc(shortDate(r.filedOn)) : ''}${r.score != null ? ' · ' + r.score + '/100' : ''}${r.filedBy ? ' · ' + esc(r.filedBy) : ''}</span></span></div>`
+          : `<div class="row tap" data-schedgp="${esc(r.gp)}"><span class="ico" style="background:${d && d < today ? 'var(--flag)' : 'var(--seal)'}">${ICON.pin}</span>
+               <span class="lbl"><b>${esc(r.gp)}</b><span>${esc(r.mandal)} · not filed</span></span>
+               <span class="chev">›</span></div>`).join('') +
+        `</div></div>`;
+    }).join('') +
+    `<p style="font-size:12.5px;color:var(--ink-3);padding:14px 6px 4px;line-height:1.55">
+       A village filed by either officer named against it closes the line for both.
+       Where a village cannot be reached on its day, file it on the next — the schedule is
+       the district&rsquo;s plan of work, not a deadline that penalises you.</p>
+    </div>`);
+  $$('#sheetBody [data-schedgp]').forEach(el => el.addEventListener('click', () => {
+    hideSheet(); openRecord(el.dataset.schedgp, ymNow());
+  }));
+}
+
+/* ---- the card on the home screen ----
+   Pinned while the district is waiting for the receipt, and again whenever he
+   is behind his own days; otherwise it drops to a quiet line he can tap. */
+function scheduleCard(){
+  const st = schedState();
+  if(!st || !st.ym || !st.mine || !st.mine.assigned) return '';
+  const m = st.mine, late = Number(m.behind) || 0, nud = schedNudges().length;
+  const ack = st.acknowledged || schedDone(st.ym);
+  const win = monthName(st.ym) + ' · ' + monthSpan(st.ym);
+
+  if(!ack){
+    return `<div class="group pinned" style="margin-top:16px">
+      <div class="hdr">Pending &middot; your filing schedule</div>
+      <div class="card"><div class="row tap" data-sched="1">
+        <span class="ico" style="background:var(--seal)">${ICON.cal}</span>
+        <span class="lbl"><b>${m.assigned} village${m.assigned === 1 ? '' : 's'} are on your schedule</b>
+        <span>${esc(win)} · tap to read it and tell the district you have seen it</span></span>
+        <span class="chev">›</span></div></div></div>`;
+  }
+  if(!m.left){
+    return `<div class="group" style="margin-top:16px"><div class="hdr">Filing schedule</div>
+      <div class="card"><div class="row tap" data-schedlist="1">
+        <span class="ico" style="background:var(--ok)">${ICON.tickC}</span>
+        <span class="lbl"><b>Your schedule is complete</b>
+        <span>All ${m.assigned} village${m.assigned === 1 ? '' : 's'} filed · ${esc(win)}</span></span>
+        <span class="chev">›</span></div></div></div>`;
+  }
+  const behindCls = late ? 'pinned' : '';
+  return `<div class="group ${behindCls}" style="margin-top:16px">
+    <div class="hdr">Filing schedule &middot; ${esc(monthName(st.ym))}</div>
+    <div class="card">
+      <div class="row tap" data-schedlist="1">
+        <span class="ico" style="background:${late ? 'var(--flag)' : 'var(--seal)'}">${ICON.cal}</span>
+        <span class="lbl"><b>${m.filed} of ${m.assigned} filed${late ? ' · ' + late + (late === 1 ? ' past its day' : ' past their day') : ''}</b>
+        <span>${m.left} still to file · ${st.workingDaysLeft} working day${st.workingDaysLeft === 1 ? '' : 's'} left${m.dueToday ? ' · ' + m.dueToday + ' set for today' : ''}</span></span>
+        <span class="chev">›</span></div>
+      ${nud ? `<div class="row tap" data-sched="1"><span class="ico" style="background:var(--seal-deep)">${ICON.text}</span>
+        <span class="lbl"><b>${nud} message${nud === 1 ? '' : 's'} from the district</b><span>Tap to read</span></span>
+        <span class="chev">›</span></div>` : ''}
+    </div></div>`;
 }
 
 /* ---- the screen ---- */
