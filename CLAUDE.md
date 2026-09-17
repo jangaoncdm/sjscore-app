@@ -16,7 +16,7 @@ the rules below exist because exactly that happened in production.
 ## Run this before you finish anything
 
 ```bash
-npm test              # 1104 assertions, 24 suites, against the real backend files
+npm test              # 1350 assertions, 25 suites, against the real backend files
 node tests/ladder     # one suite, with its detail
 ```
 
@@ -45,7 +45,7 @@ Frontend has no automated tests. **Render it and look**, with Playwright, at
 
 Sheet tabs: `Users` `GPs` `Inspections` `Attendance` `Leave` `Notices`
 `Reminders` `Holidays` `Tokens` `Audit` `Voided` `Seen` `GPDP` `Advisories`
-`AdvAck`.
+`AdvAck` `Schedule` `SchedAck` `Nudges`.
 
 Drive holds four areas, each made on first use: `SJ-SCORE Attendance`,
 `SJ-SCORE GPDP` (by plan year, then mandal), `SJ-SCORE Advisories` and
@@ -374,6 +374,95 @@ directed. Suite 24 holds all of this.
 
 ---
 
+## The filing schedule
+
+**The villages were not being filed and nobody could say whose they were.**
+Ordered 17.09.2026. The pendency of a reporting month is dealt out over the
+working days that remain: **sixty villages to the DPO, sixty to the DLPO**, and
+the rest of each mandal to that mandal's **MPO and MPDO together**, either of
+whom may file. **Nothing to the Panchayat Secretary** — he holds the village
+but he may not file its evaluation, and a schedule that called him for one
+would ask for work the server refuses at the door.
+
+**Whole mandals, not sixty exactly.** A district officer takes the pendency of
+whole mandals until his sixty is filled, because the constraint on three or
+four village visits a day is the road and not the arithmetic — five villages in
+each of twelve mandals is the same sixty and twice the driving. Sixty is
+therefore a target; the figure actually assigned is reported, office by office,
+every time the schedule is published, and is never quietly rounded into the
+order. `SCH_CAP` carries the two figures and an order reaching forward changes
+them: assignments already made stand.
+
+**It accuses nobody.** A schedule is a plan of work, not a charge. Falling
+behind draws a reminder — by mail each working morning, and a card on the
+officer's home screen — and nothing else: no show-cause notice, no casual-leave
+debit, no lock on the app, no entry in the notice register. The ladder in this
+register exists for unmarked **attendance** and a served notice recites Rule 3
+of the Conduct Rules; filing default is not that, and a table must not make it
+that. `sanction:false` travels with every reply so the app says so in the
+officer's own words. If the district ever means to sanction on filing, that is
+the Collector's written order and **suite 25 is changed first**, deliberately.
+An officer behind his days may be at a mandal meeting, at the Collectorate or
+on tour; the console prints the figure and says in as many words that what it
+means is the Collector's to read — the same restraint as rule 10.
+
+**Whether a village is filed is never stored here.** It is read back off the
+`Inspections` register every time, by the date of the visit through `rowYm_`,
+exactly as the console and the pendency read it. A status column kept in step
+by a trigger is how the reporting month went wrong once already: the label said
+one thing, the record said another, and every count believed the label. The
+`Schedule` tab records the **assignment** — who was asked, for which village,
+by which day — and that is all it records. A village filed by either officer
+named against it closes the line for both, and every district figure counts
+**villages, never rows** (rule 9), because the MPO and the MPDO hold the same
+village between them.
+
+**Publishing again never moves an assignment already made or a date already
+given.** Every row carries an id derived from the month, the officer and the
+village, so a second publish finds its own work done (rule 8); it only takes in
+villages that have become pending since. **Re-spreading the dates is a separate,
+explicit act** of the Collector's, because an officer told on Tuesday that Konne
+is his for Thursday must not find on Wednesday that it has moved. A village off
+the roll is marked `DROPPED` where it stands and the row remains (rule 7).
+
+**The district's day, not the handset's** (rule 1). `op=schedule` carries
+`today` and the app judges every due date by it: a phone a day out would tell an
+honest officer that today's village was due yesterday and paint his whole list
+red. The console reads `district.today` for the same reason — and not
+`j.today`, which is the day's attendance roster, because the dashboard payload
+sets that key twice and the object wins, so the date string never reaches the
+page at all.
+
+**The schedule reminder replaces the mandal-wide one** for the officers it
+reaches: `villageFilingReminders` consults `schScheduled_` and stands down for
+them, because two mails a morning about the same villages is how a district
+learns to read neither. The MSO and the Secretary, whom the schedule does not
+reach, keep the reminder they always had. Like the attendance reminder cut back
+on 28.08.2026, **the schedule mail names no sanction** — not even to say that
+none arises, because an officer reading the words "show-cause notice" in a
+reminder has been made to think about one. Suite 25 asserts the words are
+absent.
+
+**There is no push, and the console does not pretend there is.** A true push
+needs a VAPID key signed ES256 and Apps Script signs RSA and HMAC only. *Send a
+message* mails the officer at once and opens the message in his app the next
+time he opens it; the console prints the moment he **saw** it, because sent is
+not the same as landed. The service worker already carries a push handler for
+the day a sender exists.
+
+**The receipt is the phone's**, everywhere, as the advisory's was — and that
+lesson had to be learnt twice. `refreshSchedule` reads `schedDone()` before it
+believes the district's `acknowledged`, so a receipt still queued on a village
+road cannot come back as unacknowledged and set the card chasing him again. A
+schedule with no `ym` is never shown at all: the handset remembers by month.
+One sheet to an opening — the circular outranks the schedule and the schedule
+outranks the plan.
+
+`scheduleReminders()` runs ~09:00 every working day and is installed by
+`installScheduleTrigger()`, which `installReportTriggers()` now also calls.
+
+---
+
 ## Documents: the plan and the circular
 
 Two registers collect and distribute documents. Neither is part of the notice
@@ -559,8 +648,9 @@ Before shipping a console change, run the render pass — it measures what
 looking cannot:
 
 ```bash
-node tests/fixture-dashboard.js     # a real payload from the real backend
-node tests/render-console.js        # 6 views × 3 widths × both themes
+node tests/fixture-dashboard.js     # real payloads from the real backend
+                                    #   (writes the dashboard AND the schedule)
+node tests/render-console.js        # 7 views × 3 widths × both themes
 ```
 
 It fails on sideways scroll, on cards in one row that differ in height, on a
@@ -572,7 +662,7 @@ field app and the real console and writes a report with snapshots:
 
 ```bash
 node tests/fixture-docs.js          # payloads from the real backend
-node tests/render-docs.js           # 71 checks; Info/docs-render/REPORT.md
+node tests/render-docs.js           # 105 checks; Info/docs-render/REPORT.md
 node tests/render-admin.js          # 19 checks; presses the Admin view's buttons
 ```
 

@@ -1395,9 +1395,17 @@ function villageFilingReminders(){
     if(role === 'MSO' || role === 'MPDO')
       roleByMandal[off.mandal.trim().toLowerCase() + '|' + role] = off;
   }
+  /* WHO IS ALREADY BEING CHASED BY NAME. From 17.09.2026 an officer under the
+     filing schedule gets his own mail, listing his own villages against his
+     own days, an hour before this one runs. He is left out here: two mails a
+     morning about the same villages is how a district learns to read neither.
+     The MSO and the Panchayat Secretary are not on the schedule by the order
+     and keep the reminder they have always had. */
+  const onSchedule = schScheduled_(ym);
+
   const recip = {};   /* phone -> {off, action, villages[]} */
   const addTo = (off, action, village) => {
-    if(!off) return;
+    if(!off || onSchedule[off.phone]) return;
     const r = recip[off.phone] = recip[off.phone] || { off: off, action: action, villages: [] };
     if(r.villages.indexOf(village) < 0) r.villages.push(village);
   };
@@ -1464,6 +1472,813 @@ function villageFilingReminders(){
   }catch(err){}
   Logger.log(unfiled.length + ' village(s) unevaluated; ' + sent + ' officer(s) reminded, ' + mailed + ' mailed.');
 }
+/* ============================================================================
+ * THE FILING SCHEDULE · ordered 17.09.2026
+ * ----------------------------------------------------------------------------
+ * Asked for from the district in these words: there is huge delay in filing
+ * the village, so schedule the pending villages over the days that remain and
+ * put each officer's own list in front of him when he opens the app.
+ *
+ * THE ORDER, AS PASSED. Sixty villages to the District Panchayat Officer,
+ * sixty to the Divisional Panchayat Officer, and the rest of each mandal to
+ * that mandal's MPO and MPDO, who are named together and either of whom may
+ * file. NOTHING TO THE PANCHAYAT SECRETARY — he holds the village but he may
+ * not file its evaluation, and a schedule that called him for one would be
+ * asking for work the server refuses at the door (see the viewer guard in
+ * doPost). He is left out here rather than listed and then turned away.
+ *
+ * WHOLE MANDALS, NOT SIXTY EXACTLY. A district officer takes the pendency of
+ * whole mandals until his sixty is filled, because the constraint on three or
+ * four village visits a day is the road and not the arithmetic — five villages
+ * in each of twelve mandals is the same sixty and twice the driving. Sixty is
+ * therefore a target, and the figure actually assigned is reported, office by
+ * office, every time the schedule is published. It is never quietly rounded
+ * into the order.
+ *
+ * IT ACCUSES NOBODY. A schedule is a plan of work, not a charge. Falling
+ * behind it draws a reminder — by mail and on the officer's home screen — and
+ * nothing else: no show-cause notice, no casual-leave debit, no lock on the
+ * app, no entry in the notice register. The ladder in this file exists for
+ * unmarked ATTENDANCE and a served notice recites Rule 3 of the Conduct Rules;
+ * filing default is not that, and a table must not make it that. If the
+ * district ever means to sanction on filing, that is the Collector's written
+ * order and it is changed in suite 25 first, deliberately.
+ *
+ * WHETHER A VILLAGE IS FILED IS NEVER STORED HERE. It is read back off the
+ * Inspections register every single time, by the date of the visit through
+ * rowYm_, exactly as the console and the pendency read it. A status column
+ * kept in step by a trigger is how the reporting month went wrong once
+ * already: the stored label said one thing, the record said another, and every
+ * count believed the label. The Schedule tab records the ASSIGNMENT — who was
+ * asked, for which village, by which day — and that is all it records.
+ *
+ * IT RUNS TWICE WITHOUT DOUBLING (rule 8). Every row carries an id derived
+ * from the month, the officer and the village, so a second publish finds its
+ * own work already done. Publishing again never moves an assignment already
+ * made or a date already given to an officer — it only takes in villages that
+ * have become pending since. Re-spreading the dates is a separate, explicit
+ * act of the Collector's, because an officer told on Tuesday that Konne is his
+ * for Thursday must not find on Wednesday that it has moved.
+ *
+ * NOTHING IS DESTROYED (rule 7). A village that leaves the roll has its row
+ * marked DROPPED where it stands; the row remains, and so does every reminder
+ * and message ever sent against it.
+ * ========================================================================== */
+const SCH_HEAD = ['id','ym','mandal','gp','phone','name','role','dueDate','assignedAt','assignedBy','status','note'];
+/* One receipt per officer per reporting month — not one per village. He is
+   acknowledging the schedule, which is one document however many lines it has. */
+const SCH_ACK_HEAD = ['ym','phone','name','role','mandal','ackAt','receivedAt'];
+/* What the Collector sends by hand from the console: a reminder against the
+   schedule, or a message in his own words. Both reach the officer's app the
+   next time he opens it, and both carry the time they were seen back, so the
+   console can say whether it landed rather than only that it was sent. */
+const NUDGE_HEAD = ['id','ym','date','phone','name','role','mandal','kind','text',
+                    'sentBy','sentAt','emailedAt','seenAt','receivedAt'];
+/* THE COLLECTOR'S ORDER OF 17.09.2026. Sixty each. Change these two and the
+   next publish allocates to the new figures; assignments already made stand,
+   because an order reaches forward — the same rule the optional holidays run
+   under. A district office with nobody active on the roll takes nothing and
+   the publish SAYS SO: its mandals go to their own officers rather than to a
+   name that cannot sign in. */
+const SCH_CAP = { DPO: 60, DLPO: 60 };
+/* Who may be given villages. The Secretary is absent by the order; the MSO is
+   absent because the order did not name him, and the mandal-wide filing
+   reminder still reaches him exactly as it always did. */
+const SCH_DISTRICT_ROLES = ['DPO','DLPO'];
+const SCH_MANDAL_ROLES   = ['MPO','MPDO'];
+
+/* A mandal name as a key. Case-blind and trimmed, as everywhere on this
+   register — and then, only if that finds nothing, with the punctuation taken
+   out as well, because the roll spells "Ghanpur (Stn)" three ways and a
+   schedule must not lose a mandal's whole pendency over a bracket. It is never
+   loosened further than that: "Ghanpur (Stn)" and "Lingala Ghanpur" are two
+   different mandals, and a prefix match would quietly merge them. */
+function mkey_(s){ return String(s == null ? '' : s).trim().toLowerCase(); }
+function mkey2_(s){ return mkey_(s).replace(/[^a-z0-9]/g, ''); }
+function vkey_(mandal, gp){ return mkey_(mandal) + '|' + mkey_(gp); }
+
+/* WHAT HAS ACTUALLY BEEN FILED, read off the record and not off a label.
+   Keyed by mandal|gp, case-blind, and the month derived from the date of the
+   visit through rowYm_ — the same reading the console, the pendency and the
+   daily mail take. */
+function schFiled_(ym){
+  const sh = sheet_('Inspections', HEADERS), m = headMap_(sh, HEADERS);
+  const v = sh.getDataRange().getValues();
+  const out = {};
+  for(let i = 1; i < v.length; i++){
+    if(rowYm_(v[i], m.ix) !== ym) continue;
+    const k = vkey_(v[i][m.ix.mandal], v[i][m.ix.gp]);
+    const d = dateText_(v[i][m.ix.date]);
+    /* the FIRST filing closes the village; a later re-file does not re-open it */
+    if(!out[k] || (d && d < out[k].date))
+      out[k] = { date:d, officer:cell_(v[i], m.ix.officer), score:Number(v[i][m.ix.score]) || 0 };
+  }
+  return out;
+}
+
+/* The working days of a reporting month from a date onward, inclusive —
+   Sundays and the Holidays tab out, as everywhere else on this register. A
+   second Saturday is a fixed date on that tab and is skipped by its own date,
+   whichever window holds it. The list is empty when the month has closed: the
+   caller decides what that means rather than being handed a day that is past. */
+function schDays_(ym, fromDate){
+  const from = dateText_(fromDate), to = cycleTo_(ym), hs = holidaySet_();
+  const open = cycleFrom_(ym);
+  let k = from && from > open ? from : open;
+  const out = [];
+  for(; k <= to; k = dayAfter_(k)){
+    if(new Date(k + 'T00:00:00').getDay() === 0 || hs[k]) continue;
+    out.push(k);
+  }
+  return out;
+}
+
+/* the active roll, one officer per number, as every other reader takes it */
+function schOfficers_(){
+  const t = uidx_(), v = t.sh.getDataRange().getValues();
+  const out = [], seen = {};
+  for(let i = 1; i < v.length; i++){
+    const ph = phone10_(v[i][t.ix.phone]); if(!ph || seen[ph]) continue; seen[ph] = true;
+    if(String(v[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
+    out.push({ phone:ph, name:cell_(v[i], t.ix.name), role:cell_(v[i], t.ix.role).toUpperCase(),
+               mandal:cell_(v[i], t.ix.mandal), email:String(v[i][t.ix.email] || '').trim() });
+  }
+  return out;
+}
+
+/* every schedule row of a month, as written */
+function schRows_(ym){
+  const sh = sheet_('Schedule', SCH_HEAD), m = headMap_(sh, SCH_HEAD);
+  const v = sh.getDataRange().getValues();
+  const out = [];
+  for(let i = 1; i < v.length; i++){
+    if(ymText_(v[i][m.ix.ym]) !== ym) continue;
+    out.push({ at:i + 1, id:cell_(v[i], m.ix.id), ym:ym,
+      mandal:cell_(v[i], m.ix.mandal), gp:cell_(v[i], m.ix.gp),
+      phone:phone10_(v[i][m.ix.phone]), name:cell_(v[i], m.ix.name),
+      role:cell_(v[i], m.ix.role).toUpperCase(),
+      dueDate:dateText_(v[i][m.ix.dueDate]), assignedAt:String(v[i][m.ix.assignedAt] || ''),
+      assignedBy:cell_(v[i], m.ix.assignedBy),
+      status:String(v[i][m.ix.status] || 'ACTIVE').toUpperCase(), note:cell_(v[i], m.ix.note) });
+  }
+  return out;
+}
+
+/* Deterministic, so a second publish finds its own work already done (rule 8). */
+function schId_(ym, phone, mandal, gp){
+  return 'SCH-' + ym + '-' + phone10_(phone) + '-' + mkey2_(mandal) + '-' + mkey2_(gp);
+}
+
+/* ----------------------------------------------------------------------------
+ * THE ALLOCATION.
+ *
+ * Only villages with no row yet are allocated, so a publish can be run again
+ * without disturbing a single assignment already made. A mandal that already
+ * belongs to a district office keeps going to that office — otherwise the
+ * second publish of a month would split one mandal between two officers and
+ * both would drive to it.
+ *
+ * Mandals are taken largest-pendency-first and given to whichever district
+ * office has the most room left. Largest first is what keeps the overshoot
+ * small: by the time an office is near its sixty, only small mandals are left
+ * to push it over.
+ * ------------------------------------------------------------------------- */
+function schAllocate_(ym, existing, capsOpt){
+  const caps = capsOpt || SCH_CAP;
+  const pending = unfiledVillages_(ym);
+  const officers = schOfficers_();
+  const notes = [];
+
+  /* who holds each office, and who holds each mandal */
+  const office = {}, byMandalRole = {};
+  SCH_DISTRICT_ROLES.forEach(r => { office[r] = { role:r, cap:Number(caps[r]) || 0, got:0, men:[], mandals:[] }; });
+  officers.forEach(o => {
+    if(office[o.role]) office[o.role].men.push(o);
+    if(SCH_MANDAL_ROLES.indexOf(o.role) >= 0){
+      const k1 = mkey_(o.mandal) + '|' + o.role, k2 = mkey2_(o.mandal) + '|' + o.role;
+      (byMandalRole[k1] = byMandalRole[k1] || []).push(o);
+      if(k2 !== k1) (byMandalRole[k2] = byMandalRole[k2] || []).push(o);
+    }
+  });
+  SCH_DISTRICT_ROLES.forEach(r => {
+    if(!office[r].men.length){
+      office[r].cap = 0;
+      notes.push('No active ' + r + ' on the roll — nothing was assigned to that office, and its share has gone to the mandals’ own officers.');
+    } else if(office[r].men.length > 1){
+      notes.push(office[r].men.length + ' officers hold the ' + r + ' charge; that office’s ' +
+                 office[r].cap + ' are dealt between them, mandal by mandal.');
+    }
+  });
+
+  /* what is already spoken for, and by which office */
+  const held = {}, mandalOffice = {};
+  (existing || []).forEach(r => {
+    if(r.status !== 'ACTIVE') return;
+    held[vkey_(r.mandal, r.gp)] = true;
+    if(office[r.role]) mandalOffice[mkey_(r.mandal)] = r.role;
+  });
+  (existing || []).forEach(r => {
+    if(r.status !== 'ACTIVE') return;
+    const o = office[r.role];
+    if(o && mandalOffice[mkey_(r.mandal)] === r.role) o.got++;
+  });
+
+  const fresh = pending.filter(v => !held[vkey_(v.mandal, v.gp)]);
+  const byMandal = {};
+  fresh.forEach(v => { (byMandal[v.mandal] = byMandal[v.mandal] || []).push(v.gp); });
+  /* largest pendency first; the name breaks the tie, so the same roll always
+     allocates the same way and a re-run is never a reshuffle */
+  const mandals = Object.keys(byMandal).sort((a, b) =>
+    (byMandal[b].length - byMandal[a].length) || (a < b ? -1 : a > b ? 1 : 0));
+
+  const plan = [], unassigned = [];
+  mandals.forEach(mandal => {
+    const gps = byMandal[mandal].slice().sort();
+    const mk = mkey_(mandal);
+
+    /* a mandal already held by an office stays with it */
+    let take = mandalOffice[mk] && office[mandalOffice[mk]] ? office[mandalOffice[mk]] : null;
+    if(!take){
+      SCH_DISTRICT_ROLES.forEach(r => {
+        const o = office[r];
+        if(!o.men.length || o.got >= o.cap) return;
+        if(!take || (o.cap - o.got) > (take.cap - take.got)) take = o;
+      });
+    }
+    if(take){
+      mandalOffice[mk] = take.role;
+      take.mandals.push(mandal);
+      take.got += gps.length;
+      /* one office may be held by more than one officer; the MANDALS are dealt
+         between them rather than the villages, for the same road reason */
+      const man = take.men[(take.mandals.length - 1) % take.men.length];
+      gps.forEach(gp => plan.push({ mandal:mandal, gp:gp, phone:man.phone, name:man.name, role:man.role }));
+      return;
+    }
+
+    /* The mandal's own. BOTH the MPO and the MPDO are named against every
+       village, by the Collector's direction of 17.09.2026, and either may file
+       it — so one village raises two rows. Every district figure below
+       therefore counts VILLAGES and never rows (rule 9). */
+    const men = [];
+    SCH_MANDAL_ROLES.forEach(r => {
+      const hit = byMandalRole[mk + '|' + r] || byMandalRole[mkey2_(mandal) + '|' + r] || [];
+      if(hit.length) men.push(hit[0]);
+    });
+    if(!men.length){
+      /* NAMED, NOT SWALLOWED. A mandal with no officer to file is a fault on
+         the roll, and the Collector is told which villages it costs rather
+         than finding them missing from every total. */
+      unassigned.push({ mandal:mandal, villages:gps.length });
+      notes.push(mandal + ': no active MPO or MPDO on the roll — its ' + gps.length +
+                 ' pending village(s) could not be assigned to anybody.');
+      return;
+    }
+    gps.forEach(gp => men.forEach(o =>
+      plan.push({ mandal:mandal, gp:gp, phone:o.phone, name:o.name, role:o.role })));
+  });
+
+  return { plan:plan, notes:notes, office:office, unassigned:unassigned,
+           pending:pending.length, fresh:fresh.length };
+}
+
+/* Give every officer's villages a day. His list is spread evenly over the
+   working days that remain in the reporting month, mandal by mandal and
+   village by village, so a day's work is in one place. A month already closed
+   leaves no day to give: everything falls due on its last working day, and the
+   answer says so rather than inventing a date in the past. */
+function schDate_(days, i, n){
+  if(!days.length) return '';
+  const per = Math.max(1, Math.ceil(n / days.length));
+  return days[Math.min(days.length - 1, Math.floor(i / per))];
+}
+
+/* ---- the Collector publishes it ---- */
+function schPublish_(b, u){
+  if(u.role !== 'COLLECTOR')
+    return json_({ ok:false, error:'The filing schedule is published by the Collector alone.' });
+  const ym = /^\d{4}-\d{2}$/.test(String(b.ym || '')) ? String(b.ym) : cycleYm_(today_());
+  if(!ym) return json_({ ok:false, error:'There is no reporting month open yet.' });
+  const respread = !!b.respread;
+
+  const lock = LockService.getScriptLock();
+  try{ lock.waitLock(30000); }catch(err){ return json_({ ok:false, error:'busy — try again' }); }
+  try{
+    const sh = sheet_('Schedule', SCH_HEAD), m = headMap_(sh, SCH_HEAD);
+    const existing = schRows_(ym);
+    const caps = { DPO:Number(b.dpoCap) > 0 ? Number(b.dpoCap) : SCH_CAP.DPO,
+                   DLPO:Number(b.dlpoCap) > 0 ? Number(b.dlpoCap) : SCH_CAP.DLPO };
+    const alloc = schAllocate_(ym, existing, caps);
+
+    const now = new Date().toISOString();
+    const by = u.name + ' (' + u.phone + ')';
+    const byId = {}; existing.forEach(r => { byId[r.id] = r; });
+
+    /* NOTHING IS DESTROYED. A village that has left the roll since the
+       schedule was published is marked DROPPED where it stands; the row, and
+       every reminder sent against it, remain readable. */
+    const onRoll = {}; gpRoll_().forEach(r => { onRoll[vkey_(r.mandal, r.gp)] = true; });
+    let dropped = 0;
+    existing.forEach(r => {
+      if(r.status !== 'ACTIVE' || onRoll[vkey_(r.mandal, r.gp)]) return;
+      if(m.ix.status >= 0) sh.getRange(r.at, m.ix.status + 1).setValue('DROPPED');
+      if(m.ix.note >= 0) sh.getRange(r.at, m.ix.note + 1).setValue('Off the village roll on ' + today_());
+      r.status = 'DROPPED'; dropped++;
+    });
+
+    /* the new lines */
+    const add = [];
+    alloc.plan.forEach(p => {
+      const id = schId_(ym, p.phone, p.mandal, p.gp);
+      if(byId[id]) return;                       /* already his — untouched (rule 8) */
+      byId[id] = true;
+      add.push({ id:id, mandal:p.mandal, gp:p.gp, phone:p.phone, name:p.name, role:p.role, dueDate:'' });
+    });
+
+    /* THE DATES. Every officer's outstanding villages — the ones just added,
+       and on a re-spread the ones he already holds and has not yet filed — are
+       laid out over the working days that remain. A date already given to an
+       officer is his: only an explicit re-spread moves it. */
+    const filed = schFiled_(ym);
+    /* A MONTH ALREADY CLOSED HAS NO DAY LEFT TO GIVE, and a blank due date
+       would read on every screen as "not scheduled" — which is the opposite of
+       the truth. Everything then falls due on the month's own last working
+       day, where it reads correctly as overdue. */
+    let days = schDays_(ym, today_());
+    if(!days.length) days = schDays_(ym, cycleFrom_(ym)).slice(-1);
+    const mine = {};
+    existing.forEach(r => { if(r.status === 'ACTIVE') (mine[r.phone] = mine[r.phone] || []).push(r); });
+    add.forEach(r => (mine[r.phone] = mine[r.phone] || []).push(r));
+
+    const dates = {};
+    Object.keys(mine).forEach(ph => {
+      const open = mine[ph].filter(r => !filed[vkey_(r.mandal, r.gp)])
+        .sort((a, b) => (a.mandal < b.mandal ? -1 : a.mandal > b.mandal ? 1
+                       : (a.gp < b.gp ? -1 : a.gp > b.gp ? 1 : 0)));
+      open.forEach((r, i) => {
+        if(r.dueDate && !respread) return;
+        dates[r.id] = schDate_(days, i, open.length);
+      });
+    });
+
+    let moved = 0;
+    existing.forEach(r => {
+      if(r.status !== 'ACTIVE' || dates[r.id] === undefined || dates[r.id] === r.dueDate) return;
+      if(m.ix.dueDate >= 0) sh.getRange(r.at, m.ix.dueDate + 1).setValue("'" + dates[r.id]);
+      r.dueDate = dates[r.id]; moved++;
+    });
+    add.forEach(r => {
+      const row = new Array(m.width).fill('');
+      const put = (k, val) => { if(m.ix[k] >= 0) row[m.ix[k]] = val; };
+      put('id', r.id); put('ym', "'" + ym); put('mandal', r.mandal); put('gp', r.gp);
+      put('phone', "'" + r.phone); put('name', r.name); put('role', r.role);
+      put('dueDate', "'" + (dates[r.id] || ''));
+      put('assignedAt', now); put('assignedBy', by); put('status', 'ACTIVE'); put('note', '');
+      sh.appendRow(row);
+    });
+
+    /* WHAT WAS ACTUALLY DONE, office by office. Sixty is a target that whole
+       mandals cannot hit exactly, so the figure is reported and the Collector
+       reads the arithmetic rather than being told the order was carried out. */
+    const after = schRows_(ym).filter(r => r.status === 'ACTIVE');
+    const villagesOf = rows => { const s = {}; rows.forEach(r => { s[vkey_(r.mandal, r.gp)] = true; }); return Object.keys(s).length; };
+    const byRole = {};
+    after.forEach(r => { (byRole[r.role] = byRole[r.role] || []).push(r); });
+    const offices = Object.keys(byRole).sort().map(r => {
+      const men = {}, mand = {};
+      byRole[r].forEach(x => { men[x.phone] = x.name; mand[x.mandal] = 1; });
+      return { role:r, officers:Object.keys(men).length, villages:villagesOf(byRole[r]),
+               mandals:Object.keys(mand).sort(),
+               cap:caps[r] != null ? caps[r] : null };
+    });
+
+    schBust_('');
+    admAudit_('SCHEDULE_PUBLISH', ym,
+      add.length + ' line(s) added, ' + moved + ' date(s) ' + (respread ? 're-spread' : 'set') +
+      ', ' + dropped + ' dropped; ' + villagesOf(after) + ' village(s) under schedule');
+
+    return json_({ ok:true, ym:ym, from:cycleFrom_(ym), to:cycleTo_(ym),
+      added:add.length, moved:moved, dropped:dropped, respread:respread,
+      pending:alloc.pending, villages:villagesOf(after), rows:after.length,
+      workingDaysLeft:days.length, offices:offices, notes:alloc.notes,
+      unassigned:alloc.unassigned, caps:caps, at:now });
+  } finally { lock.releaseLock(); }
+}
+
+/* ----------------------------------------------------------------------------
+ * THE STANDING — what each officer owes, and how he is going.
+ *
+ * BEHIND is measured against what he has filed IN ALL, not against the
+ * villages whose day has passed: an officer who did Thursday's village on
+ * Tuesday is ahead, and a burn-down that could not see that would chase a man
+ * who is in front of his own schedule.
+ * ------------------------------------------------------------------------- */
+/* EVERY POLL WOULD OTHERWISE RE-READ TWO WHOLE SHEETS. Two hundred and eighty
+   handsets ask for this every few minutes and the Collector's console asks for
+   it every minute; the Schedule tab and the whole Inspections register behind
+   it are the same answer each time. Held for thirty seconds, the way the
+   dashboard payload is held for fifty and for the same reason — the sheets are
+   rebuilt about twice a minute however many people are looking, at a freshness
+   cost nobody can perceive in a register measured in days. */
+function schPace_(ym, today){
+  const t0 = dateText_(today || today_());
+  const ck = 'pace_' + ym + '_' + t0;
+  try{
+    const hit = cache_().get(ck);
+    if(hit) return JSON.parse(hit);
+  }catch(err){}
+  const out = schPaceBuild_(ym, t0);
+  try{
+    const body = JSON.stringify(out);
+    if(body.length < 95000) cache_().put(ck, body, 30);
+  }catch(err){}
+  return out;
+}
+/* AND IT IS DROPPED THE MOMENT IT COULD BE WRONG. An officer who files a
+   village expects his own list to tick over on the next screen, not in half a
+   minute — a cache that outlives the thing it describes is how a register
+   tells a man his work is outstanding after he has done it. Called from
+   saveInspection_ and from a publish; both months are cleared, because a
+   filing made on the 3rd of September belongs to August's window. */
+function schBust_(dStr){
+  const t = today_();
+  const yms = {};
+  yms[cycleYm_(t)] = true;
+  if(dStr) yms[cycleYm_(dStr)] = true;
+  Object.keys(yms).forEach(ym => { if(ym) try{ cache_().remove('pace_' + ym + '_' + t); }catch(err){} });
+}
+function schPaceBuild_(ym, today){
+  const rows = schRows_(ym).filter(r => r.status === 'ACTIVE');
+  const filed = schFiled_(ym);
+  const t = dateText_(today || today_());
+  const byPhone = {}, villages = {}, done = {};
+  rows.forEach(r => {
+    const k = vkey_(r.mandal, r.gp);
+    const f = filed[k] || null;
+    villages[k] = true; if(f) done[k] = true;
+    const o = byPhone[r.phone] = byPhone[r.phone] || { phone:r.phone, name:r.name, role:r.role,
+      assigned:0, filed:0, dueByToday:0, dueToday:0, mandals:{}, rows:[] };
+    o.assigned++; o.mandals[r.mandal] = true;
+    if(f) o.filed++;
+    if(r.dueDate && r.dueDate <= t) o.dueByToday++;
+    if(r.dueDate === t) o.dueToday++;
+    o.rows.push({ id:r.id, mandal:r.mandal, gp:r.gp, dueDate:r.dueDate,
+                  filed:!!f, filedOn:f ? f.date : '', score:f ? f.score : null,
+                  filedBy:f ? String(f.officer || '').replace(/\s*\(\d+\)$/, '') : '' });
+  });
+  const list = Object.keys(byPhone).map(ph => {
+    const o = byPhone[ph];
+    o.mandals = Object.keys(o.mandals).sort();
+    o.behind = Math.max(0, o.dueByToday - o.filed);
+    o.left = o.assigned - o.filed;
+    o.rows.sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)) ||
+                          (a.mandal < b.mandal ? -1 : a.mandal > b.mandal ? 1
+                         : (a.gp < b.gp ? -1 : a.gp > b.gp ? 1 : 0)));
+    return o;
+  }).sort((a, b) => (b.behind - a.behind) || (b.left - a.left) || (a.name < b.name ? -1 : 1));
+
+  /* THE DISTRICT COUNTS VILLAGES, NEVER ROWS. The MPO and the MPDO are named
+     against the same village and it is one village (rule 9) — adding the
+     officers' lines together would report a mandal's pendency twice over. */
+  const dueByToday = {}, dueTodayV = {};
+  rows.forEach(r => { const k = vkey_(r.mandal, r.gp);
+    if(r.dueDate && r.dueDate <= t) dueByToday[k] = true;
+    if(r.dueDate === t) dueTodayV[k] = true; });
+  const nV = Object.keys(villages).length, nD = Object.keys(done).length;
+  const days = schDays_(ym, t);
+
+  /* mandal by mandal, for the Gantt */
+  const byM = {};
+  rows.forEach(r => { const k = vkey_(r.mandal, r.gp);
+    const o = byM[r.mandal] = byM[r.mandal] || { mandal:r.mandal, seen:{}, total:0, done:0, officers:{} };
+    o.officers[r.phone] = r.name + ' (' + r.role + ')';
+    if(o.seen[k]) return; o.seen[k] = true; o.total++; if(done[k]) o.done++; });
+  const mandals = Object.keys(byM).sort().map(k => ({ mandal:k, total:byM[k].total, done:byM[k].done,
+    officers:Object.keys(byM[k].officers).map(p => byM[k].officers[p]).sort() }));
+
+  /* the day plan: how many villages fall due on each day of the month */
+  const perDay = {};
+  rows.forEach(r => { if(!r.dueDate) return;
+    const k = vkey_(r.mandal, r.gp);
+    perDay[r.dueDate] = perDay[r.dueDate] || {}; perDay[r.dueDate][k] = !!done[k]; });
+  const plan = Object.keys(perDay).sort().map(d => ({ date:d,
+    due:Object.keys(perDay[d]).length,
+    filed:Object.keys(perDay[d]).filter(k => perDay[d][k]).length }));
+
+  return { ym:ym, today:t, from:cycleFrom_(ym), to:cycleTo_(ym),
+    villages:nV, filed:nD, left:nV - nD,
+    dueByToday:Object.keys(dueByToday).length, dueToday:Object.keys(dueTodayV).length,
+    behind:Math.max(0, Object.keys(dueByToday).length - nD),
+    workingDaysLeft:days.length,
+    needPerDay:days.length ? Math.ceil((nV - nD) / days.length) : (nV - nD),
+    officers:list, mandals:mandals, plan:plan, rows:rows.length };
+}
+
+/* the receipts, by month */
+function schAcks_(ym){
+  const sh = sheet_('SchedAck', SCH_ACK_HEAD), m = headMap_(sh, SCH_ACK_HEAD);
+  const v = sh.getDataRange().getValues();
+  const out = {};
+  for(let i = 1; i < v.length; i++)
+    if(ymText_(v[i][m.ix.ym]) === ym) out[phone10_(v[i][m.ix.phone])] = String(v[i][m.ix.ackAt] || '');
+  return out;
+}
+
+/* what the Collector has sent by hand, newest first */
+function schNudges_(ym, phone){
+  const sh = sheet_('Nudges', NUDGE_HEAD), m = headMap_(sh, NUDGE_HEAD);
+  const v = sh.getDataRange().getValues();
+  const out = [];
+  for(let i = v.length - 1; i >= 1 && out.length < 400; i--){
+    if(ymText_(v[i][m.ix.ym]) !== ym) continue;
+    const ph = phone10_(v[i][m.ix.phone]);
+    if(phone && ph !== phone10_(phone)) continue;
+    out.push({ at:i + 1, id:cell_(v[i], m.ix.id), date:dateText_(v[i][m.ix.date]), phone:ph,
+      name:cell_(v[i], m.ix.name), role:cell_(v[i], m.ix.role), mandal:cell_(v[i], m.ix.mandal),
+      kind:cell_(v[i], m.ix.kind), text:cell_(v[i], m.ix.text), sentBy:cell_(v[i], m.ix.sentBy),
+      sentAt:String(v[i][m.ix.sentAt] || ''), emailedAt:String(v[i][m.ix.emailedAt] || ''),
+      seenAt:String(v[i][m.ix.seenAt] || '') });
+  }
+  return out;
+}
+
+/* ---- the register, read ----
+   An officer is given his own lines and nothing else. The Collector, with
+   all=1, is given the whole picture. A Panchayat Secretary has no lines by the
+   order, so `mine` comes back null and the app simply shows him nothing —
+   there is no empty table to explain. */
+function schRegister_(u, p){
+  const ym = /^\d{4}-\d{2}$/.test(String((p && p.ym) || '')) ? String(p.ym) : cycleYm_(today_());
+  if(!ym) return json_({ ok:true, ym:'', mine:null, note:'No reporting month is open yet.' });
+  const all = (p && p.all === '1') && u.role === 'COLLECTOR';
+  const pace = schPace_(ym, today_());
+
+  if(all){
+    const acks = schAcks_(ym);
+    pace.officers.forEach(o => { o.ackAt = acks[o.phone] || ''; });
+    return json_({ ok:true, ym:ym, district:pace, nudges:schNudges_(ym, ''),
+      caps:SCH_CAP, acknowledged:Object.keys(acks).length,
+      cycle:{ from:cycleFrom_(ym), to:cycleTo_(ym) } });
+  }
+
+  const mineRow = pace.officers.filter(o => o.phone === u.phone)[0] || null;
+  const acks = schAcks_(ym);
+  const nudges = schNudges_(ym, u.phone).filter(n => !n.seenAt)
+    .map(n => ({ id:n.id, kind:n.kind, text:n.text, sentAt:n.sentAt, sentBy:n.sentBy }));
+  /* THE PHONE'S CLOCK IS NOT EVIDENCE (rule 1), and a schedule is read in
+     days. A handset eleven minutes fast once recorded marks in the future; a
+     handset a day out would tell an honest officer that today's village was
+     due yesterday and paint his whole list red. The district's own day travels
+     with the schedule and the app judges by that. */
+  return json_({ ok:true, ym:ym, today:pace.today, from:cycleFrom_(ym), to:cycleTo_(ym),
+    mine: mineRow ? { assigned:mineRow.assigned, filed:mineRow.filed, left:mineRow.left,
+      dueByToday:mineRow.dueByToday, dueToday:mineRow.dueToday, behind:mineRow.behind,
+      mandals:mineRow.mandals, rows:mineRow.rows } : null,
+    acknowledged: !!acks[u.phone], ackAt:acks[u.phone] || '',
+    workingDaysLeft:pace.workingDaysLeft,
+    district:{ villages:pace.villages, filed:pace.filed, needPerDay:pace.needPerDay },
+    nudges:nudges,
+    /* THIS IS A PLAN OF WORK, NOT A CHARGE. The flag travels with the schedule
+       so the app can say so in the officer's own screen, and so that the day
+       the district decides otherwise it is decided here and in suite 25 rather
+       than by a word changing quietly in a template. */
+    sanction:false });
+}
+
+/* ---- the officer's receipt ----
+   Idempotent, one to a month. The handset's claim is kept, and the district's
+   own clock is what the register is read by — the phone's clock is not
+   evidence (rule 1). */
+function schAck_(b, u){
+  const ym = /^\d{4}-\d{2}$/.test(String(b.ym || '')) ? String(b.ym) : cycleYm_(today_());
+  if(!ym) return json_({ ok:false, error:'There is no reporting month open.' });
+  /* A RECEIPT FOR NOTHING IS NOT A RECEIPT. An officer with no villages on the
+     schedule — a Panchayat Secretary, an MSO, anybody the order did not name —
+     has nothing to acknowledge, and a row against his number would read on the
+     console as one more officer who had seen a schedule he was never given. */
+  if(!schRows_(ym).some(r => r.status === 'ACTIVE' && r.phone === u.phone))
+    return json_({ ok:false, error:'You hold no villages on this month’s filing schedule.' });
+  const sh = sheet_('SchedAck', SCH_ACK_HEAD), m = headMap_(sh, SCH_ACK_HEAD);
+  const lock = LockService.getScriptLock();
+  try{ lock.waitLock(20000); }catch(err){ return json_({ ok:false, error:'busy — try again' }); }
+  try{
+    const v = sh.getDataRange().getValues();
+    for(let i = 1; i < v.length; i++)
+      if(ymText_(v[i][m.ix.ym]) === ym && phone10_(v[i][m.ix.phone]) === u.phone)
+        return json_({ ok:true, already:true, ym:ym, ackAt:String(v[i][m.ix.ackAt] || '') });
+    const row = new Array(m.width).fill('');
+    const put = (k, val) => { if(m.ix[k] >= 0) row[m.ix[k]] = val; };
+    put('ym', "'" + ym); put('phone', "'" + u.phone); put('name', u.name);
+    put('role', u.role); put('mandal', u.mandal || '');
+    put('ackAt', String(b.at || new Date().toISOString()));
+    put('receivedAt', new Date().toISOString());
+    sh.appendRow(row);
+  } finally { lock.releaseLock(); }
+  return json_({ ok:true, ym:ym, ackAt:new Date().toISOString() });
+}
+
+/* ---- the officer tells the district he has read a message ---- */
+function schSeen_(b, u){
+  const ids = Array.isArray(b.ids) ? b.ids.slice(0, 40).map(String) : [];
+  if(!ids.length) return json_({ ok:true, done:0 });
+  const sh = sheet_('Nudges', NUDGE_HEAD), m = headMap_(sh, NUDGE_HEAD);
+  const v = sh.getDataRange().getValues();
+  const now = new Date().toISOString();
+  let done = 0;
+  for(let i = 1; i < v.length; i++){
+    if(ids.indexOf(cell_(v[i], m.ix.id)) < 0) continue;
+    if(phone10_(v[i][m.ix.phone]) !== u.phone) continue;        /* one's own alone */
+    if(String(v[i][m.ix.seenAt] || '')){ done++; continue; }    /* idempotent */
+    if(m.ix.seenAt >= 0) sh.getRange(i + 1, m.ix.seenAt + 1).setValue(now);
+    done++;
+  }
+  return json_({ ok:true, done:done });
+}
+
+/* ----------------------------------------------------------------------------
+ * THE COLLECTOR'S OWN HAND — a reminder, or a message in his own words.
+ *
+ * ON THE WORD "PUSH". A true push — one that lights a handset with the app
+ * shut — needs a VAPID key signed ES256, and Apps Script signs RSA and HMAC
+ * only. There is no push sender behind this register and this does not pretend
+ * to be one: what it does is send the mail at once and put the message in the
+ * officer's app, where he sees it the next time he opens it and where the
+ * district can read back the moment he saw it. The service worker already
+ * carries a push handler for the day a sender exists, and nothing here will
+ * need changing then.
+ *
+ * IT IS NOT AN INSTRUMENT. A reminder here is the same informal thing the
+ * attendance ladder's first two misses draw: unnumbered, off the notice
+ * register, no lock and no debit.
+ * ------------------------------------------------------------------------- */
+function schNudge_(b, u){
+  if(u.role !== 'COLLECTOR')
+    return json_({ ok:false, error:'A reminder against the filing schedule is sent by the Collector alone.' });
+  const ym = /^\d{4}-\d{2}$/.test(String(b.ym || '')) ? String(b.ym) : cycleYm_(today_());
+  if(!ym) return json_({ ok:false, error:'There is no reporting month open.' });
+  const kind = String(b.nudge || 'REMINDER').toUpperCase() === 'MESSAGE' ? 'MESSAGE' : 'REMINDER';
+  const text = String(b.text || '').trim().slice(0, 1200);
+  if(kind === 'MESSAGE' && !text)
+    return json_({ ok:false, error:'A message needs something in it — that is the whole of what he reads.' });
+
+  const pace = schPace_(ym, today_());
+  const want = String(b.to || '').trim();
+  let targets;
+  if(want === 'behind')    targets = pace.officers.filter(o => o.behind > 0);
+  else if(want === 'all')  targets = pace.officers.slice();
+  else if(want === 'left') targets = pace.officers.filter(o => o.left > 0);
+  else                     targets = pace.officers.filter(o => o.phone === phone10_(want));
+  if(!targets.length) return json_({ ok:false, error:'Nobody on the schedule answers to that — nothing was sent.' });
+
+  const emails = {}; schOfficers_().forEach(o => { emails[o.phone] = o.email; });
+  const sh = sheet_('Nudges', NUDGE_HEAD), m = headMap_(sh, NUDGE_HEAD);
+  const today = today_(), now = new Date().toISOString();
+  const by = u.name + ' (' + u.phone + ')';
+  let sent = 0, mailed = 0;
+
+  targets.forEach(o => {
+    const id = 'NDG-' + today + '-' + o.phone + '-' + kind.charAt(0) + '-' + Utilities.getUuid().slice(0, 6);
+    const body = text || schReasonText_(o, pace);
+    const row = new Array(m.width).fill('');
+    const put = (k, val) => { if(m.ix[k] >= 0) row[m.ix[k]] = val; };
+    put('id', id); put('ym', "'" + ym); put('date', "'" + today); put('phone', "'" + o.phone);
+    put('name', o.name); put('role', o.role); put('mandal', (o.mandals || []).join(', '));
+    put('kind', kind); put('text', body); put('sentBy', by); put('sentAt', now);
+    put('receivedAt', now);
+    const to = emails[o.phone] || '';
+    if(to && to.indexOf('@') > 0){
+      try{
+        MailApp.sendEmail(to,
+          'SJSP · ' + (kind === 'MESSAGE' ? 'a message from the Collector' : 'your filing schedule') +
+            ' · ' + dmy_(today),
+          body, { htmlBody: schMailBody_(o, pace, body, kind, by) });
+        put('emailedAt', now); mailed++;
+      }catch(err){}
+    }
+    sh.appendRow(row); sent++;
+  });
+  admAudit_('SCHEDULE_' + kind, ym, sent + ' sent to ' + (want || 'one officer') + ' (' + mailed + ' by mail)');
+  return json_({ ok:true, sent:sent, mailed:mailed, kind:kind,
+                 to:targets.map(o => ({ phone:o.phone, name:o.name, role:o.role, behind:o.behind })) });
+}
+
+/* What a reminder says when the Collector has not written one himself. It
+   names the work and the pace, and it NAMES NO SANCTION — the same cut the
+   attendance reminder was given on 28.08.2026, and for the same reason: a
+   reminder is not the place to rehearse a sanction that has not arisen and,
+   here, cannot arise at all. */
+function schReasonText_(o, pace){
+  return 'Village evaluation schedule: ' + o.assigned + ' village(s) assigned, ' +
+    o.filed + ' filed, ' + o.left + ' still to file. ' +
+    (o.behind ? o.behind + ' village(s) are past the day they were scheduled for. '
+              : 'You are on pace. ') +
+    pace.workingDaysLeft + ' working day(s) remain in the month.';
+}
+
+function schMailBody_(o, pace, body, kind, by){
+  const rowsLeft = o.rows.filter(r => !r.filed).slice(0, 60);
+  const secs =
+    emailSec_(kind === 'MESSAGE' ? 'From the Collector' : 'Where you stand',
+      '<b>' + body + '</b>', kind === 'MESSAGE' ? '#6D28D9' : '#57647D') +
+    emailSec_('Your schedule', emailStats_([
+      { label:'Assigned', value:o.assigned, tone:'info' },
+      { label:'Filed', value:o.filed, tone:o.filed >= o.dueByToday ? 'good' : 'warn' },
+      { label:'Behind the day', value:o.behind, tone:o.behind ? 'bad' : 'good',
+        sub:pace.workingDaysLeft + ' working days left' }])) +
+    (rowsLeft.length ? emailSec_('Still to file',
+      emailTable_(['Scheduled for', 'Village', 'Mandal'],
+        rowsLeft.map(r => [r.dueDate ? dmy_(r.dueDate) : '—', r.gp, r.mandal])) +
+      (o.left > rowsLeft.length ? '<div style="margin-top:6px;color:#57647D">…and ' +
+        (o.left - rowsLeft.length) + ' more.</div>' : '')) : '') +
+    /* A REMINDER NAMES NO SANCTION. The same cut the attendance reminder was
+       given on 28.08.2026: it says what is asked and it does not rehearse an
+       instrument — not even to say that one does not arise, because an officer
+       reading the words "show-cause notice" in a reminder has been made to
+       think about a show-cause notice. What this is, is said plainly; what it
+       is not is left unsaid, and suite 25 asserts the words are absent. */
+    emailSec_('What is asked', 'This is the district’s plan of work for the month. ' +
+      'File the 100-mark evaluation for each village above in the SJSP app; the register reads only ' +
+      'what is filed. Where a village cannot be reached on its day, file it on the next.');
+  return emailShell_(kind === 'MESSAGE' ? 'A message from the Collector' : 'Your village filing schedule',
+    o.name + ' · ' + o.role + ' · ' + pace.ym + ' (' + dmy_(pace.from) + ' – ' + dmy_(pace.to) + ')' +
+    (kind === 'MESSAGE' && by ? ' · ' + by : ''), secs);
+}
+
+/* ----------------------------------------------------------------------------
+ * THE DAILY REMINDER.
+ *
+ * One mail a morning to an officer who is behind his schedule or has villages
+ * falling due today. Working days only, and one to an officer to a day — the
+ * Reminders tab is what makes the second run of a nervous morning cost nothing
+ * (rule 8). An officer whose own list is finished is left alone entirely.
+ *
+ * It REPLACES the mandal-wide filing reminder for the officers it reaches, by
+ * the direction of 17.09.2026: two mails a morning about the same villages is
+ * how a district learns to read neither. villageFilingReminders reads
+ * schScheduled_ and stands down for them; the MSO and the Panchayat Secretary,
+ * whom this schedule does not reach, keep the reminder they always had.
+ * ------------------------------------------------------------------------- */
+function scheduleReminders(){
+  const today = today_();
+  const ym = cycleYm_(today);
+  if(!ym){ Logger.log('Before the register opened — there is no month to schedule into.'); return; }
+  if(!isWorkingDay_(today)){ Logger.log('Off day — no schedule reminders.'); return; }
+  const pace = schPace_(ym, today);
+  if(!pace.officers.length){ Logger.log('No schedule published for ' + ym + '.'); return; }
+
+  const rsh = sheet_('Reminders', R_HEAD), rm = headMap_(rsh, R_HEAD);
+  const rv = rsh.getDataRange().getValues();
+  const already = {};
+  for(let i = 1; i < rv.length; i++)
+    if(dateText_(rv[i][rm.ix.date]) === today && String(rv[i][rm.ix.kind]) === 'SCHEDULE')
+      already[phone10_(rv[i][rm.ix.phone])] = true;
+
+  const emails = {}; schOfficers_().forEach(o => { emails[o.phone] = o.email; });
+  let sent = 0, mailed = 0;
+  pace.officers.forEach(o => {
+    if(already[o.phone]) return;
+    if(!o.left) return;                       /* his list is done — he is left alone */
+    if(!o.behind && !o.dueToday) return;      /* on pace with nothing due — no mail */
+    const why = schReasonText_(o, pace);
+    const row = new Array(rm.width).fill('');
+    const put = (k, val) => { if(rm.ix[k] >= 0) row[rm.ix[k]] = val; };
+    put('id', 'REM-S-' + today + '-' + o.phone); put('date', "'" + today); put('phone', "'" + o.phone);
+    put('name', o.name); put('role', o.role); put('mandal', (o.mandals || []).join(', '));
+    put('miss', o.behind); put('kind', 'SCHEDULE'); put('reason', why);
+    put('sentAt', new Date().toISOString());
+    const to = emails[o.phone] || '';
+    if(to && to.indexOf('@') > 0){
+      try{
+        MailApp.sendEmail(to, 'SJSP · your filing schedule · ' + o.filed + ' of ' + o.assigned +
+          ' filed' + (o.behind ? ' · ' + o.behind + ' behind' : '') + ' · ' + dmy_(today),
+          why, { htmlBody: schMailBody_(o, pace, why, 'REMINDER', '') });
+        put('emailedAt', new Date().toISOString()); mailed++;
+      }catch(err){}
+    }
+    rsh.appendRow(row); sent++;
+  });
+  Logger.log(pace.left + ' village(s) still to file for ' + ym + '; ' +
+             sent + ' officer(s) reminded, ' + mailed + ' mailed.');
+}
+
+/* Who is under a schedule this month. The mandal-wide filing reminder reads
+   this and stands down for them, so nobody is chased twice in one morning for
+   the same villages. */
+function schScheduled_(ym){
+  const out = {};
+  schRows_(ym).forEach(r => { if(r.status === 'ACTIVE') out[r.phone] = true; });
+  return out;
+}
+
+function installScheduleTrigger(){
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if(t.getHandlerFunction() === 'scheduleReminders') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('scheduleReminders').timeBased().everyDays(1).atHour(9).create();
+  Logger.log('scheduleReminders installed ~09:00 (Asia/Calcutta) — every working day, one mail ' +
+             'to an officer who is behind his schedule or has a village due today.');
+}
+
 function dailyCollectorReport(){
   const today = today_();
   const props = PropertiesService.getScriptProperties();
@@ -1678,7 +2493,11 @@ function installReportTriggers(){
   });
   ScriptApp.newTrigger('villageFilingReminders').timeBased().everyDays(1).atHour(10).create();
   ScriptApp.newTrigger('dailyCollectorReport').timeBased().everyDays(1).atHour(19).create();
+  /* the schedule reminder goes an hour BEFORE the mandal-wide one, because it
+     is the one that stands the other down for the officers it reaches */
+  installScheduleTrigger();
   Logger.log('Report triggers installed (Asia/Calcutta):\n' +
+    '  scheduleReminders      ~09:00 — every working day, to an officer behind his own schedule.\n' +
     '  villageFilingReminders ~10:00 — from the ' + FILING_REMIND_FROM + 'th, every working day.\n' +
     '  dailyCollectorReport   ~19:00 — one structured mail, once a day, guarded against double sends.');
 }
@@ -2425,6 +3244,9 @@ function doGet(e){
 
   /* the plan register: an officer sees his own line, the district sees the roll */
   if(p.op === 'gpdp') return gpdpRegister_(u, p.year);
+  /* the filing schedule: an officer sees his own villages and his own pace,
+     the Collector with all=1 sees the district's */
+  if(p.op === 'schedule') return schRegister_(u, p);
   if(p.op === 'advisory') return advisoryRegister_(u, p.id);
   /* the officer roll, for the console's Admin view */
   if(p.op === 'roll') return rollRegister_(u);
@@ -3583,6 +4405,16 @@ function doPost(e){
   if(b.kind === 'advAck') return ackAdvisory_(b, u);
   if(b.kind === 'advPublish') return publishAdvisory_(b, u);
 
+  /* THE FILING SCHEDULE. The two receipts stand above the evaluation guard for
+     the same reason the advisory's does — a receipt is not an evaluation. The
+     two that WRITE a schedule re-check the Collector's own role on the server,
+     because the console is a web page and its convenience is never the
+     authority (rule 6). */
+  if(b.kind === 'schedAck')      return schAck_(b, u);
+  if(b.kind === 'schedSeen')     return schSeen_(b, u);
+  if(b.kind === 'schedulePublish') return schPublish_(b, u);
+  if(b.kind === 'schedNudge')    return schNudge_(b, u);
+
   /* the officer roll from the console. Each re-checks the Collector's own
      role on the server; none of them deletes anything. */
   if(b.kind === 'userCreate') return createUser_(b, u);
@@ -3736,6 +4568,9 @@ function saveInspection_(b, u){
 
   if(at > 0) sh.getRange(at + 1, 1, 1, m.width).setValues([row]);
   else sh.appendRow(row);
+  /* his filing schedule now reads differently — drop the held reading so the
+     next screen he opens shows the village closed rather than still owed */
+  schBust_(r.date);
   return json_({ ok:true, photoFolder: r.photoFolder || existingFolder || '' });
 }
 

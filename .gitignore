@@ -14,3 +14,4 @@ node_modules/
 # Deterministic and rebuilt on demand, so it is not carried in the repo.
 tests/fixture-dashboard.json
 tests/fixture-docs.json
+tests/fixture-schedule.json

@@ -33,7 +33,10 @@ function serve(){
   });
 }
 
-const VIEWS = ['overview', 'attendance', 'villages', 'leave', 'notices', 'map', 'admin'];
+const VIEWS = ['overview', 'attendance', 'villages', 'schedule', 'leave', 'notices', 'map', 'admin'];
+/* the filing schedule is fetched by its own call, so it needs its own fixture —
+   built by fixture-dashboard.js off the same real backend run */
+const SCHEDFIX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-schedule.json'), 'utf8'));
 
 /* THE OFFICER ROLL the Admin view reads. Shaped like op=roll's answer, with
    the three states that view has to draw: a man off the roll, a man with no
@@ -77,9 +80,12 @@ const SIZES = [{ w:2560, h:1440, n:'2560' }, { w:1500, h:1000, n:'1500' }, { w:3
 
       const page = await ctx.newPage();
       /* the district's own reply, served locally */
-      await page.route('**/mock.district/**', r =>
+      await page.route('**/mock.district/**', r => {
+        const u = r.request().url();
         r.fulfill({ status: 200, contentType: 'application/json',
-          body: JSON.stringify(/op=roll/.test(r.request().url()) ? ROLLFIX : payload) }));
+          body: JSON.stringify(/op=roll/.test(u) ? ROLLFIX
+                             : /op=schedule/.test(u) ? SCHEDFIX : payload) });
+      });
       /* no map tiles over the wire in a render check */
       await page.route('**tile.openstreetmap.org**', r => r.abort());
 

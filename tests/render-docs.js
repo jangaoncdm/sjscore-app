@@ -125,6 +125,11 @@ function makeRouter(state){
                                              url:'https://drive.mock/plan.pdf',
                                              uploadedAt:'2026-08-23T11:45:00.000Z' });
       if(b.kind === 'advPublish') return reply({ ok:true, id:'ADV-20260823-tst', url:'https://drive.mock/adv.pdf', title:b.title });
+      if(b.kind === 'schedAck')  return reply({ ok:true, ym:b.ym, ackAt:'2026-08-23T11:50:00.000Z' });
+      if(b.kind === 'schedSeen') return reply({ ok:true, done:(b.ids||[]).length });
+      if(b.kind === 'schedNudge') return reply({ ok:true, sent:1, mailed:1,
+                                                 to:[{ phone:b.to, name:'officer', role:'MPDO', behind:1 }] });
+      if(b.kind === 'schedulePublish') return reply(Object.assign({ ok:true }, state.pub || {}));
       return reply({ ok:true });
     }
     if(/op=weather/.test(url))  return reply(state.wx);
@@ -139,6 +144,7 @@ function makeRouter(state){
         return reply(FIX.advRetired);
       return reply(state.adv);
     }
+    if(/op=schedule/.test(url)) return reply(state.sched || { ok:true, ym:'', mine:null });
     if(/op=dashboard/.test(url))return reply(state.dash);
     if(/op=list/.test(url))     return reply({ ok:true, rows:[] });
     if(/op=attendance/.test(url))return reply({ ok:true, rows:[] });
@@ -403,6 +409,150 @@ function makeRouter(state){
     const q = await page.evaluate(() => (JSON.parse(localStorage.getItem('sjf5') || '{}').advAckQ || []).length);
     check('the receipt is held on the phone and retried, not dropped', q >= 1, q + ' queued');
     await shot(page, 'app-advisory-not-repeated', true);
+    await ctx.close();
+  }
+
+  /* ============ THE FILING SCHEDULE, ON THE OFFICER'S PHONE ============
+     Ordered 17.09.2026. The officer driven here is an MPDO with villages on
+     the schedule, a day against each of them and a message from the Collector
+     waiting — the Secretary above has none of it by the order, which is itself
+     the point: nothing was assigned to a man who may not file an evaluation.
+
+     Four things this section looks at:
+       1. the schedule opens by itself and can be acknowledged, once;
+       2. THE RECEIPT IS THE PHONE'S. Pressing it closes the sheet at once and
+          the card turns, whatever the district answers — the advisory's lesson,
+          which had to be learnt twice;
+       3. his own villages, day by day, and a village of his opens its
+          evaluation from that list;
+       4. IT LOCKS NOTHING. The app is fully usable behind the sheet, and a
+          later morning where he is behind draws a card and no gate. */
+  console.log('\nTHE FILING SCHEDULE — an MPDO with villages on it');
+  SECTION = 'The filing schedule';
+  {
+    const state = { posts: [], gpdp:{ ok:true, year:'2026-27', due:false, mine:null },
+                    adv:{ ok:true, advisory:null, acknowledged:true, recent:[] },
+                    dash:{}, wx: WXMINE, sched: FIX.schedOfficer };
+    const ctx = await browser.newContext({ viewport:{ width:390, height:844 }, deviceScaleFactor:2 });
+    const page = await ctx.newPage();
+    const errs = [];
+    page.on('pageerror', e => errs.push(String(e)));
+    const router = makeRouter(state);
+    await page.route('**/mock.district/**', router);
+    await page.route('**script.google.com/**', router);
+
+    await page.goto(base + '/manifest.webmanifest', { waitUntil:'domcontentloaded' });
+    await page.evaluate(off => {
+      const d = new Date();
+      const today = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+      const att = {};
+      att[today] = { id:'A1', date:today, ts:new Date().toISOString(), lat:17.72, lng:79.15,
+                     acc:14, verified:true, status:'PRESENT', sync:'synced' };
+      localStorage.setItem('sjf5', JSON.stringify({
+        url:'https://mock.district/exec',
+        session:{ token:'T', user: off },
+        records:{}, att:att, cache:[], master:[], leave:[], prefs:{ sun:0, big:0 }
+      }));
+    }, FIX.schedWho);
+    await page.goto(base + '/index.html', { waitUntil:'domcontentloaded' });
+    await page.waitForSelector('#app:not([hidden])', { timeout:20000 });
+    await page.waitForTimeout(1400);
+
+    const mine = (FIX.schedOfficer && FIX.schedOfficer.mine) || {};
+
+    /* --- 1. it opens by itself --- */
+    const on = await page.$eval('#sheet', el => el.classList.contains('on')).catch(() => false);
+    check('the filing schedule opens by itself on the home screen', on);
+    const txt = on ? await page.$eval('#sheetBody', el => el.innerText) : '';
+    check('it says how many villages are his', txt.indexOf(String(mine.assigned)) >= 0, String(mine.assigned) + ' assigned');
+    check('and names the reporting month with its window', /10 Aug|9 Sep/i.test(txt), txt.split('\n').slice(0, 4).join(' · '));
+    check('the Collector’s message is in it', /headquarters villages first/i.test(txt));
+    /* A REMINDER NAMES NO SANCTION, and neither does this sheet. */
+    check('it names no show-cause notice', !/show.?cause/i.test(txt));
+    check('it names no casual leave', !/casual leave/i.test(txt));
+    check('and it says plainly that it does not lock the app', /does not lock/i.test(txt));
+    await shot(page, 'app-schedule-opens');
+
+    /* --- 2. IT LOCKS NOTHING. The sheet has a Later and the app is behind it. --- */
+    const hasLater = await page.$('#schedLater');
+    check('there is a Later — an officer on a village road is not held by a modal', !!hasLater);
+    await page.click('#schedLater');
+    await page.waitForTimeout(400);
+    const shut = await page.$eval('#sheet', el => !el.classList.contains('on'));
+    check('dismissing it returns him to a working app', shut);
+    const homeUsable = await page.$eval('#homeBody', el => el.innerText.length > 40);
+    check('the home screen is fully usable with the schedule unacknowledged — no gate', homeUsable);
+    const cardTxt = await page.$eval('#homeBody', el => el.innerText);
+    check('and the card stays pinned on the home screen until he answers it',
+      /filing schedule/i.test(cardTxt), cardTxt.split('\n').slice(0, 8).join(' · '));
+    await shot(page, 'app-schedule-card-pinned', true);
+
+    /* --- 3. his own list, day by day, and a village opens from it --- */
+    await page.click('[data-sched]');
+    await page.waitForTimeout(400);
+    await page.click('#schedOpenList');
+    await page.waitForTimeout(500);
+    const listTxt = await page.$eval('#sheetBody', el => el.innerText);
+    const firstUnfiled = ((mine.rows || []).filter(r => !r.filed)[0] || {});
+    const firstFiled   = ((mine.rows || []).filter(r => r.filed)[0] || {});
+    check('the list names a village he has already filed', !!firstFiled.gp && listTxt.indexOf(firstFiled.gp) >= 0, firstFiled.gp || '—');
+    check('and one he has not', !!firstUnfiled.gp && listTxt.indexOf(firstUnfiled.gp) >= 0, firstUnfiled.gp || '—');
+    check('a filed line carries the day it was filed and its score',
+      /filed/i.test(listTxt) && new RegExp(String(firstFiled.score || '')).test(listTxt), String(firstFiled.score || ''));
+    await shot(page, 'app-schedule-list');
+
+    const rows = await page.$$('#sheetBody [data-schedgp]');
+    check('every village still to file is tappable straight into its evaluation',
+      rows.length === (mine.left || 0), rows.length + ' tappable, ' + mine.left + ' left to file');
+    if(rows.length){
+      await rows[0].click();
+      await page.waitForTimeout(700);
+      const onInspect = await page.$eval('#s-inspect', el => el.classList.contains('on')).catch(() => false);
+      check('tapping one opens the 100-mark evaluation for that village', onInspect);
+      await shot(page, 'app-schedule-opens-the-evaluation');
+      const back = await page.$('#insBack button, #insBack');
+      if(back){ await back.click(); await page.waitForTimeout(500); }
+    }
+
+    /* --- 4. the receipt is the phone's --- */
+    await page.evaluate(() => { if(typeof go === 'function') go('home'); });
+    await page.waitForTimeout(400);
+    await page.click('[data-sched]');
+    await page.waitForTimeout(400);
+    const before = state.posts.filter(p => p.kind === 'schedAck').length;
+    await page.click('#schedAckBtn');
+    await page.waitForTimeout(900);
+    const closed = await page.$eval('#sheet', el => !el.classList.contains('on'));
+    check('pressing "I have seen this" closes the sheet at once', closed);
+    const sent = state.posts.filter(p => p.kind === 'schedAck');
+    check('and the district is told', sent.length === before + 1, sent.length + ' receipt(s) posted');
+    check('the receipt carries the reporting month it answers to',
+      !!sent.length && sent[sent.length - 1].ym === FIX.schedOfficer.ym, (sent[sent.length - 1] || {}).ym);
+    const after = await page.$eval('#homeBody', el => el.innerText);
+    check('the card turns without waiting to be told again by the district',
+      !/tap to read it/i.test(after), after.split('\n').slice(0, 8).join(' · '));
+    await shot(page, 'app-schedule-acknowledged', true);
+
+    /* it does not open a second time on this handset */
+    await page.reload({ waitUntil:'domcontentloaded' });
+    await page.waitForSelector('#app:not([hidden])', { timeout:20000 });
+    await page.waitForTimeout(1500);
+    const again = await page.$eval('#sheet', el => el.classList.contains('on'));
+    check('and it does not come back the next time he opens the app', !again);
+
+    /* --- 5. a later morning, behind his own days --- */
+    state.sched = FIX.schedOfficerLate;
+    await page.reload({ waitUntil:'domcontentloaded' });
+    await page.waitForSelector('#app:not([hidden])', { timeout:20000 });
+    await page.waitForTimeout(1600);
+    const late = await page.$eval('#homeBody', el => el.innerText);
+    const lateN = ((FIX.schedOfficerLate || {}).mine || {}).behind || 0;
+    check('five days on and behind, the card says so', /past (its|their) day/i.test(late), lateN + ' behind');
+    const gated = await page.$eval('#sheet', el => el.classList.contains('on'));
+    check('AND IT LOCKS NOTHING — no gate, no sheet, the app opens as it always did', !gated);
+    await shot(page, 'app-schedule-behind-pace', true);
+
+    check('the field app raised no script error on the schedule', errs.length === 0, errs.slice(0, 2).join(' | '));
     await ctx.close();
   }
 
