@@ -16,7 +16,7 @@ the rules below exist because exactly that happened in production.
 ## Run this before you finish anything
 
 ```bash
-npm test              # 1350 assertions, 25 suites, against the real backend files
+npm test              # 1372 assertions, 25 suites, against the real backend files
 node tests/ladder     # one suite, with its detail
 ```
 
@@ -457,6 +457,35 @@ road cannot come back as unacknowledged and set the card chasing him again. A
 schedule with no `ym` is never shown at all: the handset remembers by month.
 One sheet to an opening — the circular outranks the schedule and the schedule
 outranks the plan.
+
+**The day the work begins is the Collector's, not the calendar's.** A schedule
+published on a Friday afternoon and starting that afternoon asks for village
+visits nobody was given notice of — the district's order of 18.09.2026 was to
+plan from the 21st. `from` on a publish or a re-spread names that day ("Begin
+on" in the console). It can only move the start **later**: a date already gone
+cannot be worked, so one is quietly read as today. The answer reports
+`startFrom`/`startTo`, so the console says *planned 21 Sept – 9 Oct, 15 working
+days* rather than the month's own edges.
+
+**The schedule is shared on the Collector's word.** *Send the schedule to all*
+mails every officer on it his own villages and his own days and opens the same
+in his app — the daily reminder chases only those behind, and a re-issue after
+a re-spread is how the whole district is told the dates have moved.
+
+**Three CSVs, off the console** (18.09.2026): the officer ledger, every line
+village by village, and the month day by day. They are CSV and not a workbook
+because CSV needs nothing from the network. Each counts **lines, not
+villages** — a mandal village is named against the MPO and the MPDO both — and
+each says so at its foot, so a total read off a spreadsheet cannot be mistaken
+for a village count.
+
+**The evening report carries where the schedule stands** — filed against
+scheduled, who is behind and by how much, how many have acknowledged it, and
+the officer ledger attached as a CSV. It says nothing about what falling behind
+costs, because it costs nothing. The section is **left out entirely** when no
+schedule has been published: a row of noughts reads as a district doing
+nothing, which is not the same thing as a district that has not been given a
+schedule.
 
 `scheduleReminders()` runs ~09:00 every working day and is installed by
 `installScheduleTrigger()`, which `installReportTriggers()` now also calls.

@@ -1800,11 +1800,19 @@ function schPublish_(b, u){
        laid out over the working days that remain. A date already given to an
        officer is his: only an explicit re-spread moves it. */
     const filed = schFiled_(ym);
+    /* THE DAY THE WORK IS TO BEGIN IS THE COLLECTOR'S, NOT THE CALENDAR'S.
+       A schedule published on a Friday afternoon and starting that afternoon
+       asks for village visits nobody was given notice of; the district's order
+       of 18.09.2026 was to plan from the 21st. `from` names that day. It can
+       only move the start LATER — a date already gone cannot be worked, and a
+       blank one means begin today, which is the old behaviour exactly. */
+    const asked = dateText_(b.from || '');
+    const start = (asked && asked > today_()) ? asked : today_();
     /* A MONTH ALREADY CLOSED HAS NO DAY LEFT TO GIVE, and a blank due date
        would read on every screen as "not scheduled" — which is the opposite of
        the truth. Everything then falls due on the month's own last working
        day, where it reads correctly as overdue. */
-    let days = schDays_(ym, today_());
+    let days = schDays_(ym, start);
     if(!days.length) days = schDays_(ym, cycleFrom_(ym)).slice(-1);
     const mine = {};
     existing.forEach(r => { if(r.status === 'ACTIVE') (mine[r.phone] = mine[r.phone] || []).push(r); });
@@ -1855,10 +1863,14 @@ function schPublish_(b, u){
     schBust_('');
     admAudit_('SCHEDULE_PUBLISH', ym,
       add.length + ' line(s) added, ' + moved + ' date(s) ' + (respread ? 're-spread' : 'set') +
-      ', ' + dropped + ' dropped; ' + villagesOf(after) + ' village(s) under schedule');
+      ' from ' + (days[0] || '—') + ', ' + dropped + ' dropped; ' +
+      villagesOf(after) + ' village(s) under schedule');
 
     return json_({ ok:true, ym:ym, from:cycleFrom_(ym), to:cycleTo_(ym),
       added:add.length, moved:moved, dropped:dropped, respread:respread,
+      /* the working days the plan actually runs over, so the console can say
+         "21 Sept – 9 Oct, 15 working days" rather than the month's own edges */
+      startFrom:days[0] || '', startTo:days[days.length - 1] || '',
       pending:alloc.pending, villages:villagesOf(after), rows:after.length,
       workingDaysLeft:days.length, offices:offices, notes:alloc.notes,
       unassigned:alloc.unassigned, caps:caps, at:now });
@@ -2439,6 +2451,38 @@ function dailyCollectorReport(){
     .forEach(r => vRows.push(['Evaluated', r[0], r[1], r[2], r[3], r[4], r[5], r[6]]));
   const vCsv = vRows.map(r => r.map(csvCell).join(',')).join('\r\n');
 
+  /* ---- THE FILING SCHEDULE, in the evening mail (ordered 18.09.2026) ----
+     Where the month's plan of work stands, officer by officer. It says who is
+     behind and by how much, and it says NOTHING about what that costs, because
+     it costs nothing: the schedule raises no notice, no debit and no lock. The
+     section is left out entirely when no schedule has been published, rather
+     than printing a row of noughts that reads as a district doing nothing. */
+  const schP = schPace_(ym, today);
+  const schBehind = (schP.officers || []).filter(o => o.behind > 0);
+  const schRowsCsv = [['Officer', 'Charge', 'Mandals', 'Assigned', 'Filed', 'Due by today', 'Behind', 'Acknowledged']];
+  const schAck = schAcks_(ym);
+  (schP.officers || []).forEach(o => schRowsCsv.push([o.name, o.role, (o.mandals || []).join('; '),
+    o.assigned, o.filed, o.dueByToday, o.behind, schAck[o.phone] ? 'yes' : 'no']));
+  const schCsv = schRowsCsv.map(r => r.map(csvCell).join(',')).join('\r\n');
+  const schSec = !schP.officers.length ? '' :
+    emailSec_('Filing schedule · ' + ym,
+      '<b>' + schP.filed + ' of ' + schP.villages + '</b> scheduled villages filed · <b style="color:' +
+      (schP.behind ? '#B91C1C' : '#15803D') + '">' + schP.behind + '</b> past the day set for them · ' +
+      schP.workingDaysLeft + ' working day' + (schP.workingDaysLeft === 1 ? '' : 's') + ' left, ' +
+      '<b>' + schP.needPerDay + '/day</b> needed · ' +
+      Object.keys(schAck).length + ' of ' + schP.officers.length + ' officers have acknowledged it.' +
+      (schBehind.length
+        ? emailTable_(['Officer', 'Charge', 'Assigned', 'Filed', 'Behind'],
+            schBehind.slice(0, 15).map(o => [o.name, o.role, String(o.assigned), String(o.filed),
+              '<b style="color:#B91C1C">' + o.behind + '</b>']), '#FDF0EF') +
+          (schBehind.length > 15 ? '<div style="margin-top:6px;color:#57647D">…and ' +
+            (schBehind.length - 15) + ' more.</div>' : '')
+        : '<div style="margin-top:8px;color:#15803D">Every officer is level with his own days.</div>') +
+      '<div style="margin-top:8px;color:#57647D;font-size:12px">A schedule is a plan of work. Falling behind it ' +
+      'draws a reminder and nothing else — no notice, no debit, no lock. The full schedule, officer by ' +
+      'officer, is attached.</div>',
+      '#0F766E', '#D8EEEB');
+
   const secs =
     emailPanel_('The district at ' + dmy_(today), tiles, '#4A40CE') +
     emailPanel_('Filing progress · ' + ym, emailGantt_(ganttRows, wd.gone, wdAll), '#0F766E') +
@@ -2454,6 +2498,7 @@ function dailyCollectorReport(){
       (gapRows.length ? emailTable_(['Mandal', 'Not marked'], gapRows.slice(0, 12), '#FFF7E8') : '') +
       '<div style="margin-top:8px;color:#57647D;font-size:12px">The officer-by-officer register — every name with its status — is attached and opens in Excel.</div>',
       '#B45309', '#F1E2C2') +
+    schSec +
     emailSec_('Awaiting your orders',
       '<b>' + nProp + '</b> notice proposal' + (nProp === 1 ? '' : 's') + ' (Console ▸ Notices)' +
       (nServedToday ? ' · ' + nServedToday + ' served today' : '') +
@@ -2467,7 +2512,9 @@ function dailyCollectorReport(){
         /* the BOM keeps Telugu names readable when Excel opens the files */
         attachments: [
           Utilities.newBlob('﻿' + attCsv, 'text/csv', 'SJGP_attendance_' + today + '.csv'),
-          Utilities.newBlob('﻿' + vCsv, 'text/csv', 'SJGP_villages_' + ym + '.csv')] });
+          Utilities.newBlob('﻿' + vCsv, 'text/csv', 'SJGP_villages_' + ym + '.csv')]
+          .concat(schP.officers.length
+            ? [Utilities.newBlob('﻿' + schCsv, 'text/csv', 'SJGP_schedule_' + ym + '.csv')] : []) });
     props.setProperty('LAST_DAILY_REPORT', today);
     Logger.log('Daily report sent to ' + to + '.');
   } else Logger.log('No address to send the daily report to.');

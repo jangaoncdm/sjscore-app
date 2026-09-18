@@ -378,7 +378,81 @@ module.exports = {
       .some(m => m.mandal === goneMandal && m.total > MANDALS.filter(x => x.name === goneMandal)[0].n),
       'and no count reads it any more');
 
-    /* ---- 13. an office with nobody on the roll takes nothing, and says so ---- */
+    /* ---- 13. THE DAY THE WORK BEGINS IS THE COLLECTOR'S ----
+       The district's order of 18.09.2026 was to plan from the 21st, not from
+       the Friday afternoon the button was pressed: a schedule that starts the
+       moment it is published asks for village visits nobody was given notice
+       of. `from` can only move the start LATER — a day already gone cannot be
+       worked — and it is read by a re-spread as well as by a first publish. */
+    const env5 = mock.load({ now: '2026-09-18T16:00:00+05:30' });
+    seed(env5);
+    const cdm5 = tokenFor(env5, '9000000001', '1111');
+    const p5 = env5.post({ kind: 'schedulePublish', token: cdm5, dpoCap: 12, dlpoCap: 12,
+                           from: '2026-09-21' });
+    t.eq(p5.ok, true, 'a publish may name the day the work begins');
+    t.eq(p5.startFrom, '2026-09-21', 'and the plan opens on that day, not on the day it was published');
+    t.eq(p5.startTo, '2026-10-09', 'running to the close of the reporting month');
+    const rows5 = schedRows(env5).filter(r => r.status === 'ACTIVE');
+    t.ok(rows5.every(r => r.dueDate >= '2026-09-21'),
+      'not one village is set for a day before the 21st');
+    t.ok(rows5.every(r => r.dueDate <= '2026-10-09'), 'nor past the 9th of October');
+    t.ok(!rows5.some(r => r.dueDate === '2026-09-20'), 'the Sunday is not a working day');
+    t.ok(!rows5.some(r => r.dueDate === '2026-09-19'), 'nor is the 19th, which is before the start');
+
+    /* a start already gone is ignored rather than obeyed */
+    const p5b = env5.post({ kind: 'schedulePublish', token: cdm5, dpoCap: 12, dlpoCap: 12,
+                            respread: true, from: '2026-09-11' });
+    t.eq(p5b.ok, true, 'a start in the past is accepted');
+    t.eq(p5b.startFrom, '2026-09-18', 'and quietly becomes today — a day already gone cannot be worked');
+
+    /* and a re-spread reads it too */
+    const p5c = env5.post({ kind: 'schedulePublish', token: cdm5, dpoCap: 12, dlpoCap: 12,
+                            respread: true, from: '2026-09-28' });
+    t.eq(p5c.startFrom, '2026-09-28', 'a re-spread begins where it is told to');
+    t.ok(schedRows(env5).filter(r => r.status === 'ACTIVE').every(r => r.dueDate >= '2026-09-28'),
+      'and every remaining village moves behind that day');
+
+    /* ---- 14. the schedule reaches EVERY officer when the Collector says so ---- */
+    const mailBefore = env5.outbox.length;
+    const all5 = env5.post({ kind: 'schedNudge', token: cdm5, to: 'all' });
+    t.eq(all5.ok, true, 'the Collector may send the schedule to everyone on it');
+    t.eq(all5.sent, env5.get('schedule', { token: cdm5, all: '1' }).district.officers.length,
+      'and it reaches every officer holding villages, not only those behind');
+    t.ok(env5.outbox.length > mailBefore, 'each one goes by mail at once');
+    const anyMail = env5.outbox.filter(m => /filing schedule/i.test(m.subject))[0];
+    t.ok(!!anyMail && /Still to file/.test(String(anyMail.htmlBody || '')),
+      'and each mail carries that officer’s own villages and days');
+
+    /* ---- 15. the evening report carries where the schedule stands ---- */
+    const env6 = mock.load({ now: '2026-09-18T19:05:00+05:30' });
+    seed(env6);
+    const cdm6 = tokenFor(env6, '9000000001', '1111');
+    env6.post({ kind: 'schedulePublish', token: cdm6, dpoCap: 12, dlpoCap: 12, from: '2026-09-21' });
+    env6.outbox.length = 0;
+    env6.ctx.dailyCollectorReport();
+    const daily = env6.outbox.filter(m => /daily report/i.test(m.subject))[0];
+    t.ok(!!daily, 'the Collector’s evening report goes');
+    const dh = String((daily || {}).htmlBody || '');
+    t.contains(dh, 'Filing schedule', 'and it now carries where the filing schedule stands');
+    t.contains(dh, 'acknowledged it', 'naming how many officers have acknowledged it');
+    t.contains(dh, 'no notice, no debit, no lock',
+      'and saying plainly that falling behind it costs nothing');
+    t.ok(((daily || {}).attachments || []).some(a => /SJGP_schedule_/.test(a.getName ? a.getName() : a.name || '')),
+      'the schedule, officer by officer, is attached as a CSV');
+
+    /* NOTHING IS SENT WHEN NOTHING IS PUBLISHED. A row of noughts in the
+       evening mail reads as a district doing nothing, which is not the same
+       thing as a district that has not been given a schedule. */
+    const env7 = mock.load({ now: '2026-09-18T19:05:00+05:30' });
+    seed(env7);
+    tokenFor(env7, '9000000001', '1111');
+    env7.ctx.dailyCollectorReport();
+    const daily7 = env7.outbox.filter(m => /daily report/i.test(m.subject))[0];
+    t.ok(!!daily7, 'the report still goes with no schedule published');
+    t.ok(!/Filing schedule/.test(String((daily7 || {}).htmlBody || '')),
+      'and leaves the section out entirely rather than printing noughts');
+
+    /* ---- 16. an office with nobody on the roll takes nothing, and says so ---- */
     const env4 = mock.load({ now: '2026-09-17T09:00:00+05:30' });
     seed(env4);
     const u4 = env4.sheets['Users'], h4 = u4.rows[0].map(String);
