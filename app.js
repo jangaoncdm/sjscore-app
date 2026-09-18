@@ -1100,7 +1100,7 @@ function attendanceStrip(){
 function viewerHome(u, ym){
   const gps = myGps();
   let h = banner('info', ICON.eye, 'You have view access. The evaluation is recorded by the Mandal Sanitation Task Force; what they file appears here.');
-  h += `<div class="group"><div class="hdr">${esc(monthName(ym))} · ${esc(monthSpan(ym))}</div><div class="card">`;
+  h += `<div class="group wide"><div class="hdr">${esc(monthName(ym))} · ${esc(monthSpan(ym))}</div><div class="card">`;
   gps.forEach(gp => {
     const rows = viewerRows(gp), cur = rows.find(r => r.ym === ym);
     if(cur){
@@ -1133,13 +1133,13 @@ function viewerHome(u, ym){
   }
   const rfRows = gps.flatMap(gp => viewerRows(gp)).filter(r => r.ym===ym && String(r.rf||'').trim());
   if(rfRows.length){
-    h += `<div class="group"><div class="hdr">Red flags recorded this month</div><div class="card">` +
+    h += `<div class="group wide"><div class="hdr">Red flags recorded this month</div><div class="card">` +
       rfRows.map(r => `<div class="row"><span class="ico" style="background:var(--flag)">${ICON.flag}</span>
         <span class="lbl"><b>${esc(r.gp)}</b><span>Grade capped at D</span></span>
         <span>${String(r.rf).split(' ').filter(Boolean).map(n=>`<i class="rfchip">RF-${esc(n)}</i>`).join('')}</span></div>`).join('') +
       `</div></div>`;
   }
-  h += `<div class="group"><button class="btn quiet" data-refresh="1">Refresh from district</button>
+  h += `<div class="group act"><button class="btn quiet" data-refresh="1">Refresh from district</button>
     <p style="font-size:12px;color:var(--ink-3);text-align:center;padding-top:9px">${DB.cacheAt?('Updated '+new Date(DB.cacheAt).toLocaleString('en-IN')):'Not loaded yet — tap Refresh'}</p></div>`;
   h += viewerTrend(gps[0]);
   return h;
@@ -1176,7 +1176,7 @@ function districtHome(u, ym){
   const totalGps = (DB.master||[]).length;
   let h='';
 
-  const startBtn = `<div class="group" style="margin-top:16px"><button class="btn${isDistrict(u.role)?' quiet':''}" id="homeStart">${ICON.plus}Start an inspection</button></div>`;
+  const startBtn = `<div class="group act" style="margin-top:16px"><button class="btn${isDistrict(u.role)?' quiet':''}" id="homeStart">${ICON.plus}Start an inspection</button></div>`;
   if(isMandal(u.role)) h += startBtn;
   h += `<div class="kpis" style="margin-top:18px">
     <div class="kpi"><div class="n num">${rows.length}${totalGps?`<span style="font-size:16px;color:var(--ink-3)"> / ${totalGps}</span>`:''}</div><div class="l">Gram Panchayats reported<br>${esc(monthName(ym))}<br><span style="color:var(--ink-3)">${esc(monthSpan(ym))}</span></div></div>
@@ -1187,7 +1187,7 @@ function districtHome(u, ym){
   if(isDistrict(u.role) && rows.length){
     const byM={};
     rows.forEach(r=>{ const m=r.mandal||'Unassigned'; (byM[m]=byM[m]||[]).push(r); });
-    h += `<div class="group"><div class="hdr">Mandal by mandal</div><div class="card">` +
+    h += `<div class="group wide"><div class="hdr">Mandal by mandal</div><div class="card">` +
       Object.keys(byM).sort().map(m=>{
         const list=byM[m];
         const a=Math.round(list.reduce((s,r)=>s+(+r.score||0),0)/list.length);
@@ -1199,7 +1199,7 @@ function districtHome(u, ym){
       }).join('') + `</div></div>`;
   }
   if(rf.length){
-    h += `<div class="group"><div class="hdr">Red flags this month</div><div class="card">` +
+    h += `<div class="group wide"><div class="hdr">Red flags this month</div><div class="card">` +
       rf.map(r=>`<div class="row"><span class="ico" style="background:var(--flag)">${ICON.flag}</span>
         <span class="lbl"><b>${esc(r.gp)}</b><span>${esc(r.mandal)}</span></span>
         <span>${String(r.rf).split(' ').filter(Boolean).map(n=>`<i class="rfchip">RF-${esc(n)}</i>`).join('')}</span></div>`).join('') +
@@ -1207,7 +1207,7 @@ function districtHome(u, ym){
   }
   if(rows.length){
     const sorted=[...rows].sort((a,b)=>(+b.score)-(+a.score));
-    h += `<div class="group"><div class="hdr">Ranking</div><div class="card">` +
+    h += `<div class="group wide"><div class="hdr">Ranking</div><div class="card">` +
       sorted.slice(0,60).map((r,i)=>`<div class="row">
         <span style="width:24px;font-size:13px;color:var(--ink-3);font-weight:700" class="num">${i+1}</span>
         <span class="lbl"><b>${esc(r.gp)}</b><span>${esc(r.mandal)} · ${esc(String(r.officer||'').replace(/\s*\(\d+\)$/,''))}</span></span>
@@ -1243,7 +1243,7 @@ function districtHome(u, ym){
         <span>Attendance, scores and leave, live on one screen. Yours alone.</span></span><span class="chev"></span></a>
     </div></div>`;
   }
-  h += `<div class="group"><button class="btn quiet" data-refresh="1">Refresh from district</button>
+  h += `<div class="group act"><button class="btn quiet" data-refresh="1">Refresh from district</button>
         <p style="font-size:12px;color:var(--ink-3);text-align:center;padding-top:9px">${DB.cacheAt?('Updated '+new Date(DB.cacheAt).toLocaleString('en-IN')):'Not loaded yet — tap Refresh'}</p></div>`;
 
   if(isDistrict(u.role)) h += startBtn;
