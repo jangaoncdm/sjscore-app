@@ -25,6 +25,19 @@ parse, then runs every suite. The suites load the backend **from disk** — they
 never hold their own copy of the logic, so a test cannot pass against a stale
 duplicate. The same command gates the GitHub Action; nothing untested deploys.
 
+**One command runs everything and writes down what it produced:**
+
+```bash
+node tests/report.js           # every pass, then Info/TEST-REPORT.md
+```
+
+It rebuilds the fixtures from the real backend, runs all seven passes, and
+writes a report that indexes every screenshot. Nothing in that file is
+retyped — each figure is read back out of the pass that produced it, so the
+report cannot drift from what actually ran. A pass it cannot run is reported
+as **skipped, with the reason**: a report that quietly omits what it could not
+run is worse than no report.
+
 **Render it and look**, with Playwright, at 2560, 1500 and 390 px. Do not ship
 CSS you have not seen — and the app has a render pass of its own now:
 
@@ -653,6 +666,40 @@ that is working.
 
 Restoring is deliberately not a menu item. Putting a backup back over a live
 government register is the Collector's own act, done by hand.
+
+## The QR, and why it is tested
+
+**A code nobody can check is worse than no code.** 134 officers install by
+photographing a square. If it is wrong they cannot install, and nobody finds
+out by looking — a QR is unreadable to a person by design, and the failure
+lands on all of them at once.
+
+So `tests/qr.js` is written here in the open (byte mode, level M, versions 1–6;
+version 7 adds a version-information block and is deliberately out of scope,
+because unused code that has never been decoded is what fails on the day it is
+needed). And `tests/qr-check.js` **decodes every square this project prints**
+with jsQR — an independent decoder — at three print sizes and turned a quarter
+round, then compares it **module for module against an independent encoder**.
+
+Both halves earned their place on the first run:
+
+- the decoder said only *"no code found"*, which is true of a thousand
+  different faults;
+- the **cross-encoder** said exactly which eight modules of 441 were wrong —
+  the format information, written with rows and columns swapped, while every
+  data module was already correct. Format bits are what tell a scanner the
+  mask, so nothing could read it.
+
+A third bug was caught before either: the Reed–Solomon generator polynomial
+came out low-to-high while the division needs high-to-low, and the spec's own
+worked example returned `123,166,70,…` instead of `165,36,212,…`.
+
+`tests/install-cards.js` writes the printable A5 card per register — the
+square, **the address in words as well**, because a card carrying only a QR
+cannot be checked by the person holding it or used by a handset whose camera
+has failed, and a line saying plainly that the square is **not a credential**.
+
+---
 
 ## The second register · Gram Panchayat
 

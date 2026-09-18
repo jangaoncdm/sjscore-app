@@ -125,7 +125,8 @@ both projects.
 
 ## 7. Publish the app
 
-Create `gp/config.js` in the repository:
+Copy `gp/config.example.js` to `gp/config.js` and paste the GP `/exec` address
+into it. It is two lines:
 
 ```js
 window.SJGP_SERVER = 'https://script.google.com/macros/s/…/exec';   // the GP /exec
@@ -149,13 +150,28 @@ The GP app lives at:
 https://jangaoncdm.github.io/sjscore-app/gp/
 ```
 
-**The QR is the last step and it is deliberately last.** A QR is only a picture
-of that address, and I would not put one in front of 134 officers without
-scanning it first — there is no QR tool on the district machine to check it
-with. Make it from the address above with any generator, **scan it with your
-own phone once**, and only then print it. It is not a credential: anyone who
-photographs it reaches the sign-in page and gets no further without a number on
-the roll and its PIN.
+**The card is already made, and its square has been decoded.**
+
+```bash
+node tests/install-cards.js     # Info/install/install-gp.html  — open, Ctrl+P
+```
+
+It is an A5 card: the QR, the address in type large enough to key in when a
+camera will not focus, the three steps, and a line saying plainly that the
+square is not a credential — anyone who photographs it reaches the sign-in
+page and gets no further without a number on the roll and its PIN. It may go
+on a notice board.
+
+**Nothing on it is printed on trust.** `tests/qr-check.js` decodes every
+square this project produces with jsQR — an independent decoder — at three
+print sizes and turned a quarter round, and compares it module for module
+against an independent *encoder*. That cross-check is what found the one real
+bug: eight modules out of 441, the format information written with rows and
+columns swapped, while every data module was already correct. A decoder alone
+had said only "no code found", which is true of a thousand different faults.
+
+Scan it with your own phone once before printing 134 copies anyway. It costs
+five seconds and it is the only test done on the paper itself.
 
 ---
 
