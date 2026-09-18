@@ -64,6 +64,26 @@ jobs:
             echo "::error::config.js is missing. Copy app/config.example.js to config.js once, with the district's /exec address."
             exit 1
           fi
+      - name: Publish the Gram Panchayat app to gp/, leaving its config.js alone
+        # THE SECOND REGISTER IS THE SAME BYTES AT A SECOND ADDRESS. Its
+        # config.js says which register it is and where its server lives, and
+        # like the root one it is never carried by a publish. The console is
+        # NOT copied: there is one console, it is the Collector's, and it
+        # reaches the second register through its tenant switch.
+        #
+        # It publishes only once gp/config.js exists, so nothing appears at
+        # /gp/ until the district has actually made the deployment. A folder
+        # of app that answers to no server is worse than no folder.
+        run: |
+          if [ ! -f gp/config.js ]; then
+            echo "gp/config.js does not exist yet — the Gram Panchayat app is not published. See DEPLOY-GP.md."
+            exit 0
+          fi
+          mkdir -p gp
+          for f in index.html app.js sw.js manifest.webmanifest privacy.html; do
+            [ -f "app/$f" ] && cp "app/$f" "gp/$f" && echo "published gp/$f"
+          done
+          [ -d app/icons ] && cp -r app/icons gp/ || true
       - name: Commit whatever changed
         # The commit message travels as an environment variable, never pasted
         # into the script: a ${{ }} substitution is raw text, and a message
@@ -76,6 +96,57 @@ jobs:
           git add -A ':!backend' ':!.github'
           git diff --staged --quiet || git commit -m "publish: $(printf '%s' "$MSG" | head -n 1)"
           git push
+
+  # THE SAME Code.gs GOES TO BOTH PROJECTS. Which register a project is, is a
+  # Script Property on it (TENANT=GP) and never a line in the file — so there
+  # is no build to get wrong, and no way for a GP-shaped file to reach the
+  # sanitation project. This job does nothing at all until GP_SCRIPT_ID is set.
+  backend-gp:
+    name: Push and deploy the Gram Panchayat backend
+    needs: guard
+    runs-on: ubuntu-latest
+    if: ${{ vars.GP_SCRIPT_ID != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Install clasp
+        run: npm install -g @google/clasp@2.4.2
+      - name: Sign in with the stored credential
+        run: echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
+      - name: Push the code
+        run: |
+          printf '{"scriptId":"%s","rootDir":"backend"}\n' "${{ vars.GP_SCRIPT_ID }}" > .clasp.json
+          clasp push --force
+      - name: Deploy a new version
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          clasp deploy -i "${{ vars.GP_DEPLOYMENT_ID }}" -d "auto ${{ github.run_number }}: $(printf '%s' "$MSG" | head -n 1 | cut -c1-120)"
+      - name: Confirm the Gram Panchayat register is answering, AND that it knows which register it is
+        # The stamp alone is not enough here. Both projects run the same bytes,
+        # so a diag that says ok:true proves only that SOMETHING answered — it
+        # would say exactly the same if TENANT had never been set and the GP
+        # address were serving the sanitation register's shape. The tenant is
+        # read back and checked by name.
+        run: |
+          URL="${{ vars.GP_EXEC_URL }}?op=diag"
+          for i in 1 2 3 4 5 6; do
+            sleep 15
+            OUT=$(curl -sL --max-time 45 "$URL" || true)
+            if echo "$OUT" | grep -q '"ok":true'; then
+              if echo "$OUT" | grep -q '"tenant":"GP"'; then
+                echo "The Gram Panchayat register answered on attempt $i, and knows it is GP."
+                exit 0
+              fi
+              echo "::error::That address answered, but it does NOT report tenant GP. Set the Script Property TENANT=GP on the GP project before anyone signs in."
+              echo "$OUT" | tr -d '\n' | head -c 200
+              exit 1
+            fi
+            echo "attempt $i: not yet — $(echo "$OUT" | tr -d '\n' | head -c 100)"
+          done
+          echo "::error::The Gram Panchayat register did not answer with ok:true after deploying."
+          exit 1
 
   backend:
     name: Push and deploy the Apps Script backend
