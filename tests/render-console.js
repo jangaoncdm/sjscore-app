@@ -57,6 +57,24 @@ const ROLLFIX = { ok:true,
   ] };
 const SIZES = [{ w:2560, h:1440, n:'2560' }, { w:1500, h:1000, n:'1500' }, { w:390, h:844, n:'390' }];
 
+/* ---- THE SECOND REGISTER, for the tenant switch ----
+   Plainly different figures, so a screenshot of one cannot be mistaken for a
+   screenshot of the other, and so the check below can prove the console
+   actually re-read rather than redrawing what it already had. */
+const GPFIX = JSON.parse(JSON.stringify(payloadRaw()));
+function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
+(() => {
+  GPFIX.totals = { officers:134, gps:180, due:133 };
+  GPFIX.today.present = GPFIX.today.present.slice(0, 91).map(r =>
+    Object.assign({}, r, { role:'GPO', dutyKm: Math.round((r.km || 1) * 10) / 10 }));
+  GPFIX.today.onLeave = GPFIX.today.onLeave.slice(0, 3);
+  GPFIX.today.absent  = GPFIX.today.absent.slice(0, 5).map(r => Object.assign({}, r, { role:'GPO' }));
+  /* the Gram Panchayat register takes no evaluation: no filings, no grades */
+  GPFIX.month = { rows:[], grades:{A:0,B:0,C:0,D:0}, avg:null, rfCount:0 };
+  GPFIX.trend = [];
+  GPFIX.coverage = [];
+})();
+
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const payload = JSON.parse(fs.readFileSync(FIX, 'utf8'));
@@ -70,22 +88,32 @@ const SIZES = [{ w:2560, h:1440, n:'2560' }, { w:1500, h:1000, n:'1500' }, { w:3
       const ctx = await browser.newContext({ viewport: { width: size.w, height: size.h },
         deviceScaleFactor: 1 });
       await ctx.addInitScript(([data, th]) => {
+        const who = { name: 'Sandeep Kumar Jha', role: 'COLLECTOR', phone: '9000000001' };
         localStorage.setItem('sjf5', JSON.stringify({
-          url: 'https://mock.district/exec',
-          session: { token: 'T', user: { name: 'Sandeep Kumar Jha', role: 'COLLECTOR', phone: '9000000001' } }
-        }));
+          url: 'https://mock.district/exec', session: { token: 'T', user: who } }));
+        /* THE SECOND REGISTER'S OWN STORE. The console reads it because both
+           apps are served from one domain; the token is its own and means
+           nothing to the other register's server. */
+        localStorage.setItem('sjgp-gp1', JSON.stringify({
+          url: 'https://gp.district/exec', session: { token: 'TGP', user: who } }));
+        localStorage.removeItem('sjgp-console-tenant');
         localStorage.setItem('sjgp-theme', th);
         localStorage.setItem('sjgp-console-seen', '{}');
       }, [null, theme]);
 
       const page = await ctx.newPage();
       /* the district's own reply, served locally */
+      /* each register answers on its own address, as they will in the field */
       await page.route('**/mock.district/**', r => {
         const u = r.request().url();
+        const gp = /gp\.district/.test(u);
         r.fulfill({ status: 200, contentType: 'application/json',
-          body: JSON.stringify(/op=roll/.test(u) ? ROLLFIX
+          body: JSON.stringify(gp ? GPFIX
+                             : /op=roll/.test(u) ? ROLLFIX
                              : /op=schedule/.test(u) ? SCHEDFIX : payload) });
       });
+      await page.route('**/gp.district/**', r =>
+        r.fulfill({ status:200, contentType:'application/json', body:JSON.stringify(GPFIX) }));
       /* no map tiles over the wire in a render check */
       await page.route('**tile.openstreetmap.org**', r => r.abort());
 
@@ -154,6 +182,81 @@ const SIZES = [{ w:2560, h:1440, n:'2560' }, { w:1500, h:1000, n:'1500' }, { w:3
           els => els.slice(0, 6).map(e => e.tagName + ' ' + (e.getAttribute('style') || '').slice(0, 60)));
         if(hard.length) problems.push(size.n + '/' + theme + '/' + v + ': hardcoded colour in a chart — ' + JSON.stringify(hard));
       }
+      /* ================= THE TENANT SWITCH =================
+         Only at the desktop widths and once per theme: it is one control and
+         two payloads, not a layout to measure at every size. */
+      if(size.w === 1500){
+        const lbl = size.n + '/' + theme + '/tenant';
+        await page.click('#nav [data-v="overview"]');
+        await page.waitForTimeout(400);
+        const sel = await page.$('#tenPick');
+        if(!sel) problems.push(lbl + ': no register switch, though the device is signed in to both');
+        else {
+          const shown = await page.$eval('#tenPick', e => !e.hidden);
+          if(!shown) problems.push(lbl + ': the register switch is hidden with two registers signed in');
+          const before = await page.$eval('#g', e => e.innerText);
+          await page.screenshot({ path: path.join(OUT, size.n + '-' + theme + '-tenant-sjgp.png') });
+
+          await page.selectOption('#tenPick', 'GP');
+          await page.waitForTimeout(1400);
+          const after = await page.$eval('#g', e => e.innerText);
+          await page.screenshot({ path: path.join(OUT, size.n + '-' + theme + '-tenant-gp.png') });
+
+          /* IT ACTUALLY RE-READ. The two registers look alike — attendance,
+             leave, a map — so identical text would mean the console had
+             redrawn what it already had against a different address. */
+          if(before === after) problems.push(lbl + ': switching register changed nothing on screen');
+
+          /* THE HEADER SAYS WHICH ONE. Reading one register believing it is
+             the other is the single mistake this control can cause. */
+          const nm = await page.$eval('#tenName', e => e.hidden ? '' : e.textContent).catch(() => '');
+          if(!/Gram Panchayat/i.test(nm)) problems.push(lbl + ': the header does not name the register being read — "' + nm + '"');
+
+          /* AND THE RAIL SHOWS ONLY WHAT THAT REGISTER HAS. The GP register
+             takes no evaluation and carries no filing schedule; its server
+             refuses both, so a rail item could only lead to an empty screen. */
+          /* WHAT IS ON THE SCREEN, not what the property says. Reading
+             x.hidden passed while every item was still visible, because the
+             rail's own display:flex beats the UA's [hidden]{display:none}. */
+          const vis = b => b.filter(x => x.offsetParent !== null &&
+            getComputedStyle(x).display !== 'none').map(x => x.dataset.v);
+          const railGp = await page.$$eval('#nav [data-v]', vis);
+          ['villages', 'schedule', 'gpdp'].forEach(v => {
+            if(railGp.indexOf(v) >= 0) problems.push(lbl + ': the GP rail still offers "' + v + '", which that register does not have');
+          });
+          if(railGp.indexOf('attendance') < 0) problems.push(lbl + ': the GP rail has lost Attendance, which it does have');
+
+          /* THE GP OVERVIEW CARRIES NO EVALUATION. "Villages evaluated 0 of 0",
+             "District average —" and an empty grade ring are not a district
+             doing badly; they are figures for work nobody was asked to do. */
+          const gpText = await page.$eval('#g', e => e.innerText);
+          ['Evaluation outcomes', 'Villages evaluated', 'District average', 'Red flags'].forEach(w => {
+            if(gpText.indexOf(w) >= 0) problems.push(lbl + ': the GP overview still shows "' + w + '"');
+          });
+          if(gpText.indexOf('Marked at the GP office') < 0)
+            problems.push(lbl + ': the GP overview does not show the place of duty, which is what that register has');
+          if(!/a distance, not a default/.test(gpText))
+            problems.push(lbl + ': the GP overview does not say that a distance accuses nobody');
+
+          /* and back again, with the sanitation register whole */
+          await page.selectOption('#tenPick', 'SJGP');
+          await page.waitForTimeout(1400);
+          const railSj = await page.$$eval('#nav [data-v]', vis);
+          ['villages', 'schedule'].forEach(v => {
+            if(railSj.indexOf(v) < 0) problems.push(lbl + ': switching back left the sanitation rail without "' + v + '"');
+          });
+          const back = await page.$eval('#g', e => e.innerText);
+          if(back === after) problems.push(lbl + ': switching back did not re-read the sanitation register');
+          const nm2 = await page.$eval('#tenName', e => e.hidden ? '' : e.textContent).catch(() => '');
+          if(!/Swachh/i.test(nm2)) problems.push(lbl + ': back on SJGP the header does not say so — "' + nm2 + '"');
+          const sjText = await page.$eval('#g', e => e.innerText);
+          ['Villages evaluated', 'District average'].forEach(w => {
+            if(sjText.indexOf(w) < 0) problems.push(lbl + ': the sanitation overview has LOST "' + w + '"');
+          });
+          console.log('  ' + lbl + ' — switched to GP and back; rail GP ' + JSON.stringify(railGp));
+        }
+      }
+
       if(errs.length) problems.push(size.n + '/' + theme + ': ' + errs.slice(0, 4).join(' | '));
       await ctx.close();
     }

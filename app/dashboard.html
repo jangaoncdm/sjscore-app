@@ -790,11 +790,24 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 
 /* ---------- shell ---------- */
 .shell{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
+/* WHICH REGISTER THESE FIGURES ARE. Shown only on a district running two, and
+   in the register's accent, because the two screens are otherwise alike:
+   attendance, leave, a map, a daily report. Reading one believing it is the
+   other is the one mistake the switch can cause. */
+.tenname{font-weight:750;letter-spacing:.01em;color:var(--pri);margin-top:2px}
+body[data-tenant="gp"] .tenname{color:var(--teal)}
+body[data-tenant="gp"] .rail .brand b::after{content:" · GP";color:var(--teal);font-weight:700}
 .rail{background:var(--panel);border-right:1px solid var(--line);box-shadow:none;padding:var(--s3) var(--s2);position:sticky;top:0;height:100vh}
 .rail .brand{display:flex;align-items:center;gap:11px;padding:2px 8px 18px;border-bottom:1px solid var(--line-2);margin-bottom:14px}
 .rail .brand img{width:38px;height:38px;border-radius:10px}
 .rail .brand b{font-size:16px;letter-spacing:-.01em}
 .rail .brand span{display:block;font-size:10.5px;color:var(--tx-3)}
+/* `hidden` DOES NOT HIDE WHAT CARRIES ITS OWN display. The UA stylesheet's
+   [hidden]{display:none} is beaten by any author display rule, so setting
+   .hidden on a rail button left it on screen while every check that read the
+   PROPERTY passed. The render pass now reads computed visibility instead, and
+   this rule is what makes the property mean what it says. */
+.nav button[hidden]{display:none}
 .nav button{display:flex;align-items:center;gap:var(--s1);width:100%;min-height:48px;padding:0 var(--s2);border-radius:14px;
   font-size:13.5px;font-weight:650;color:var(--tx-2);margin-bottom:var(--s1)}
 .nav button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -1154,9 +1167,11 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
   </aside>
   <div class="main">
     <div class="top">
-      <div><h1 id="hi">Welcome back</h1><div class="sub" id="hisub"></div></div>
+      <div><h1 id="hi">Welcome back</h1><div class="sub" id="hisub"></div>
+        <div class="sub tenname" id="tenName" hidden></div></div>
       <span class="sp"></span>
       <span class="live" id="live"><i></i><span id="liveTx">connecting</span></span>
+      <select class="rsel" id="tenPick" title="Which register" hidden></select>
       <select class="rsel" id="monPick" title="Month under review"></select>
       <select class="rsel" id="every"><option value="30000">30s</option><option value="60000" selected>1m</option><option value="300000">5m</option></select>
       <button class="tbtn thm" id="thm" title="Light or dark" aria-label="Switch between light and dark"></button>
@@ -1194,6 +1209,86 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
 <script>
 'use strict';
 const $=s=>document.querySelector(s);
+/* ============================================================================
+ * TWO REGISTERS, ONE CONSOLE · 18.09.2026
+ *
+ * The Collector reads both; nobody else reads either from here. The switch
+ * needs nothing configured, because each app already keeps its own server
+ * address and its own sign-in in its own store, and both apps are served from
+ * one domain — so the console can read whichever the Collector has signed in
+ * to. A token from one register means nothing to the other: they are separate
+ * Apps Script projects over separate spreadsheets, and each re-checks the role
+ * on its own server (rule 6).
+ *
+ * THE SWITCH APPEARS ONLY WHEN THERE IS SOMETHING TO SWITCH TO. Until the
+ * Gram Panchayat register exists and the Collector has signed into it once on
+ * this device, there is no second store and no control — a dead option that
+ * can only explain itself is worse than no option.
+ *
+ * AND THE SCREEN SAYS WHICH REGISTER IT IS SHOWING, always, in the header. The
+ * two look alike: attendance, leave, a map, a daily report. Reading the Gram
+ * Panchayat register's figures believing they are the sanitation register's is
+ * the one mistake this control can cause, so it is made hard to make.
+ * ========================================================================== */
+/* Beyond this, a mark is far enough from the officer's own GP office to be
+   worth the Collector's eye. It is a READING and not a rule: nothing is
+   raised by it, and the officer may be at a mandal meeting, at the
+   Collectorate or on tour (rule 10). */
+const FAR_DUTY_KM = 3;
+const TENANCY = {
+  SJGP:{ key:'SJGP', name:'Swachh Jangaon', full:'Swachh Jangaon Gram Panchayat', store:'sjf5' },
+  GP:  { key:'GP',   name:'Gram Panchayat', full:'Gram Panchayat Register',       store:'sjgp-gp1' }
+};
+let TVIEW='SJGP';
+function tenantSession(k){
+  const t=TENANCY[k]; if(!t) return null;
+  let d=null; try{ d=JSON.parse(localStorage.getItem(t.store)||'null'); }catch(e){ return null; }
+  if(!d||!d.session||!d.session.token||!d.url) return null;
+  if(String((d.session.user||{}).role||'').toUpperCase()!=='COLLECTOR') return null;
+  return { url:d.url, token:d.session.token, user:d.session.user, tenant:k };
+}
+/* everything the console has read is the OTHER register's the moment this
+   changes — every cache is dropped, not merged */
+function useTenant(k){
+  const sess=tenantSession(k);
+  if(!sess) return false;
+  TVIEW=k; ST=sess;
+  try{ localStorage.setItem('sjgp-console-tenant',k); }catch(e){}
+  DATA=null; SCHED=null; ROLL=null; GPDP=null; ADV=null; WX=null;
+  SCHEDMSG=''; ROLLMSG=''; ADV_OPEN='';
+  paintTenant();
+  $('#g').setAttribute('aria-busy','true');
+  $('#g').innerHTML='';
+  pull();
+  return true;
+}
+function paintTenant(){
+  const sel=$('#tenPick'); if(!sel) return;
+  const have=Object.keys(TENANCY).filter(k=>!!tenantSession(k));
+  /* one register is not a choice */
+  sel.hidden = have.length < 2;
+  if(!sel.hidden){
+    const want=have.map(k=>k+'|'+TVIEW).join(',');
+    if(sel.dataset.k!==want){
+      sel.dataset.k=want;
+      sel.innerHTML=have.map(k=>'<option value="'+k+'"'+(k===TVIEW?' selected':'')+'>'+
+        esc(TENANCY[k].name)+'</option>').join('');
+    }
+    sel.onchange=()=>{ if(!useTenant(sel.value)) sel.value=TVIEW; };
+  }
+  document.body.dataset.tenant = TVIEW.toLowerCase();
+  /* THE RAIL SHOWS WHAT THE REGISTER HAS. The Gram Panchayat register takes no
+     village evaluation and carries no filing schedule; its server refuses both
+     at the door, so a rail item for either could only lead to an empty screen. */
+  const off = TVIEW==='GP' ? ['villages','schedule','gpdp'] : [];
+  document.querySelectorAll('#nav [data-v]').forEach(b=>{
+    b.hidden = off.indexOf(b.dataset.v)>=0;
+  });
+  if(off.indexOf(VIEW)>=0){
+    VIEW='overview';
+    document.querySelectorAll('#nav [data-v]').forEach(x=>x.toggleAttribute('aria-current',x.dataset.v==='overview'));
+  }
+}
 let ST=null,TIMER=null,LASTOK=0,EVERY=60000,NEXT=0,INFLIGHT=false,DOWN=false,DATA=null,VIEW='overview',MET='present',MONTH='',SORTD=true;
 let MAP=null,MLAYER=null,MAP2=null,M2LAYER=null,GEO=[],MARKERS=[],MFILTER='all',BRIEF=null,BRIEFING=false,NEWS=[],REC={};
 let CHAT=[],ASKING=false,XLSXP=null,NTC_UNCHK={},NTC_DECIDING=false;
@@ -1228,7 +1323,11 @@ function boot(){
   let d=null; try{ d=JSON.parse(localStorage.getItem('sjf5')||'null'); }catch(e){}
   if(!d||!d.session||!d.session.token||!d.url){ gate('Sign in once in the SJGP app on this device, then open this page again. The console uses that sign-in.',true); return; }
   if((d.session.user||{}).role!=='COLLECTOR'){ gate('<span class="rd">The monitoring console is available to the Collector alone.</span> This device is signed in as '+esc((d.session.user||{}).name||'another officer')+'.',true); return; }
-  ST={url:d.url,token:d.session.token,user:d.session.user};
+  ST={url:d.url,token:d.session.token,user:d.session.user,tenant:'SJGP'};
+  /* the register this device was last reading, if it is still signed in to it */
+  let want=''; try{ want=localStorage.getItem('sjgp-console-tenant')||''; }catch(e){}
+  if(want && want!=='SJGP'){ const alt=tenantSession(want); if(alt){ TVIEW=want; ST=alt; } }
+  paintTenant();
   /* the roll is the Collector's. Hiding the rail item is a courtesy, not a
      rule — every one of those calls re-checks the role on the server. */
   if(String((ST.user||{}).role||'').toUpperCase()==='COLLECTOR'){ const na=$('#navAdmin'); if(na) na.hidden=false; }
@@ -1415,7 +1514,24 @@ function analyse(j){
      Asia/Kolkata, and a Collector opening this from anywhere else would have
      been shown a different figure from the one on paper for the same morning. */
   const by10=j.today.present.filter(r=>istHour(r.at)<10).length;
-  const parts=[
+  /* WHAT A DISTRICT'S HEALTH IS MADE OF, on the register in front of you.
+     Three of these five are the 100-mark evaluation — coverage, scores and red
+     flags. The Gram Panchayat register does not take one, so on that register
+     they are not zero, they are ABSENT: scored as nothing filed they would
+     drag the health figure down for work nobody was asked to do, and named in
+     the legend they would put "Red flags" on a screen that has no flags to
+     carry. What that register has is attendance, the leave desk, and the place
+     of duty its roll can measure. */
+  const gpNow = (typeof TVIEW !== 'undefined' && TVIEW === 'GP');
+  const duty = j.today.present.filter(r=>r.dutyKm!=null);
+  const dutyNear = duty.filter(r=>r.dutyKm<=FAR_DUTY_KM).length;
+  const parts = gpNow ? [
+    {k:'Attendance',w:45,v:off?null:attPct,why:off?off+' — not counted':accounted+' of '+officersDue+' accounted'},
+    {k:'At the place of duty',w:25,v:duty.length?clamp(Math.round(dutyNear*100/duty.length),0,100):null,
+      why:duty.length?dutyNear+' of '+duty.length+' measured within '+FAR_DUTY_KM+' km':'no located marks yet'},
+    {k:'Leave desk',w:15,v:clamp(Math.round(100-Math.max(0,oldestH-24)*2),0,100),
+      why:j.leave.pending.length?'oldest waiting '+Math.round(oldestH)+' h':'nothing waiting'}]
+  : [
     {k:'Attendance',w:25,v:off?null:attPct,why:off?off+' — not counted':accounted+' of '+officersDue+' accounted'},
     {k:'Coverage',w:25,v:expected===0?null:clamp(Math.round(cov.d*100/Math.max(1,expected)),0,100),
       why:expected===0?'month opening — grace':cov.d+' filed against '+expected+' expected by now'},
@@ -2010,9 +2126,27 @@ function vOverview(j,A){
   h+=kpi('Attendance today',IC.u,A.accounted,A.off?'':delta(A.accounted,A.attY,true),
     A.off?esc(A.off)+' — voluntary marks only':'of '+A.officersDue+' · vs yesterday','view:attendance');
   h+=kpi('Not marked',IC.u,A.off?'—':A.absent,'',A.off?esc(A.off)+' — not tracked today':'tap for names',A.off?null:'list:absent');
-  h+=kpi('Villages evaluated',IC.h,A.filed,'','of '+A.cov.t+' · tap to open','view:villages');
-  h+=kpi('District average',IC.s,A.avg==null?'—':A.avg,delta(A.avg,A.prevAvg,true),'vs last month','view:villages');
-  h+=kpi('Red flags',IC.f,j.month.rfCount,'',A.filed?pct(j.month.rfCount,A.filed)+'% · tap for the list':'nothing filed','list:flags');
+  if(TVIEW==='GP'){
+    /* THE TILES OF THE REGISTER IN FRONT OF YOU. Villages evaluated, the
+       district average and the red flags are the 100-mark evaluation, which
+       the Gram Panchayat register does not take — drawn here they read
+       "0 of 0", "—" and "0", which is not a district doing badly, it is three
+       figures for work nobody was asked to do. What that register HAS that the
+       other has not is the place of duty, so that is what its third tile says.
+       It names a distance and it accuses nobody (rule 10). */
+    const marks=(j.today.present||[]).filter(r=>r.dutyKm!=null);
+    const far=marks.filter(r=>r.dutyKm>FAR_DUTY_KM).length;
+    const near=marks.length-far;
+    h+=kpi('Marked at the GP office',IC.h,near,'',
+      marks.length?near+' of '+marks.length+' measured · within '+FAR_DUTY_KM+' km':'no located marks yet');
+    h+=kpi('Marked away from it',IC.f,far,'',
+      far?'a distance, not a default — read on the facts':'none today','view:attendance');
+    h+=kpi('Revenue villages',IC.h,(j.totals&&j.totals.gps)||0,'','on the Gram Panchayat roll');
+  } else {
+    h+=kpi('Villages evaluated',IC.h,A.filed,'','of '+A.cov.t+' · tap to open','view:villages');
+    h+=kpi('District average',IC.s,A.avg==null?'—':A.avg,delta(A.avg,A.prevAvg,true),'vs last month','view:villages');
+    h+=kpi('Red flags',IC.f,j.month.rfCount,'',A.filed?pct(j.month.rfCount,A.filed)+'% · tap for the list':'nothing filed','list:flags');
+  }
   h+='</div>';
 
   const mkList=j.today.present.slice().sort((a,b)=>String(b.at).localeCompare(String(a.at)));
@@ -2031,7 +2165,10 @@ function vOverview(j,A){
     [['present','Present',A.present],['leave','On leave',A.onLeave],['absent','Not marked',A.absent],['filed','Villages filed',A.filed]]
       .map(([k,n,v])=>`<button class="mtab" data-met="${k}" aria-selected="${MET===k}"><b>${v}</b>${n}</button>`).join('')+
     `</div><div id="area" class="plot">${areaChart(j.att14x, MET, metColor(MET))}</div>`);
-  h+=panel('c4','Evaluation outcomes',j.ym,
+  /* the 100-mark evaluation's own panel — nothing to draw on a register that
+     does not take one, and four empty grades read as a district doing badly
+     rather than as work nobody was asked to do */
+  if(TVIEW!=='GP') h+=panel('c4','Evaluation outcomes',j.ym,
     '<div class="plot">'+donut([{k:'Grade A',v:j.month.grades.A,c:'var(--st-ok)'},{k:'Grade B',v:j.month.grades.B,c:'var(--grade-b)'},
            {k:'Grade C',v:j.month.grades.C,c:'var(--st-warn)'},{k:'Grade D',v:j.month.grades.D,c:'var(--st-bad)'}],A.filed,'filed')+'</div>'
     + bestWorst(j));
@@ -3743,6 +3880,11 @@ function vAdvisory(j,A){
 function render(j){
   /* the accent follows the view — panels and nav answer in its colour */
   $('#g').dataset.view=VIEW;
+  /* AND THE HEADER SAYS WHICH REGISTER THESE FIGURES ARE. Only once there are
+     two: on a district running one register the line is what it always was. */
+  const tl=$('#tenName');
+  if(tl){ const two=Object.keys(TENANCY).filter(k=>!!tenantSession(k)).length>1;
+          tl.hidden=!two; tl.textContent=TENANCY[TVIEW].full; }
   /* villages filed per day, for the area chart */
   const byDay={}; j.month.rows.forEach(r=>{byDay[r.date]=(byDay[r.date]||0)+1;});
   j.att14x=j.att14.map(r=>({...r, filedN:byDay[r.date]||0}));
