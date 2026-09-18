@@ -2282,6 +2282,41 @@ function loadXLSX(){
 }
 function expNote(t){ const el=$('#expNote'); if(el) el.textContent=t; }
 async function doExport(kind){
+  /* THE FILING SCHEDULE'S OWN REGISTERS. They come out of SCHED, which is its
+     own call, so they are answered before the dashboard payload is asked for.
+     Every one of them counts LINES, not villages — a mandal village is named
+     against the MPO and the MPDO both — and each file says so at its foot, so
+     a total read off a spreadsheet cannot be mistaken for a village count. */
+  if(kind==='scoff'||kind==='scvil'||kind==='scday'){
+    const d=(SCHED&&SCHED.district)||null;
+    if(!d||!(d.officers||[]).length){ expNote('No schedule has been published for this month.'); return; }
+    const ym=SCHED.ym||'', win=(SCHED.cycle&&SCHED.cycle.from)?SCHED.cycle.from+' to '+SCHED.cycle.to:'';
+    const ackOf=o=>o.ackAt?String(o.ackAt).slice(0,10):'';
+    if(kind==='scoff'){
+      const body=[['Officer','Charge','Mandals','Villages assigned','Filed','Still to file','Due by today','Behind','Acknowledged on']]
+        .concat(d.officers.map(o=>[o.name,o.role,(o.mandals||[]).join('; '),o.assigned,o.filed,o.left,o.dueByToday,o.behind,ackOf(o)]));
+      body.push([]);
+      body.push(['Reporting month',ym,'window',win,'villages scheduled',d.villages,'filed',d.filed,'behind',d.behind]);
+      body.push(['A schedule is a plan of work. Falling behind it draws a reminder and nothing else — no notice, no debit, no lock.']);
+      dlBlob('SJGP_Schedule_Officers_'+ym+'.csv','text/csv;charset=utf-8',csvText(body));
+      expNote('Saved: the officer ledger ('+d.officers.length+' officers).'); return; }
+    if(kind==='scvil'){
+      const rows=[];
+      d.officers.forEach(o=>(o.rows||[]).forEach(r=>rows.push([r.mandal,r.gp,r.dueDate||'',o.name,o.role,
+        r.filed?'filed':'not filed',r.filedOn||'',r.score==null?'':r.score,r.filedBy||''])));
+      rows.sort((a,b)=>String(a[2]).localeCompare(String(b[2]))||String(a[0]).localeCompare(String(b[0]))||String(a[1]).localeCompare(String(b[1])));
+      const body=[['Mandal','Village','Scheduled for','Officer','Charge','Status','Filed on','Score','Filed by']].concat(rows);
+      body.push([]);
+      body.push([rows.length+' lines over '+d.villages+' villages — a mandal village is named against its MPO and its MPDO both, and either may file it.']);
+      dlBlob('SJGP_Schedule_Villages_'+ym+'.csv','text/csv;charset=utf-8',csvText(body));
+      expNote('Saved: every line ('+rows.length+' over '+d.villages+' villages).'); return; }
+    const body=[['Working day','Villages set','Filed so far','Still to file']]
+      .concat((d.plan||[]).map(p=>[p.date,p.due,p.filed,Math.max(0,p.due-p.filed)]));
+    body.push([]);
+    body.push(['Sundays and the Holidays tab are not working days and carry nothing.','','','']);
+    dlBlob('SJGP_Schedule_Days_'+ym+'.csv','text/csv;charset=utf-8',csvText(body));
+    expNote('Saved: the month day by day ('+(d.plan||[]).length+' working days).'); return;
+  }
   if(!DATA){ expNote('Nothing to export yet — the figures have not arrived.'); return; }
   const day=new Date().toISOString().slice(0,10), j=DATA;
   if(kind==='vxlsx'){
@@ -2818,19 +2853,36 @@ function wireAdmin(){
    column beside it prints the moment he saw it. Sent is not the same as
    landed, and this screen does not let the two be confused. */
 let SCHED=null, SCHEDBUSY=false, SCHEDMSG='', SCHEDBAD=false, SCHEDCOMPOSE=false;
-const SCHEDFORM={to:'', text:''};
+/* `start` is the day the plan is to BEGIN — the district's order of 18.09.2026
+   was to plan from the 21st, not from the afternoon the button was pressed.
+   Held here so it survives the minute-by-minute re-render like every other
+   typed field on this console. */
+const SCHEDFORM={to:'', text:'', start:''};
 
+/* THE MONTH PICKER IS THE WHOLE CONSOLE'S, AND THIS VIEW OBEYS IT. It did not
+   at first: the picker read August and the Schedule panel went on reporting
+   September, because op=schedule was asked with no month and the server
+   answered with the one running today. Every other view moves with that
+   control, and a screen that quietly does not is how a Collector reads one
+   month's figures believing they are another's. SCHED remembers which month it
+   was read for, so a change of the picker is a re-read and not a stale answer. */
 function pullSched(){
-  return fetch(ST.url+'?op=schedule&all=1&token='+encodeURIComponent(ST.token))
-    .then(r=>r.json()).then(j=>{ if(j&&j.ok){ SCHED=j; if(VIEW==='schedule'&&DATA) render(DATA); } })
+  const want = MONTH || '';
+  return fetch(ST.url+'?op=schedule&all=1'+(want?'&ym='+encodeURIComponent(want):'')+
+               '&token='+encodeURIComponent(ST.token))
+    .then(r=>r.json()).then(j=>{ if(j&&j.ok){ j.forMonth=want; SCHED=j; if(VIEW==='schedule'&&DATA) render(DATA); } })
     .catch(()=>{});
 }
 function schedSay(t,bad){ SCHEDMSG=t||''; SCHEDBAD=!!bad; if(DATA) render(DATA); }
 function schedPost(body,after){
   if(SCHEDBUSY) return;
   SCHEDBUSY=true; schedSay('Sending to the district…');
+  /* EVERY ORDER NAMES THE MONTH ON THE SCREEN. Without it the server would
+     answer for the month running today, so a Collector reading August and
+     pressing Publish would have published September and been shown August's
+     figures unchanged — the same trap the reporting month set once already. */
   fetch(ST.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body:JSON.stringify(Object.assign({token:ST.token},body))})
+    body:JSON.stringify(Object.assign({token:ST.token, ym:(SCHED&&SCHED.ym)||''},body))})
     .then(r=>r.json()).then(j=>{
       SCHEDBUSY=false;
       if(!j||j.ok===false){ schedSay((j&&j.error)||'The district refused it.',true); return; }
@@ -2867,11 +2919,11 @@ function vSchedule(j,A){
     h+=panel('c12','No schedule for '+esc(SCHED.ym||''), esc(win),
       `<div class="empty">Nothing has been assigned for this reporting month.</div>
        <div class="expbar" style="margin-top:12px">
+         <label style="font-size:12px;color:var(--tx-2)">Begin on
+           <input class="find" type="date" id="scStart" style="width:170px;margin-left:8px"
+             min="${esc(todayISO())}" max="${esc((SCHED.cycle&&SCHED.cycle.to)||'')}"
+             value="${esc(SCHEDFORM.start)}"></label>
          <button class="tbtn pri" data-sc="publish">Publish the schedule for ${esc(SCHED.ym||'')}</button>
-         <span class="expnote">Sixty villages to the DPO, sixty to the DLPO — whole mandals each, so a district
-           officer works a mandal through rather than crossing the district — and the rest of every mandal to its
-           own MPO and MPDO together, either of whom may file. Nothing to the Panchayat Secretary, who may not
-           file an evaluation. Each officer&rsquo;s villages are then spread over the working days that remain.</span>
        </div>`);
     return h;
   }
@@ -2908,13 +2960,20 @@ function vSchedule(j,A){
   /* ---- what the Collector can do ---- */
   h+=panel('c12','Orders','the schedule is yours to publish and to chase',
     `<div class="expbar">
+      <label style="font-size:12px;color:var(--tx-2)">Begin on
+        <input class="find" type="date" id="scStart" style="width:170px;margin-left:8px"
+          min="${esc(todayISO())}" max="${esc((SCHED.cycle&&SCHED.cycle.to)||'')}"
+          value="${esc(SCHEDFORM.start)}"></label>
       <button class="tbtn" data-sc="publish">Take in newly pending villages</button>
       <button class="tbtn" data-sc="respread">Re-spread the remaining dates</button>
       <button class="tbtn pri" data-sc="remind"${behindOff.length?'':' disabled'}>Remind the ${behindOff.length} officer${behindOff.length===1?'':'s'} behind</button>
+      <button class="tbtn" data-sc="share">Send the schedule to all ${offs.length}</button>
       <button class="tbtn" data-sc="compose">Send a message</button>
       <span class="expnote">Taking in newly pending villages never moves an assignment or a date already given —
         an officer told on Tuesday that a village is his for Thursday keeps Thursday. Re-spreading moves the
         dates of everything still unfiled onto the days that are left, and is the only thing that does.
+        <b>Begin on</b> sets the day the work is planned from; it can only move the start later, never into a
+        day already gone, and it is read by <b>Re-spread</b> as well as by a first publish.
         A message goes by mail at once and opens in the officer&rsquo;s app the next time he opens it;
         there is no push sender behind this register, and the column below prints when he actually saw it.</span>
     </div>` +
@@ -2972,6 +3031,22 @@ function vSchedule(j,A){
         <td class="num">${p.due}</td><td class="num">${p.filed>=p.due?'<span class="pill ok">'+p.filed+'</span>':p.filed}</td></tr>`).join('')+
       `</tbody></table></div>`:'<div class="empty">Nothing is dated yet.</div>','scplan');
 
+  /* ---- the register, downloadable ----
+     Asked for on 18.09.2026. Three readings of the same schedule: the officers
+     as a ledger, every line village by village, and the month day by day. CSV
+     and not a workbook: it needs nothing from the network, which matters on a
+     filtered government connection. */
+  h+=panel('c12','Reports · the filing schedule','opens in Excel',
+    `<div class="expbar">
+      <button class="tbtn pri" data-exp="scoff">CSV &middot; officer by officer (${offs.length})</button>
+      <button class="tbtn" data-exp="scvil">CSV &middot; every line, village by village (${d.rows})</button>
+      <button class="tbtn" data-exp="scday">CSV &middot; the month, day by day (${plan.length})</button>
+      <span class="expnote" id="expNote">The officer ledger carries what each man holds, what he has filed and
+        whether he has acknowledged the schedule. The village file carries one row per officer named against a
+        village, so a mandal village appears twice — once for the MPO and once for the MPDO. Counts of
+        VILLAGES are on the tiles above; these are the lines behind them.</span>
+    </div>`);
+
   /* ---- what has been sent, and whether it landed ---- */
   const nud=(SCHED.nudges||[]).slice(0,40);
   h+=panel('c12','Reminders and messages sent', nud.length?nud.length+' this month':'nothing sent yet',
@@ -2994,7 +3069,7 @@ function wireSchedule(){
      a typed circular that way and the Collector would have written it twice. */
   const to=$('#scTo'); if(to){ if(SCHEDFORM.to) to.value=SCHEDFORM.to; else SCHEDFORM.to=to.value; }
   const tx=$('#scText'); if(tx && SCHEDFORM.text) tx.value=SCHEDFORM.text;
-  bind('#scTo','to'); bind('#scText','text');
+  bind('#scTo','to'); bind('#scText','text'); bind('#scStart','start');
 
   document.querySelectorAll('#g [data-sc]').forEach(b=>b.onclick=()=>{
     const a=b.dataset.sc;
@@ -3002,22 +3077,31 @@ function wireSchedule(){
     if(a==='cancel'){ SCHEDCOMPOSE=false; SCHEDFORM.text=''; if(DATA) render(DATA); return; }
     if(a==='publish'){
       if(!confirm('Publish the filing schedule for '+(SCHED&&SCHED.ym||'this month')+'?\n\n'+
-        'Villages pending and not yet on anybody’s list are assigned: whole mandals to the DPO and the DLPO up '+
-        'to sixty each, the rest of each mandal to its own MPO and MPDO together. Nothing already assigned moves, '+
-        'and no date already given to an officer is changed.')) return;
-      schedPost({kind:'schedulePublish'}, r=>{
+        'Villages pending and not yet on anybody’s list are assigned'+schedFromWords()+'. '+
+        'Nothing already assigned moves, and no date already given to an officer is changed.')) return;
+      schedPost({kind:'schedulePublish', from:SCHEDFORM.start||''}, r=>{
         SCHEDMSG=schedPubWords(r); SCHEDBAD=false;
       });
       return;
     }
     if(a==='respread'){
       if(!confirm('Re-spread the dates for '+(SCHED&&SCHED.ym||'this month')+'?\n\n'+
-        'Every village still unfiled is given a new day, spread over the working days that remain. Assignments do '+
+        'Every village still unfiled is given a new day, spread over the working days that remain'+schedFromWords()+'. Assignments do '+
         'not change — only the days. An officer who was told a village was his for a day already past will be told '+
         'a new one, and an officer working to his old list will find it has moved.')) return;
-      schedPost({kind:'schedulePublish', respread:true}, r=>{
+      schedPost({kind:'schedulePublish', respread:true, from:SCHEDFORM.start||''}, r=>{
         SCHEDMSG=schedPubWords(r); SCHEDBAD=false;
       });
+      return;
+    }
+    if(a==='share'){
+      const n=((SCHED.district||{}).officers||[]).length;
+      if(!confirm('Send the schedule to all '+n+' officers?\n\n'+
+        'Each one is mailed his own villages and his own days, and it opens in his app the next time he opens '+
+        'it. It is the plan of work, not a notice — it raises nothing against anybody.')) return;
+      schedPost({kind:'schedNudge', to:'all'}, r=>{
+        SCHEDMSG='The schedule went to '+r.sent+' officer'+(r.sent===1?'':'s')+' ('+r.mailed+' by mail). '+
+          'Each has his own villages and his own days.'; SCHEDBAD=false; });
       return;
     }
     if(a==='remind'){
@@ -3060,13 +3144,20 @@ function wireSchedule(){
 /* WHAT THE PUBLISH ACTUALLY DID, in the district's own figures. Sixty is a
    target that whole mandals cannot hit exactly, so the arithmetic is printed
    rather than the order being reported as carried out. */
+const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+function schedFromWords(){
+  const f=String(SCHEDFORM.start||'');
+  return /^\d{4}-\d{2}-\d{2}$/.test(f) ? ', beginning '+dm(f) : ', beginning today';
+}
 function schedPubWords(r){
   const bits=[];
   bits.push(r.added+' line'+(r.added===1?'':'s')+' added');
   if(r.moved) bits.push(r.moved+' date'+(r.moved===1?'':'s')+(r.respread?' re-spread':' set'));
   if(r.dropped) bits.push(r.dropped+' dropped from the roll');
   bits.push(r.villages+' village'+(r.villages===1?'':'s')+' now under schedule');
-  bits.push(r.workingDaysLeft+' working day'+(r.workingDaysLeft===1?'':'s')+' left');
+  bits.push(r.startFrom
+    ? ('planned '+dm(r.startFrom)+' – '+dm(r.startTo)+', '+r.workingDaysLeft+' working day'+(r.workingDaysLeft===1?'':'s'))
+    : (r.workingDaysLeft+' working day'+(r.workingDaysLeft===1?'':'s')+' left'));
   const off=(r.offices||[]).map(o=>o.role+' '+o.villages+(o.cap!=null?' of '+o.cap+' asked for':'')).join(' · ');
   return bits.join(' · ') + (off?'.  '+off+'.':'.') +
     ((r.notes||[]).length?'  '+r.notes.join('  '):'');
@@ -3593,6 +3684,7 @@ function render(j){
   if(VIEW==='advisory' && !ADV) pullAdv(ADV_OPEN);
   if(VIEW==='admin' && !ROLL) pullRoll();
   if(VIEW==='admin') wireAdmin();
+  if(VIEW==='schedule' && SCHED && SCHED.forMonth !== (MONTH||'')) SCHED=null;   /* the picker moved */
   if(VIEW==='schedule' && !SCHED) pullSched();
   if(VIEW==='schedule') wireSchedule();
   if(VIEW==='overview') drawMap('map','main');
