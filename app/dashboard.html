@@ -905,6 +905,18 @@ td.mut{color:var(--tx-2)} td.num{font-family:var(--mono);text-align:center}
 tr[data-di],tr[data-advopen]{cursor:pointer} tr:hover td{background:var(--row-hover)}
 tr[data-advopen].on td{background:var(--row-hover);font-weight:600}
 .twrap{overflow:auto;max-height:352px;border-radius:14px;box-shadow:var(--nm-in-sm);background:var(--well)}
+/* THE PIVOT. Twenty columns of days scroll sideways inside the card; the two
+   columns that say WHO stay put, or a reader three days along the scroll is
+   looking at figures with no name against them. */
+.piv th,.piv td{white-space:nowrap}
+.piv .pivh{position:sticky;left:0;z-index:2;text-align:left;background:var(--panel);min-width:170px}
+.piv .pivh2{position:sticky;left:170px;z-index:2;text-align:left;background:var(--panel);min-width:64px}
+.piv thead .pivh,.piv thead .pivh2{z-index:3}
+.piv .pivtot{font-weight:700;background:var(--well)}
+.piv .pivnow{color:var(--pri)}
+.piv .pivtoday{font-family:var(--mono);font-size:9.5px;font-weight:400;color:var(--tx-3)}
+.piv .pivfoot td{font-weight:700;background:var(--well)}
+.piv td .pill{min-width:26px;display:inline-block;text-align:center}
 th{background:var(--well)}
 tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--row-hover-2)}
 .pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:1.5px 8px;border-radius:9px}
@@ -2287,7 +2299,7 @@ async function doExport(kind){
      Every one of them counts LINES, not villages — a mandal village is named
      against the MPO and the MPDO both — and each file says so at its foot, so
      a total read off a spreadsheet cannot be mistaken for a village count. */
-  if(kind==='scoff'||kind==='scvil'||kind==='scday'){
+  if(kind==='scoff'||kind==='scvil'||kind==='scday'||kind==='scpiv'){
     const d=(SCHED&&SCHED.district)||null;
     if(!d||!(d.officers||[]).length){ expNote('No schedule has been published for this month.'); return; }
     const ym=SCHED.ym||'', win=(SCHED.cycle&&SCHED.cycle.from)?SCHED.cycle.from+' to '+SCHED.cycle.to:'';
@@ -2310,6 +2322,29 @@ async function doExport(kind){
       body.push([rows.length+' lines over '+d.villages+' villages — a mandal village is named against its MPO and its MPDO both, and either may file it.']);
       dlBlob('SJGP_Schedule_Villages_'+ym+'.csv','text/csv;charset=utf-8',csvText(body));
       expNote('Saved: every line ('+rows.length+' over '+d.villages+' villages).'); return; }
+    if(kind==='scpiv'){
+      /* THE PIVOT, AS A SPREADSHEET. On screen a cell is a count, because
+         twenty columns of village names will not fit; in a file it is the
+         NAMES, because that is what a reviewer reads down a column when he
+         asks who is where on Tuesday. */
+      const days=(d.plan||[]).map(x=>x.date);
+      const cell={};
+      d.officers.forEach(o=>(o.rows||[]).forEach(r=>{
+        if(!r.dueDate) return;
+        const k=o.phone+'|'+r.dueDate;
+        (cell[k]=cell[k]||[]).push(r.gp+(r.filed?' (filed)':''));
+      }));
+      const head=['Officer','Charge','Mandals'].concat(days).concat(['Villages in all']);
+      const rows=d.officers.map(o=>[o.name,o.role,(o.mandals||[]).join('; ')]
+        .concat(days.map(dt=>(cell[o.phone+'|'+dt]||[]).join('; ')))
+        .concat([o.assigned]));
+      const tot=['All officers','',''].concat(days.map(dt=>
+        d.officers.reduce((n,o)=>n+((cell[o.phone+'|'+dt]||[]).length),0))).concat([d.rows]);
+      const body=[head].concat(rows); body.push([]); body.push(tot); body.push([]);
+      body.push(['Lines, not villages - a mandal village is set against its MPO and its MPDO both. '+
+                 d.rows+' lines over '+d.villages+' villages. Reporting month '+ym+', window '+win+'.']);
+      dlBlob('SJGP_Schedule_Pivot_'+ym+'.csv','text/csv;charset=utf-8',csvText(body));
+      expNote('Saved: the pivot ('+d.officers.length+' officers, '+days.length+' days).'); return; }
     const body=[['Working day','Villages set','Filed so far','Still to file']]
       .concat((d.plan||[]).map(p=>[p.date,p.due,p.filed,Math.max(0,p.due-p.filed)]));
     body.push([]);
@@ -3031,6 +3066,53 @@ function vSchedule(j,A){
         <td class="num">${p.due}</td><td class="num">${p.filed>=p.due?'<span class="pill ok">'+p.filed+'</span>':p.filed}</td></tr>`).join('')+
       `</tbody></table></div>`:'<div class="empty">Nothing is dated yet.</div>','scplan');
 
+  /* ------------------------------------------------------------------
+     THE PIVOT — who is answerable, against the day.
+     Asked for on 18.09.2026. The officer ledger says what a man holds for the
+     month; the day table says what the district owes on a date. Neither
+     answers the question a review actually asks: on Tuesday, who is out, and
+     where. This crosses the two.
+
+     A cell is the villages set for that officer on that day, and it reads
+     filed-over-set once any of them is filed. It counts LINES — a mandal
+     village is set against its MPO and its MPDO both — and the footnote says
+     so, rather than letting a corner total be mistaken for a village count.
+     ------------------------------------------------------------------ */
+  const pDays = plan.map(x=>x.date);
+  if(pDays.length){
+    const cell={};
+    offs.forEach(o=>(o.rows||[]).forEach(r=>{
+      if(!r.dueDate) return;
+      const k=o.phone+'|'+r.dueDate;
+      (cell[k]=cell[k]||{set:0,done:0,gps:[]});
+      cell[k].set++; if(r.filed) cell[k].done++; cell[k].gps.push(r.gp);
+    }));
+    const colTot=dt=>offs.reduce((n,o)=>n+((cell[o.phone+'|'+dt]||{}).set||0),0);
+    h+=panel('c12','Pivot \u00b7 who is answerable, against the day',
+      offs.length+' officers \u00d7 '+pDays.length+' working days',
+      `<div class="twrap" style="max-height:460px"><table class="piv"><thead><tr>
+         <th class="pivh">Officer</th><th class="pivh2">Charge</th>
+         ${pDays.map(dt=>`<th${dt===today?' class="pivnow"':''}>${esc(dm(dt))}${dt===today?'<br><span class="pivtoday">today</span>':''}</th>`).join('')}
+         <th class="pivtot">All</th></tr></thead><tbody>` +
+      offs.map(o=>`<tr>
+         <td class="pivh">${esc(o.name)}</td><td class="pivh2 mut">${esc(o.role)}</td>` +
+         pDays.map(dt=>{
+           const c=cell[o.phone+'|'+dt];
+           if(!c) return '<td class="mut">&middot;</td>';
+           const cls=c.done>=c.set?'ok':(dt<today?'bad':(c.done?'warn':''));
+           return `<td title="${esc(o.name+' — '+dm(dt)+': '+c.gps.join(', '))}">`+
+             `<span class="pill ${cls}">${c.done?c.done+'/'+c.set:c.set}</span></td>`;
+         }).join('') +
+         `<td class="pivtot num">${o.assigned}</td></tr>`).join('') +
+      `<tr class="pivfoot"><td class="pivh">All officers</td><td class="pivh2"></td>` +
+      pDays.map(dt=>`<td class="num">${colTot(dt)||''}</td>`).join('') +
+      `<td class="pivtot num">${d.rows}</td></tr></tbody></table></div>
+       <div class="expnote" style="margin-top:10px">A cell is the villages set for that officer on that day, and
+       reads <b>filed / set</b> once any of them is filed. Hover a cell for the village names. These are
+       <b>lines, not villages</b> &mdash; a mandal village is set against its MPO and its MPDO both &mdash; so the
+       corner total is ${d.rows} lines over ${d.villages} villages.</div>`,'scpiv');
+  }
+
   /* ---- the register, downloadable ----
      Asked for on 18.09.2026. Three readings of the same schedule: the officers
      as a ledger, every line village by village, and the month day by day. CSV
@@ -3041,6 +3123,7 @@ function vSchedule(j,A){
       <button class="tbtn pri" data-exp="scoff">CSV &middot; officer by officer (${offs.length})</button>
       <button class="tbtn" data-exp="scvil">CSV &middot; every line, village by village (${d.rows})</button>
       <button class="tbtn" data-exp="scday">CSV &middot; the month, day by day (${plan.length})</button>
+      <button class="tbtn" data-exp="scpiv">CSV &middot; pivot &mdash; officer &times; day</button>
       <span class="expnote" id="expNote">The officer ledger carries what each man holds, what he has filed and
         whether he has acknowledged the schedule. The village file carries one row per officer named against a
         village, so a mandal village appears twice — once for the MPO and once for the MPDO. Counts of

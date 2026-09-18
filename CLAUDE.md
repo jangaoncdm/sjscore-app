@@ -25,8 +25,19 @@ parse, then runs every suite. The suites load the backend **from disk** — they
 never hold their own copy of the logic, so a test cannot pass against a stale
 duplicate. The same command gates the GitHub Action; nothing untested deploys.
 
-Frontend has no automated tests. **Render it and look**, with Playwright, at
-2560, 1500 and 390 px. Do not ship CSS you have not seen.
+**Render it and look**, with Playwright, at 2560, 1500 and 390 px. Do not ship
+CSS you have not seen — and the app has a render pass of its own now:
+
+```bash
+node tests/render-app.js       # sign-in + 4 screens x 3 widths; Info/app-render/
+```
+
+It fails on sideways scroll, on a script error, on a desktop rule that has
+leaked below 1500px onto the phone, and on a monitor carrying margin instead of
+content. **The 390px layout is asserted against the numbers it has always
+had** — one column, the tab bar across the foot, the content exactly the width
+of the screen — because the desktop layout was added to a phone app and the
+phone is what 280 officers hold.
 
 ---
 
@@ -487,6 +498,19 @@ schedule has been published: a row of noughts reads as a district doing
 nothing, which is not the same thing as a district that has not been given a
 schedule.
 
+**The pivot — who is answerable, against the day** (18.09.2026). The officer
+ledger says what a man holds for the month; the day table says what the district
+owes on a date. Neither answers the question a review actually asks: *on
+Tuesday, who is out, and where.* The pivot crosses the two — officers down,
+working days across, each cell the villages set for that officer that day,
+reading **filed / set** once any is filed. On screen a cell is a count, because
+twenty columns of village names will not fit; in the CSV it is the NAMES,
+because that is what is read down a column. Both count **lines, not villages**,
+and both say so at the foot: a mandal village is set against its MPO and its
+MPDO both, so the corner total is larger than the village count on the tiles.
+The two columns that say WHO are frozen, or a reader three days along the
+sideways scroll is looking at figures with no name against them.
+
 `scheduleReminders()` runs ~09:00 every working day and is installed by
 `installScheduleTrigger()`, which `installReportTriggers()` now also calls.
 
@@ -629,6 +653,48 @@ that is working.
 
 Restoring is deliberately not a menu item. Putting a backup back over a live
 government register is the Collector's own act, done by hand.
+
+## The desktop view
+
+**One codebase, one URL.** The field app is a phone app that lays itself out
+for a monitor above 980px; there is no separate desktop build and there must
+not be. Below 1500px nothing here applies at all, which is the whole guarantee:
+every desktop rule lives inside `@media (min-width:980px|1500px|1980px)`, and
+`tests/render-app.js` fails if one leaks onto the phone.
+
+**A list is not a column.** The ranking is thirty-nine villages; in a third of a
+2K monitor it came out as a ribbon nearly three thousand pixels long beside two
+thirds of blank paper, which was the whole of what "it looks so bad" meant. A
+`.group.wide` lays its rows ACROSS the width — two columns at 1500, three at
+1980 — so the screen carries the list rather than framing it. The class is put
+on the long, list-shaped groups in `app.js` and means nothing on a phone.
+
+**An action is not a card.** `.group.act` holds the buttons — *Start an
+inspection*, *Refresh from district* — at their own width on one line. A button
+stretched to a third of a monitor reads as a slab.
+
+**A capped column is centred.** Settings and leave are held to a 720px reading
+measure, because a list of switches gains nothing from being 1,760px wide; they
+then sit in the middle of the space rather than pinned to its left edge.
+
+**Sign in is one centred composition**, not a full-bleed split. The brand panel
+and the credentials sit side by side and the pair is centred both ways. It used
+to put the emblem in the far-left corner of a 2560 screen and the form against
+the right edge, with the form pinned to the TOP because `.fineprint` carries
+`margin-top:auto` — right on a phone, where it rests at the foot of the screen,
+and fatal in a 1440px column where that auto margin ate every pixel of free
+space before `justify-content:center` could see it. The two panels are centred
+by auto margins rather than `align-items`, because a centred flex item in a
+scrolling container is clipped at the top when it is taller than the window,
+and this is the one screen an officer cannot get past if it goes wrong.
+
+**Before changing any of it, take a rollback point.** `pre-desktop-2026-09-18`
+tags the commit the site was published from before the desktop view existed.
+Putting the site back is `git checkout <tag> -- app/ backend/`, a commit and a
+push; the Action republishes and redeploys from that, and rolling forward again
+destroys nothing.
+
+---
 
 ## House style
 

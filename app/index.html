@@ -587,13 +587,32 @@ body.kb .tabs,body.kb .strip{transform:translateY(160%);pointer-events:none}
   /* the attendance gate holds the middle of the screen */
   #attend .attwrap{max-width:560px;margin:0 auto}
 
-  /* sign in becomes two columns: the brand panel beside the credentials */
-  #signin{flex-direction:row}
-  .brandband{width:44%;min-width:380px;display:flex;flex-direction:column;justify-content:center;
-    padding:64px 54px}
-  .brandband::after{top:0;bottom:0;left:auto;right:0;width:3px;height:auto;
-    background:linear-gradient(180deg, var(--gold) 0%, var(--gold) 34%, transparent 34%)}
-  .siwrap{flex:1;justify-content:center;max-width:470px;margin:0 auto;padding:48px 34px}
+  /* ------------------------------------------------------------------
+     SIGN IN, on a monitor — the brand panel beside the credentials, but as
+     ONE CENTRED COMPOSITION and not a full-bleed split.
+
+     The split put the emblem in the far-left corner of a 2560 screen and the
+     form against the right edge with seven hundred pixels of nothing between
+     them, and the form sat at the TOP of the screen rather than in the middle
+     of it: .fineprint carries margin-top:auto so that on a phone it rests at
+     the foot of the screen, and in a 1440px-tall column that auto margin ate
+     every pixel of free space before justify-content:center could see it.
+
+     The two panels are centred by AUTO MARGINS rather than by align-items,
+     because a centred flex item in a scrolling container is clipped at the top
+     when it is taller than the window, and this is the one screen an officer
+     cannot get past if it goes wrong.
+     ------------------------------------------------------------------ */
+  #signin{flex-direction:row;align-items:flex-start;justify-content:center;padding:40px}
+  .brandband{flex:0 1 480px;width:auto;min-width:0;max-width:480px;
+    margin-top:auto;margin-bottom:auto;
+    display:flex;flex-direction:column;justify-content:center;padding:10px 56px 10px 10px}
+  .brandband::after{top:10%;bottom:10%;left:auto;right:0;width:3px;height:auto;
+    background:linear-gradient(180deg, var(--seal) 0%, var(--iris) 46%, var(--teal) 88%, transparent 100%)}
+  .siwrap{flex:0 1 430px;width:auto;max-width:430px;margin-top:auto;margin-bottom:auto;
+    justify-content:center;padding:10px 10px 10px 56px}
+  /* under the form, where it belongs — not at the foot of a 1440px screen */
+  .siwrap .fineprint{margin-top:22px}
 }
 
 /* ============================================================
@@ -616,7 +635,11 @@ body.kb .tabs,body.kb .strip{transform:translateY(160%);pointer-events:none}
   #homeBody,#recBody,#ntcBody,#inspBody{
     display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
     column-gap:26px;align-items:start}
-  #moreBody,#lvBody{max-width:720px}   /* settings and leave read as one column */
+  /* Settings and leave read as ONE COLUMN — a list of switches gains nothing
+     from being 1,760px wide. But a capped column belongs in the middle of the
+     space it is given, not pinned to its left edge with a thousand pixels of
+     paper beside it. */
+  #moreBody,#lvBody{max-width:720px;margin-left:auto;margin-right:auto}
   /* main already carries the side padding; inside the grid the cards drop
      their own horizontal margin or the columns lose width to it */
   #homeBody > *,#recBody > *,#ntcBody > *,#inspBody > *{margin-left:0;margin-right:0}
@@ -625,8 +648,45 @@ body.kb .tabs,body.kb .strip{transform:translateY(160%);pointer-events:none}
   #recBody  > .banner,#recBody  > .kpis,#recBody  > .rulebox,
   #ntcBody  > .banner,#ntcBody  > .kpis,#ntcBody  > .rulebox,
   #inspBody > .banner,#inspBody > .kpis,#inspBody > .rulebox,
-  #homeBody > .group.wide,#recBody > .group.wide{grid-column:1 / -1}
+  #homeBody > .group.wide,#recBody > .group.wide,
+  #ntcBody > .group.wide,#inspBody > .group.wide,
+  #homeBody > .empty,#recBody > .empty,#ntcBody > .empty,#inspBody > .empty{grid-column:1 / -1}
   .kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+
+  /* ------------------------------------------------------------------
+     A LIST IS NOT A COLUMN.
+     The ranking is thirty-nine villages. In a third of a 2K monitor it came
+     out as a ribbon nearly three thousand pixels long with two thirds of the
+     screen blank beside it — the whole of what was wrong with this page on a
+     desktop. A wide group lays its rows ACROSS the width instead, so the
+     monitor carries the list rather than framing it. Nothing here is reached
+     below 1500px: the phone reads the same single column it always did, and
+     the `wide` class does nothing at all there.
+     ------------------------------------------------------------------ */
+  .group.wide > .card{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  /* The hairline belongs between rows of the SAME column. The phone's rule
+     puts one on every row but the first; in two columns the first row of the
+     second column is also a top edge, so it loses its line too. */
+  .group.wide > .card > .row:nth-child(2)::before{display:none}
+  /* and the columns are parted by a rule of their own */
+  .group.wide > .card > .row:nth-child(2n)::after{
+    content:"";position:absolute;left:0;top:10px;bottom:10px;width:1px;background:var(--hair-2)}
+
+  /* ------------------------------------------------------------------
+     AN ACTION IS NOT A CARD. "Start an inspection" and "Refresh from
+     district" are buttons, and a button stretched to a third of a monitor
+     reads as a slab. They take their own width and sit at the start of the
+     line, where a hand looking for them expects them.
+     ------------------------------------------------------------------ */
+  .group.act{grid-column:1 / -1;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .group.act > .btn{width:auto;min-width:250px;margin-top:0}
+  .group.act > p{margin:0;text-align:left!important;padding:0!important}
+
+  /* THE TILES CARRY THE WIDTH THEY ARE GIVEN. Four tiles across 1,760px is
+     440px each; at the phone's 32px the figure was a full stop in a field. */
+  .kpi{padding:18px 20px 17px 22px}
+  .kpi .n{font-size:40px}
+  .kpi .l{font-size:11.5px;margin-top:10px}
 }
 @media (min-width:1980px){
   main{padding:0 56px}
@@ -636,6 +696,13 @@ body.kb .tabs,body.kb .strip{transform:translateY(160%);pointer-events:none}
   .kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
   .bigtitle h2{font-size:38px}
   .masthead h2{font-size:36px}
+  /* three columns of cards, and three columns of list */
+  .group.wide > .card{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .group.wide > .card > .row:nth-child(3)::before{display:none}
+  .group.wide > .card > .row:nth-child(2n)::after{display:none}
+  .group.wide > .card > .row:not(:nth-child(3n+1))::after{
+    content:"";position:absolute;left:0;top:10px;bottom:10px;width:1px;background:var(--hair-2)}
+  .kpi .n{font-size:44px}
 }
 </style>
 </head>
