@@ -19,6 +19,24 @@
    pasted back by hand after every publish. The empty string below is only a
    fallback for the case where config.js is missing. */
 const SERVER_URL = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
+/* ============================================================================
+ * WHICH REGISTER THIS APP IS · 18.09.2026
+ *
+ * The same bytes serve the sanitation register and the Gram Panchayat one;
+ * config.js says which, and config.js is per-deployment and is never carried
+ * by an upgrade. Anything unreadable is SJGP, because a setting that fails to
+ * load must land on the register that already exists.
+ *
+ * AND THE STORE IS THE TENANT'S OWN. Both apps are published under one domain,
+ * and localStorage is per ORIGIN and not per path — so without this the GP app
+ * would open on top of an officer's SJGP session, write its own over it, and
+ * each would keep signing the other out on the same handset. The key carries
+ * the tenant; nothing else about the store changes, and an SJGP phone reads
+ * exactly the key it has always read.
+ * ========================================================================== */
+const TENANT = String((typeof window !== 'undefined' && window.SJGP_TENANT) || 'SJGP').toUpperCase().trim() === 'GP' ? 'GP' : 'SJGP';
+const IS_GP = TENANT === 'GP';
+const STORE_KEY = IS_GP ? 'sjgp-gp1' : 'sjf5';
 const APP_VERSION = '6.10.0';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
@@ -147,10 +165,12 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,9
    store and a record would refuse to save. */
 let DB;
 function load(){
-  try{ DB = JSON.parse(localStorage.getItem('sjf5') || 'null'); }catch(e){ DB = null; }
+  try{ DB = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); }catch(e){ DB = null; }
   if(!DB){
     let old = null;
-    try{ old = JSON.parse(localStorage.getItem('sjf4') || 'null'); }catch(e){}
+    /* the 4.x store is the sanitation register's history alone; the GP
+       register has none to carry forward */
+    try{ if(!IS_GP) old = JSON.parse(localStorage.getItem('sjf4') || 'null'); }catch(e){}
     DB = {url:(old&&old.url)||'', session:(old&&old.session)||null, master:(old&&old.master)||[],
           records:{}, cache:[], cacheAt:'', att:{}, leave:[], prefs:{sun:0,big:0}, iosTipSeen:!!(old&&old.iosTipSeen)};
   }
@@ -174,7 +194,7 @@ let st;
 function save(){ clearTimeout(st); st = setTimeout(saveNow, 200); }
 function saveNow(){
   clearTimeout(st);
-  try{ localStorage.setItem('sjf5', JSON.stringify(DB)); }
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(DB)); }
   catch(e){ toast('Phone storage is full. Sync now to clear space.', 5000); }
 }
 

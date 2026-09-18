@@ -16,7 +16,7 @@ the rules below exist because exactly that happened in production.
 ## Run this before you finish anything
 
 ```bash
-npm test              # 1372 assertions, 25 suites, against the real backend files
+npm test              # 1448 assertions, 26 suites, against the real backend files
 node tests/ladder     # one suite, with its detail
 ```
 
@@ -653,6 +653,80 @@ that is working.
 
 Restoring is deliberately not a menu item. Putting a backup back over a live
 government register is the Collector's own act, done by hand.
+
+## The second register · Gram Panchayat
+
+**Ordered 18.09.2026.** A second tenant for the Gram Panchayat domain: 115 Gram
+Panchayat Officers across 180 revenue villages, and 19 Revenue Inspectors —
+134 officers, carrying attendance, leave, the geo-tagged mark, the map and the
+daily report. `DEPLOY-GP.md` is how it is put up.
+
+**Two Sheets, and that is the whole of the isolation.** Each register is its
+own Apps Script project bound to its own spreadsheet behind its own `/exec`.
+**There is no Tenant column and there must not be one.** A logical filter is
+the wrong boundary for a register that issues notices under the Conduct Rules:
+every read in four thousand lines would have to carry it, and one missed filter
+puts a Gram Panchayat Officer's absence into a Panchayat Secretary's show-cause
+notice. Two spreadsheets cannot leak into one another because there is nothing
+between them to leak through.
+
+**Which register a project is, is a Script Property, not a line in the file.**
+The same bytes deploy to both, so there is no build to get wrong. `TENANT=GP`
+selects it; **anything else — missing, empty, misspelt — is SJGP**, because a
+property that fails to read must land on the register that already exists.
+Suite 26 asserts that for each of those cases. `op=diag` reports the tenant by
+name, and the GP deploy step fails if the address answers without saying `GP` —
+an `ok:true` alone would look identical from a project whose property was never
+set, and the first officer to sign in would land in the wrong register.
+
+**`TENANTS` in `Code.gs` carries what differs**: the roles and their rank, who
+is district, who holds a mandal, who is a viewer, who is asked to mark in, who
+applies for leave, and four switches — `sanction`, `evaluation`, `schedule`,
+`placeOfDuty`. Nothing else in the file knows there are two registers.
+
+**The ladder is built and switched off** (`TENANTS.GP.sanction = false`). A GPO
+who does not mark draws no notice, no debit and no lock. Turning it on is the
+Collector's written order and **suite 26 is where it is changed first**.
+
+**The 100-mark evaluation and the filing schedule are refused at the door** on
+the GP register — not hidden, refused — rather than growing a half-filled
+Inspections tab nobody reads.
+
+**And this register can do what the other cannot.** Every revenue village
+carries its GP office on the roll, so for the first time a mark has a place of
+duty to be measured against. It **measures and it accuses nobody** — the same
+restraint as rule 10, which exists precisely because the sanitation register
+had nothing to check against. The distance is printed; the mark stands. An
+officer holding four villages is at his place of duty at any of them, so the
+distance is to the **nearest of his own offices** — measuring to the first
+alone would call a man absent for standing in the second village he is in
+charge of. **A coordinate that cannot be believed is not a coordinate**: two of
+the district's 180 rows were wrong (a longitude of `7852556`, and one with the
+latitude copied into the longitude), and a distance off either would have been
+a five-hundred-kilometre accusation against a man in his own office. Anything
+outside the district's box is dropped and named in the seed report.
+
+**One origin, two apps, two stores.** Browser storage is per *domain*, not per
+path, so without a tenant-keyed store the GP app would open on top of an
+officer's sanitation session and the two would sign each other out on the same
+handset. `window.SJGP_TENANT` in `gp/config.js` sets the key; the service
+worker takes the same from its own path, because a worker cannot read
+config.js.
+
+**The rosters never enter this repository.** `Domain/` is gitignored. The
+workbook carries 134 personal mobile numbers and the repository is public; it
+was untracked on 18.09.2026 only by the accident of landing after that day's
+last commit, and `git add -A` an hour earlier would have published it.
+`tests/gp-seed.js` reads it and writes the two seed tabs **into `Domain/GP/`
+and nowhere else**.
+
+**Both registers draw on one mail allowance.** They run as the same deploying
+user, so 280 + 134 = 414 officers share it — 100 a day on a consumer account,
+1,500 on Workspace. On a consumer account that arithmetic fails on *both*
+registers and nothing says why. `checkMailQuota` in Admin.gs reads the figure
+rather than guessing, and sends nothing to do it.
+
+---
 
 ## The desktop view
 

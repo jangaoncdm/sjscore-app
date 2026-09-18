@@ -300,17 +300,115 @@ function entitlement_(type, year){
   if(type === 'OH' && Number(year) === OH_REDUCED_YEAR) return OH_REDUCED_BALANCE;
   return LEAVE_ENTITLEMENT[type] || 0;
 }
-/* Leave is applied for by these three, and sanctioned by the Collector alone. */
-const LEAVE_APPLY   = ['MPO','PS','MPDO'];
-const canApplyLeave_   = r => LEAVE_APPLY.indexOf(r) >= 0;
+/* ============================================================================
+ * THE TENANT · ordered 18.09.2026
+ * ----------------------------------------------------------------------------
+ * This same file serves two registers. SJGP is the sanitation register the
+ * district has run since July: 280 Panchayat Secretaries, MPOs, MSOs and
+ * MPDOs, the 100-mark village evaluation, and the show-cause ladder. GP is the
+ * Gram Panchayat register ordered on 18.09.2026: 115 Gram Panchayat Officers
+ * across 180 revenue villages, and 19 Revenue Inspectors.
+ *
+ * THEY DO NOT SHARE A SPREADSHEET, AND THAT IS THE WHOLE OF THE ISOLATION.
+ * Each runs as its own Apps Script project bound to its own Sheet, behind its
+ * own /exec. There is no Tenant column anywhere and there must not be one: a
+ * logical filter is the wrong boundary for a register that issues notices
+ * under the Conduct Rules, because every read in four thousand lines would
+ * have to carry it and ONE missed filter puts a Gram Panchayat Officer's
+ * absence into a Panchayat Secretary's show-cause notice. Two spreadsheets
+ * cannot leak into one another, because there is nothing between them to leak
+ * through. Neither register can read the other's data even in principle — not
+ * because a role check says no, but because the data is not there.
+ *
+ * WHICH REGISTER THIS IS, IS A SCRIPT PROPERTY, not a line in this file. The
+ * same bytes deploy to both projects, so there is no build to get wrong and no
+ * way for the GP file to reach the SJGP project. Set TENANT=GP once, in the
+ * browser, on the GP project; anything else, including nothing at all, is
+ * SJGP. That default is deliberate: a property that fails to read must land on
+ * the register that already exists, never on the new one.
+ * ========================================================================== */
+const TENANTS = {
+  SJGP: {
+    key:'SJGP', name:'Swachh Jangaon Gram Panchayat', short:'SJGP',
+    /* seniority, for folding a number that sits on more than one row */
+    rank:{PS:1, MPO:2, MSO:3, MPDO:4, DLPO:5, DPO:6, COLLECTOR:7},
+    district:['DPO','DLPO','COLLECTOR'],
+    mandal:['MPDO','MSO','MPO'],
+    /* the Secretary is the officer being evaluated, so he never writes */
+    viewer:['PS'],
+    /* not asked to mark in, so never counted as a gap: the Collector, and by
+       the order of 19.08.2026 the MSOs, whose attendance is voluntary */
+    attExempt:['COLLECTOR','MSO'],
+    leaveApply:['MPO','PS','MPDO'],
+    /* the show-cause ladder, the village evaluation and the filing schedule
+       are this register's and have always run */
+    sanction:true, evaluation:true, schedule:true,
+    /* THE GPs TAB HAS NO COORDINATES (rule 10), so this register has nothing
+       to measure a mark against and says so rather than guessing */
+    placeOfDuty:false,
+    roles:['PS','MPO','MSO','MPDO','DLPO','DPO','COLLECTOR']
+  },
+  GP: {
+    key:'GP', name:'Gram Panchayat Register · Jangaon', short:'GP',
+    /* GPO holds the village and marks in; the Revenue Inspectors supervise a
+       mandal, ARI under MRI. No role here is a viewer: a GPO is not an officer
+       being evaluated, he is the officer keeping the register. */
+    rank:{GPO:1, ARI:2, MRI:3, COLLECTOR:7},
+    district:['COLLECTOR'],
+    mandal:['MRI','ARI'],
+    viewer:[],
+    attExempt:['COLLECTOR'],
+    leaveApply:['GPO','ARI','MRI'],
+    /* THE LADDER IS BUILT AND SWITCHED OFF, by the Collector's direction of
+       18.09.2026. Attendance, leave, the geo-tagged mark, the map and the
+       daily report are what was asked for; no show-cause notice is proposed,
+       no casual leave is debited and no app is locked. Turning this to true
+       serves numbered notices to Gram Panchayat Officers, and that is the
+       Collector's written order and not a code edit — suite 26 holds it off
+       and is where the change is made first, deliberately. */
+    sanction:false,
+    /* the 100-mark evaluation and its filing schedule are the sanitation
+       register's work and are not asked of this one */
+    evaluation:false, schedule:false,
+    /* AND THIS REGISTER CAN DO WHAT THE OTHER CANNOT. Every revenue village
+       carries its GP office on the roll, so a mark has a place of duty to be
+       measured against for the first time. It MEASURES AND IT ACCUSES NOBODY
+       (rule 10): the distance is printed and the mark stands. */
+    placeOfDuty:true,
+    roles:['GPO','ARI','MRI','COLLECTOR']
+  }
+};
+let TENANT_CACHE = null;
+function tenant_(){
+  if(TENANT_CACHE) return TENANT_CACHE;
+  let v = '';
+  try{ v = String(PropertiesService.getScriptProperties().getProperty('TENANT') || '').toUpperCase().trim(); }catch(e){}
+  /* ANYTHING UNREADABLE IS THE REGISTER THAT ALREADY EXISTS. A property that
+     cannot be read must not silently turn the sanitation register into
+     something else. */
+  TENANT_CACHE = TENANTS[v] || TENANTS.SJGP;
+  return TENANT_CACHE;
+}
+const isGP_ = () => tenant_().key === 'GP';
+/* seniority, for folding a number that sits on more than one row, and for the
+   roll the console offers. Was a const; it is the register's now. */
+const rank_ = () => tenant_().rank;
+/* THE VILLAGE ROLL, AND WHAT IT CARRIES.
+   SJGP's GPs tab is Mandal, GP and nothing else — that is the whole reason
+   rule 10 exists: the register had nothing to measure a mark against, so it
+   measured nothing and said so. The GP register's roll carries the GP office
+   of every revenue village, so it CAN measure. The two extra columns are
+   written only on the register that has them; SJGP's tab is not touched. */
+const GPS_HEAD = () => tenant_().placeOfDuty ? ['Mandal','GP','Lat','Lng'] : ['Mandal','GP'];
+
+/* Leave is applied for by these, and sanctioned by the Collector alone. */
+const canApplyLeave_   = r => tenant_().leaveApply.indexOf(String(r || '').toUpperCase()) >= 0;
 const canApproveLeave_ = r => r === 'COLLECTOR';
-/* Not asked to mark in, so never counted as a gap: the Collector — and,
-   by the Collector's order of 19.08.2026, the MSOs, whose attendance is
-   VOLUNTARY. An MSO's mark is welcome and recorded; an MSO's silence
-   draws nothing — no reminder, no notice, no debit, no seen ping. */
-const attExempt_ = r => r === 'COLLECTOR' || r === 'MSO';
+const attExempt_ = r => tenant_().attExempt.indexOf(String(r || '').toUpperCase()) >= 0;
 const U_HEAD = ['Phone','Name','Role','Mandal','GP','Email','InitPin','Hash','Active'];
-const RANK = {PS:1, MPO:2, MSO:3, MPDO:4, DLPO:5, DPO:6, COLLECTOR:7};
+/* Kept as a name because thirty rules and both Admin files read it; the values
+   now come from whichever register this is. */
+const LEAVE_APPLY = TENANTS.SJGP.leaveApply;
 
 /* ---------------- plumbing ---------------- */
 function sheet_(name, headers){
@@ -476,7 +574,7 @@ function findByPhone_(phone){
   let best = rows[0], hash = '', active = false;
   rows.forEach(x => {
     const role = cell_(x.v, t.ix.role).toUpperCase();
-    if((RANK[role] || 0) > (RANK[cell_(best.v, t.ix.role).toUpperCase()] || 0)) best = x;
+    if((rank_()[role] || 0) > (rank_()[cell_(best.v, t.ix.role).toUpperCase()] || 0)) best = x;
     if(!hash) hash = cell_(x.v, t.ix.hash);
     const a = t.ix.active < 0 ? true : x.v[t.ix.active];
     if(!(a === false || String(a).toUpperCase() === 'FALSE' || a === '')) active = true;
@@ -504,10 +602,14 @@ function findByPhone_(phone){
   };
 }
 const pub_ = u => ({ name:u.name, role:u.role, phone:u.phone, mandal:u.mandal, mandals:u.mandals, gp:u.gp, gps:u.gps });
-const districtRole_ = r => r === 'DPO' || r === 'COLLECTOR' || r === 'DLPO';
-const mandalRole_   = r => r === 'MPDO' || r === 'MSO' || r === 'MPO';
-/* The Secretary is the officer being evaluated, so the Secretary never writes. */
-const viewerRole_   = r => r === 'PS';
+/* WHAT A ROLE MAY DO IS THE REGISTER'S TO SAY, not this file's. In SJGP the
+   district is the DPO, the DLPO and the Collector and the Secretary is a
+   viewer; in GP the Revenue Inspectors hold the mandal and nobody is a viewer,
+   because a Gram Panchayat Officer is not an officer being evaluated — he is
+   the officer keeping the register. */
+const districtRole_ = r => tenant_().district.indexOf(String(r || '').toUpperCase()) >= 0;
+const mandalRole_   = r => tenant_().mandal.indexOf(String(r || '').toUpperCase()) >= 0;
+const viewerRole_   = r => tenant_().viewer.indexOf(String(r || '').toUpperCase()) >= 0;
 
 /* ---------------- sessions ---------------- */
 function issueToken_(u){
@@ -929,6 +1031,13 @@ function noticeEmail_(g, no, dStr, seq){
    Collector; reminders go out at once, because a reminder costs nothing and
    its whole value is being quick. */
 function issueAbsenceNotices(){
+  /* A REGISTER WITHOUT SANCTION PROPOSES NOTHING. The GP register records
+     attendance, leave and the geo-tagged mark and reports them; by the
+     Collector's direction of 18.09.2026 it raises no show-cause notice and
+     debits no casual leave. The trigger may be installed and may fire; it
+     stops here, so turning the register on later is one constant and not a
+     re-wiring. Suite 26 holds it off. */
+  if(!tenant_().sanction){ Logger.log('This register carries no sanction — no notice is proposed.'); return; }
   const today = today_();
   if(!isWorkingDay_(today)){ Logger.log('Not a working day (' + today + ') — nothing to do.'); return; }
   const lock = LockService.getScriptLock(); lock.waitLock(30000);
@@ -1149,6 +1258,7 @@ function clUsed_(phone, yr){
    found signal at nine at night, is counted before a rupee moves. Pass a
    date to settle a particular day by hand. */
 function settleAbsenceDebits(dateOpt){
+  if(!tenant_().sanction){ Logger.log('This register carries no sanction — nothing is settled.'); return; }
   const today = String(dateOpt || '').trim() || prevWorkingDay_(today_());
   if(!isWorkingDay_(today)){ Logger.log(today + ' was not a working day — nothing to settle.'); return; }
   const lock = LockService.getScriptLock(); lock.waitLock(30000);
@@ -1312,7 +1422,7 @@ function emailGantt_(rows, wdGone, wdAll){
 /* the GPs master, read by its own headers — the tab has been created with
    the columns both ways round over the versions, so the header decides */
 function gpRoll_(){
-  const sh = sheet_('GPs', ['Mandal','GP']);
+  const sh = sheet_('GPs', GPS_HEAD());
   const v = sh.getDataRange().getValues();
   if(v.length < 2) return [];
   const head = v[0].map(h => String(h).toLowerCase().trim());
@@ -1334,6 +1444,71 @@ function gpRoll_(){
   }
   return out;
 }
+/* ----------------------------------------------------------------------------
+ * THE PLACE OF DUTY.
+ *
+ * Every revenue village on the GP register carries its GP office on the roll,
+ * so for the first time a mark has something to be measured against. Read by
+ * header, like every other column on this register, and empty where the roll
+ * has nothing — a village with no coordinate yields no distance rather than a
+ * distance from nowhere.
+ *
+ * A COORDINATE THAT CANNOT BE BELIEVED IS NOT A COORDINATE. Two of the 180
+ * rows the district supplied on 18.09.2026 were plainly wrong — one longitude
+ * of 7852556, one with the latitude copied into the longitude column — and a
+ * distance computed off either would have been a five-hundred-kilometre
+ * accusation against an officer sitting in his own office. Anything outside
+ * the district's box is dropped here and reported by the Admin audit instead.
+ * ------------------------------------------------------------------------- */
+function gpPlaces_(){
+  const sh = sheet_('GPs', GPS_HEAD());
+  const v = sh.getDataRange().getValues();
+  if(v.length < 2) return {};
+  const head = v[0].map(h => String(h).toLowerCase().trim());
+  let mi = -1, gi = -1, la = -1, ln = -1;
+  head.forEach((h, i) => {
+    if(h.indexOf('mandal') >= 0) mi = i;
+    else if(h === 'gp' || h.indexOf('village') >= 0 || h.indexOf('panchayat') >= 0) gi = i;
+    else if(h.indexOf('lat') >= 0) la = i;
+    else if(h.indexOf('lng') >= 0 || h.indexOf('lon') >= 0) ln = i;
+  });
+  if(mi < 0 || gi < 0){ mi = 0; gi = 1; }
+  const out = {};
+  if(la < 0 || ln < 0) return out;
+  for(let i = 1; i < v.length; i++){
+    const m2 = String(v[i][mi] || '').trim(), g = String(v[i][gi] || '').trim();
+    if(!m2 || !g) continue;
+    const y = Number(v[i][la]), x = Number(v[i][ln]);
+    if(!isFinite(y) || !isFinite(x)) continue;
+    if(!(y > 16.4 && y < 19.2 && x > 77.6 && x < 80.9)) continue;   /* not believable */
+    const k = m2.toLowerCase() + '|' + g.toLowerCase();
+    if(!out[k]) out[k] = { lat:y, lng:x, mandal:m2, gp:g };
+  }
+  return out;
+}
+
+/* HOW FAR A MARK WAS MADE FROM THE OFFICER'S OWN OFFICE.
+   An officer may hold four villages — 54 of the 115 hold more than one — and
+   he is at his place of duty at ANY of them, so the distance is to the NEAREST
+   of his own offices. Anything else would call a man absent for standing in
+   the second village he is in charge of.
+
+   IT ACCUSES NOBODY (rule 10). No reminder, no notice, no debit, no lock, and
+   the mark stands. He may be at a mandal meeting, at the Collectorate or on
+   tour; the register cannot know which and a table must not decide it. */
+function dutyDistance_(places, gpsOfOfficer, lat, lng){
+  if(!places || !gpsOfOfficer || !gpsOfOfficer.length) return null;
+  if(!(lat && lng)) return null;
+  let best = null;
+  gpsOfOfficer.forEach(g => {
+    const pt = places[g];
+    if(!pt) return;
+    const d = distKm_(lat, lng, pt.lat, pt.lng);
+    if(best === null || d < best.km) best = { km:d, gp:pt.gp, mandal:pt.mandal };
+  });
+  return best;
+}
+
 function unfiledVillages_(ym){
   const filed = {};
   const ish = sheet_('Inspections', HEADERS), im = headMap_(ish, HEADERS);
@@ -2879,7 +3054,15 @@ function doGet(e){
   if(p.op === 'diag'){
     var dk = '';
     try{ dk = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY') || ''; }catch(err){}
-    return json_({ ok:true, stamp:'SJGP-6.9-diag12', tzScript:Session.getScriptTimeZone(), tzSheet:sheetTz_(), today:today_(), offToday:offInfo_(today_()), briefKeyStored: !!dk,
+    /* WHICH REGISTER THIS ADDRESS SERVES. Both projects run the same bytes, so
+       an ok:true proves only that SOMETHING answered — it would say exactly the
+       same from a GP address whose TENANT property was never set, and the first
+       Gram Panchayat Officer to sign in would land in the sanitation register.
+       The deploy checks this by name. It reveals nothing: the name of the
+       register is on the sign-in page. */
+    return json_({ ok:true, stamp:'SJGP-6.9-diag12', tenant:tenant_().key, tenantName:tenant_().name,
+      sanction:tenant_().sanction, placeOfDuty:tenant_().placeOfDuty,
+      tzScript:Session.getScriptTimeZone(), tzSheet:sheetTz_(), today:today_(), offToday:offInfo_(today_()), briefKeyStored: !!dk,
       keyEnds: dk ? dk.slice(-6) : '', at:new Date().toISOString() });
   }
 
@@ -2888,7 +3071,7 @@ function doGet(e){
   if(p.op === 'me') return json_({ ok:true, user:u });
 
   if(p.op === 'gps'){
-    let rows = sheet_('GPs', ['Mandal','GP']).getDataRange().getValues().slice(1)
+    let rows = sheet_('GPs', GPS_HEAD()).getDataRange().getValues().slice(1)
       .filter(r => r[0] && r[1]).map(r => ({ mandal:String(r[0]).trim(), gp:String(r[1]).trim() }));
     if(viewerRole_(u.role)) rows = rows.filter(r => u.gps.indexOf(r.gp) >= 0);
     else if(mandalRole_(u.role)) rows = rows.filter(r => r.mandal === u.mandal);
@@ -3038,6 +3221,19 @@ function doGet(e){
        and by nobody else: it raises no reminder, no notice, no debit and no
        lock. A distant mark is still a mark. */
     const centres = mandalCentres_(histFix);
+    /* the GP offices, and which of them each officer holds — empty on a
+       register whose roll carries no coordinates, which is SJGP's */
+    const places = tenant_().placeOfDuty ? gpPlaces_() : null;
+    const dutyGps = {};
+    if(places){
+      const dt = uidx_(), dv = dt.sh.getDataRange().getValues();
+      for(let i = 1; i < dv.length; i++){
+        const ph2 = phone10_(dv[i][dt.ix.phone]); if(!ph2) continue;
+        const mn = cell_(dv[i], dt.ix.mandal).toLowerCase();
+        String(dv[i][dt.ix.gp] || '').split(',').map(x => x.trim()).filter(String)
+          .forEach(g => { (dutyGps[ph2] = dutyGps[ph2] || []).push(mn + '|' + g.toLowerCase()); });
+      }
+    }
     todayRows.forEach(r => {
       /* A DISTANCE OFF AN UNTRUSTWORTHY READING IS NOT A DISTANCE. A network
          guess of ±2 km, or a fix that lands outside the district altogether,
@@ -3049,6 +3245,14 @@ function doGet(e){
       const usable = c && r.lat && r.lng && !suspectMark_(r.lat, r.lng, r.acc, r.tz);
       r.km = usable ? distKm_(r.lat, r.lng, c.lat, c.lng) : null;
       r.far = r.km != null && r.km > FAR_MARK_KM_;
+      /* AND, WHERE THE ROLL KNOWS THE OFFICE, the distance from his own place
+         of duty — which is a fact the sanitation register has never had. The
+         same restraint applies to it: measured off a trustworthy reading only,
+         printed, and accusing nobody. */
+      if(places && r.lat && r.lng && !suspectMark_(r.lat, r.lng, r.acc, r.tz)){
+        const dd = dutyDistance_(places, dutyGps[r.phone] || [], r.lat, r.lng);
+        if(dd){ r.dutyKm = dd.km; r.dutyGp = dd.gp; }
+      }
     });
 
     /* SANCTIONED LEAVE STANDS IN FOR THE MISSING ROW. An officer whose
@@ -3906,7 +4110,7 @@ function rollRegister_(u){
     /* the SENIOR row is the one the app greets him from, so it is the one the
        console shows — anything else and the roll disagrees with his phone */
     const role = cell_(v[i], t.ix.role).toUpperCase();
-    if(!r.role || (RANK[role] || 0) > (RANK[r.role] || 0)){
+    if(!r.role || (rank_()[role] || 0) > (rank_()[r.role] || 0)){
       r.role = role; r.name = cell_(v[i], t.ix.name); r.mandal = cell_(v[i], t.ix.mandal);
       r.gp = cell_(v[i], t.ix.gp); r.email = cell_(v[i], t.ix.email);
     }
@@ -3916,9 +4120,9 @@ function rollRegister_(u){
   }
   const rows = order.map(k => by[k]);
   rows.sort((a, b) => (a.mandal || '').localeCompare(b.mandal || '') ||
-                      (RANK[b.role] || 0) - (RANK[a.role] || 0) ||
+                      (rank_()[b.role] || 0) - (rank_()[a.role] || 0) ||
                       (a.name || '').localeCompare(b.name || ''));
-  return json_({ ok:true, rows:rows, roles:Object.keys(RANK),
+  return json_({ ok:true, rows:rows, roles:Object.keys(rank_()),
                  mandals:gpRoll_().map(r => r.mandal).filter((m, i, A) => m && A.indexOf(m) === i).sort() });
 }
 
@@ -3930,7 +4134,7 @@ function createUser_(b, u){
   const name = String(b.name || '').trim();
   if(!name) return json_({ ok:false, error:'A name is needed — the roll is read by people.' });
   const role = String(b.role || '').trim().toUpperCase();
-  if(!RANK[role]) return json_({ ok:false, error:'That is not a role on the register: ' + Object.keys(RANK).join(', ') + '.' });
+  if(!rank_()[role]) return json_({ ok:false, error:'That is not a role on the register: ' + Object.keys(rank_()).join(', ') + '.' });
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -4390,8 +4594,13 @@ function doPost(e){
 
   /* leave — an applicant may only write his own, and only the Collector may decide */
   if(b.kind === 'leave'){
+    /* NAME THE ROLES OF THIS REGISTER, not the other one's. Hardcoded, this
+       told a Gram Panchayat Officer that leave is applied for by the MPO, the
+       Panchayat Secretary and the MPDO — three roles that do not exist on his
+       register at all. */
     if(!canApplyLeave_(u.role))
-      return json_({ ok:false, error:'Leave is applied for through this app by the MPO, the Panchayat Secretary and the MPDO.' });
+      return json_({ ok:false, error:'Leave is applied for through this app by the ' +
+        tenant_().leaveApply.join(', ') + '.' });
     return saveLeave_(b, u);
   }
   if(b.kind === 'leaveDecision'){
@@ -4459,7 +4668,10 @@ function doPost(e){
      authority (rule 6). */
   if(b.kind === 'schedAck')      return schAck_(b, u);
   if(b.kind === 'schedSeen')     return schSeen_(b, u);
-  if(b.kind === 'schedulePublish') return schPublish_(b, u);
+  if(b.kind === 'schedulePublish'){
+    if(!tenant_().schedule) return json_({ ok:false, error:'This register carries no filing schedule.' });
+    return schPublish_(b, u);
+  }
   if(b.kind === 'schedNudge')    return schNudge_(b, u);
 
   /* the officer roll from the console. Each re-checks the Collector's own
@@ -4472,6 +4684,11 @@ function doPost(e){
   if(viewerRole_(u.role))
     return json_({ ok:false, error:'Your login has view access only. Evaluations are filed by the Mandal Sanitation Task Force.' });
 
+  /* THE 100-MARK EVALUATION IS THE SANITATION REGISTER'S WORK. A register
+     that was never asked for it refuses at the door rather than growing a
+     half-filled Inspections tab nobody reads. */
+  if(!tenant_().evaluation)
+    return json_({ ok:false, error:'This register does not take village evaluations.' });
   if(b.kind === 'inspection') return saveInspection_(b, u);
   if(b.kind === 'photos')     return savePhotos_(b, u);
   return json_({ ok:false, error:'unknown request' });

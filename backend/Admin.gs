@@ -44,6 +44,7 @@ function onOpen(){
     .addItem('Settle those duplicated applications (asks first)',           'menuSettleLeaveTwins')
     .addSeparator()
     .addItem('Why can an officer not sign in?',          'menuWhySignIn')
+    .addItem('What is left in today’s mail allowance?', 'checkMailQuota')
     .addItem('What a PIN reset would do — read first',   'menuShowPinReset')
     .addItem('Reset one officer’s PIN (asks first)',     'menuResetOnePin')
     .addItem('Check the village roll',                   'menuGpSpellCheck')
@@ -2388,4 +2389,49 @@ function menuRestampFilingMonths(){
     'it came from. Read "Filings under the old calendar month" first if you have not.',
     'restampFilingMonths')) return;
   admShow_('Filing months re-stamped', restampFilingMonths());
+}
+
+/* ============================================================================
+ * WHAT IS LEFT IN THE DAY'S MAIL ALLOWANCE · 18.09.2026
+ * ----------------------------------------------------------------------------
+ * Asked for when the Gram Panchayat register was ordered, because the two
+ * registers DRAW ON ONE ALLOWANCE. Both web apps run as the deploying user, so
+ * Google counts their mail against the same account: the sanitation register's
+ * ~280 officers and the GP register's 134 come to 414 recipients on a busy
+ * morning, before a single reminder is re-sent.
+ *
+ * Google gives a consumer account 100 mails a day and a Workspace account
+ * 1,500. On a consumer account this arithmetic does not work, and it fails on
+ * BOTH registers rather than on the new one — the daily report simply stops
+ * going and nothing says why. This reads the figure rather than guessing at
+ * it, and it sends nothing itself.
+ *
+ * READ-ONLY. It changes no record and writes no row.
+ * ========================================================================== */
+function checkMailQuota(){
+  var left = -1;
+  try{ left = MailApp.getRemainingDailyQuota(); }catch(err){
+    admSay_('The mail allowance', 'Could not be read: ' + err);
+    return 'unreadable';
+  }
+  var who = '';
+  try{ who = Session.getEffectiveUser().getEmail(); }catch(err){}
+  /* the figure Google reports is what is LEFT today, so the ceiling is
+     inferred from it rather than asserted — a consumer account can never
+     report more than 100 */
+  var kind = left > 100 ? 'a Workspace account (the ceiling is 1,500 a day)'
+           : 'a consumer account, or a Workspace one already well used today';
+  var need = 414;
+  var verdict = left >= need
+    ? 'Enough for both registers today (' + need + ' officers between them).'
+    : 'NOT ENOUGH FOR BOTH REGISTERS. ' + need + ' officers between them and ' + left +
+      ' mails left. The daily report and the reminders will stop part way through, ' +
+      'on the sanitation register as well as the Gram Panchayat one, and nothing will say why.';
+  var msg = 'Mails left today: ' + left + '\n' +
+            'Running as: ' + (who || 'unknown') + '\n' +
+            'This looks like ' + kind + '.\n\n' + verdict + '\n\n' +
+            'Both registers run as the deploying user, so they share this one allowance. ' +
+            'Nothing was sent to read it.';
+  admSay_('The day’s mail allowance', msg);
+  return msg;
 }

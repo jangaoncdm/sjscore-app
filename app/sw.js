@@ -5,7 +5,13 @@
    5.0 drops the Chart.js CDN. It was loaded on every start and never used,
    which cost bandwidth on a weak signal and put a third-party origin in a
    government app for no reason. */
-const CACHE = 'sjf-v6-13-0';
+/* ONE ORIGIN, TWO APPS, TWO CACHES. Caches are keyed by NAME and shared
+   across an origin, so the GP app published at /gp/ would otherwise serve the
+   sanitation app's shell to a Gram Panchayat Officer. A worker cannot read
+   config.js, so it takes the tenant from its own address — which is the one
+   thing about it that is already different. */
+const TENANT = /\/gp\//.test(self.location.pathname) ? 'gp' : 'sjf';
+const CACHE = TENANT + '-v6-13-0';
 const SHELL = [
   './', './index.html', './app.js', './manifest.webmanifest', './privacy.html',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',
