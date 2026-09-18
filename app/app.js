@@ -37,6 +37,24 @@ const SERVER_URL = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
 const TENANT = String((typeof window !== 'undefined' && window.SJGP_TENANT) || 'SJGP').toUpperCase().trim() === 'GP' ? 'GP' : 'SJGP';
 const IS_GP = TENANT === 'GP';
 const STORE_KEY = IS_GP ? 'sjgp-gp1' : 'sjf5';
+/* WHAT THIS REGISTER IS CALLED, in the two places an officer reads it: the
+   eyebrow over the home screen and the desktop rail. A Gram Panchayat Officer
+   opening an app headed "Swachh Jangaon" would reasonably think he had the
+   wrong one. Applied on load, so the markup keeps the sanitation register's
+   own wording as its default and a phone reads exactly what it always has. */
+const REGISTER_NAME = IS_GP ? 'Gram Panchayat Register' : 'Swachh Jangaon Gram Panchayat';
+function brandRegister(){
+  if(!IS_GP) return;
+  try{
+    document.title = 'GP — ' + REGISTER_NAME + ' · Jangaon';
+    $$('.eyebrow').forEach(el => {
+      if(/Swachh Jangaon Gram Panchayat/i.test(el.textContent)) el.textContent = REGISTER_NAME;
+    });
+    const sub = document.querySelector('.brandband .sub');
+    if(sub) sub.textContent = REGISTER_NAME + ' · Jangaon';
+    document.documentElement.setAttribute('data-tenant', 'gp');
+  }catch(e){}
+}
 const APP_VERSION = '6.10.0';
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
@@ -260,11 +278,21 @@ const shortDate = d => { if(!d) return ''; const t=new Date(String(d).length>10?
 const rid = (gp,ym) => gp + '|' + ym;
 const user = () => (DB.session && DB.session.user) || null;
 const myGps = () => { const u = user(); if(!u) return []; return (u.gps && u.gps.length) ? u.gps : (u.gp ? [u.gp] : []); };
-const isDistrict = r => r==='DPO' || r==='COLLECTOR' || r==='DLPO';
-const isMandal = r => r==='MPDO' || r==='MSO' || r==='MPO';
+/* The same shapes the server keeps in TENANTS. They must agree: the server is
+   the authority (rule 6) and the app only decides what to draw. */
+const isDistrict = r => IS_GP ? (r==='COLLECTOR')
+                              : (r==='DPO' || r==='COLLECTOR' || r==='DLPO');
+const isMandal   = r => IS_GP ? (r==='MRI' || r==='ARI')
+                              : (r==='MPDO' || r==='MSO' || r==='MPO');
 /* The Secretary is the officer being evaluated. Read access only, everywhere. */
-const isViewer = r => r === 'PS';
-const canEdit = () => { const u = user(); return !!u && !isViewer(u.role); };
+/* NOBODY IS A VIEWER ON THE GRAM PANCHAYAT REGISTER. A Gram Panchayat Officer
+   is not the officer being evaluated — he is the officer keeping the register. */
+const isViewer = r => !IS_GP && r === 'PS';
+/* WHO MAY FILE AN EVALUATION. On the Gram Panchayat register: nobody, because
+   the register does not take them — the server refuses `kind:'inspection'` at
+   the door. The app agrees with the server rather than offering a button that
+   can only fail. */
+const canEdit = () => { const u = user(); return !IS_GP && !!u && !isViewer(u.role); };
 
 /* ---------------- scoring (unchanged from 4.x — the marks must not move) ---------------- */
 const clamp = (v,mx) => Math.max(0, Math.min(mx, Math.round(Number(v)||0)));
@@ -359,7 +387,15 @@ const TAB_DEFS = {
   more:    ['More',    '<svg viewBox="0 0 24 24"><path d="M6 10.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6m6 0a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6m6 0a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6"/></svg>']
 };
 function buildTabs(){
-  const keys = canEdit() ? ['home','inspect','records','notices','more'] : ['home','records','notices','more'];
+  /* THE TABS A REGISTER ACTUALLY HAS. Inspect and Records are the 100-mark
+     village evaluation and the drafts waiting to be filed; the Gram Panchayat
+     register was never asked for either, and its server refuses both at the
+     door. Showing a Gram Panchayat Officer a tab that can only refuse him is
+     worse than not showing it — he would try it, be told no, and trust the
+     rest of the screen less. Nothing here is reached on the sanitation
+     register: IS_GP is false and the list is the one it has always had. */
+  const keys = IS_GP ? ['home','notices','more']
+    : (canEdit() ? ['home','inspect','records','notices','more'] : ['home','records','notices','more']);
   $('#tabs').innerHTML = keys.map(k => {
     const [label, svg] = TAB_DEFS[k];
     return `<button role="tab" data-s="${k}" aria-selected="${k===TAB?'true':'false'}" aria-label="${label}">
@@ -826,7 +862,10 @@ async function _syncAttendance(){
    HOME
    ============================================================ */
 const roleName = r => ({PS:'Panchayat Secretary', MPDO:'MPDO', MSO:'Mandal Special Officer', MPO:'MPO',
-  DPO:'District Panchayat Officer', DLPO:'Divisional Panchayat Officer', COLLECTOR:'Collector & District Magistrate'}[r] || r);
+  DPO:'District Panchayat Officer', DLPO:'Divisional Panchayat Officer',
+  /* the Gram Panchayat register's own */
+  GPO:'Gram Panchayat Officer', MRI:'Mandal Revenue Inspector', ARI:'Assistant Revenue Inspector',
+  COLLECTOR:'Collector & District Magistrate'}[r] || r);
 /* ============================================================
    SHOW-CAUSE NOTICES
    A pending notice locks the app — everything except marking today's
@@ -1187,7 +1226,56 @@ function viewerTrend(gp){
 }
 
 /* ---- mandal and district home ---- */
+/* THE HOME SCREEN OF A REGISTER WITH NO EVALUATION.
+   districtHome is the sanitation register's picture: villages reported, the
+   average SJ-SCORE, grades A to D, the red flags and the ranking. Every one of
+   those is the 100-mark evaluation, which the Gram Panchayat register does not
+   take and its server refuses at the door. Drawn there they would be four
+   empty tiles and a heading with nothing under it — figures for work this
+   register was never asked to do. What a Gram Panchayat Officer is asked for
+   is his attendance and his leave, so that is what his screen carries. */
+function gpHome(u){
+  const a = DB.att[todayStr()];
+  const marked = Object.keys(DB.att || {}).length;
+  const pend = pendingAtt();
+  let h = '';
+  h += `<div class="kpis" style="margin-top:18px">
+    <div class="kpi"><div class="n num" style="color:${a?'var(--ok)':'var(--ink-3)'}">${a?'Yes':'—'}</div>
+      <div class="l">Marked today<br>${esc(dayName(todayStr()).split(',')[0])}</div></div>
+    <div class="kpi"><div class="n num">${marked}</div><div class="l">Days marked<br>on this phone</div></div>
+    <div class="kpi"><div class="n num" style="color:${pend?'var(--warn)':'var(--ink-3)'}">${pend}</div>
+      <div class="l">Waiting for signal</div></div>
+    <div class="kpi"><div class="n num">${(u.gps&&u.gps.length)||0}</div>
+      <div class="l">Revenue villages<br>in your charge</div></div></div>`;
+
+  if((u.gps || []).length){
+    h += `<div class="group"><div class="hdr">Your charge</div><div class="card">` +
+      u.gps.map(g => `<div class="row"><span class="ico" style="background:var(--seal)">${ICON.pin}</span>
+        <span class="lbl"><b>${esc(g)}</b><span>${esc(u.mandal||'')} mandal</span></span></div>`).join('') +
+      `</div></div>`;
+  }
+  if(leaveVisible(u.role)){
+    const pl = pendingLeave().length;
+    h += `<div class="group"><div class="hdr">Leave</div><div class="card">
+      <div class="row tap" data-leave="1"><span class="ico" style="background:var(--seal-2)">${ICON.cal}</span>
+        <span class="lbl"><b>${pl ? pl + (pl===1?' application waiting':' applications waiting') : 'Apply for leave'}</b>
+        <span>Sanctioned by the Collector alone</span></span><span class="chev"></span></div></div></div>`;
+  }
+  if(canApproveLeave(u.role)){
+    h += `<div class="group"><div class="hdr">Monitoring</div><div class="card">
+      <a class="row tap" href="dashboard.html" style="text-decoration:none;color:inherit">
+        <span class="ico" style="background:var(--seal-deep)">${ICON.eye}</span>
+        <span class="lbl"><b>District monitoring console</b>
+        <span>Attendance, the place of duty and leave, live on one screen.</span></span><span class="chev"></span></a>
+    </div></div>`;
+  }
+  h += `<p style="font-size:12.5px;color:var(--ink-3);text-align:center;padding:18px 24px 0;line-height:1.55">
+     Your attendance carries the place it was marked from. The district reads the distance from your
+     Gram Panchayat office; it raises no notice and debits no leave.</p>`;
+  return h;
+}
 function districtHome(u, ym){
+  if(IS_GP) return gpHome(u);
   const rows=(DB.cache||[]).filter(r=>r.ym===ym);
   const scope = isDistrict(u.role) ? 'the district' : (u.mandal || 'your mandal');
   const grades={A:0,B:0,C:0,D:0}; rows.forEach(r=>grades[r.grade]=(grades[r.grade]||0)+1);
@@ -2419,7 +2507,11 @@ function leaveBalance(type, year, phone){
   const held = mine.filter(l => l.status === 'PENDING').reduce((s,l) => s + (Number(l.days) || 0), 0);
   return {ent, used, held, left: Math.max(0, ent - used - held)};
 }
-const canApplyLeave   = r => ['MPO','PS','MPDO'].includes(r);
+/* WHO APPLIES FOR LEAVE ON THIS REGISTER. The same list the server keeps in
+   TENANTS; they must agree, and the server is the authority (rule 6). Without
+   this a Gram Panchayat Officer was shown no way to apply for the leave his
+   own register grants him. */
+const canApplyLeave   = r => (IS_GP ? ['GPO','MRI','ARI'] : ['MPO','PS','MPDO']).includes(r);
 /* The Collector is not asked to mark in. The office is not one that reports
    its own presence to itself — though it may still mark a day voluntarily
    from More, which is useful as proof of a field visit. */
@@ -3810,6 +3902,7 @@ function markLeaveDay(){
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
 load();
 applyPrefs();
+brandRegister();   /* the app says which register it is before it draws anything */
 netBar();
 if(SERVER_URL) DB.url=SERVER_URL;
 gate();

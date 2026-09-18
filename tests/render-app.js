@@ -33,10 +33,20 @@ const SCHED = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-schedule.
 const MIME = { '.html':'text/html', '.js':'text/javascript', '.css':'text/css',
   '.png':'image/png', '.webmanifest':'application/manifest+json', '.json':'application/json' };
 
+/* THE TENANT COMES FROM config.js, WHICH IS WHAT IT WILL DO IN THE FIELD.
+   Injecting a variable would test the harness; serving the file the deployment
+   actually serves tests the switch. */
+let SERVE_TENANT = 'SJGP';
 function serve(){
   return new Promise(res => {
     const srv = http.createServer((req, rq) => {
       const u = decodeURIComponent(req.url.split('?')[0]);
+      if(/\/config\.js$/.test(u)){
+        rq.writeHead(200, { 'Content-Type':'text/javascript' });
+        rq.end("window.SJGP_SERVER='https://mock.district/exec';" +
+               (SERVE_TENANT === 'GP' ? "window.SJGP_TENANT='GP';" : ''));
+        return;
+      }
       const f = path.join(ROOT, u === '/' ? 'index.html' : u);
       if(!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()){
         rq.writeHead(404); rq.end('no'); return;
@@ -84,6 +94,14 @@ function router(route){
 
 const SIZES = [{ w:2560, h:1440, n:'2560' }, { w:1500, h:1000, n:'1500' }, { w:390, h:844, n:'390' }];
 const TABS = ['home', 'records', 'notices', 'more'];
+/* a Gram Panchayat Officer holding two revenue villages — 54 of the 115 do */
+const GP_OFFICER = { name:'K. Surya Prakash', role:'GPO', phone:'9111100001',
+                     mandal:'Bachannapeta', gp:'', gps:['Bachannapet','Itikalapally'] };
+/* THE TABS EACH REGISTER HAS. Inspect and Records are the 100-mark evaluation
+   and its drafts; the GP register does not take one and its server refuses at
+   the door, so the app must not offer a tab that can only refuse him. */
+const TABS_EXPECTED = { SJGP:['home','inspect','records','notices','more'],
+                        GP:  ['home','notices','more'] };
 
 const problems = [];
 const note = (label, msg) => problems.push(label + ': ' + msg);
@@ -94,6 +112,10 @@ const note = (label, msg) => problems.push(label + ': ' + msg);
   const base = 'http://127.0.0.1:' + srv.address().port;
   const browser = await chromium.launch();
 
+  for(const tn of ['SJGP', 'GP']){
+  SERVE_TENANT = tn;
+  const OFF = tn === 'GP' ? GP_OFFICER : OFFICER;
+  const pre = tn === 'GP' ? 'gp-' : '';
   for(const size of SIZES){
     /* ---- the sign-in screen, which is the front door on a desktop ---- */
     {
@@ -103,7 +125,7 @@ const note = (label, msg) => problems.push(label + ': ' + msg);
       await page.route('**/mock.district/**', router);
       await page.goto(base + '/index.html', { waitUntil:'domcontentloaded' });
       await page.waitForTimeout(900);
-      await page.screenshot({ path: path.join(OUT, size.n + '-signin.png') });
+      await page.screenshot({ path: path.join(OUT, pre + size.n + '-signin.png') });
       const m = await page.evaluate(() => {
         const g = s => { const e = document.querySelector(s); if(!e) return null;
           const r = e.getBoundingClientRect();
@@ -111,7 +133,7 @@ const note = (label, msg) => problems.push(label + ': ' + msg);
         return { brand:g('.brandband'), form:g('.siwrap'), vw:window.innerWidth, vh:window.innerHeight,
                  over:document.documentElement.scrollWidth - document.documentElement.clientWidth };
       });
-      const lbl = size.n + '/signin';
+      const lbl = tn + '/' + size.n + '/signin';
       if(m.over > 1) note(lbl, 'scrolls sideways by ' + m.over + 'px');
       if(errs.length) note(lbl, errs[0]);
       if(size.w >= 980){
@@ -143,28 +165,42 @@ const note = (label, msg) => problems.push(label + ': ' + msg);
        the app builds an empty store on load and its own debounced save puts
        session:null straight back over anything written after. */
     await page.goto(base + '/manifest.webmanifest', { waitUntil:'domcontentloaded' });
-    await page.evaluate(([off, gps, list]) => {
+    /* THE STORE IS THE TENANT'S OWN, and the harness must write to the key the
+       app will read. This is the isolation doing its job: writing the session
+       to 'sjf5' left the GP app looking at an empty store and sitting on the
+       sign-in screen, which is exactly what would happen to an officer whose
+       two apps shared a key. */
+    await page.evaluate(([off, gps, list, key]) => {
       const d = new Date();
       const t = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
       const att = {}; att[t] = { id:'A1', date:t, ts:new Date().toISOString(), lat:17.72, lng:79.15,
                                  acc:12, verified:true, status:'PRESENT', sync:'synced' };
-      localStorage.setItem('sjf5', JSON.stringify({ url:'https://mock.district/exec',
+      localStorage.setItem(key, JSON.stringify({ url:'https://mock.district/exec',
         session:{ token:'T', user:off }, records:{}, att:att, cache:list,
         cacheAt:new Date().toISOString(), master:gps, leave:[], prefs:{ sun:0, big:0 } }));
-    }, [OFFICER, GPS, LIST]);
+    }, [OFF, GPS, LIST, tn === 'GP' ? 'sjgp-gp1' : 'sjf5']);
     await page.goto(base + '/index.html', { waitUntil:'domcontentloaded' });
     await page.waitForSelector('#app:not([hidden])', { timeout:20000 });
     await page.waitForTimeout(1500);
 
+    /* ---- WHAT TABS THIS REGISTER OFFERS ----
+       The heart of the second-register work: the GP app must not show a tab
+       whose endpoint refuses it, and the sanitation app must be untouched. */
+    const tabsOn = await page.$$eval('.tabs button[data-s]', b => b.map(x => x.dataset.s));
+    if(tabsOn.join(',') !== TABS_EXPECTED[tn].join(','))
+      note(tn + '/' + size.n, 'the tab bar is ' + JSON.stringify(tabsOn) +
+        ', expected ' + JSON.stringify(TABS_EXPECTED[tn]));
+
     for(const tab of TABS){
+      if(TABS_EXPECTED[tn].indexOf(tab) < 0) continue;
       if(tab !== 'home'){
         const b = await page.$('.tabs button[data-s="' + tab + '"]');
         if(!b) continue;
         await b.click();
         await page.waitForTimeout(700);
       }
-      await page.screenshot({ path: path.join(OUT, size.n + '-' + tab + '.png'), fullPage: size.w > 500 });
-      const lbl = size.n + '/' + tab;
+      await page.screenshot({ path: path.join(OUT, pre + size.n + '-' + tab + '.png'), fullPage: size.w > 500 });
+      const lbl = tn + '/' + size.n + '/' + tab;
       const m = await page.evaluate(() => {
         const g = s => { const e = document.querySelector(s); if(!e) return null;
           const r = e.getBoundingClientRect();
@@ -182,6 +218,13 @@ const note = (label, msg) => problems.push(label + ': ' + msg);
       });
       if(m.over > 1) note(lbl, 'scrolls sideways by ' + m.over + 'px');
 
+      if(tab === 'home'){
+        const startBtn = await page.$('#homeStart');
+        if(tn === 'GP' && startBtn) note(tn + '/' + size.n,
+          'the home screen offers "Start an inspection" — the GP server refuses evaluations at the door');
+        if(tn === 'SJGP' && !startBtn) note(tn + '/' + size.n,
+          'the sanitation home screen has LOST its "Start an inspection" button');
+      }
       if(size.w === 390){
         /* ---- THE PHONE, HELD TO ITS OWN NUMBERS ---- */
         if(m.body && m.body.w !== 390) note(lbl, 'the content is ' + m.body.w + 'px wide, not the 390 of the screen');
@@ -208,11 +251,17 @@ const note = (label, msg) => problems.push(label + ': ' + msg);
           if(Math.abs(off) > 24) note(lbl, 'the capped column is not centred in the working area, off by ' +
             Math.round(off) + 'px');
         }
-        if(tab === 'home' && m.wideCols < 2) note(lbl, 'the ranking is a single column on a ' + size.w + 'px screen');
+        /* THE RANKING IS THE SANITATION REGISTER'S. The GP home screen carries
+           no long list at all — no evaluation, so no scores and no ranking —
+           and asserting a two-column list on a screen that has none would be
+           asserting the absence of a defect that cannot occur there. */
+        if(tn === 'SJGP' && tab === 'home' && m.wideCols < 2)
+          note(lbl, 'the ranking is a single column on a ' + size.w + 'px screen');
       }
     }
-    if(errs.length) note(size.n, errs.slice(0, 3).join(' | '));
+    if(errs.length) note(tn + '/' + size.n, errs.slice(0, 3).join(' | '));
     await ctx.close();
+  }
   }
 
   await browser.close();
@@ -226,5 +275,7 @@ const note = (label, msg) => problems.push(label + ': ' + msg);
   } else {
     console.log('\nNo overflow, no layout or script problems.');
     console.log('The phone is byte-for-byte the layout it was; the monitor carries the content.');
+    console.log('Both registers draw their own tabs: SJGP ' + TABS_EXPECTED.SJGP.join('/') +
+                ', GP ' + TABS_EXPECTED.GP.join('/') + '.');
   }
 })();
