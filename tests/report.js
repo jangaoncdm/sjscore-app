@@ -61,6 +61,11 @@ const PASSES = [
           'officer’s work — including one written before any of this existed, which records no owner at all — ' +
           'and one carrying the serving officer’s own, which must survive untouched.',
     cmd: ['tests/render-handset.js'], needs: BROWSER ? null : 'playwright is not installed', shots: null },
+  { name: 'The installation page',
+    what: 'The page 414 officers are sent to put the register on their phone, at 390, 1500 and 2560 px in both ' +
+          'themes. Fails on sideways scroll, on a missing square, on an address not written out in words beside ' +
+          'it, and on a QR drawn too small to scan.',
+    cmd: ['tests/render-install.js'], needs: BROWSER ? null : 'playwright is not installed', shots: 'install-render' },
   { name: 'The address the console calls',
     what: 'Both registers’ stores carrying a STALE /exec, as a browser that signed in once does. The console must ' +
           'call the address the district publishes beside it and never the remembered one — a write sent to an old ' +
