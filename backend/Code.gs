@@ -4759,6 +4759,55 @@ function doPost(e){
     return json_({ ok:true, phone:want, name:cell_(v[at], t.ix.name), pin:pin });
   }
 
+  /* ==========================================================================
+   * THE ISSUE LIST, FOR HANDING OUT — once, and only what is still unchanged.
+   *
+   * A hundred and thirty-four officers have to be told their PIN, and there is
+   * no way to do that one console reset at a time. So the district may take
+   * the list ONCE, at rollout, to print and distribute mandal by mandal.
+   *
+   * IT CANNOT REVEAL A PIN AN OFFICER HAS CHOSEN. Every row is checked against
+   * the PIN this register would derive for that number today: if the stored
+   * hash matches, the PIN is still the one that was issued and has never been
+   * changed, so printing it tells nobody anything they were not already going
+   * to be handed. The moment an officer changes his PIN his row drops out of
+   * this list for good — so it can never be used to read a working account.
+   *
+   * And it is guarded by the key, which every routine deploy strips out. This
+   * exists in the minutes after a provisioning run and at no other time.
+   *
+   * Audit records that the list was taken, by how many rows — never a PIN.
+   * ======================================================================== */
+  if(b.kind === 'pinList'){
+    let key = '';
+    try{ if(typeof BOOTSTRAP_KEY !== 'undefined') key = String(BOOTSTRAP_KEY || ''); }catch(e){}
+    if(!key) return json_({ ok:false, error:'This register does not hand out a list.' });
+    if(String(b.key || '') !== key) return json_({ ok:false, error:'auth' });
+
+    const t = uidx_(), v = t.sh.getDataRange().getValues();
+    const rows = [], changed = [];
+    const seen = {};
+    for(let i = 1; i < v.length; i++){
+      const ph = phone10_(v[i][t.ix.phone]);
+      if(!ph || seen[ph]) continue; seen[ph] = true;
+      if(String(v[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
+      const role = cell_(v[i], t.ix.role).toUpperCase();
+      if(role === 'COLLECTOR') continue;                 /* his is not handed out */
+      const held = String(v[i][t.ix.hash] || '').trim();
+      const pin = dayPin_(ph);
+      if(!held || held !== hash_(ph, pin)){
+        /* he has set his own, or has none at all — either way not ours to say */
+        changed.push(ph);
+        continue;
+      }
+      rows.push({ phone:ph, name:cell_(v[i], t.ix.name), role:role,
+                  mandal:cell_(v[i], t.ix.mandal), gp:cell_(v[i], t.ix.gp), pin:pin });
+    }
+    admAudit_('PIN_LIST', tenant_().key, rows.length + ' PIN(s) listed for distribution, ' +
+      changed.length + ' withheld as already changed or unset. No PIN is recorded here.');
+    return json_({ ok:true, tenant:tenant_().key, rows:rows, withheld:changed.length });
+  }
+
   if(b.kind === 'login'){
     const u = findByPhone_(b.u || '');
     if(!u || !u.active) return json_({ ok:false, error:'This number is not registered. Contact the District Panchayat Office.' });

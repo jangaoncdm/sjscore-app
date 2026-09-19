@@ -350,6 +350,55 @@ module.exports = {
         'a register with no recovery key has no recovery endpoint');
     }
 
+    /* ---- 1g. THE ISSUE LIST, AND WHAT IT REFUSES TO SHOW ----
+       134 officers have to be told their PIN and there is no way to do that
+       one console reset at a time. The list may be taken once at rollout — but
+       it can never read an account an officer has made his own. */
+    {
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e.eval('var BOOTSTRAP_KEY = "k";');
+      e.mkSheet('Users', ['Phone','Name','Role','Mandal','GP','Email','InitPin','Hash','Active'], [
+        { Phone:'9111100001', Name:'A GPO',     Role:'GPO', Mandal:'Jangaon', GP:'V1', Active:'TRUE' },
+        { Phone:'9111100002', Name:'B GPO',     Role:'GPO', Mandal:'Jangaon', GP:'V2', Active:'TRUE' },
+        { Phone:'9111100010', Name:'An MRI',    Role:'MRI', Mandal:'Jangaon', GP:'',   Active:'TRUE' },
+        { Phone:'9111100099', Name:'Off roll',  Role:'GPO', Mandal:'Jangaon', GP:'V9', Active:'FALSE' },
+        { Phone:'9063753622', Name:'Collector', Role:'COLLECTOR', Active:'TRUE' }]);
+      e.post({ kind:'issuePins', key:'k' });
+
+      t.eq(e.post({ kind:'pinList', key:'nope' }).ok, false, 'a wrong key gets no list');
+      const l = e.post({ kind:'pinList', key:'k' });
+      t.eq(l.ok, true, 'the right key takes the issue list');
+      const by = {}; l.rows.forEach(r => { by[r.phone] = r; });
+      t.eq(l.rows.length, 3, 'three officers: the two GPOs and the MRI');
+      t.ok(!by['9063753622'], 'THE COLLECTOR IS NOT ON IT — his is not handed out');
+      t.ok(!by['9111100099'], 'nor is anybody off the roll');
+      t.ok(!!by['9111100001'].pin, 'each row carries the PIN to be handed over');
+      t.contains(by['9111100001'].gp, 'V1', 'with his village, so a list can be sorted by mandal');
+      /* and the PINs on it actually work */
+      t.ok(!!e.post({ kind:'login', u:'9111100001', p:by['9111100001'].pin }).token,
+        'and the PIN on the list opens the app');
+
+      /* THE MOMENT AN OFFICER CHOOSES HIS OWN, HIS ROW DROPS OUT FOR GOOD. */
+      const tok = e.post({ kind:'login', u:'9111100002', p:by['9111100002'].pin }).token;
+      t.eq(e.post({ kind:'chpass', token:tok, old:by['9111100002'].pin, newp:'8642' }).ok, true,
+        'an officer changes his PIN');
+      const l2 = e.post({ kind:'pinList', key:'k' });
+      t.eq(l2.rows.length, 2, 'and he is no longer on the list');
+      t.ok(!l2.rows.some(r => r.phone === '9111100002'), 'IT CANNOT READ AN ACCOUNT HE HAS MADE HIS OWN');
+      t.eq(l2.withheld, 1, 'and it says one was withheld rather than quietly dropping him');
+
+      const audit = JSON.stringify((e.sheets['Audit'] || { rows:[] }).rows);
+      t.contains(audit, 'PIN_LIST', 'the Audit tab records that the list was taken');
+      t.ok(audit.indexOf(by['9111100001'].pin) < 0, 'and does NOT record a PIN');
+    }
+    {
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e.mkSheet('Users', ['Phone','Name','Role','Mandal','GP','Email','InitPin','Hash','Active'],
+        [{ Phone:'9111100001', Name:'X', Role:'GPO', Active:'TRUE' }]);
+      t.eq(e.post({ kind:'pinList', key:'anything' }).ok, false,
+        'a register with no key hands out no list — the sanitation register, permanently');
+    }
+
     /* ---- 2. THE SHAPE FOLLOWS THE TENANT ---- */
     const env = mock.load({ now:'2026-09-21T09:00:00+05:30' });
     const c = env.ctx;
