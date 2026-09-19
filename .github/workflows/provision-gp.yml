@@ -62,12 +62,6 @@ jobs:
             exit 1
           fi
 
-      - name: Refuse to make a second register
-        run: |
-          if [ -n "${{ vars.GP_SCRIPT_ID }}" ]; then
-            echo "::error::GP_SCRIPT_ID is already set. A second run would create a second register and orphan the first with its data in it. Clear the variable deliberately if you really mean to start again."
-            exit 1
-          fi
 
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -107,13 +101,35 @@ jobs:
           echo "--- gpbuild ---"; ls -1 gpbuild
           echo "(the key itself is not printed)"
 
-      - name: Create the Sheet and its bound Apps Script project
+      # IT RUNS TWICE WITHOUT MAKING A SECOND REGISTER (rule 8). Creation is the
+      # only step that cannot be undone by running it again — a second Sheet
+      # would orphan the first with its data in it — so it happens ONLY when
+      # GP_SCRIPT_ID is empty. Everything after it is a push, a deploy and
+      # three variables, all of which are safe to repeat. A run that fell over
+      # halfway is therefore COMPLETED by the next one rather than restarted,
+      # which is the same rule the nightly backup keeps.
+      - name: Create the Sheet and its bound project, if it does not exist yet
         id: create
         run: |
+          if [ -n "${{ vars.GP_SCRIPT_ID }}" ]; then
+            echo "script_id=${{ vars.GP_SCRIPT_ID }}" >> "$GITHUB_OUTPUT"
+            echo "Already created: ${{ vars.GP_SCRIPT_ID }} — resuming rather than making a second register."
+            exit 0
+          fi
           clasp create --type sheets --title "${{ github.event.inputs.title }}" --rootDir gpbuild
-          SID=$(node -e "console.log(JSON.parse(require('fs').readFileSync('.clasp.json','utf8')).scriptId)")
+          # clasp writes .clasp.json INTO --rootDir, not into the working
+          # directory. Reading it from the wrong place failed a run whose Sheet
+          # and script had in fact been created perfectly well.
+          CJ=gpbuild/.clasp.json; [ -f "$CJ" ] || CJ=.clasp.json
+          SID=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$CJ','utf8')).scriptId)")
           echo "script_id=$SID" >> "$GITHUB_OUTPUT"
           echo "Created script $SID"
+
+      - name: Point clasp at the project
+        run: |
+          printf '{"scriptId":"%s","rootDir":"gpbuild"}\n' "${{ steps.create.outputs.script_id }}" > .clasp.json
+          rm -f gpbuild/.clasp.json
+          cat .clasp.json
 
       - name: Push the backend into it
         run: clasp push --force
@@ -154,6 +170,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh variable set GP_SCRIPT_ID     --body '${{ steps.create.outputs.script_id }}'
+          gh variable set GP_PROVISIONED_AT --body "$(date -u +%Y-%m-%dT%H:%M:%SZ) run ${{ github.run_number }}"
           gh variable set GP_DEPLOYMENT_ID --body '${{ steps.deploy.outputs.deployment_id }}'
           gh variable set GP_EXEC_URL      --body '${{ steps.deploy.outputs.exec_url }}'
           echo "GP_SCRIPT_ID, GP_DEPLOYMENT_ID and GP_EXEC_URL are set."
