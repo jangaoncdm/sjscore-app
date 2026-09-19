@@ -1153,7 +1153,7 @@ function renderHome(){
         if(TAB==='home') renderHome(); }
     }).catch(()=>{});
     if(!isViewer(u.role)) get({op:'attendance'}).then(r=>{ if(r&&r.ok){ DB.attToday=r.rows; if(TAB==='home') renderHome(); } }).catch(()=>{});
-    refreshGpdp();      /* so the plan card states the district's record, not a guess */
+    if(gpdpOffered()) refreshGpdp();  /* and never asked for on a register that keeps no plan */
     refreshAdvisory();  /* and the circular is put up the moment it is issued */
     refreshSchedule();  /* his own villages, his own days, and what the district has sent him */
     refreshWeather();   /* the sky over his own mandal, from the district's one call */
@@ -2400,7 +2400,7 @@ async function renderMore(){
       <span class="lbl"><b>${esc(u.name)}</b><span>${esc(roleName(u.role))}${u.mandal?' · '+esc(u.mandal):''}</span></span>
       ${isViewer(u.role)?'<span class="pill p-info">View access</span>':''}</div>
     <div class="row"><span class="lbl"><b>Mobile</b></span><span class="val num">+91 ${esc(u.phone||'')}</span></div>
-    ${myGps().length?`<div class="row"><span class="lbl"><b>Gram Panchayat${myGps().length>1?'s':''}</b><span>${esc(myGps().join(', '))}</span></span></div>`:''}
+    ${myGps().length?`<div class="row"><span class="lbl"><b>${IS_GP?'Revenue village':'Gram Panchayat'}${myGps().length>1?'s':''}</b><span>${esc(myGps().join(', '))}</span></span></div>`:''}
     <div class="row"><span class="lbl"><b>Session</b></span><span class="val">30 days</span></div>
   </div></div>
 
@@ -2422,9 +2422,9 @@ async function renderMore(){
     ${(schedState() && schedState().mine && schedState().mine.assigned) ? `<div class="row tap" id="mSched"><span class="ico" style="background:var(--seal-deep)">${ICON.cal}</span>
       <span class="lbl"><b>Filing schedule</b><span>${schedState().mine.filed} of ${schedState().mine.assigned} villages filed${schedBehind() ? ' · ' + schedBehind() + (schedBehind() === 1 ? ' past its day' : ' past their day') : ''}</span></span>
       ${schedPending() ? '<i class="badge">1</i>' : '<span class="chev">›</span>'}</div>` : ''}
-    <div class="row tap" id="mGpdp"><span class="ico" style="background:var(--gold-ink)">${ICON.file}</span>
+    ${gpdpOffered() ? `<div class="row tap" id="mGpdp"><span class="ico" style="background:var(--gold-ink)">${ICON.file}</span>
       <span class="lbl"><b>Development plan</b><span>Send the Gram Panchayat Development Plan the district has called for</span></span>
-      ${gpdpPending() ? '<i class="badge">1</i>' : '<span class="chev">›</span>'}</div>
+      ${gpdpPending() ? '<i class="badge">1</i>' : '<span class="chev">›</span>'}</div>` : ''}
     <div class="row tap" id="mLeave"><span class="ico" style="background:var(--seal-2)">${ICON.cal}</span>
       <span class="lbl"><b>${canApproveLeave(u.role)?'Leave applications':'Apply for leave'}</b>
       <span>${canApproveLeave(u.role)
@@ -2507,7 +2507,7 @@ async function renderMore(){
 }
 function changePin(){
   showSheet(`<div style="padding:6px 20px 6px"><h2>Change my PIN</h2>
-    <p style="font-size:14px;color:var(--ink-2);margin-top:5px">At least four digits. It changes on every Gram Panchayat held against your number.</p></div>
+    <p style="font-size:14px;color:var(--ink-2);margin-top:5px">At least four digits. It changes on every ${IS_GP?'revenue village':'Gram Panchayat'} held against your number.</p></div>
     <div class="group" style="margin-top:10px"><div class="card">
       <div class="field"><label for="cpOld">Current PIN</label><input type="password" inputmode="numeric" id="cpOld"></div>
       <div class="field"><label for="cpNew">New PIN</label><input type="password" inputmode="numeric" id="cpNew"></div>
@@ -2793,6 +2793,24 @@ function notifyLocal(title, body, tag){
 }
 
 /* Is the district still waiting on this officer's plan? */
+/* IS A PLAN ASKED OF THIS OFFICER AT ALL?
+   gpdpPending() answers whether one is OUTSTANDING, which is a different
+   question, and the two were conflated: the More menu rendered its
+   Development plan row unconditionally and consulted gpdpPending() only for
+   the badge. So a Gram Palana Officer — whose register was never asked for a
+   plan, whose server refuses the upload and who is raised no card — still had
+   the row in his menu, and tapping it opened the filing screen. Reported from
+   the district after the card was gated, in those words: why is he still
+   seeing that.
+   Everything that OFFERS a plan asks this; only what chases one asks
+   gpdpPending(). It also covers the Collector on the sanitation register, who
+   is not called for a plan either and had the row all the same. */
+function gpdpOffered(){
+  if(IS_GP) return false;
+  const st = gpdpState();
+  if(st && st.due === false) return false;
+  return true;
+}
 function gpdpPending(){
   /* THE DEVELOPMENT PLAN IS THE SANITATION REGISTER'S. The Gram Palana
      register was never asked for one — its server does not call for it — so
@@ -2868,6 +2886,7 @@ function maybePopGpdp(){
   gpdpSheet();
 }
 function gpdpSheet(){
+  if(!gpdpOffered()) return;
   const st = gpdpState(); if(!st) return;
   showSheet(`<div style="padding:6px 20px 4px">
       <p class="eyebrow">The district is waiting</p>
@@ -3445,6 +3464,10 @@ function scheduleCard(){
 
 /* ---- the screen ---- */
 function openGpdp(){
+  /* A SCREEN IS A DOOR. Hiding the row that opens it is a courtesy; this is
+     the rule — an old handset with a cached menu, or a deep link, must not
+     land a Gram Palana Officer on a form his own server will refuse. */
+  if(!gpdpOffered()) return;
   showScreen('gpdp');
   renderGpdp();
   refreshGpdp();
