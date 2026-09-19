@@ -701,6 +701,60 @@ has failed, and a line saying plainly that the square is **not a credential**.
 
 ---
 
+## The roll against the district's own roster
+
+**The office keeps its roster in a table** — mandal, name, mobile, official
+email, the office and its coordinates — and that table is the truth the
+register is meant to agree with. Agreeing with it used to mean a line in a
+`FIELD_FIXES` batch, a code edit and a deploy for one officer.
+
+**The table is pasted into the console and never committed.** Those are
+officers' personal mobile numbers and this repository is public, because that
+is how handsets install the app. So it goes from the Collector's screen to his
+own register over HTTPS and nowhere else, exactly as the Gram Palana roster
+did. The parser reads the shape a spreadsheet actually gives — the office and
+its two coordinates on three lines inside one cell, tabs in one paste and runs
+of spaces in the next — by taking first the pieces that can be recognised on
+sight (a ten-digit mobile, an address with an @, *Latitude:*, *Longitude:*)
+and only then splitting what is left into columns. A parser that insisted on a
+shape would be defeated by the first paste from another machine.
+
+**It proposes before it writes.** `dry` returns what *would* change, row by
+row, and writes nothing; the console prints it as a table and only then offers
+Apply.
+
+**And a new officer is NEVER written over the last one. This is the whole of
+it.** If the MPO of a mandal is a different person from the one on the row,
+writing the new name and number over that row would hand the outgoing
+officer's attendance, her notices and her leave to the incoming man — the
+register would show him present on days he had not joined, and a show-cause
+notice served on one officer would stand against another. So a changed
+**number** against the same name is a correction, written in place; a changed
+**person** is a succession: the outgoing row is marked inactive and keeps
+everything pointing at it (rule 7), and the incoming officer gets a row of his
+own with no PIN of hers. `sameName_` decides which, by the rule Admin.gs
+already used — two names are one officer when they share a word of real
+length, so a designation trailing the name (*"G. Praveen Kumar, PS,
+Gr-I(FAC)"*) does not make him a different man. **The app does not call
+Admin.gs for it**: a missing function there would fall to "different person",
+which is the dangerous way to be wrong, because it retires a serving officer.
+
+A number already held by somebody else is **refused and its holder named**
+(one number, one officer). Two officers in one chair is reported as ambiguous
+and left alone — which of them is right is the Collector's to settle. An empty
+table is refused rather than read as *take everyone off*. Nothing is deleted,
+a second run changes nothing (rule 8), and every change is on `Audit` with
+what it was before. Suite 27 and `tests/render-roster.js` hold all of it.
+
+**The mandal offices come with it.** `Mandals` (`Mandal, Office, Lat, Lng`) is
+written from the same table — data about a place, not about a person. A
+coordinate outside the district's box is dropped rather than believed, for the
+reason two of the Gram Palana roll's 180 were: a distance off a bad reading is
+a five-hundred-kilometre figure printed against a man sitting in his own
+office.
+
+---
+
 ## The second register · Gram Palana
 
 **Ordered 18.09.2026.** A second tenant for the Gram Palana domain: 115 Gram

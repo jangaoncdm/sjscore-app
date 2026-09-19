@@ -61,6 +61,11 @@ const PASSES = [
           'officer’s work — including one written before any of this existed, which records no owner at all — ' +
           'and one carrying the serving officer’s own, which must survive untouched.',
     cmd: ['tests/render-handset.js'], needs: BROWSER ? null : 'playwright is not installed', shots: null },
+  { name: 'The roll against the district’s roster',
+    what: 'The office’s own table pasted into the console in the shape a spreadsheet actually gives it, read, '+
+          'compared against the register, and written only on Apply. Guards the difference between correcting an '+
+          'officer’s row and a different officer taking the chair.',
+    cmd: ['tests/render-roster.js'], needs: BROWSER ? null : 'playwright is not installed', shots: null },
   { name: 'The installation page',
     what: 'The page 414 officers are sent to put the register on their phone, at 390, 1500 and 2560 px in both ' +
           'themes. Fails on sideways scroll, on a missing square, on an address not written out in words beside ' +

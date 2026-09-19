@@ -4688,6 +4688,299 @@ function holidayLoad_(who){
   return json_({ ok:true, tenant:tenant_().key, before:before, after:after, added:Math.max(0, after - before) });
 }
 
+
+/* ============================================================================
+ * THE ROLL, CORRECTED FROM A LIST THE DISTRICT ALREADY KEEPS
+ * ----------------------------------------------------------------------------
+ * The office holds its roster in a table — mandal, name, mobile, official
+ * email, the office and its coordinates — and that table is the truth the
+ * register is meant to agree with. Until now agreeing with it meant a line in
+ * a FIELD_FIXES batch, a code edit and a deploy for one officer.
+ *
+ * THE LIST NEVER ENTERS THE REPOSITORY. It is 12 officers' personal mobile
+ * numbers; this repository is public, because that is how handsets install the
+ * app. So the table goes from the Collector's own screen to his own register
+ * over HTTPS and nowhere else, exactly as the Gram Palana roster did.
+ *
+ * IT PROPOSES BEFORE IT WRITES. `dry` returns what WOULD change, row by row,
+ * old against new, and writes nothing. That is not a courtesy: the office's
+ * table and the register can disagree in four quite different ways, and three
+ * of them must not be settled by a robot.
+ *
+ * AND A NEW OFFICER NEVER OVERWRITES THE LAST ONE. This is the whole of it.
+ * If the MPO of Bachannapet is a different person from the one on the row,
+ * writing the new name and number over that row would hand HER attendance,
+ * HER notices and HER leave to him — the register would show a man present on
+ * days he had not joined, and a show-cause notice served on one officer
+ * standing against another. So a changed NUMBER against the SAME name is a
+ * correction and is written in place; a changed PERSON is a succession: the
+ * outgoing row is marked inactive, it keeps everything pointing at it (rule
+ * 7), and the incoming officer is a new row of his own.
+ *
+ * Nothing here deletes, nothing is written twice (rule 8), every change is on
+ * the Audit tab with what it was before, and the Collector's own role is
+ * re-checked on the server (rule 6).
+ * ========================================================================== */
+const MANDAL_HEAD = ['Mandal', 'Office', 'Lat', 'Lng'];
+
+/* the mandal offices, as the district's own table gives them */
+function mandalOffices_(){
+  const sh = sheet_('Mandals', MANDAL_HEAD);
+  const v = sh.getDataRange().getValues();
+  const out = {};
+  if(v.length < 2) return out;
+  const mo = headMap_(sh, MANDAL_HEAD);
+  for(let i = 1; i < v.length; i++){
+    const name = String(v[i][mo.ix.Mandal] || '').trim();
+    if(!name) continue;
+    const y = Number(v[i][mo.ix.Lat]), x = Number(v[i][mo.ix.Lng]);
+    /* A COORDINATE THAT CANNOT BE BELIEVED IS NOT A COORDINATE. Two of the
+       Gram Palana roll's 180 were wrong — a longitude of 7852556, and one with
+       the latitude copied into the longitude — and a distance off either would
+       have been a five-hundred-kilometre figure printed against a man sitting
+       in his own office. Anything outside the district's box is dropped. */
+    if(!isFinite(y) || !isFinite(x)) continue;
+    if(!(y > 16.4 && y < 19.2 && x > 77.6 && x < 80.9)) continue;
+    out[name.toLowerCase()] = { mandal:name, office:String(v[i][mo.ix.Office] || '').trim(), lat:y, lng:x };
+  }
+  return out;
+}
+
+/* one officer's line of the district's table, read against the register */
+/* TWO NAMES, ONE OFFICER. The registers spell a man "L Mahesh Kumar",
+   "L. Mahesh Kumar" and "Mahesh Kumar L", and the office abbreviates a
+   surname to an initial — and appends a designation, so the table's
+   "G. Praveen Kumar, PS, Gr-I(FAC)" is the man the roll calls G. Praveen
+   Kumar. Two names are the same officer when they share a word of real
+   length; initials, honorifics and designations do not count, because
+   "A. Narmada" and "A. Ramesh" share only the A. */
+function sameName_(a, b){
+  const words = function(s){
+    return String(s || '').toLowerCase().replace(/[^a-z\s]/g, ' ')
+      .split(/\s+/).filter(function(w){
+        return w.length > 2 &&
+          ['smt','shri','sri','mrs','fac','supdt','gr','sec'].indexOf(w) < 0; });
+  };
+  const A = words(a), B = words(b);
+  if(!A.length || !B.length) return true;      /* a blank name blocks nothing */
+  return A.some(function(w){ return B.indexOf(w) >= 0; });
+}
+
+function rollPlan_(t, v, r){
+  const mandal = String(r.mandal || '').trim();
+  const role   = String(r.role || '').trim().toUpperCase();
+  const name   = String(r.name || '').trim();
+  const phone  = phone10_(r.phone || '');
+  const email  = String(r.email || '').trim();
+  const out = { mandal:mandal, role:role, name:name, phone:phone, email:email, changes:[] };
+
+  if(!mandal || !role){ out.verdict = 'refused'; out.why = 'a mandal and a role are needed'; return out; }
+  if(phone.length !== 10){ out.verdict = 'refused'; out.why = 'a mobile number is ten digits'; return out; }
+  if(!name){ out.verdict = 'refused'; out.why = 'a name is needed — the roll is read by people'; return out; }
+  if(!rank_()[role]){ out.verdict = 'refused'; out.why = 'no such role on this register'; return out; }
+
+  /* who holds that chair on the register today */
+  const seat = [];
+  for(let i = 1; i < v.length; i++){
+    if(String(v[i][t.ix.role] || '').trim().toUpperCase() !== role) continue;
+    if(String(v[i][t.ix.mandal] || '').trim().toLowerCase() !== mandal.toLowerCase()) continue;
+    const act = t.ix.active < 0 ? true : !(v[i][t.ix.active] === false ||
+      String(v[i][t.ix.active]).toUpperCase() === 'FALSE');
+    if(act) seat.push(i);
+  }
+  /* and whether that number is already somebody's */
+  const held = rollRows_(t, v, phone).filter(function(i){
+    const act = t.ix.active < 0 ? true : !(v[i][t.ix.active] === false ||
+      String(v[i][t.ix.active]).toUpperCase() === 'FALSE');
+    return act;
+  });
+
+  if(seat.length > 1){
+    out.verdict = 'ambiguous';
+    out.why = seat.length + ' active officers hold this chair on the register: ' +
+      seat.map(function(i){ return cell_(v[i], t.ix.name) + ' (' + phone10_(v[i][t.ix.phone]) + ')'; }).join(', ') +
+      '. Which of them is right is yours to settle, not this page’s.';
+    return out;
+  }
+
+  if(!seat.length){
+    /* nobody holds it. If the number is on the roll elsewhere, that is a man
+       being MOVED, and moving a man between mandals is not a thing this does
+       quietly — his notices and his filings are counted by mandal. */
+    if(held.length){
+      out.verdict = 'refused';
+      out.why = 'that number is already on the roll as ' + cell_(v[held[0]], t.ix.name) + ', ' +
+        cell_(v[held[0]], t.ix.role) + (cell_(v[held[0]], t.ix.mandal) ? ' of ' + cell_(v[held[0]], t.ix.mandal) : '') +
+        '. One number is one officer; correct that row rather than adding a second.';
+      return out;
+    }
+    out.verdict = 'register';
+    out.why = 'nobody holds this chair on the register';
+    out.changes.push('registered as ' + role + ' of ' + mandal);
+    out.needsPin = true;
+    return out;
+  }
+
+  const i = seat[0];
+  out.row = i + 1;
+  out.was = { name:cell_(v[i], t.ix.name), phone:phone10_(v[i][t.ix.phone]),
+              email:cell_(v[i], t.ix.email) };
+
+  /* IS THIS THE SAME PERSON? The registers spell a man "L Mahesh Kumar",
+     "L. Mahesh Kumar" and "Mahesh Kumar L", and the office abbreviates a
+     surname to an initial, so two names are the same officer when they share
+     a word of real length: initials and honorifics do not count, because
+     "A. Narmada" and "A. Ramesh" share only the A.
+     Admin.gs has this rule too and the app does NOT call it: Admin.gs is the
+     Collector’s own, never the app’s, and a missing function there would fall
+     to “different person” — which is the dangerous way to be wrong here,
+     because it retires a serving officer. */
+  let same = sameName_(out.was.name, name);
+  if(!same && out.was.phone === phone) same = true;   /* same number, spelt anew */
+
+  if(!same){
+    out.verdict = 'succession';
+    out.why = cell_(v[i], t.ix.name) + ' holds this chair on the register and ' + name + ' is a different person.';
+    out.changes.push(out.was.name + ' is taken off the roll — the row stays, and so does everything pointing at it');
+    out.changes.push(name + ' is registered as a new row of his own');
+    out.needsPin = true;
+    if(held.length && phone10_(v[held[0]][t.ix.phone]) === phone && held[0] !== i){
+      out.verdict = 'refused';
+      out.why = 'that number is already on the roll as ' + cell_(v[held[0]], t.ix.name) + '.';
+    }
+    return out;
+  }
+
+  /* the same officer: correct what differs */
+  if(out.was.phone !== phone){
+    if(held.length && held[0] !== i){
+      out.verdict = 'refused';
+      out.why = 'that number is already on the roll as ' + cell_(v[held[0]], t.ix.name) + '.';
+      return out;
+    }
+    out.changes.push('mobile ' + (out.was.phone || '(blank)') + ' → ' + phone);
+    out.newPhone = true;
+  }
+  if(name && out.was.name !== name) out.changes.push('name "' + out.was.name + '" → "' + name + '"');
+  if(email && String(out.was.email).toLowerCase() !== email.toLowerCase())
+    out.changes.push('email ' + (out.was.email || '(blank)') + ' → ' + email);
+
+  out.verdict = out.changes.length ? 'correct' : 'unchanged';
+  return out;
+}
+
+function rollUpdate_(b, u){
+  if(u.role !== 'COLLECTOR') return json_({ ok:false, error:'The roll is the Collector’s alone.' });
+  const rows = (b.rows && b.rows.length) ? b.rows : [];
+  if(!rows.length) return json_({ ok:false, error:'Nothing was sent.' });
+  if(rows.length > 400) return json_({ ok:false, error:'That is more than one roll.' });
+  const dry = b.dry !== false;
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try{
+    const t = uidx_();
+    let v = t.sh.getDataRange().getValues();
+    const plans = rows.map(function(r){ return rollPlan_(t, v, r); });
+
+    /* the offices, which are data about a place and not about a person */
+    let offices = 0, officeRows = [];
+    rows.forEach(function(r){
+      const y = Number(r.lat), x = Number(r.lng);
+      if(!r.mandal || !isFinite(y) || !isFinite(x)) return;
+      if(!(y > 16.4 && y < 19.2 && x > 77.6 && x < 80.9)) return;
+      officeRows.push({ mandal:String(r.mandal).trim(), office:String(r.office || '').trim(), lat:y, lng:x });
+    });
+
+    if(dry){
+      const have = mandalOffices_();
+      officeRows.forEach(function(o){
+        const cur = have[o.mandal.toLowerCase()];
+        if(!cur || cur.lat !== o.lat || cur.lng !== o.lng) offices++;
+      });
+      return json_({ ok:true, dry:true, plans:plans, offices:offices, officeTotal:officeRows.length });
+    }
+
+    /* ---- and now the writing ---- */
+    let wrote = 0, made = 0, retired = 0;
+    const pins = [];
+    plans.forEach(function(p){
+      if(p.verdict === 'unchanged' || p.verdict === 'refused' || p.verdict === 'ambiguous') return;
+
+      if(p.verdict === 'correct'){
+        const i = p.row - 1;
+        if(p.was.phone !== p.phone) t.sh.getRange(p.row, t.ix.phone + 1).setValue("'" + p.phone);
+        if(p.name)  t.sh.getRange(p.row, t.ix.name + 1).setValue(p.name);
+        if(p.email && t.ix.email >= 0) t.sh.getRange(p.row, t.ix.email + 1).setValue(p.email);
+        admAudit_('ROLL CORRECTED', p.phone, p.role + ' of ' + p.mandal + ' · ' + p.changes.join('; '));
+        wrote++;
+        return;
+      }
+
+      if(p.verdict === 'succession'){
+        /* HE IS NOT DELETED AND HE IS NOT OVERWRITTEN (rule 7). The row stays,
+           marked inactive, and his attendance, his notices, his leave and his
+           plan stay with it — a file can still be produced, and the man who
+           earned that record keeps it. */
+        if(t.ix.active >= 0) t.sh.getRange(p.row, t.ix.active + 1).setValue('FALSE');
+        admAudit_('OFFICER TAKEN OFF THE ROLL', p.was.phone,
+          p.was.name + ', ' + p.role + ' of ' + p.mandal + ' — succeeded by ' + p.name);
+        retired++;
+      }
+
+      /* register the incoming officer as a row of his own */
+      const width = Math.max(t.sh.getLastColumn(), U_HEAD.length);
+      const row = new Array(width).fill('');
+      row[t.ix.phone] = "'" + p.phone;
+      row[t.ix.name] = p.name;
+      row[t.ix.role] = p.role;
+      row[t.ix.mandal] = p.mandal;
+      if(t.ix.email >= 0) row[t.ix.email] = p.email;
+      if(t.ix.active >= 0) row[t.ix.active] = 'TRUE';
+      t.sh.appendRow(row);
+      admAudit_('OFFICER REGISTERED', p.phone, p.name + ', ' + p.role + ' of ' + p.mandal);
+      made++;
+      pins.push({ phone:p.phone, name:p.name, mandal:p.mandal });
+    });
+
+    /* the offices. A tab of places, written by mandal, and idempotent. */
+    let officeWrote = 0;
+    if(officeRows.length){
+      const osh = sheet_('Mandals', MANDAL_HEAD);
+      const om = headMap_(osh, MANDAL_HEAD);
+      const ov = osh.getDataRange().getValues();
+      const at = {};
+      for(let i = 1; i < ov.length; i++){
+        const nm = String(ov[i][om.ix.Mandal] || '').trim().toLowerCase();
+        if(nm) at[nm] = i + 1;
+      }
+      officeRows.forEach(function(o){
+        const k = o.mandal.toLowerCase();
+        if(at[k]){
+          const r = at[k];
+          if(String(ov[r - 1][om.ix.Lat]) === String(o.lat) &&
+             String(ov[r - 1][om.ix.Lng]) === String(o.lng) &&
+             String(ov[r - 1][om.ix.Office] || '') === o.office) return;
+          osh.getRange(r, om.ix.Office + 1).setValue(o.office);
+          osh.getRange(r, om.ix.Lat + 1).setValue(o.lat);
+          osh.getRange(r, om.ix.Lng + 1).setValue(o.lng);
+        } else {
+          const w = Math.max(osh.getLastColumn(), MANDAL_HEAD.length);
+          const rr = new Array(w).fill('');
+          rr[om.ix.Mandal] = o.mandal; rr[om.ix.Office] = o.office;
+          rr[om.ix.Lat] = o.lat; rr[om.ix.Lng] = o.lng;
+          osh.appendRow(rr);
+        }
+        officeWrote++;
+      });
+      if(officeWrote) admAudit_('MANDAL OFFICES WRITTEN', String(officeWrote), 'from the district’s own table');
+    }
+
+    return json_({ ok:true, dry:false, corrected:wrote, registered:made, retired:retired,
+                   offices:officeWrote, pins:pins, plans:plans });
+  } finally { lock.releaseLock(); }
+}
+
 function doPost(e){
   let b;
   try{ b = JSON.parse(e.postData.contents); }catch(err){ return json_({ ok:false, error:'bad request' }); }
@@ -5205,6 +5498,7 @@ function doPost(e){
     if(u.role !== 'COLLECTOR') return json_({ ok:false, error:'The year is loaded by the Collector alone.' });
     return holidayLoad_('COLLECTOR ' + u.phone);
   }
+  if(b.kind === 'rollUpdate') return rollUpdate_(b, u);
   if(b.kind === 'userCreate') return createUser_(b, u);
   if(b.kind === 'userPin')    return resetUserPin_(b, u);
   if(b.kind === 'userActive') return setUserActive_(b, u);
