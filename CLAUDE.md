@@ -742,6 +742,31 @@ the key back for one call; it was rejected because it would have automated an
 Admin.gs job *and* put a live key into the deployed project, to save the
 Collector one click in a console he is already in.
 
+**One handset is one officer, and a handset that names nobody is not
+therefore his.** Two officers share a phone all day here — a Revenue Inspector
+borrows a GPO's, the Collector signs in to test, a man lends his to a colleague
+whose battery is flat. The offline store was keyed to the DEVICE and not to the
+man: attendance is held as `att[date]`, so the second officer was told he had
+marked when the district held no row for him. Worse than the display — an
+inspection not yet synced would have gone up under the SECOND officer's token,
+and `saveInspection_` stamps the officer from the token.
+
+**It was reported twice, and the second report was the first fix's fault.**
+That fix wiped only when the app already knew whose the store was; a handset
+written before it carries no owner, because nothing had ever written one — so
+the one switch that mattered, the first after the update, went through
+unguarded, and every device in the district was in that state on the day it
+shipped. Now `officerOwn()` adopts the store at every start for whoever is
+signed in, so nobody serving is ever caught; and at sign-in, a store that names
+nobody **and yet holds somebody's work** is cleared, because the app cannot
+prove it is his and the wrong way to be wrong here is to credit a man with a
+mark the district has no row for. He loses at most his own unsent work and is
+told why. Numbers are matched through `own10` — `+91…` and plain are one
+officer (rule 4). `tests/render-handset.js` holds all six cases; it is a
+browser test because the fault lives in the store, the boot and the sign-in
+path together, and a unit test of any one of them passes while the officer in
+the village sees it.
+
 **Two Sheets, and that is the whole of the isolation.** Each register is its
 own Apps Script project bound to its own spreadsheet behind its own `/exec`.
 **There is no Tenant column and there must not be one.** A logical filter is
