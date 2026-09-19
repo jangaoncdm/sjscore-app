@@ -3204,9 +3204,20 @@ function doGet(e){
        question is settled by reading, not by reasoning. It reveals nothing:
        these are endpoint names, every one of which re-checks the caller. */
     return json_({ ok:true, stamp:'SJGP-6.9-diag13', tenant:tenant_().key, tenantName:tenant_().name,
-      kinds:['login','attendance','inspection','photos','leave','leaveDecision','leaveWithdraw',
-             'gpdp','advAck','advPublish','schedAck','schedSeen','schedulePublish','schedNudge',
-             'holidaysLoad','userCreate','userPin','userActive'],
+      /* READ OFF THE RUNNING CODE, NOT TYPED HERE. A list written by hand
+         says what the author believed; it proved exactly nothing when the
+         question was whether the deployed build carried an endpoint, because
+         the list and the endpoint came from different commits. doPost is
+         asked for its own source and the dispatch is read out of it, so this
+         cannot say yes to a kind the running build does not answer. */
+      kinds:(function(){
+        try{
+          var src = String(doPost);
+          var out = [], m, re = /b\.kind\s*===\s*'([A-Za-z]+)'/g;
+          while((m = re.exec(src))){ if(out.indexOf(m[1]) < 0) out.push(m[1]); }
+          return out.sort();
+        }catch(err){ return ['(could not read: ' + err + ')']; }
+      })(),
       can:{ sanction:!!tenant_().sanction, evaluation:!!tenant_().evaluation,
             schedule:!!tenant_().schedule, gpdp:!!tenant_().gpdp,
             placeOfDuty:!!tenant_().placeOfDuty },
