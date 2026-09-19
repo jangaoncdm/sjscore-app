@@ -1,0 +1,206 @@
+# ============================================================================
+# STAND UP THE GRAM PANCHAYAT REGISTER — once, from a button.
+# ----------------------------------------------------------------------------
+# Everything the forty minutes in DEPLOY-GP.md asked a person to do, except the
+# one step that moves personal data:
+#
+#   1. creates a new Google Sheet with an Apps Script project bound to it,
+#      under the SAME account that owns the sanitation register — the one
+#      CLASPRC_JSON belongs to, not whichever account a laptop is logged in as;
+#   2. writes ONE generated line telling that project it is the GP register;
+#   3. pushes backend/ and deploys it as a web app;
+#   4. sets GP_SCRIPT_ID, GP_DEPLOYMENT_ID and GP_EXEC_URL on the repository;
+#   5. commits gp/config.js, which is what makes the app appear at /gp/;
+#   6. asks the new address what register it is, and does not call the job done
+#      unless it says GP — both projects run identical backend files, so
+#      "ok:true" proves only that something answered.
+#
+# HOW THE NEW PROJECT KNOWS WHAT IT IS, without anybody typing a Script
+# Property: step 2 writes `gpbuild/Tenant.gs`, one line long. It is generated
+# into a build directory and never into backend/, and the sanitation
+# register's own deploy job pushes `rootDir: backend` — so the line cannot
+# reach that project even by accident. The Script Property still outranks it
+# wherever one is set.
+#
+# WHAT IT DELIBERATELY DOES NOT DO: put the roster into GitHub. The Users and
+# GPs tabs carry 134 officers' personal mobile numbers. This repository is
+# public and has collaborators, and anyone with write access to a repository
+# can print one of its secrets from a workflow — so the roster is imported
+# into the Sheet by hand, from Domain/GP/seed-*.csv, which is two
+# File ▸ Import steps and about two minutes. It is the only part of this that
+# touches personal data and the only part left to a person. Not an oversight.
+#
+# IT REFUSES TO RUN TWICE. If GP_SCRIPT_ID is already set it stops: a second
+# run would create a SECOND register and orphan the first with its data in it.
+# ============================================================================
+name: Provision the Gram Panchayat register
+
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: 'Name for the new Google Sheet'
+        required: true
+        default: 'SJGP - Gram Panchayat register'
+      confirm:
+        description: 'Type CREATE to confirm this makes a new Sheet and Apps Script project'
+        required: true
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  provision:
+    name: Create, push, deploy and wire up
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse unless confirmed
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "CREATE" ]; then
+            echo "::error::Type CREATE in the confirm box. This creates a Google Sheet and an Apps Script project in the district's Drive."
+            exit 1
+          fi
+
+      - name: Refuse to make a second register
+        run: |
+          if [ -n "${{ vars.GP_SCRIPT_ID }}" ]; then
+            echo "::error::GP_SCRIPT_ID is already set. A second run would create a second register and orphan the first with its data in it. Clear the variable deliberately if you really mean to start again."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      - name: Install clasp
+        run: npm install -g @google/clasp@2.4.2
+
+      - name: Sign in with the stored credential
+        run: echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
+
+      - name: Assemble what the new project will hold
+        env:
+          BOOTSTRAP_KEY: ${{ secrets.GP_BOOTSTRAP_KEY }}
+        run: |
+          if [ -z "$BOOTSTRAP_KEY" ]; then
+            echo "::error::GP_BOOTSTRAP_KEY is not set. It is a random key carrying no personal data; it is what lets the roster be posted straight to the new register instead of being carried through this repository."
+            exit 1
+          fi
+          mkdir -p gpbuild
+          cp backend/Code.gs backend/Admin.gs backend/appsscript.json gpbuild/
+          # THE TWO GENERATED LINES. They live here and never in backend/, so
+          # the sanitation register's deploy job — rootDir: backend — cannot
+          # pick them up even by accident.
+          {
+            echo "/* Written by the provisioning pipeline. This file exists ONLY in the"
+            echo "   Gram Panchayat project and is never in backend/, so it cannot reach"
+            echo "   the sanitation register. A Script Property named TENANT outranks it."
+            echo ""
+            echo "   BOOTSTRAP_KEY lets the district's own machine post the roll ONCE, to"
+            echo "   an empty register, so that 134 officers' mobile numbers never travel"
+            echo "   through a public repository. It stops working the moment one officer"
+            echo "   is on the roll. */"
+            echo "var TENANT_OVERLAY = 'GP';"
+            printf "var BOOTSTRAP_KEY = '%s';\n" "$BOOTSTRAP_KEY"
+          } > gpbuild/Tenant.gs
+          echo "--- gpbuild ---"; ls -1 gpbuild
+          echo "(the key itself is not printed)"
+
+      - name: Create the Sheet and its bound Apps Script project
+        id: create
+        run: |
+          clasp create --type sheets --title "${{ github.event.inputs.title }}" --rootDir gpbuild
+          SID=$(node -e "console.log(JSON.parse(require('fs').readFileSync('.clasp.json','utf8')).scriptId)")
+          echo "script_id=$SID" >> "$GITHUB_OUTPUT"
+          echo "Created script $SID"
+
+      - name: Push the backend into it
+        run: clasp push --force
+
+      - name: Deploy it as a web app
+        id: deploy
+        run: |
+          OUT=$(clasp deploy -d "provisioned by the pipeline, run ${{ github.run_number }}")
+          echo "$OUT"
+          DID=$(echo "$OUT" | grep -oE 'AKfyc[A-Za-z0-9_-]+' | head -n1)
+          if [ -z "$DID" ]; then echo "::error::clasp did not report a deployment id."; exit 1; fi
+          echo "deployment_id=$DID" >> "$GITHUB_OUTPUT"
+          echo "exec_url=https://script.google.com/macros/s/$DID/exec" >> "$GITHUB_OUTPUT"
+
+      - name: Ask the new address what register it is
+        id: verify
+        continue-on-error: true
+        run: |
+          URL='${{ steps.deploy.outputs.exec_url }}?op=diag'
+          for i in 1 2 3 4 5 6 7 8; do
+            sleep 15
+            OUT=$(curl -sL --max-time 45 "$URL" || true)
+            if echo "$OUT" | grep -q '"tenant":"GP"'; then
+              echo "It answered, and it knows it is the Gram Panchayat register."
+              echo "ok=yes" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            if echo "$OUT" | grep -q '"ok":true'; then
+              echo "::warning::It answered but does not report tenant GP."
+              echo "$OUT" | head -c 300; echo
+            fi
+            echo "attempt $i: $(echo "$OUT" | tr -d '\n' | head -c 140)"
+          done
+          echo "ok=no" >> "$GITHUB_OUTPUT"
+          echo "::warning::The new web app has not answered yet. A first deployment usually has to have its scopes approved once in the browser: open the script, Run, and accept. Everything else below is already done."
+
+      - name: Record the three variables on the repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh variable set GP_SCRIPT_ID     --body '${{ steps.create.outputs.script_id }}'
+          gh variable set GP_DEPLOYMENT_ID --body '${{ steps.deploy.outputs.deployment_id }}'
+          gh variable set GP_EXEC_URL      --body '${{ steps.deploy.outputs.exec_url }}'
+          echo "GP_SCRIPT_ID, GP_DEPLOYMENT_ID and GP_EXEC_URL are set."
+
+      - name: Publish the app by committing gp/config.js
+        run: |
+          mkdir -p gp
+          {
+            echo "/* Written by the provisioning pipeline, run ${{ github.run_number }}."
+            echo "   A publish never carries config.js, so nothing here is overwritten."
+            echo ""
+            echo "   SJGP_TENANT does two things: the app draws itself as the Gram"
+            echo "   Panchayat register, and it changes the key the app keeps its store"
+            echo "   under. Both apps sit on one domain and browser storage is per"
+            echo "   domain, not per folder. */"
+            echo "window.SJGP_SERVER = '${{ steps.deploy.outputs.exec_url }}';"
+            echo "window.SJGP_TENANT = 'GP';"
+          } > gp/config.js
+          git config user.name  "SJGP deploy"
+          git config user.email "deploy@users.noreply.github.com"
+          git add gp/config.js
+          git diff --staged --quiet || git commit -m "provision: the Gram Panchayat register is live at /gp/"
+          git push
+
+      - name: What is left to a person
+        run: |
+          echo "=============================================================="
+          echo " The Gram Panchayat register is stood up."
+          echo ""
+          echo "   Script  https://script.google.com/d/${{ steps.create.outputs.script_id }}/edit"
+          echo "   Server  ${{ steps.deploy.outputs.exec_url }}"
+          echo "   App     https://jangaoncdm.github.io/sjscore-app/gp/"
+          echo "   Console https://jangaoncdm.github.io/sjscore-app/dashboard.html"
+          echo ""
+          echo " TWO THINGS REMAIN, and both are deliberate:"
+          echo ""
+          echo " 1. IMPORT THE ROSTER. Open the Sheet the script is bound to"
+          echo "    (Extensions > Apps Script > the file name at the top), then:"
+          echo "      File > Import > Upload > Domain/GP/seed-Users.csv"
+          echo "         > Insert new sheet, rename the tab exactly  Users"
+          echo "      File > Import > Upload > Domain/GP/seed-GPs.csv"
+          echo "         > Insert new sheet, rename the tab exactly  GPs"
+          echo "    134 officers' personal mobile numbers are not put through a"
+          echo "    public repository, so this is the one step a person does."
+          echo ""
+          echo " 2. ADD YOURSELF to the Users tab with Role = COLLECTOR, then run"
+          echo "    setupPins once from the script editor to issue the PINs."
+          echo ""
+          echo " The register makes its own salt on first use. Nothing to paste."
+          echo "=============================================================="

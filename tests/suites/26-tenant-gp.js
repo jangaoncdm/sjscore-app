@@ -106,6 +106,122 @@ module.exports = {
       t.eq(e.ctx.tenant_().key, 'GP', JSON.stringify(good) + ' selects the GP register');
     });
 
+    /* ---- 1b. THE SPREADSHEET MAY SAY WHICH REGISTER IT IS ----
+       A Script Property has to be typed in by a person, in a browser, on the
+       day the register is created; a register that cannot be stood up without
+       that cannot be stood up by a pipeline. The bound spreadsheet carries it
+       instead, on a Config tab, where it travels with the data it describes
+       and cannot reach the other project. */
+    {
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e.mkSheet('Config', ['Key','Value'], [{ Key:'TENANT', Value:'GP' }]);
+      t.eq(e.ctx.tenant_().key, 'GP', 'a Config tab naming GP selects the Gram Panchayat register');
+    }
+    {
+      /* THE PROPERTY STILL WINS, so nothing already standing moves */
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e.props.TENANT = 'SJGP';
+      e.mkSheet('Config', ['Key','Value'], [{ Key:'TENANT', Value:'GP' }]);
+      t.eq(e.ctx.tenant_().key, 'SJGP', 'a Script Property beats the tab — what is set by hand is not overridden');
+    }
+    ['', 'GPX', 'yes', '  '].forEach(bad => {
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e.mkSheet('Config', ['Key','Value'], [{ Key:'TENANT', Value:bad }]);
+      t.eq(e.ctx.tenant_().key, 'SJGP',
+        'a Config tab saying ' + JSON.stringify(bad) + ' is not a register — still SJGP');
+    });
+    {
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e.mkSheet('Config', ['Key','Value'], [{ Key:'SOMETHING', Value:'GP' }]);
+      t.eq(e.ctx.tenant_().key, 'SJGP', 'a Config tab with no TENANT row changes nothing');
+    }
+
+    /* ---- 1c. A NEW REGISTER MAKES ITS OWN SALT ----
+       The step most likely to be skipped, mistyped, or copied from the other
+       register — which would make the same PIN hash identically on both. */
+    {
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      t.ok(!e.props.SALT, 'a fresh register has none to begin with');
+      const a = e.ctx.salt_();
+      t.ok(a && a.length > 20, 'it makes one on first use: ' + (a ? a.length : 0) + ' characters');
+      t.ok(a !== e.eval('SALT_FALLBACK'), 'and it is NOT the placeholder that ships in the file');
+      t.eq(e.props.SALT, a, 'it is written to Script Properties');
+      t.ok(!!e.props.SALT_MADE_AT, 'with the day it was made, so the register can be asked later');
+      /* ONCE, AND NEVER AGAIN */
+      const e2 = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e2.props.SALT = a;
+      t.eq(e2.ctx.salt_(), a, 'a register that already has one keeps it, untouched');
+      /* two registers do not share one */
+      const e3 = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      t.ok(e3.ctx.salt_() !== a, 'and two registers never make the same one');
+      /* IT IS NOT WRITTEN TO THE SHEET. The nightly backup copies the
+         spreadsheet; a salt in it would be a second place to lose it from. */
+      const e4 = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      const made = e4.ctx.salt_();
+      const anySheet = JSON.stringify(Object.keys(e4.sheets).map(k => e4.sheets[k].rows));
+      t.ok(anySheet.indexOf(made) < 0, 'and it appears on no tab of the register');
+    }
+
+    /* ---- 1d. SEEDING A NEW REGISTER, ONCE, AND NEVER A LIVE ONE ----
+       The roll is 134 officers' personal mobile numbers. They do not travel
+       through a public repository — not as a file and not as a secret, because
+       a secret is readable by anybody who can push a workflow. They are posted
+       straight to the register from the district's own machine, and the only
+       thing that goes near GitHub is a random key carrying no personal data.
+       Four guards, and every one has to hold. */
+    {
+      /* NO KEY, NO ENDPOINT. This is the sanitation register's position
+         permanently: nothing ever writes a key into it. */
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e.mkSheet('Users', ['Phone','Name','Role','Mandal','GP','Email','InitPin','Hash','Active'], []);
+      const r = e.post({ kind:'bootstrap', key:'anything', users:[['9000000009','X','GPO','Jangaon','V','']] });
+      t.eq(r.ok, false, 'a register with no bootstrap key refuses to be seeded at all');
+      t.contains(r.error, 'no bootstrap key', 'and says so');
+      t.eq((e.sheets['Users'].rows || []).length, 1, 'nothing was written');
+    }
+    {
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e.eval('var BOOTSTRAP_KEY = "the-right-key";');
+      e.mkSheet('Config', ['Key','Value'], [{ Key:'TENANT', Value:'GP' }]);
+      e.mkSheet('Users', ['Phone','Name','Role','Mandal','GP','Email','InitPin','Hash','Active'], []);
+
+      t.eq(e.post({ kind:'bootstrap', key:'the-wrong-key',
+        users:[['9000000009','X','GPO','Jangaon','V','']] }).ok, false, 'a wrong key is refused');
+      t.eq((e.sheets['Users'].rows || []).length, 1, 'and writes nothing');
+
+      const good = e.post({ kind:'bootstrap', key:'the-right-key',
+        users:[['9111100001','K. Surya Prakash','GPO','Bachannapeta','Bachannapet, Itikalapally','a@b'],
+               ['9111100010','T. Lokesh Kumar','MRI','Bachannapeta','','c@d']],
+        gps:[['Bachannapeta','Bachannapet',17.7898,79.0404],
+             ['Bachannapeta','Salvapur','','']] });
+      t.eq(good.ok, true, 'the right key on an empty register seeds it');
+      t.eq(good.officers, 2, 'two officers');
+      t.eq(good.villages, 2, 'two villages');
+      t.eq(good.tenant, 'GP', 'into the Gram Panchayat register');
+      t.eq(e.sheets['Users'].rows.length, 3, 'the roll is on the Users tab');
+      t.eq(e.sheets['GPs'].rows.length, 3, 'and the villages on GPs');
+      /* the officer can then actually sign in — the seeding is not cosmetic */
+      const tok = tokenFor(e, '9111100001', '4242');
+      t.ok(!!tok, 'and a seeded officer can sign in');
+      t.eq(e.post({ kind:'login', u:'9111100001', p:'4242' }).user.role, 'GPO', 'as a GPO');
+      /* a village with no believable coordinate stays blank, not zero */
+      t.eq(e.ctx.gpPlaces_()['bachannapeta|salvapur'], undefined,
+        'a village sent without coordinates gets none — not a point at sea');
+
+      /* ONCE. A register with one officer on it can never be seeded again, so
+         there is no window in which this could overwrite a live roll. */
+      const again = e.post({ kind:'bootstrap', key:'the-right-key',
+        users:[['9999999999','Somebody Else','GPO','Jangaon','V','']] });
+      t.eq(again.ok, false, 'a register that already has a roll REFUSES to be seeded again');
+      t.contains(again.error, 'cannot be seeded again', 'and says why');
+      t.eq(e.sheets['Users'].rows.length, 3, 'and the roll is untouched');
+
+      /* it wrote what it did, without writing the roll into the log */
+      const audit = JSON.stringify((e.sheets['Audit'] || { rows:[] }).rows);
+      t.contains(audit, 'BOOTSTRAP', 'the Audit tab records that a register was seeded');
+      t.ok(audit.indexOf('9111100001') < 0, 'and does NOT record the numbers it seeded');
+    }
+
     /* ---- 2. THE SHAPE FOLLOWS THE TENANT ---- */
     const env = mock.load({ now:'2026-09-21T09:00:00+05:30' });
     const c = env.ctx;

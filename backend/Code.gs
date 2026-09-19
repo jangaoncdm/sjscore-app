@@ -148,6 +148,37 @@ function salt_(){
   if(SALT_CACHE !== null) return SALT_CACHE;
   let v = '';
   try{ v = String(PropertiesService.getScriptProperties().getProperty('SALT') || ''); }catch(e){}
+  /* A NEW REGISTER MAKES ITS OWN, ONCE, AND NEVER AGAIN.
+     Asking a person to invent one and paste it into a browser is the step most
+     likely to be skipped, mistyped, or — worst — copied from the other
+     register, which would make the same PIN hash identically on both. What
+     Utilities generates beats anything typed, and a register that does this
+     for itself can be stood up by a pipeline instead of by an evening.
+
+     IT NEVER TOUCHES A REGISTER THAT ALREADY HAS ONE. The property is read
+     first and a value found there is returned untouched, so the sanitation
+     register is not affected by this in any way.
+
+     The lock is not ceremony: two officers may sign in in the same second on
+     the first morning, and two values would mean the second silently
+     invalidated the first one's PIN. It is written to Script Properties and
+     nowhere else — not to the Sheet, so the nightly backup still carries only
+     a fingerprint of it, exactly as rule 7 of the backup requires. */
+  if(!v){
+    const lock = LockService.getScriptLock();
+    let held = false;
+    try{ lock.waitLock(20000); held = true; }catch(e){}
+    try{
+      const props = PropertiesService.getScriptProperties();
+      v = String(props.getProperty('SALT') || '');        /* another request may have won the lock */
+      if(!v){
+        v = Utilities.base64Encode(Utilities.getUuid() + '|' + Utilities.getUuid() + '|' + new Date().getTime());
+        props.setProperty('SALT', v);
+        try{ props.setProperty('SALT_MADE_AT', new Date().toISOString()); }catch(e){}
+      }
+    }catch(e){ v = ''; }
+    finally{ if(held) try{ lock.releaseLock(); }catch(e){} }
+  }
   SALT_CACHE = v || SALT_FALLBACK;
   return SALT_CACHE;
 }
@@ -383,6 +414,41 @@ function tenant_(){
   if(TENANT_CACHE) return TENANT_CACHE;
   let v = '';
   try{ v = String(PropertiesService.getScriptProperties().getProperty('TENANT') || '').toUpperCase().trim(); }catch(e){}
+  /* OR THE REGISTER'S OWN SPREADSHEET SAYS SO.
+     A Script Property must be typed in by a person, in a browser, on the day
+     the register is created — and a register that cannot be stood up without
+     somebody typing one word cannot be stood up by a pipeline at all. The
+     bound spreadsheet IS the register: a Config tab carries what it is, it
+     travels with the data it describes, and it cannot reach the other project
+     because it is not in the other project's spreadsheet.
+
+     THE PROPERTY STILL WINS wherever it is set, so nothing already standing
+     moves. And a tab that cannot be read, or that names something which is not
+     a register, is still SJGP — the default a failure has to land on. */
+  /* OR A FILE THAT EXISTS ONLY IN THAT PROJECT.
+     The provisioning pipeline writes one line into the project it creates:
+     `var TENANT_OVERLAY = 'GP';`. It is generated into a build directory, not
+     into backend/, and the sanitation register's deploy job pushes backend/
+     and nothing else — so it CANNOT reach the other project. That is the whole
+     of why this is safe to read here. It is checked before the Sheet only
+     because it is cheaper; the property still outranks both. */
+  if(!TENANTS[v]){
+    try{ if(typeof TENANT_OVERLAY !== 'undefined') v = String(TENANT_OVERLAY || '').toUpperCase().trim(); }catch(e){}
+  }
+  if(!TENANTS[v]){
+    try{
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const sh = ss && ss.getSheetByName('Config');
+      if(sh && sh.getLastRow() > 0){
+        const rows = sh.getRange(1, 1, sh.getLastRow(), Math.max(2, sh.getLastColumn())).getValues();
+        for(let i = 0; i < rows.length; i++){
+          if(String(rows[i][0] || '').trim().toUpperCase() !== 'TENANT') continue;
+          v = String(rows[i][1] || '').trim().toUpperCase();
+          break;
+        }
+      }
+    }catch(e){}
+  }
   /* ANYTHING UNREADABLE IS THE REGISTER THAT ALREADY EXISTS. A property that
      cannot be read must not silently turn the sanitation register into
      something else. */
@@ -4451,6 +4517,75 @@ function weatherRead_(u, forDraft){
 function doPost(e){
   let b;
   try{ b = JSON.parse(e.postData.contents); }catch(err){ return json_({ ok:false, error:'bad request' }); }
+
+  /* ==========================================================================
+   * THE ONE-TIME SEEDING OF A NEW REGISTER.
+   *
+   * A register is no use until its roll is in it, and a roll is 134 officers'
+   * personal mobile numbers. Those must not travel through a public
+   * repository — not as a file, and not as a secret either, because a secret
+   * is readable by anybody who can push a workflow. So they are posted
+   * straight to this register, once, from the district's own machine, and the
+   * only thing that ever goes near GitHub is a random key that carries no
+   * personal data at all.
+   *
+   * IT CANNOT BE USED TWICE, AND IT CANNOT BE USED ON A LIVE REGISTER. Four
+   * guards, and every one of them has to hold:
+   *
+   *   1. A key must be baked into THIS project. It is generated per
+   *      provisioning and lives in the one file that exists only here.
+   *      No key, no endpoint — which is the sanitation register's position,
+   *      permanently, because nothing ever writes one into it.
+   *   2. The key posted must match it.
+   *   3. The Users tab must be EMPTY. A register with one officer on it can
+   *      never be seeded again, so there is no window in which this could
+   *      overwrite a roll that people are signing in against.
+   *   4. It writes the roll and the village list and nothing else — no
+   *      attendance, no leave, no notices, nothing that could be back-dated.
+   *
+   * It is written to the Audit tab, with the count and not the roll.
+   * ======================================================================== */
+  if(b.kind === 'bootstrap'){
+    let key = '';
+    try{ if(typeof BOOTSTRAP_KEY !== 'undefined') key = String(BOOTSTRAP_KEY || ''); }catch(e){}
+    if(!key) return json_({ ok:false, error:'This register has no bootstrap key. It is seeded by hand.' });
+    if(String(b.key || '') !== key) return json_({ ok:false, error:'auth' });
+
+    const t0 = uidx_();
+    if(t0.sh.getLastRow() > 1)
+      return json_({ ok:false, error:'This register already has officers on its roll. It cannot be seeded again.' });
+
+    const users = Array.isArray(b.users) ? b.users : [];
+    const gps   = Array.isArray(b.gps)   ? b.gps   : [];
+    if(!users.length) return json_({ ok:false, error:'No officers were sent.' });
+
+    const lock = LockService.getScriptLock();
+    try{ lock.waitLock(30000); }catch(e){ return json_({ ok:false, error:'busy — try again' }); }
+    try{
+      if(t0.sh.getLastRow() > 1) return json_({ ok:false, error:'already seeded' });
+      const ush = sheet_('Users', U_HEAD), um = headMap_(ush, U_HEAD);
+      users.slice(0, 2000).forEach(r => {
+        const row = new Array(um.width).fill('');
+        const put = (k, v) => { if(um.ix[k] >= 0) row[um.ix[k]] = v; };
+        /* the leading quote keeps a mobile number text, as everywhere else */
+        put('Phone', "'" + phone10_(r[0])); put('Name', String(r[1] || ''));
+        put('Role', String(r[2] || '').toUpperCase()); put('Mandal', String(r[3] || ''));
+        put('GP', String(r[4] || '')); put('Email', String(r[5] || ''));
+        put('Active', 'TRUE');
+        ush.appendRow(row);
+      });
+      if(gps.length){
+        const gsh = sheet_('GPs', ['Mandal','GP','Lat','Lng']);
+        gps.slice(0, 4000).forEach(r => gsh.appendRow([String(r[0] || ''), String(r[1] || ''),
+          r[2] === '' || r[2] == null ? '' : Number(r[2]),
+          r[3] === '' || r[3] == null ? '' : Number(r[3])]));
+      }
+    } finally { lock.releaseLock(); }
+
+    admAudit_('BOOTSTRAP', tenant_().key, users.length + ' officer(s) and ' + gps.length +
+      ' village(s) seeded. The roll itself is not recorded here.');
+    return json_({ ok:true, tenant:tenant_().key, officers:users.length, villages:gps.length });
+  }
 
   if(b.kind === 'login'){
     const u = findByPhone_(b.u || '');
