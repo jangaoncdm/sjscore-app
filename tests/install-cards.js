@@ -35,12 +35,17 @@ const CARDS = [
     who: 'Gram Palana Officers · Mandal and Assistant Revenue Inspectors',
     url: 'https://jangaoncdm.github.io/sjscore-app/gp/',
     accent: '#0F766E',
+    /* WHO ISSUES THE PIN ON THIS REGISTER. The card sent a Gram Palana
+       Officer — Revenue department — to the District Panchayat Office for his
+       PIN. That is not his office and it does not hold his roll. */
+    office: 'Collectorate',
     note: 'Attendance with the place of duty, leave, and the day’s report.' },
   { file: 'install-sjgp.html',
     tag: 'Swachh Jangaon Gram Panchayat',
     who: 'Panchayat Secretaries · MPO · MSO · MPDO',
     url: 'https://jangaoncdm.github.io/sjscore-app/',
     accent: '#4A40CE',
+    office: 'District Panchayat Office',
     note: 'Attendance, the 100-mark village evaluation, leave and the filing schedule.' }
 ];
 
@@ -94,8 +99,8 @@ function card(c){
     <li>Point the phone camera at the square, or type the address above into Chrome.</li>
     <li>Chrome will offer <b>Add to Home screen</b> — accept it. The app then opens
         like any other app and works with no signal.</li>
-    <li>Sign in with <b>your own mobile number</b> and the PIN issued by the District
-        Panchayat Office.</li>
+    <li>Sign in with <b>your own mobile number</b> and the PIN issued by the
+        ${esc(c.office)}.</li>
   </ol>
 
   <h2>What it is for</h2>
@@ -106,7 +111,7 @@ function card(c){
     photographs it reaches the sign-in page and no further: the register opens only to a
     mobile number on the roll, with its PIN. It may be put on a notice board.<br><br>
     If the camera will not read it, type the address. If the number is not accepted,
-    the District Panchayat Office issues and resets PINs — no PIN is ever sent by message.
+    the ${esc(c.office)} issues and resets PINs — no PIN is ever sent by message.
   </p>
   <p class="foot">QR version ${meta.version} · ${meta.size}×${meta.size} modules · error correction M
     · decoded and verified before printing</p>
@@ -120,7 +125,53 @@ CARDS.forEach(c => {
   const m = QR.encode(c.url);
   console.log(c.tag.padEnd(32) + ' v' + m.version + ' ' + m.size + '×' + m.size + '  ' + c.url);
 });
-console.log('\nwritten: ' + OUT);
-console.log('  install-*.html  the printable A5 card (open in a browser, Ctrl+P)');
-console.log('  install-*.svg   the bare square, if you want it in another document');
-console.log('\nEvery square here is decoded by tests/qr-check.js before it is printed.');
+
+/* THE PICTURE IS WHAT ACTUALLY GETS CIRCULATED, and it was the one thing this
+   did not write. The HTML and the SVG were rebuilt the moment the register was
+   renamed; the PNG came from a separate pass that nothing re-ran, so a card
+   headed "Gram Panchayat Register" was still being forwarded a day after the
+   register had been corrected everywhere else. Reported from the district in
+   those words. It is made here now, from the very HTML above, so the three
+   cannot drift apart again.
+
+   AND IF IT CANNOT BE MADE, THE OLD ONE IS DESTROYED. A stale picture of a
+   government register, naming it something it is not, is worse than no
+   picture: nobody looks at the date on an image before forwarding it. */
+(async () => {
+  let chromium = null;
+  try{ chromium = require('playwright').chromium; }catch(e){}
+  const pngOf = c => path.join(OUT, c.file.replace('.html', '.png'));
+  if(!chromium){
+    let removed = 0;
+    CARDS.forEach(c => { const p = pngOf(c); if(fs.existsSync(p)){ fs.unlinkSync(p); removed++; } });
+    console.log('\nPlaywright is not installed, so no picture was made.' +
+      (removed ? ' ' + removed + ' older one(s) were DELETED rather than left to be forwarded.' : ''));
+    console.log('Run  npm i playwright --no-save  and run this again for the .png.');
+  } else {
+    const br = await chromium.launch();
+    for(const c of CARDS){
+      const ctx = await br.newContext({ viewport:{ width:760, height:1100 }, deviceScaleFactor:2 });
+      const p = await ctx.newPage();
+      await p.goto('file:///' + pngOf(c).replace('.png', '.html').split(path.sep).join('/'),
+                   { waitUntil:'load' });
+      await p.waitForTimeout(250);
+      await p.screenshot({ path: pngOf(c), fullPage:true });
+      /* IT MUST NOT GO OUT NAMING A REGISTER THAT IS NOT IT. Read back off the
+         rendered card, not off the source that produced it. */
+      const txt = await p.evaluate(() => document.body.innerText);
+      const sanitation = /Swachh Jangaon/i.test(txt);
+      if(/Gram Panchayat/i.test(txt) && !sanitation){
+        fs.unlinkSync(pngOf(c));
+        throw new Error('the card for ' + c.tag + ' names a register that is not it — nothing written');
+      }
+      await ctx.close();
+      console.log('  picture: ' + path.basename(pngOf(c)));
+    }
+    await br.close();
+  }
+  console.log('\nwritten: ' + OUT);
+  console.log('  install-*.html  the printable A5 card (open in a browser, Ctrl+P)');
+  console.log('  install-*.png   the same card as a picture, for sending');
+  console.log('  install-*.svg   the bare square, if you want it in another document');
+  console.log('\nEvery square here is decoded by tests/qr-check.js before it is printed.');
+})();
