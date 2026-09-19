@@ -65,8 +65,11 @@ const GPFIX = JSON.parse(JSON.stringify(payloadRaw()));
 function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
 (() => {
   GPFIX.totals = { officers:134, gps:180, due:133 };
-  GPFIX.today.present = GPFIX.today.present.slice(0, 91).map(r =>
-    Object.assign({}, r, { role:'GPO', dutyKm: Math.round((r.km || 1) * 10) / 10 }));
+  /* the place of duty the Gram Palana roll can measure against, which the
+     sanitation roll has no coordinates for */
+  GPFIX.today.present = GPFIX.today.present.slice(0, 91).map((r, i) =>
+    Object.assign({}, r, { role:'GPO', dutyKm: Math.round((r.km || 1) * 10) / 10,
+                           dutyGp: 'Village ' + (i + 1) }));
   GPFIX.today.onLeave = GPFIX.today.onLeave.slice(0, 3);
   GPFIX.today.absent  = GPFIX.today.absent.slice(0, 5).map(r => Object.assign({}, r, { role:'GPO' }));
   /* the Gram Palana register takes no evaluation: no filings, no grades */
@@ -212,6 +215,37 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
           const nm = await page.$eval('#tenName', e => e.hidden ? '' : e.textContent).catch(() => '');
           if(!/Gram Palana/i.test(nm) || /Swachh Jangaon/i.test(nm))
             problems.push(lbl + ': the header does not name the register being read — "' + nm + '"');
+
+          /* THE GEO-TAGGED MARK AGAINST THE PLACE OF DUTY, officer by officer.
+             It was only ever two summary tiles, and "where is the geo-tagging"
+             is a question about a man and a morning, not about a percentage.
+             The sanitation register has no coordinates to measure against and
+             must NOT grow the column. */
+          const attTxt = await (async () => {
+            await page.click('#nav [data-v="attendance"]'); await page.waitForTimeout(800);
+            return page.$eval('#g', e => e.innerText);
+          })();
+          /* the table headers are uppercased by CSS, so innerText gives
+             "PLACE OF DUTY" — match case-blind or this cannot pass */
+          if(!/place of duty/i.test(attTxt))
+            problems.push(lbl + ': the GP attendance table does not carry the place of duty');
+          if(!/marked away from the place of duty/i.test(attTxt))
+            problems.push(lbl + ': the GP register still measures from the mandal, not the place of duty');
+          if(attTxt.indexOf('Village 1') < 0)
+            problems.push(lbl + ': no officer is shown the village he is posted to');
+
+          /* A CIRCULAR IS ADDRESSED TO ROLES THIS REGISTER HAS. It offered
+             Panchayat Secretaries and MPDOs on the Revenue register, none of
+             whom exist there, so it would have reached nobody. */
+          await page.click('#nav [data-v="advisory"]'); await page.waitForTimeout(800);
+          const aud = await page.$$eval('#advAud option', o => o.map(x => x.textContent.trim())).catch(() => []);
+          if(aud.length){
+            if(aud.join(' ').indexOf('Panchayat') >= 0)
+              problems.push(lbl + ': the GP circular composer still offers Panchayat roles — ' + JSON.stringify(aud));
+            if(aud.join(' ').indexOf('Gram Palana Officers') < 0)
+              problems.push(lbl + ': the GP circular composer does not offer this register’s own roles — ' + JSON.stringify(aud));
+          }
+          await page.click('#nav [data-v="overview"]'); await page.waitForTimeout(600);
 
           /* AND THE RAIL SHOWS ONLY WHAT THAT REGISTER HAS. The GP register
              takes no evaluation and carries no filing schedule; its server

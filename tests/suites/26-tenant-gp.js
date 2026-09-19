@@ -442,8 +442,16 @@ module.exports = {
       const tok = tokenFor(e, '9111100001', '2222');
       t.eq(e.eval("gpdpDue_('GPO')"), false, 'no plan is called for from a Gram Palana Officer');
       t.eq(e.eval("gpdpDue_('MRI')"), false, 'nor from a Revenue Inspector');
+      /* THE READ IS REFUSED TOO, and that is not pedantry. The upload was
+         already refused and gpdpDue_ already answered false, yet the district
+         went on SERVING the plan register to this officer — so a handset that
+         had the screen open, or a stale menu, could keep drawing a plan off
+         it. Reported from the district after the card was gated: why is he
+         still seeing that. A register that keeps no plan answers no questions
+         about one (rule 6). */
       const reg = e.get('gpdp', { token:tok });
-      t.eq(reg.due, false, 'the register tells the app it is not due');
+      t.eq(reg.ok, false, 'the plan register is not served on a register that keeps none');
+      t.contains(reg.error, 'does not call for a development plan', 'and it says so plainly');
       const up = e.post({ kind:'gpdp', token:tok, file:{ name:'plan.pdf', b64:'eHg=' } });
       t.eq(up.ok, false, 'and a plan posted anyway is refused at the door');
       t.contains(up.error, 'does not call for a development plan', 'saying so plainly');

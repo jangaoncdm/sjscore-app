@@ -1227,7 +1227,7 @@ const $=s=>document.querySelector(s);
  *
  * AND THE SCREEN SAYS WHICH REGISTER IT IS SHOWING, always, in the header. The
  * two look alike: attendance, leave, a map, a daily report. Reading the Gram
- * Panchayat register's figures believing they are the sanitation register's is
+ * Palana register's figures believing they are the sanitation register's is
  * the one mistake this control can cause, so it is made hard to make.
  * ========================================================================== */
 /* Beyond this, a mark is far enough from the officer's own village office to be
@@ -1236,8 +1236,15 @@ const $=s=>document.querySelector(s);
    Collectorate or on tour (rule 10). */
 const FAR_DUTY_KM = 3;
 const TENANCY = {
-  SJGP:{ key:'SJGP', name:'Swachh Jangaon', full:'Swachh Jangaon Gram Panchayat', store:'sjf5' },
-  GP:  { key:'GP',   name:'Gram Palana',    full:'Gram Palana Register',       store:'sjgp-gp1' }
+  /* THE AUDIENCE OF A CIRCULAR IS THE REGISTER'S OWN ROLES. The composer
+     offered Panchayat Secretaries, MPDOs, MPOs and MSOs on BOTH registers —
+     not one of whom exists on the Gram Palana one, so a circular addressed by
+     role there would have gone to nobody at all, and the Collector would have
+     read the word "Panchayat" on a Revenue register. */
+  SJGP:{ key:'SJGP', name:'Swachh Jangaon', full:'Swachh Jangaon Gram Panchayat', store:'sjf5',
+    aud:[['PS','Panchayat Secretaries'],['MPDO','MPDOs'],['MPO','MPOs'],['MSO','MSOs']] },
+  GP:  { key:'GP',   name:'Gram Palana',    full:'Gram Palana Register',       store:'sjgp-gp1',
+    aud:[['GPO','Gram Palana Officers'],['ARI','Assistant Revenue Inspectors'],['MRI','Mandal Revenue Inspectors']] }
 };
 let TVIEW='SJGP';
 function tenantSession(k){
@@ -2724,7 +2731,16 @@ function vAttendance(j,A){
   h+=kpi('Not marked',IC.u,A.off?'—':A.absent,'',A.off?esc(A.off)+' — not tracked today':'as of now');
   h+=kpi('Marked by 10:00',IC.u,A.present?pct(A.by10,A.present)+'%':'—','',A.by10+' of '+A.present);
   h+=kpi('Location not trustworthy',IC.u,j.today.present.filter(r=>suspect(r)||!r.verified).length,'','of '+A.present+' present');
-  const farRows=(j.today.present||[]).filter(r=>r.far).sort((a,b)=>b.km-a.km);
+  /* WHICH MEASURE THIS REGISTER CAN HONESTLY MAKE.
+     The sanitation roll has no coordinates, so the only thing it can say is
+     how far a mark is from the MIDDLE OF THE MANDAL, as that mandal's own
+     marks place it. The Gram Palana roll carries each revenue village's
+     office, so it measures from the place the officer is actually posted to,
+     which is the real question and a far better answer. */
+  const farRows = DUTY()
+    ? (j.today.present||[]).filter(r=>r.dutyKm!=null && r.dutyKm>FAR_DUTY_KM)
+        .sort((a,b)=>b.dutyKm-a.dutyKm)
+    : (j.today.present||[]).filter(r=>r.far).sort((a,b)=>b.km-a.km);
   h+='</div>';
   /* THE QUESTION THE WORD "VERIFIED" INVITED. It never meant the officer was at
      his place of duty — only that his handset returned a precise fix, which a
@@ -2735,18 +2751,23 @@ function vAttendance(j,A){
      it, and a distant mark is still a mark. An officer may be at a mandal
      meeting, at the Collectorate or on tour; the register cannot know which,
      and a table must not decide it. */
-  h+=panel('c12','Marked away from the mandal',
-    farRows.length?farRows.length+' of '+A.present+' present · over 15 km':'nothing over 15 km today',
-    `<div class="twrap"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th><th>Marked</th><th>Distance</th><th>Reading</th><th></th></tr></thead><tbody>`+
+  const farLim = DUTY() ? FAR_DUTY_KM : 15;
+  h+=panel('c12', DUTY()?'Marked away from the place of duty':'Marked away from the mandal',
+    farRows.length?farRows.length+' of '+A.present+' present · over '+farLim+' km':'nothing over '+farLim+' km today',
+    `<div class="twrap"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th>${DUTY()?'<th>Posted to</th>':''}<th>Marked</th><th>Distance</th><th>Reading</th><th></th></tr></thead><tbody>`+
     farRows.map(r=>`<tr>
        <td>${esc(r.name||'—')}</td><td class="mut">${esc(r.role||'')}</td>
-       <td class="mut">${esc(r.mandal||'—')}</td><td class="num mut">${esc(hm(r.at))}</td>
-       <td class="num"><b>${r.km} km</b></td>
+       <td class="mut">${esc(r.mandal||'—')}</td>
+       ${DUTY()?`<td class="mut">${esc(r.dutyGp||'—')}</td>`:''}
+       <td class="num mut">${esc(hm(r.at))}</td>
+       <td class="num"><b>${DUTY()?r.dutyKm:r.km} km</b></td>
        <td class="mut">±${Math.round(r.acc||0)} m</td>
        <td>${r.lat!=null?`<a href="https://maps.google.com/?q=${r.lat},${r.lng}" target="_blank" rel="noopener">Open in Maps</a>`:''}</td></tr>`).join('')+
-    (farRows.length?'':`<tr><td colspan="7" class="empty">Every trustworthy mark today was made inside the officer's own mandal.</td></tr>`)+
+    (farRows.length?'':`<tr><td colspan="${DUTY()?8:7}" class="empty">${DUTY()?'Every trustworthy mark today was made at the officer’s own village office.':'Every trustworthy mark today was made inside the officer’s own mandal.'}</td></tr>`)+
     `</tbody></table></div>
-     <div class="expnote" style="margin-top:8px">Measured from the middle of the officer's own mandal, as the district's own attendance marks place it — the register holds no village coordinates. A distance is a fact for you to read, not a default: nothing here raises a reminder, a notice or a debit, and the mark stands.</div>`);
+     <div class="expnote" style="margin-top:8px">${DUTY()
+       ? 'Measured from the office of the revenue village the officer holds — the nearest of them, where he holds more than one, because a man is at his place of duty at any of his own villages.'
+       : 'Measured from the middle of the officer’s own mandal, as the district’s own attendance marks place it — the register holds no village coordinates.'} A distance is a fact for you to read, not a default: nothing here raises a reminder, a notice or a debit, and the mark stands.</div>`);
   h+=panel('c12','Export the attendance record','opens in Excel · names, gaps and the fortnight compared',
     `<div class="expbar">
       <button class="tbtn pri" data-exp="xlsx">Excel workbook (.xlsx)</button>
@@ -2772,13 +2793,32 @@ function vAttendance(j,A){
   window.__ROWS.att=attRows;
   h+=panel('c12','Officer by officer',A.present+' present · '+A.onLeave+' leave · '+A.absent+' not marked',
     `<input class="find" id="attFind" placeholder="Search name, role, mandal or status" style="margin-bottom:9px">
-     <div class="twrap" style="max-height:430px"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th><th>Time</th><th>Location</th><th>Status</th></tr></thead><tbody id="attBody">`+
+     <div class="twrap" style="max-height:430px"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th>${DUTY()?'<th>Place of duty</th>':''}<th>Time</th><th>Location</th><th>Status</th></tr></thead><tbody id="attBody">`+
     attRows.map((r,i)=>attRow(r,i)).join('')+`</tbody></table></div>`,'att');
   return h;
 }
+/* DOES THIS REGISTER HAVE A PLACE OF DUTY TO MEASURE AGAINST?
+   The sanitation roll is Mandal + GP and carries no coordinates, so there is
+   nothing to measure and the column is not drawn. The Gram Palana roll carries
+   every revenue village's own office, so for the first time a mark can be put
+   against the place the officer is posted to — and it is shown officer by
+   officer, not only as two tiles, because "where is the geo-tagging" is a
+   question about a man and a morning, not about a percentage.
+   IT ACCUSES NOBODY (rule 10). The distance is printed and the mark stands. */
+function DUTY(){ return TVIEW==='GP'; }
+function dutyCell(r){
+  if(!DUTY()) return '';
+  if(r._s!=='P') return '<td class="mut">—</td>';
+  if(r.dutyKm==null) return '<td class="mut">no fix to measure</td>';
+  const km=r.dutyKm, near=km<=FAR_DUTY_KM;
+  const txt = km<1 ? Math.round(km*1000)+' m' : km.toFixed(km<10?1:0)+' km';
+  return '<td><span class="pill '+(near?'ok':'warn')+'">'+esc(txt)+'</span>'+
+    (r.dutyGp?' <span class="mut">'+esc(r.dutyGp)+'</span>':'')+'</td>';
+}
 function attRow(r,i){
-  return `<tr data-di="att:${i}" data-f="${esc((r.name+' '+r.role+' '+(r.mandal||'')+' '+(r._s==='P'?'present':r._s==='L'?'leave':'not marked')).toLowerCase())}">
+  return `<tr data-di="att:${i}" data-f="${esc((r.name+' '+r.role+' '+(r.mandal||'')+' '+(r.dutyGp||'')+' '+(r._s==='P'?'present':r._s==='L'?'leave':'not marked')).toLowerCase())}">
     <td>${esc(r.name)}</td><td class="mut">${esc(r.role)}</td><td class="mut">${esc(r.mandal||'—')}</td>
+    ${dutyCell(r)}
     <td class="num">${r._s==='P'?esc(hm(r.at)):'—'}</td>
     <td>${r._s==='P'?(suspect(r)?'<span class="pill bad">not trustworthy</span>':r.verified?'<span class="pill ok">'+locWord(r)+'</span>':'<span class="pill warn">no fix</span>')+farPill(r)+((r.marks||1)>1?' <span class="pill bad">'+r.marks+'×</span>':''):'—'}</td>
     <td>${r._s==='P'?'<span class="pill ok">present</span>':r._s==='L'?'<span class="pill warn">'+esc(r.leaveType||'leave')+'</span>':'<span class="pill bad">not marked</span>'}</td></tr>`;
@@ -3888,10 +3928,8 @@ function vAdvisory(j,A){
        <label style="font-size:12px;color:var(--tx-2)">Which officers
          <select class="rsel" id="advAud" style="display:block;margin-top:5px;width:250px">
            <option value="ALL"${ADV_AUD==='ALL'?' selected':''}>Every role</option>
-           <option value="PS"${ADV_AUD==='PS'?' selected':''}>Panchayat Secretaries</option>
-           <option value="MPDO"${ADV_AUD==='MPDO'?' selected':''}>MPDOs</option>
-           <option value="MPO"${ADV_AUD==='MPO'?' selected':''}>MPOs</option>
-           <option value="MSO"${ADV_AUD==='MSO'?' selected':''}>MSOs</option></select></label>
+           ${((TENANCY[TVIEW]||{}).aud||[]).map(a=>
+             `<option value="${esc(a[0])}"${ADV_AUD===a[0]?' selected':''}>${esc(a[1])}</option>`).join('')}</select></label>
        <div>
          <div style="font-size:12px;color:var(--tx-2);margin-bottom:6px">Which mandals</div>
          <div class="mtools" id="advMandals" style="padding:0">

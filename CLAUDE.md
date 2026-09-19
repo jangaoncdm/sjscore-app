@@ -767,6 +767,37 @@ browser test because the fault lives in the store, the boot and the sign-in
 path together, and a unit test of any one of them passes while the officer in
 the village sees it.
 
+**The plan is not asked of this register — and "not asked" means every door.**
+Gating the card was not enough: the More menu rendered its Development plan row
+unconditionally and consulted `gpdpPending()` only for the badge, so a Gram
+Palana Officer still had the row and tapping it opened the filing screen.
+Reported from the district in those words: why is he still seeing that.
+`gpdpOffered()` is now the single question everything that OFFERS a plan asks —
+the menu row, the screen, the modal, and whether the app asks the district for
+the register at all — while `gpdpPending()` answers only whether one is
+outstanding. The two were conflated. `op=gpdp` is refused on this register as
+`kind:'gpdp'` already was, so a stale handset cannot draw a plan screen off a
+read the server had gone on serving. It also covers the Collector on the
+sanitation register, who is not called for a plan either and had the row all
+the same. `tests/render-handset.js` cases 7 and 8 assert both registers.
+
+**And the console says Gram Palana everywhere, including where it addresses
+people.** The circular composer offered *Panchayat Secretaries, MPDOs, MPOs,
+MSOs* on BOTH registers — not one of whom exists on this one, so a circular
+addressed by role here would have reached nobody. The audience list is now the
+register's own, carried on `TENANCY[k].aud`.
+
+**The geo-tagged mark is shown against the place of duty, officer by officer.**
+It was only ever two summary tiles, and *where is the geo-tagging* is a
+question about a man and a morning, not about a percentage. The attendance
+table carries the distance and the village he is posted to, and *Marked away
+from the mandal* becomes *Marked away from the place of duty* on this register,
+measured from the office of the nearest village he actually holds rather than
+from the middle of a mandal — because this is the roll that has coordinates and
+the other one does not. The threshold is `FAR_DUTY_KM` (3 km), not the 15 km a
+mandal-median needs. **It accuses nobody** (rule 10): the distance is printed,
+and the mark stands.
+
 **Two Sheets, and that is the whole of the isolation.** Each register is its
 own Apps Script project bound to its own spreadsheet behind its own `/exec`.
 **There is no Tenant column and there must not be one.** A logical filter is

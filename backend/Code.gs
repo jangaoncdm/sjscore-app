@@ -3627,8 +3627,17 @@ function doGet(e){
     return json_({ ok:true, rows:rows.slice(0, 400) });
   }
 
-  /* the plan register: an officer sees his own line, the district sees the roll */
-  if(p.op === 'gpdp') return gpdpRegister_(u, p.year);
+  /* the plan register: an officer sees his own line, the district sees the roll.
+     A REGISTER THAT KEEPS NO PLAN ANSWERS NO QUESTIONS ABOUT ONE. The upload
+     was refused and gpdpDue_ answered false, but the read was still served,
+     so a stale handset could go on drawing a plan screen off it. The server
+     is the authority (rule 6): it says plainly that this register does not
+     keep one, rather than returning an empty roll that reads as "nobody has
+     filed". */
+  if(p.op === 'gpdp'){
+    if(!tenant_().gpdp) return json_({ ok:false, error:'This register does not call for a development plan.' });
+    return gpdpRegister_(u, p.year);
+  }
   /* the filing schedule: an officer sees his own villages and his own pace,
      the Collector with all=1 sees the district's */
   if(p.op === 'schedule') return schRegister_(u, p);
