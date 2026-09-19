@@ -3194,7 +3194,25 @@ function doGet(e){
        Gram Palana Officer to sign in would land in the sanitation register.
        The deploy checks this by name. It reveals nothing: the name of the
        register is on the sign-in page. */
-    return json_({ ok:true, stamp:'SJGP-6.9-diag12', tenant:tenant_().key, tenantName:tenant_().name,
+    /* AND WHAT THIS BUILD CAN ACTUALLY DO.
+       "Is the code I think is live actually live" is a question that came up
+       the moment there were two projects: the console offered a button whose
+       endpoint the register answered as an unknown request, and nothing short
+       of a valid Collector token could tell which of the two was behind. A
+       deployment that lags the repository looks exactly like a bug in the
+       page. The register now lists the POSTs this build answers, so the
+       question is settled by reading, not by reasoning. It reveals nothing:
+       these are endpoint names, every one of which re-checks the caller. */
+    return json_({ ok:true, stamp:'SJGP-6.9-diag13', tenant:tenant_().key, tenantName:tenant_().name,
+      kinds:['login','attendance','inspection','photos','leave','leaveDecision','leaveWithdraw',
+             'gpdp','advAck','advPublish','schedAck','schedSeen','schedulePublish','schedNudge',
+             'holidaysLoad','userCreate','userPin','userActive'],
+      can:{ sanction:!!tenant_().sanction, evaluation:!!tenant_().evaluation,
+            schedule:!!tenant_().schedule, gpdp:!!tenant_().gpdp,
+            placeOfDuty:!!tenant_().placeOfDuty },
+      holidays:(function(){ try{ var y=today_().slice(0,4);
+        return { year:Number(y), count:Object.keys(holidaySet_()).filter(function(k){
+          return String(k).slice(0,4)===y; }).length }; }catch(err){ return null; } })(),
       sanction:tenant_().sanction, placeOfDuty:tenant_().placeOfDuty,
       tzScript:Session.getScriptTimeZone(), tzSheet:sheetTz_(), today:today_(), offToday:offInfo_(today_()), briefKeyStored: !!dk,
       keyEnds: dk ? dk.slice(-6) : '', at:new Date().toISOString() });

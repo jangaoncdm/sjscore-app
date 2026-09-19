@@ -137,6 +137,31 @@ module.exports = {
         'while the sanitation register is still Swachh Jangaon Gram Panchayat');
     }
 
+    /* ---- 1a-iii. AND THE REGISTER SAYS WHAT ITS BUILD CAN DO ----
+       A deployment that lags the repository looks exactly like a bug in the
+       console: the page offered Load the year, the register answered it as an
+       unknown request and fell through to "this register does not take village
+       evaluations", and nothing short of a valid Collector token could tell
+       which of the two was behind it. op=diag now lists the POSTs the running
+       build answers, so it is settled by reading. */
+    {
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e.props.TENANT = 'GP';
+      const d = e.get('diag', {});
+      t.eq(d.ok, true, 'the register answers a diag');
+      t.ok(Array.isArray(d.kinds), 'and lists the requests this build answers');
+      ['holidaysLoad','userCreate','login','advPublish'].forEach(k =>
+        t.ok(d.kinds.indexOf(k) >= 0, 'the list names ' + k));
+      t.eq(d.can.evaluation, false, 'it reports that this register takes no evaluation');
+      t.eq(d.can.gpdp, false, 'and calls for no development plan');
+      t.eq(d.can.placeOfDuty, true, 'while it can measure a place of duty');
+      t.ok(d.holidays && typeof d.holidays.count === 'number',
+        'and says how many holidays it holds for the year');
+      const sj = e.eval('1') && mock.load({ now:'2026-09-21T09:00:00+05:30' }).get('diag', {});
+      t.eq(sj.can.evaluation, true, 'the sanitation register reports the opposite');
+      t.eq(sj.can.gpdp, true, 'and that it does call for a plan');
+    }
+
     /* ---- 1b. THE SPREADSHEET MAY SAY WHICH REGISTER IT IS ----
        A Script Property has to be typed in by a person, in a browser, on the
        day the register is created; a register that cannot be stood up without
