@@ -37,6 +37,13 @@ const SERVER_URL = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
 const TENANT = String((typeof window !== 'undefined' && window.SJGP_TENANT) || 'SJGP').toUpperCase().trim() === 'GP' ? 'GP' : 'SJGP';
 const IS_GP = TENANT === 'GP';
 const STORE_KEY = IS_GP ? 'sjgp-gp1' : 'sjf5';
+/* THERE IS ONE CONSOLE, AND IT IS AT THE ROOT. The Gram Panchayat app is
+   published in a folder, so a relative link to dashboard.html resolved to
+   /gp/dashboard.html and gave the Collector a 404 the first time he tapped
+   Monitoring from it. The console is not copied into the folder on purpose —
+   it reads both registers through its own switch — so the link has to climb
+   out of the folder to reach it. */
+const CONSOLE_HREF = IS_GP ? '../dashboard.html' : 'dashboard.html';
 /* WHAT THIS REGISTER IS CALLED, in the two places an officer reads it: the
    eyebrow over the home screen and the desktop rail. A Gram Panchayat Officer
    opening an app headed "Swachh Jangaon" would reasonably think he had the
@@ -1263,7 +1270,7 @@ function gpHome(u){
   }
   if(canApproveLeave(u.role)){
     h += `<div class="group"><div class="hdr">Monitoring</div><div class="card">
-      <a class="row tap" href="dashboard.html" style="text-decoration:none;color:inherit">
+      <a class="row tap" href="${CONSOLE_HREF}" style="text-decoration:none;color:inherit">
         <span class="ico" style="background:var(--seal-deep)">${ICON.eye}</span>
         <span class="lbl"><b>District monitoring console</b>
         <span>Attendance, the place of duty and leave, live on one screen.</span></span><span class="chev"></span></a>
@@ -1345,7 +1352,7 @@ function districtHome(u, ym){
         <span class="lbl"><b>${pend ? pend + (pend===1?' application waiting':' applications waiting') : 'No application waiting'}</b>
         <span>Sanctioned or refused by you alone</span></span><span class="chev"></span></div></div></div>`;
     h += `<div class="group"><div class="hdr">Monitoring</div><div class="card">
-      <a class="row tap" href="dashboard.html" style="text-decoration:none;color:inherit">
+      <a class="row tap" href="${CONSOLE_HREF}" style="text-decoration:none;color:inherit">
         <span class="ico" style="background:var(--seal-deep)">${ICON.eye}</span>
         <span class="lbl"><b>District monitoring console</b>
         <span>Attendance, scores and leave, live on one screen. Yours alone.</span></span><span class="chev"></span></a>
