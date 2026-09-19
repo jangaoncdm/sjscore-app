@@ -3639,7 +3639,7 @@ function wireSchedule(){
   });
 }
 
-/* WHAT THE PUBLISH ACTUALLY DID, in the district's own figures. Sixty is a
+/* WHAT THE PUBLISH ACTUALLY DID, in the district's own figures. A share is a
    target that whole mandals cannot hit exactly, so the arithmetic is printed
    rather than the order being reported as carried out. */
 const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
@@ -3656,7 +3656,7 @@ function schedPubWords(r){
   bits.push(r.startFrom
     ? ('planned '+dm(r.startFrom)+' – '+dm(r.startTo)+', '+r.workingDaysLeft+' working day'+(r.workingDaysLeft===1?'':'s'))
     : (r.workingDaysLeft+' working day'+(r.workingDaysLeft===1?'':'s')+' left'));
-  const off=(r.offices||[]).map(o=>o.role+' '+o.villages+(o.cap!=null?' of '+o.cap+' asked for':'')).join(' · ');
+  const off=(r.offices||[]).map(o=>o.role+' '+o.villages+(o.share!=null?' ('+o.share+'%)':'')).join(' \u00b7 ');
   return bits.join(' · ') + (off?'.  '+off+'.':'.') +
     ((r.notes||[]).length?'  '+r.notes.join('  '):'');
 }

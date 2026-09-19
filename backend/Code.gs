@@ -1788,21 +1788,41 @@ function villageFilingReminders(){
  * the village, so schedule the pending villages over the days that remain and
  * put each officer's own list in front of him when he opens the app.
  *
- * THE ORDER, AS PASSED. Sixty villages to the District Panchayat Officer,
- * sixty to the Divisional Panchayat Officer, and the rest of each mandal to
- * that mandal's MPO and MPDO, who are named together and either of whom may
- * file. NOTHING TO THE PANCHAYAT SECRETARY — he holds the village but he may
- * not file its evaluation, and a schedule that called him for one would be
- * asking for work the server refuses at the door (see the viewer guard in
- * doPost). He is left out here rather than listed and then turned away.
+ * THE ORDER, AS PASSED (19.09.2026). The pendency of a mandal is split inside
+ * that mandal, by share: MPDO 40 · MPO 40 · MSO 10 · the district officer 10.
+ * And which district officer is a question of SUBDIVISION and not of who has
+ * room left — the DLPO takes his ten per cent in the five mandals of the
+ * Station Ghanpur subdivision (Chilpur, Ghanpur (Stn), Zaffergadh, Palakurthy,
+ * Kodakandla) and the DPO takes his in the other seven.
  *
- * WHOLE MANDALS, NOT SIXTY EXACTLY. A district officer takes the pendency of
- * whole mandals until his sixty is filled, because the constraint on three or
- * four village visits a day is the road and not the arithmetic — five villages
- * in each of twelve mandals is the same sixty and twice the driving. Sixty is
- * therefore a target, and the figure actually assigned is reported, office by
- * office, every time the schedule is published. It is never quietly rounded
- * into the order.
+ * NOTHING TO THE PANCHAYAT SECRETARY — he holds the village but he may not
+ * file its evaluation, and a schedule that called him for one would be asking
+ * for work the server refuses at the door (see the viewer guard in doPost). He
+ * is left out here rather than listed and then turned away. The MSO is in this
+ * order, having been left out of the last one; he is not a viewer, so the
+ * server takes his filing.
+ *
+ * ONE VILLAGE, ONE OFFICER. This is what the shares changed besides the
+ * arithmetic. Under the order of 17.09.2026 the MPO and the MPDO were both
+ * named against every village and either could file it, so one village raised
+ * two rows and every district figure had to count villages rather than rows.
+ * Forty per cent to one man and forty to another is not that: each village now
+ * has ONE officer answerable for it. The rule that district figures count
+ * villages stands anyway (rule 9) — it costs nothing and it is what stopped
+ * filed-plus-pending overshooting the district once already.
+ *
+ * THE SHARES ALWAYS ADD UP. Forty per cent of 23 villages is 9.2, and four
+ * shares rounded on their own come to 22 or 24 — a village lost, or one dealt
+ * twice. schApportion_ takes the whole numbers first and gives what is left to
+ * the largest remainders, so the parts sum to exactly the pendency. Ties break
+ * by the order the shares are named in, so the same roll always deals the same
+ * way and a re-publish is never a reshuffle.
+ *
+ * A SHARE WITH NOBODY TO TAKE IT DOES NOT VANISH. A mandal with no MSO, or
+ * with no district officer active on the roll, spreads that share over the
+ * officers who ARE there, in the proportion the order set between them — and
+ * the publish says so in as many words rather than letting a tenth of a mandal
+ * disappear into whoever happened to be first.
  *
  * IT ACCUSES NOBODY. A schedule is a plan of work, not a charge. Falling
  * behind it draws a reminder — by mail and on the officer's home screen — and
@@ -1843,18 +1863,78 @@ const SCH_ACK_HEAD = ['ym','phone','name','role','mandal','ackAt','receivedAt'];
    console can say whether it landed rather than only that it was sent. */
 const NUDGE_HEAD = ['id','ym','date','phone','name','role','mandal','kind','text',
                     'sentBy','sentAt','emailedAt','seenAt','receivedAt'];
-/* THE COLLECTOR'S ORDER OF 17.09.2026. Sixty each. Change these two and the
-   next publish allocates to the new figures; assignments already made stand,
-   because an order reaches forward — the same rule the optional holidays run
-   under. A district office with nobody active on the roll takes nothing and
-   the publish SAYS SO: its mandals go to their own officers rather than to a
-   name that cannot sign in. */
-const SCH_CAP = { DPO: 60, DLPO: 60 };
-/* Who may be given villages. The Secretary is absent by the order; the MSO is
-   absent because the order did not name him, and the mandal-wide filing
-   reminder still reaches him exactly as it always did. */
+/* THE COLLECTOR'S ORDER OF 19.09.2026, which replaces the sixty-each of
+   17.09.2026. The pendency is no longer dealt out in whole mandals to a
+   district office until a figure is filled; it is split INSIDE EVERY MANDAL,
+   by share:
+
+       MPDO 40 · MPO 40 · MSO 10 · the district officer 10
+
+   and the district officer is decided by SUBDIVISION and not by who has room
+   left: the DLPO takes his ten per cent in the five mandals of the Station
+   Ghanpur subdivision, and the DPO takes his in the other seven.
+
+   WHAT THIS CHANGES BESIDES THE ARITHMETIC. Under the old order the MPO and
+   the MPDO were BOTH named against every village and either could file it, so
+   one village raised two rows. A share is not that: forty per cent to one man
+   and forty to another means each village now has ONE officer answerable for
+   it, and rows and villages are the same count again. The MSO is named for
+   the first time — he was left out of the last order and is in this one, and
+   he is not a viewer, so the server will take his filing.
+
+   An order reaches forward. Assignments already made stand; only villages
+   still unspoken-for are dealt under the new shares. */
+const SCH_SHARE = { MPDO: 40, MPO: 40, MSO: 10, DISTRICT: 10 };
+
+/* THE SUBDIVISION, SPELT AS THE ROLL SPELLS IT AND MATCHED AS THE ROLL IS
+   MATCHED. "Ghanpur (Stn)" appears three ways on this register, so these are
+   compared through mkey_/mkey2_ like every other mandal name — a subdivision
+   must not lose a mandal over a bracket. Any mandal not named here is the
+   DPO's. */
+const SCH_SUBDIVISION = {
+  DLPO: ['Chilpur', 'Ghanpur (Stn)', 'Zaffergadh', 'Palakurthy', 'Kodakandla']
+};
+/* Who may be given villages. The Secretary alone is absent, by the order and
+   because he may not file an evaluation at all — a schedule that called him
+   for one would ask for work the server refuses at the door. */
 const SCH_DISTRICT_ROLES = ['DPO','DLPO'];
-const SCH_MANDAL_ROLES   = ['MPO','MPDO'];
+const SCH_MANDAL_ROLES   = ['MPDO','MPO','MSO'];
+
+/* Which district officer answers for a mandal. */
+function schDistrictRole_(mandal){
+  const k1 = mkey_(mandal), k2 = mkey2_(mandal);
+  let found = '';
+  Object.keys(SCH_SUBDIVISION).forEach(function(role){
+    SCH_SUBDIVISION[role].forEach(function(m){
+      if(mkey_(m) === k1 || mkey2_(m) === k2) found = role;
+    });
+  });
+  return found || 'DPO';
+}
+
+/* HAMILTON, NOT ROUNDING. Forty per cent of 23 villages is 9.2, and four
+   shares rounded on their own come to 22 or 24 — a village lost or a village
+   dealt twice, and the pendency no longer adds up. The whole numbers are
+   taken first and what is left over goes to the largest remainders, so the
+   parts always sum to exactly what there was. Ties break by the order the
+   shares are named in, so the same roll always deals the same way and a
+   re-publish is never a reshuffle. */
+function schApportion_(total, weights){
+  const keys = Object.keys(weights).filter(function(k){ return weights[k] > 0; });
+  const sum = keys.reduce(function(a, k){ return a + weights[k]; }, 0);
+  const out = {}; let given = 0;
+  if(!keys.length || !sum || total <= 0){ keys.forEach(function(k){ out[k] = 0; }); return out; }
+  const rem = [];
+  keys.forEach(function(k){
+    const exact = total * weights[k] / sum;
+    out[k] = Math.floor(exact);
+    given += out[k];
+    rem.push({ k:k, r:exact - Math.floor(exact) });
+  });
+  rem.sort(function(a, b){ return (b.r - a.r) || (keys.indexOf(a.k) - keys.indexOf(b.k)); });
+  for(let i = 0; given < total; i++, given++) out[rem[i % rem.length].k]++;
+  return out;
+}
 
 /* A mandal name as a key. Case-blind and trimmed, as everywhere on this
    register — and then, only if that finds nothing, with the punctuation taken
@@ -1949,18 +2029,18 @@ function schId_(ym, phone, mandal, gp){
  *
  * Mandals are taken largest-pendency-first and given to whichever district
  * office has the most room left. Largest first is what keeps the overshoot
- * small: by the time an office is near its sixty, only small mandals are left
+ * small: the largest pendency is dealt first, so by the end only small mandals
  * to push it over.
  * ------------------------------------------------------------------------- */
-function schAllocate_(ym, existing, capsOpt){
-  const caps = capsOpt || SCH_CAP;
+function schAllocate_(ym, existing, sharesOpt){
+  const share = sharesOpt || SCH_SHARE;
   const pending = unfiledVillages_(ym);
   const officers = schOfficers_();
   const notes = [];
 
-  /* who holds each office, and who holds each mandal */
+  /* who holds each mandal chair, and who holds each district office */
   const office = {}, byMandalRole = {};
-  SCH_DISTRICT_ROLES.forEach(r => { office[r] = { role:r, cap:Number(caps[r]) || 0, got:0, men:[], mandals:[] }; });
+  SCH_DISTRICT_ROLES.forEach(r => { office[r] = { role:r, cap:0, got:0, men:[], mandals:[] }; });
   officers.forEach(o => {
     if(office[o.role]) office[o.role].men.push(o);
     if(SCH_MANDAL_ROLES.indexOf(o.role) >= 0){
@@ -1970,81 +2050,75 @@ function schAllocate_(ym, existing, capsOpt){
     }
   });
   SCH_DISTRICT_ROLES.forEach(r => {
-    if(!office[r].men.length){
-      office[r].cap = 0;
-      notes.push('No active ' + r + ' on the roll — nothing was assigned to that office, and its share has gone to the mandals’ own officers.');
-    } else if(office[r].men.length > 1){
-      notes.push(office[r].men.length + ' officers hold the ' + r + ' charge; that office’s ' +
-                 office[r].cap + ' are dealt between them, mandal by mandal.');
-    }
+    if(!office[r].men.length)
+      notes.push('No active ' + r + ' on the roll — the ' + share.DISTRICT +
+        '% that office would have taken has gone to the mandal’s own officers, in their own proportion.');
+    else if(office[r].men.length > 1)
+      notes.push(office[r].men.length + ' officers hold the ' + r + ' charge; its share is dealt between them, mandal by mandal.');
   });
 
-  /* what is already spoken for, and by which office */
-  const held = {}, mandalOffice = {};
-  (existing || []).forEach(r => {
-    if(r.status !== 'ACTIVE') return;
-    held[vkey_(r.mandal, r.gp)] = true;
-    if(office[r.role]) mandalOffice[mkey_(r.mandal)] = r.role;
-  });
-  (existing || []).forEach(r => {
-    if(r.status !== 'ACTIVE') return;
-    const o = office[r.role];
-    if(o && mandalOffice[mkey_(r.mandal)] === r.role) o.got++;
-  });
+  /* what is already spoken for. An order reaches forward: a village already
+     assigned stays where it was put, whatever the new shares would say. */
+  const held = {};
+  (existing || []).forEach(r => { if(r.status === 'ACTIVE') held[vkey_(r.mandal, r.gp)] = true; });
 
   const fresh = pending.filter(v => !held[vkey_(v.mandal, v.gp)]);
   const byMandal = {};
   fresh.forEach(v => { (byMandal[v.mandal] = byMandal[v.mandal] || []).push(v.gp); });
-  /* largest pendency first; the name breaks the tie, so the same roll always
-     allocates the same way and a re-run is never a reshuffle */
   const mandals = Object.keys(byMandal).sort((a, b) =>
     (byMandal[b].length - byMandal[a].length) || (a < b ? -1 : a > b ? 1 : 0));
 
   const plan = [], unassigned = [];
   mandals.forEach(mandal => {
     const gps = byMandal[mandal].slice().sort();
-    const mk = mkey_(mandal);
+    const mk = mkey_(mandal), mk2 = mkey2_(mandal);
 
-    /* a mandal already held by an office stays with it */
-    let take = mandalOffice[mk] && office[mandalOffice[mk]] ? office[mandalOffice[mk]] : null;
-    if(!take){
-      SCH_DISTRICT_ROLES.forEach(r => {
-        const o = office[r];
-        if(!o.men.length || o.got >= o.cap) return;
-        if(!take || (o.cap - o.got) > (take.cap - take.got)) take = o;
-      });
-    }
-    if(take){
-      mandalOffice[mk] = take.role;
-      take.mandals.push(mandal);
-      take.got += gps.length;
-      /* one office may be held by more than one officer; the MANDALS are dealt
-         between them rather than the villages, for the same road reason */
-      const man = take.men[(take.mandals.length - 1) % take.men.length];
-      gps.forEach(gp => plan.push({ mandal:mandal, gp:gp, phone:man.phone, name:man.name, role:man.role }));
-      return;
-    }
-
-    /* The mandal's own. BOTH the MPO and the MPDO are named against every
-       village, by the Collector's direction of 17.09.2026, and either may file
-       it — so one village raises two rows. Every district figure below
-       therefore counts VILLAGES and never rows (rule 9). */
-    const men = [];
+    /* who is actually there to be given villages in this mandal */
+    const man = {};
     SCH_MANDAL_ROLES.forEach(r => {
-      const hit = byMandalRole[mk + '|' + r] || byMandalRole[mkey2_(mandal) + '|' + r] || [];
-      if(hit.length) men.push(hit[0]);
+      const hit = byMandalRole[mk + '|' + r] || byMandalRole[mk2 + '|' + r] || [];
+      if(hit.length) man[r] = hit[0];
     });
-    if(!men.length){
-      /* NAMED, NOT SWALLOWED. A mandal with no officer to file is a fault on
-         the roll, and the Collector is told which villages it costs rather
-         than finding them missing from every total. */
+    const dRole = schDistrictRole_(mandal);
+    const dOff = office[dRole];
+    /* one office may be held by more than one officer; the MANDALS are dealt
+       between them rather than the villages, for the road reason */
+    let dMan = null;
+    if(dOff && dOff.men.length){
+      dOff.mandals.push(mandal);
+      dMan = dOff.men[(dOff.mandals.length - 1) % dOff.men.length];
+    }
+
+    const weights = {};
+    SCH_MANDAL_ROLES.forEach(r => { if(man[r]) weights[r] = share[r] || 0; });
+    if(dMan) weights.DISTRICT = share.DISTRICT || 0;
+
+    if(!Object.keys(weights).length){
+      /* NAMED, NOT SWALLOWED. A mandal with nobody to file is a fault on the
+         roll, and the Collector is told what it costs rather than finding the
+         villages missing from every total. */
       unassigned.push({ mandal:mandal, villages:gps.length });
-      notes.push(mandal + ': no active MPO or MPDO on the roll — its ' + gps.length +
-                 ' pending village(s) could not be assigned to anybody.');
+      notes.push(mandal + ': no active MPDO, MPO, MSO or district officer on the roll — its ' +
+        gps.length + ' pending village(s) could not be assigned to anybody.');
       return;
     }
-    gps.forEach(gp => men.forEach(o =>
-      plan.push({ mandal:mandal, gp:gp, phone:o.phone, name:o.name, role:o.role })));
+    /* A SHARE WITH NOBODY TO TAKE IT DOES NOT VANISH, and it is not given to
+       whoever happens to be first: it is spread over those who ARE there, in
+       the proportion the order set between them. The publish says so. */
+    const absent = SCH_MANDAL_ROLES.filter(r => !man[r]);
+    if(absent.length || !dMan)
+      notes.push(mandal + ': no active ' + absent.concat(dMan ? [] : [dRole]).join(' or ') +
+        ' — that share was spread over the officers who are there.');
+
+    const cut = schApportion_(gps.length, weights);
+    let i = 0;
+    Object.keys(cut).forEach(r => {
+      const who = r === 'DISTRICT' ? dMan : man[r];
+      if(!who) return;
+      for(let n = 0; n < cut[r]; n++, i++)
+        plan.push({ mandal:mandal, gp:gps[i], phone:who.phone, name:who.name, role:who.role });
+      if(r === 'DISTRICT' && dOff) dOff.got += cut[r];
+    });
   });
 
   return { plan:plan, notes:notes, office:office, unassigned:unassigned,
@@ -2075,9 +2149,9 @@ function schPublish_(b, u){
   try{
     const sh = sheet_('Schedule', SCH_HEAD), m = headMap_(sh, SCH_HEAD);
     const existing = schRows_(ym);
-    const caps = { DPO:Number(b.dpoCap) > 0 ? Number(b.dpoCap) : SCH_CAP.DPO,
-                   DLPO:Number(b.dlpoCap) > 0 ? Number(b.dlpoCap) : SCH_CAP.DLPO };
-    const alloc = schAllocate_(ym, existing, caps);
+    /* the shares are the order's; there is nothing here for the console to
+       set, which is the point of an order */
+    const alloc = schAllocate_(ym, existing, SCH_SHARE);
 
     const now = new Date().toISOString();
     const by = u.name + ' (' + u.phone + ')';
@@ -2154,7 +2228,7 @@ function schPublish_(b, u){
       sh.appendRow(row);
     });
 
-    /* WHAT WAS ACTUALLY DONE, office by office. Sixty is a target that whole
+    /* WHAT WAS ACTUALLY DONE, office by office. A share is a proportion that whole
        mandals cannot hit exactly, so the figure is reported and the Collector
        reads the arithmetic rather than being told the order was carried out. */
     const after = schRows_(ym).filter(r => r.status === 'ACTIVE');
@@ -2166,7 +2240,8 @@ function schPublish_(b, u){
       byRole[r].forEach(x => { men[x.phone] = x.name; mand[x.mandal] = 1; });
       return { role:r, officers:Object.keys(men).length, villages:villagesOf(byRole[r]),
                mandals:Object.keys(mand).sort(),
-               cap:caps[r] != null ? caps[r] : null };
+               share:SCH_SHARE[r] != null ? SCH_SHARE[r]
+                     : (r === 'DPO' || r === 'DLPO' ? SCH_SHARE.DISTRICT : null) };
     });
 
     schBust_('');
@@ -2182,7 +2257,7 @@ function schPublish_(b, u){
       startFrom:days[0] || '', startTo:days[days.length - 1] || '',
       pending:alloc.pending, villages:villagesOf(after), rows:after.length,
       workingDaysLeft:days.length, offices:offices, notes:alloc.notes,
-      unassigned:alloc.unassigned, caps:caps, at:now });
+      unassigned:alloc.unassigned, shares:SCH_SHARE, subdivision:SCH_SUBDIVISION, at:now });
   } finally { lock.releaseLock(); }
 }
 
@@ -2338,7 +2413,7 @@ function schRegister_(u, p){
     const acks = schAcks_(ym);
     pace.officers.forEach(o => { o.ackAt = acks[o.phone] || ''; });
     return json_({ ok:true, ym:ym, district:pace, nudges:schNudges_(ym, ''),
-      caps:SCH_CAP, acknowledged:Object.keys(acks).length,
+      shares:SCH_SHARE, subdivision:SCH_SUBDIVISION, acknowledged:Object.keys(acks).length,
       cycle:{ from:cycleFrom_(ym), to:cycleTo_(ym) } });
   }
 

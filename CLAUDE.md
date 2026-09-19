@@ -401,21 +401,52 @@ directed. Suite 24 holds all of this.
 ## The filing schedule
 
 **The villages were not being filed and nobody could say whose they were.**
-Ordered 17.09.2026. The pendency of a reporting month is dealt out over the
-working days that remain: **sixty villages to the DPO, sixty to the DLPO**, and
-the rest of each mandal to that mandal's **MPO and MPDO together**, either of
-whom may file. **Nothing to the Panchayat Secretary** — he holds the village
-but he may not file its evaluation, and a schedule that called him for one
-would ask for work the server refuses at the door.
+Ordered 17.09.2026, and **re-ordered on 19.09.2026**. The pendency of a
+reporting month is no longer dealt out in whole mandals to a district office
+until a figure is filled. It is split **inside every mandal**, by share:
 
-**Whole mandals, not sixty exactly.** A district officer takes the pendency of
-whole mandals until his sixty is filled, because the constraint on three or
-four village visits a day is the road and not the arithmetic — five villages in
-each of twelve mandals is the same sixty and twice the driving. Sixty is
-therefore a target; the figure actually assigned is reported, office by office,
-every time the schedule is published, and is never quietly rounded into the
-order. `SCH_CAP` carries the two figures and an order reaching forward changes
-them: assignments already made stand.
+> **MPDO 40 · MPO 40 · MSO 10 · the district officer 10**
+
+and which district officer is a question of **subdivision**, not of who has
+room left: the **DLPO** takes his ten per cent in the five mandals of the
+Station Ghanpur subdivision — Chilpur, Ghanpur (Stn), Zaffergadh, Palakurthy,
+Kodakandla — and the **DPO** takes his in the other seven. `SCH_SHARE` and
+`SCH_SUBDIVISION` carry it; `schDistrictRole_` answers for a mandal, matching
+through `mkey_`/`mkey2_` like every other mandal name, because the roll spells
+"Ghanpur (Stn)" three ways and a subdivision must not lose a mandal over a
+bracket. *Lingala Ghanpur is not Ghanpur (Stn)*, and a loose match would
+quietly merge them.
+
+**Nothing to the Panchayat Secretary** — he holds the village but may not file
+its evaluation, and a schedule that called him for one would ask for work the
+server refuses at the door. **The MSO is in this order**, having been left out
+of the last; he is not a viewer, so the server takes his filing.
+
+**One village, one officer.** This is what the shares changed besides the
+arithmetic. Under the old order the MPO and the MPDO were both named against
+every village and either could file it, so one village raised two rows. Forty
+per cent to one man and forty to another is not that: each village now has one
+officer answerable for it, and rows and villages are the same count again. The
+rule that district figures count **villages, never rows** stands anyway (rule
+9) — it costs nothing and it is what stopped filed-plus-pending overshooting
+the district once already.
+
+**The shares always add up.** Forty per cent of 23 villages is 9.2, and four
+shares rounded on their own come to 22 or 24 — a village lost, or one dealt
+twice. `schApportion_` takes the whole numbers first and gives what is left to
+the largest remainders, so the parts sum to exactly the pendency. Ties break by
+the order the shares are named in, so the same roll always deals the same way
+and a re-publish is never a reshuffle.
+
+**A share with nobody to take it does not vanish.** A mandal with no MSO, or no
+active district officer, spreads that share over the officers who are there, in
+the proportion the order set between them — and the publish says so rather than
+letting a tenth of a mandal disappear into whoever happened to be first. A
+mandal with nobody at all is **named, not swallowed**.
+
+**An order reaches forward.** Assignments already made stand; only villages
+still unspoken-for are dealt under the new shares. Re-spreading the dates
+remains a separate, explicit act.
 
 **It accuses nobody.** A schedule is a plan of work, not a charge. Falling
 behind draws a reminder — by mail each working morning, and a card on the
