@@ -311,6 +311,45 @@ module.exports = {
         'a register with no key issues nothing, whatever is posted to it');
     }
 
+    /* ---- 1f. THE WAY BACK IN, WHEN THE COLLECTOR CANNOT SIGN IN ----
+       Not hypothetical: the PIN issued at seeding was lost between the call
+       and the screen it should have been printed on, and every console action
+       that could reset it is behind the sign-in it was needed for. */
+    {
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e.eval('var BOOTSTRAP_KEY = "k";');
+      e.mkSheet('Users', ['Phone','Name','Role','Mandal','GP','Email','InitPin','Hash','Active'], [
+        { Phone:'9063753622', Name:'The Collector', Role:'COLLECTOR', Active:'TRUE', Hash:'stale' },
+        { Phone:'9111100001', Name:'A GPO', Role:'GPO', Mandal:'Jangaon', GP:'V', Active:'TRUE', Hash:'x' }]);
+
+      t.eq(e.post({ kind:'collectorPin', key:'wrong', phone:'9063753622' }).ok, false, 'a wrong key gets nothing');
+      const off = e.post({ kind:'collectorPin', key:'k', phone:'9111100001' });
+      t.eq(off.ok, false, 'IT CANNOT BE POINTED AT AN OFFICER — no taking over a GPO’s account');
+      t.contains(off.error, 'Collector', 'and says so');
+      t.eq(e.post({ kind:'collectorPin', key:'k', phone:'9999999999' }).ok, false, 'nor at a number not on the roll');
+
+      const r = e.post({ kind:'collectorPin', key:'k', phone:'9063753622' });
+      t.eq(r.ok, true, 'the Collector’s own row is reset');
+      t.ok(!!r.pin, 'and the PIN comes back in the answer to the call that made it');
+      const tok = e.post({ kind:'login', u:'9063753622', p:r.pin }).token;
+      t.ok(!!tok, 'and it opens the register');
+      t.eq(e.get('dashboard', { token:tok }).ok, true, 'and the console with it');
+
+      const audit = JSON.stringify((e.sheets['Audit'] || { rows:[] }).rows);
+      t.contains(audit, 'COLLECTOR_PIN_RESET', 'the Audit tab records that it happened');
+      t.ok(audit.indexOf(r.pin) < 0, 'and does NOT record the PIN');
+    }
+    {
+      /* NOT A STANDING DOOR. Every routine deploy strips the key out, so on a
+         register without one this does not exist — which is the sanitation
+         register's position permanently. */
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e.mkSheet('Users', ['Phone','Name','Role','Mandal','GP','Email','InitPin','Hash','Active'],
+        [{ Phone:'9063753622', Name:'X', Role:'COLLECTOR', Active:'TRUE' }]);
+      t.eq(e.post({ kind:'collectorPin', key:'anything', phone:'9063753622' }).ok, false,
+        'a register with no recovery key has no recovery endpoint');
+    }
+
     /* ---- 2. THE SHAPE FOLLOWS THE TENANT ---- */
     const env = mock.load({ now:'2026-09-21T09:00:00+05:30' });
     const c = env.ctx;

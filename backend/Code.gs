@@ -4704,6 +4704,61 @@ function doPost(e){
            'This endpoint is now closed for good.' });
   }
 
+  /* ==========================================================================
+   * THE WAY BACK IN, WHEN THE COLLECTOR CANNOT SIGN IN.
+   *
+   * A register whose Collector has no working PIN has no way back: every
+   * console action that could reset one is itself behind his sign-in. That is
+   * not a hypothetical — it happened here, on the day this register was stood
+   * up, because the PIN issued at seeding was lost between the call and the
+   * screen it should have been printed on.
+   *
+   * IT RESETS THE COLLECTOR'S PIN AND NOBODY ELSE'S. Three guards:
+   *
+   *   1. the key baked into this project alone, which every routine deploy
+   *      strips out again — so this is not a standing door, it is one that
+   *      exists only in the minutes after a provisioning run;
+   *   2. the row must be a COLLECTOR. It can never be pointed at an officer,
+   *      so it cannot be used to take over a Gram Panchayat Officer's account
+   *      and mark attendance in his name;
+   *   3. it resets one row and touches nothing else.
+   *
+   * The PIN is returned in the answer to the call that made it and written
+   * nowhere. Audit records that a Collector PIN was reset, never the PIN.
+   * ======================================================================== */
+  if(b.kind === 'collectorPin'){
+    let key = '';
+    try{ if(typeof BOOTSTRAP_KEY !== 'undefined') key = String(BOOTSTRAP_KEY || ''); }catch(e){}
+    if(!key) return json_({ ok:false, error:'This register has no recovery key.' });
+    if(String(b.key || '') !== key) return json_({ ok:false, error:'auth' });
+
+    const want = phone10_(b.phone || '');
+    if(want.length !== 10) return json_({ ok:false, error:'A mobile number is ten digits.' });
+
+    const t = uidx_(), rng = t.sh.getDataRange(), v = rng.getValues();
+    let at = -1;
+    for(let i = 1; i < v.length; i++) if(phone10_(v[i][t.ix.phone]) === want){ at = i; break; }
+    if(at < 0) return json_({ ok:false, error:'That number is not on the roll.' });
+    if(cell_(v[at], t.ix.role).toUpperCase() !== 'COLLECTOR')
+      return json_({ ok:false, error:'This resets the Collector’s PIN alone. An officer’s is reset from the console.' });
+
+    const pin = dayPin_(want);
+    const lock = LockService.getScriptLock();
+    try{ lock.waitLock(20000); }catch(e){ return json_({ ok:false, error:'busy — try again' }); }
+    try{
+      /* every row carrying the number, because findByPhone_ takes the PIN from
+         the first row holding one — a reset written to only one of them hands
+         him a PIN that does not open the app */
+      for(let i = 1; i < v.length; i++)
+        if(phone10_(v[i][t.ix.phone]) === want) v[i][t.ix.hash] = hash_(want, pin);
+      rng.setValues(v);
+      try{ cache_().remove('pl_' + want); }catch(e){}   /* and the wrong-PIN counter with it */
+    } finally { lock.releaseLock(); }
+
+    admAudit_('COLLECTOR_PIN_RESET', want, 'The Collector’s PIN was reset through the recovery key. The PIN is not recorded.');
+    return json_({ ok:true, phone:want, name:cell_(v[at], t.ix.name), pin:pin });
+  }
+
   if(b.kind === 'login'){
     const u = findByPhone_(b.u || '');
     if(!u || !u.active) return json_({ ok:false, error:'This number is not registered. Contact the District Panchayat Office.' });
