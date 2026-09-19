@@ -326,10 +326,26 @@ const CL_OPENING_BALANCE = 6;
    does not undo what the Collector has already granted. */
 const OH_REDUCED_YEAR = 2026;
 const OH_REDUCED_BALANCE = 3;
+/* A YEAR'S LEAVE IS THE YEAR'S. A register that opens in September does not
+   grant a full year of casual leave for the three months it covers, so the
+   opening year is PRO-RATED to the months the register actually runs for —
+   the same arithmetic the sanitation register was opened on (adopted
+   20.07.2026, counted from August, 15 x 5/12 taken as 6).
+   The Gram Panchayat register opened on 19.09.2026, so it counts from October:
+     CL  15 x 3/12 = 3.75, taken as 4
+     EL  30 x 3/12 = 7.5,  taken as 8
+   OPTIONAL HOLIDAYS ARE NOT PRO-RATED, on either register. The G.O. grants
+   them for the year whichever months the register covers, and the Collector's
+   order of 2026 reduces them to three — that order is the district's and
+   applies to both. Medical leave answers to no yearly figure at all.
+   The opening figures live on the tenant, so neither register can move the
+   other's by accident, and 2027 takes the full year by itself on both. */
 function entitlement_(type, year){
-  if(type === 'CL' && Number(year) === LEAVE_OPENING_YEAR) return CL_OPENING_BALANCE;
+  const t = tenant_();
+  const open = (t.leaveOpening && t.leaveOpening[String(year)]) || null;
+  if(open && open[type] != null) return open[type];
   if(type === 'OH' && Number(year) === OH_REDUCED_YEAR) return OH_REDUCED_BALANCE;
-  return LEAVE_ENTITLEMENT[type] || 0;
+  return (t.entitlement || LEAVE_ENTITLEMENT)[type] || 0;
 }
 /* ============================================================================
  * THE TENANT · ordered 18.09.2026
@@ -377,6 +393,13 @@ const TENANTS = {
     /* THE GPs TAB HAS NO COORDINATES (rule 10), so this register has nothing
        to measure a mark against and says so rather than guessing */
     placeOfDuty:false,
+    /* CL 15 a year, EL 30, HQ a permission and ML on certificate. 2026 opened
+       in August, so casual leave that year is five months' worth: 15 x 5/12,
+       taken as 6 — the figure this register has run on since adoption. */
+    entitlement:{CL:15, EL:30, HQ:0, ML:0, OH:5},
+    leaveOpening:{ '2026':{ CL:6 } },
+    /* the Gram Panchayat Development Plan, called for from every officer */
+    gpdp:true,
     roles:['PS','MPO','MSO','MPDO','DLPO','DPO','COLLECTOR']
   },
   GP: {
@@ -406,6 +429,18 @@ const TENANTS = {
        measured against for the first time. It MEASURES AND IT ACCUSES NOBODY
        (rule 10): the distance is printed and the mark stands. */
     placeOfDuty:true,
+    /* THE SAME YEARLY FIGURES, PRO-RATED TO WHAT IS LEFT OF THE YEAR. This
+       register opened on 19.09.2026 and so counts from October — three months
+       of twelve. CL 15 x 3/12 = 3.75 taken as 4; EL 30 x 3/12 = 7.5 taken as
+       8. Optional holidays are not pro-rated on either register: the G.O.
+       grants them for the year, and the Collector's order reduces 2026 to
+       three. 2027 takes the full year by itself. */
+    entitlement:{CL:15, EL:30, HQ:0, ML:0, OH:5},
+    leaveOpening:{ '2026':{ CL:4, EL:8 } },
+    /* NO DEVELOPMENT PLAN. It was not asked of this register, and a register
+       that calls for a document nobody wants teaches its officers to ignore
+       what it asks for. */
+    gpdp:false,
     roles:['GPO','ARI','MRI','COLLECTOR']
   }
 };
@@ -3666,6 +3701,8 @@ function gpdpExt_(name){
 /* Who the register expects a plan from. The Collector calls for it; he is not
    called upon by it. */
 function gpdpDue_(role){
+  /* AND NOT AT ALL ON A REGISTER THAT WAS NEVER ASKED FOR ONE. */
+  if(!tenant_().gpdp) return false;
   const r = String(role || '').toUpperCase();
   return !!r && r !== 'COLLECTOR';
 }
@@ -4808,6 +4845,26 @@ function doPost(e){
     return json_({ ok:true, tenant:tenant_().key, rows:rows, withheld:changed.length });
   }
 
+  /* THE YEAR'S HOLIDAYS, ONTO A REGISTER THAT HAS NONE.
+     A register with an empty Holidays tab counts Dasara and Diwali and every
+     second Saturday as working days — it would chase officers for attendance
+     on days the office is shut. The dates are the G.O.'s and are the same for
+     both registers, because it is the same state and the same order. Guarded
+     by the key, and idempotent: it adds what is missing and nothing else, so a
+     second call changes nothing. */
+  if(b.kind === 'seedHolidays'){
+    let key = '';
+    try{ if(typeof BOOTSTRAP_KEY !== 'undefined') key = String(BOOTSTRAP_KEY || ''); }catch(e){}
+    if(!key) return json_({ ok:false, error:'This register loads its holidays by hand.' });
+    if(String(b.key || '') !== key) return json_({ ok:false, error:'auth' });
+    let before = 0, after = 0;
+    try{ before = Object.keys(holidaySet_()).length; }catch(e){}
+    try{ applyTsHolidays(); }catch(err){ return json_({ ok:false, error:'could not load them: ' + err }); }
+    try{ after = Object.keys(holidaySet_()).length; }catch(e){}
+    admAudit_('SEED_HOLIDAYS', tenant_().key, before + ' before, ' + after + ' after.');
+    return json_({ ok:true, tenant:tenant_().key, before:before, after:after });
+  }
+
   if(b.kind === 'login'){
     const u = findByPhone_(b.u || '');
     if(!u || !u.active) return json_({ ok:false, error:'This number is not registered. Contact the District Panchayat Office.' });
@@ -5008,7 +5065,10 @@ function doPost(e){
      holds the Gram Panchayat — the very role that may not file an
      evaluation. Put this line one place lower and the district calls every
      Secretary for a plan and then refuses to take it. */
-  if(b.kind === 'gpdp') return saveGpdp_(b, u);
+  if(b.kind === 'gpdp'){
+    if(!tenant_().gpdp) return json_({ ok:false, error:'This register does not call for a development plan.' });
+    return saveGpdp_(b, u);
+  }
 
   /* a circular the district puts in front of everyone, and the receipt for it.
      Both stand above the evaluation guard: an advisory is addressed TO the

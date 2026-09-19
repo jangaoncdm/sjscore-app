@@ -448,6 +448,26 @@ async function get(params){
   if(out && out.ok===false && out.error==='auth'){ endSession(); throw new Error('Session ended — sign in again'); }
   return out;
 }
+/* EVERYTHING THAT BELONGS TO ONE OFFICER AND NOT TO THE HANDSET. What stays
+   is what the device knows about itself: the server address, the reading
+   preferences, and whether the iOS tip has been seen. */
+function wipeOfficerStore(){
+  DB.att = {}; DB.records = {}; DB.cache = []; DB.cacheAt = ''; DB.master = [];
+  DB.leave = []; DB.attToday = null;
+  DB.notices = {rows:[], at:0, grace:3}; DB.reminders = []; DB.remSeen = {};
+  DB.noticeAckQ = []; DB.noticeDone = {}; DB.holidays = {};
+  DB.sched = null; DB.schedDone = {}; DB.schedAckQ = []; DB.schedSeen = {}; DB.schedSeenQ = [];
+  DB.adv = null; DB.advDone = {}; DB.advAckQ = [];
+  DB.gpdp = null; DB.gpdpPrompt = '';
+  DB.wx = null;
+  /* The photographs live in IndexedDB, keyed by the record they belong to.
+     Those records have just gone, so the keys that reach them have gone with
+     them: what is left is unreachable and is cleaned up by the phone's own
+     storage pressure. Deleting them here would mean walking a store this
+     module deliberately keeps to put/get/del by key, and getting that wrong
+     would take the CURRENT officer's photographs with it. */
+  saveNow();
+}
 function endSession(){ DB.session=null; saveNow(); gate(); }
 
 /* ============================================================
@@ -606,6 +626,31 @@ async function signIn(){
   try{
     const r = await post({kind:'login', u:phone, p:pin}, url);
     if(r.ok){
+      /* ONE HANDSET, ONE OFFICER AT A TIME.
+         The store was keyed to the DEVICE and not to the man: attendance is
+         held as DB.att[date], so a second officer signing in on the same
+         handset saw the first one's mark and was told he had marked when the
+         district had no row for him — reported from the field in exactly
+         those words. Worse, an inspection the first officer had not yet
+         synced would have gone up under the SECOND officer's token, and
+         saveInspection_ stamps the officer from the token: one man's work
+         recorded against another's name.
+         So a different number wipes what belonged to the last one. The same
+         number signing back in keeps his own unsynced work, which is the
+         whole reason it is held on the phone. */
+      const lastWho = DB.who || '';
+      if(lastWho && lastWho !== phone){
+        const lostRecords = Object.values(DB.records || {}).filter(x => x.sync !== 'synced').length;
+        const lostAtt = Object.values(DB.att || {}).filter(a => a.sync !== 'synced').length;
+        wipeOfficerStore();
+        if(lostRecords || lostAtt)
+          toast('This phone was signed in as another officer. ' +
+                (lostRecords ? lostRecords + ' unsynced inspection(s) ' : '') +
+                (lostRecords && lostAtt ? 'and ' : '') +
+                (lostAtt ? lostAtt + ' unsent mark(s) ' : '') +
+                'of his could not be carried over and were cleared.', 9000);
+      }
+      DB.who = phone;
       DB.url=url; DB.session={token:r.token, user:r.user}; saveNow();
       $('#lPin').value=''; m.textContent='';
       try{ const g = await get({op:'gps'}); if(g.ok){ DB.master=g.gps; saveNow(); } }catch(e){}
@@ -2490,8 +2535,18 @@ const CL_OPENING_BALANCE = 6;
 const OH_REDUCED_YEAR = 2026;
 const OH_REDUCED_BALANCE = 3;
 
+/* THE OPENING YEAR IS PRO-RATED TO THE MONTHS THE REGISTER COVERS, and the
+   two registers opened in different months — the sanitation one in August
+   (15 x 5/12, taken as 6) and the Gram Panchayat one on 19.09.2026, counting
+   from October (CL 15 x 3/12 = 3.75 taken as 4, EL 30 x 3/12 = 7.5 taken as
+   8). The same figures the server keeps in TENANTS; they must agree, and the
+   server is the authority (rule 6) — this is only what the screen shows while
+   an officer is picking his dates. Optional holidays are not pro-rated on
+   either: the G.O. grants them for the year and the Collector's order reduces
+   2026 to three. */
+const LEAVE_OPENING = IS_GP ? { CL:4, EL:8 } : { CL:6 };
 function entitlement(type, year){
-  if(type === 'CL' && Number(year) === LEAVE_OPENING_YEAR) return CL_OPENING_BALANCE;
+  if(Number(year) === LEAVE_OPENING_YEAR && LEAVE_OPENING[type] != null) return LEAVE_OPENING[type];
   if(type === 'OH' && Number(year) === OH_REDUCED_YEAR) return OH_REDUCED_BALANCE;
   return leaveMeta(type).year || 0;
 }
@@ -2683,6 +2738,10 @@ function notifyLocal(title, body, tag){
 
 /* Is the district still waiting on this officer's plan? */
 function gpdpPending(){
+  /* THE DEVELOPMENT PLAN IS THE SANITATION REGISTER'S. The Gram Panchayat
+     register was never asked for one — its server does not call for it — so
+     nothing here chases a Gram Panchayat Officer for a plan nobody wants. */
+  if(IS_GP) return false;
   const st = gpdpState();
   return !!(st && st.due !== false && !st.mine);
 }

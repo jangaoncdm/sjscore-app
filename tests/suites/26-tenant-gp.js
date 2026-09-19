@@ -72,6 +72,15 @@ function seed(env){
 /* A `const` arrow lives in the script's own scope and never lands on the vm's
    global object, so it cannot be reached as env.ctx.x — the suites read those
    through env.eval, the same way they read HEADERS. */
+/* a minimal GP roll, for the blocks that only need somebody to sign in as */
+function seedLike(env){
+  env.mkSheet('Users', ['Phone','Name','Role','Mandal','GP','Email','InitPin','Hash','Active'], [
+    { Phone:'9000000001', Name:'Collector', Role:'COLLECTOR', Active:'TRUE' },
+    { Phone:'9111100001', Name:'A GPO', Role:'GPO', Mandal:'Jangaon', GP:'V1', Active:'TRUE' }]);
+  env.mkSheet('GPs', ['Mandal','GP','Lat','Lng'], [{ Mandal:'Jangaon', GP:'V1', Lat:17.72, Lng:79.16 }]);
+  env.mkSheet('Holidays', ['Date','Occasion'], []);
+}
+
 function tokenFor(env, phone, pin){
   const head = env.sheets['Users'].rows[0].map(String), uh = head.indexOf('Hash');
   env.sheets['Users'].rows.slice(1).forEach(r => {
@@ -397,6 +406,74 @@ module.exports = {
         [{ Phone:'9111100001', Name:'X', Role:'GPO', Active:'TRUE' }]);
       t.eq(e.post({ kind:'pinList', key:'anything' }).ok, false,
         'a register with no key hands out no list — the sanitation register, permanently');
+    }
+
+    /* ---- 1h. WHAT THIS REGISTER DOES NOT ASK FOR ----
+       Reported from the field on the first day: a Gram Panchayat Officer was
+       being chased for a Gram Panchayat Development Plan. It was never asked
+       of this register, and a register that calls for a document nobody wants
+       teaches its officers to ignore what it does ask for. */
+    {
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e.mkSheet('Config', ['Key','Value'], [{ Key:'TENANT', Value:'GP' }]);
+      seedLike(e);
+      const tok = tokenFor(e, '9111100001', '2222');
+      t.eq(e.eval("gpdpDue_('GPO')"), false, 'no plan is called for from a Gram Panchayat Officer');
+      t.eq(e.eval("gpdpDue_('MRI')"), false, 'nor from a Revenue Inspector');
+      const reg = e.get('gpdp', { token:tok });
+      t.eq(reg.due, false, 'the register tells the app it is not due');
+      const up = e.post({ kind:'gpdp', token:tok, file:{ name:'plan.pdf', b64:'eHg=' } });
+      t.eq(up.ok, false, 'and a plan posted anyway is refused at the door');
+      t.contains(up.error, 'does not call for a development plan', 'saying so plainly');
+    }
+    {
+      /* and it is still called for on the register that asked for it */
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      t.eq(e.eval("gpdpDue_('PS')"), true, 'the sanitation register still calls for one from a Secretary');
+      t.eq(e.eval("gpdpDue_('COLLECTOR')"), false, 'and still not from the Collector');
+    }
+
+    /* ---- 1i. LEAVE, PRO-RATED TO WHAT IS LEFT OF THE YEAR ----
+       A register that opens in September does not grant a full year of casual
+       leave for the three months it covers. */
+    {
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e.mkSheet('Config', ['Key','Value'], [{ Key:'TENANT', Value:'GP' }]);
+      t.eq(e.ctx.entitlement_('CL', 2026), 4, 'GP casual leave for 2026 is 15 x 3/12, taken as 4');
+      t.eq(e.ctx.entitlement_('EL', 2026), 8,  'and earned leave 30 x 3/12, taken as 8');
+      t.eq(e.ctx.entitlement_('OH', 2026), 3,  'optional holidays are NOT pro-rated — the Collector’s order of three');
+      t.eq(e.ctx.entitlement_('ML', 2026), 0,  'and medical leave answers to no yearly figure');
+      t.eq(e.ctx.entitlement_('CL', 2027), 15, 'and 2027 takes the full year by itself');
+      t.eq(e.ctx.entitlement_('EL', 2027), 30, 'on both counts');
+    }
+    {
+      /* THE SANITATION REGISTER'S OWN FIGURES DO NOT MOVE. */
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      t.eq(e.ctx.entitlement_('CL', 2026), 6, 'SJGP casual leave for 2026 is still 6, as it has been since adoption');
+      t.eq(e.ctx.entitlement_('EL', 2026), 30, 'and its earned leave is untouched');
+      t.eq(e.ctx.entitlement_('OH', 2026), 3, 'with the same three optional holidays');
+      t.eq(e.ctx.entitlement_('CL', 2027), 15, 'and 2027 the full year');
+    }
+
+    /* ---- 1j. THE HOLIDAYS OF A NEW REGISTER ----
+       An empty Holidays tab counts Dasara and every second Saturday as working
+       days, and would chase officers for attendance on days the office is shut. */
+    {
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30', admin:true });
+      e.eval('var BOOTSTRAP_KEY = "k";');
+      e.mkSheet('Config', ['Key','Value'], [{ Key:'TENANT', Value:'GP' }]);
+      e.mkSheet('Holidays', ['Date','Occasion'], []);
+      t.eq(Object.keys(e.ctx.holidaySet_()).length, 0, 'a new register starts with none');
+      t.eq(e.post({ kind:'seedHolidays', key:'no' }).ok, false, 'a wrong key loads nothing');
+      const r = e.post({ kind:'seedHolidays', key:'k' });
+      t.eq(r.ok, true, 'the right key loads the G.O.’s dates');
+      t.ok(r.after > 30, 'the general holidays and every second Saturday: ' + r.after + ' dates');
+      const hs = e.ctx.holidaySet_();
+      t.ok(!!hs['2026-09-12'], 'the second Saturday of September is among them');
+      t.eq(e.ctx.isWorkingDay_('2026-09-12'), false, 'and the register stops counting it as a working day');
+      /* IDEMPOTENT — a nervous second run changes nothing (rule 8) */
+      const again = e.post({ kind:'seedHolidays', key:'k' });
+      t.eq(again.after, r.after, 'a second run adds not one date');
     }
 
     /* ---- 2. THE SHAPE FOLLOWS THE TENANT ---- */
