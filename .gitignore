@@ -8,7 +8,7 @@ Info/
 # Source advisories the district hands over for publishing. The document
 # belongs in Drive, published through the console — not carried in the repo.
 Adv/
-# The district's own rosters for the second register: 134 Gram Panchayat
+# The district's own rosters for the second register: 134 Gram Palana
 # Officers and Revenue Inspectors with their personal mobile numbers, the GP
 # office coordinates, and everything tests/gp-seed.js derives from them. THIS
 # REPOSITORY IS PUBLIC. The workbook arrived on 18.09.2026 and was untracked

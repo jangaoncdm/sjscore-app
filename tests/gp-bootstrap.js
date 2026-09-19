@@ -7,7 +7,7 @@
    district's own Apps Script web app, over HTTPS, and never anywhere else.
 
    What travels through GitHub is a random key with no personal data in it,
-   baked into the one file that exists only in the Gram Panchayat project.
+   baked into the one file that exists only in the Gram Palana project.
 
    IT CANNOT OVERWRITE A LIVE REGISTER. The endpoint refuses unless the Users
    tab is empty, so the moment one officer is on the roll this stops working —
@@ -94,7 +94,7 @@ function post(url, body){
   console.log('to be seeded:');
   console.log('  officers  ' + users.length + '   (' +
     Object.keys(roles).sort().map(k => k + ' ' + roles[k]).join(', ') + ')');
-  console.log('  villages  ' + gps.length + '   (' + placed + ' with a usable GP office)');
+  console.log('  villages  ' + gps.length + '   (' + placed + ' with a usable village office)');
   console.log('  into      ' + url);
   /* the roll is never printed. A terminal is a log too. */
 

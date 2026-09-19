@@ -22,7 +22,7 @@ const SERVER_URL = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
 /* ============================================================================
  * WHICH REGISTER THIS APP IS · 18.09.2026
  *
- * The same bytes serve the sanitation register and the Gram Panchayat one;
+ * The same bytes serve the sanitation register and the Gram Palana one;
  * config.js says which, and config.js is per-deployment and is never carried
  * by an upgrade. Anything unreadable is SJGP, because a setting that fails to
  * load must land on the register that already exists.
@@ -37,7 +37,7 @@ const SERVER_URL = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
 const TENANT = String((typeof window !== 'undefined' && window.SJGP_TENANT) || 'SJGP').toUpperCase().trim() === 'GP' ? 'GP' : 'SJGP';
 const IS_GP = TENANT === 'GP';
 const STORE_KEY = IS_GP ? 'sjgp-gp1' : 'sjf5';
-/* THERE IS ONE CONSOLE, AND IT IS AT THE ROOT. The Gram Panchayat app is
+/* THERE IS ONE CONSOLE, AND IT IS AT THE ROOT. The Gram Palana app is
    published in a folder, so a relative link to dashboard.html resolved to
    /gp/dashboard.html and gave the Collector a 404 the first time he tapped
    Monitoring from it. The console is not copied into the folder on purpose —
@@ -45,11 +45,11 @@ const STORE_KEY = IS_GP ? 'sjgp-gp1' : 'sjf5';
    out of the folder to reach it. */
 const CONSOLE_HREF = IS_GP ? '../dashboard.html' : 'dashboard.html';
 /* WHAT THIS REGISTER IS CALLED, in the two places an officer reads it: the
-   eyebrow over the home screen and the desktop rail. A Gram Panchayat Officer
+   eyebrow over the home screen and the desktop rail. A Gram Palana Officer
    opening an app headed "Swachh Jangaon" would reasonably think he had the
    wrong one. Applied on load, so the markup keeps the sanitation register's
    own wording as its default and a phone reads exactly what it always has. */
-const REGISTER_NAME = IS_GP ? 'Gram Panchayat Register' : 'Swachh Jangaon Gram Panchayat';
+const REGISTER_NAME = IS_GP ? 'Gram Palana Register' : 'Swachh Jangaon Gram Panchayat';
 function brandRegister(){
   if(!IS_GP) return;
   try{
@@ -59,6 +59,17 @@ function brandRegister(){
     });
     const sub = document.querySelector('.brandband .sub');
     if(sub) sub.textContent = REGISTER_NAME + ' · Jangaon';
+    /* THE SIGN-IN PAGE IS THE FIRST THING HE EVER SEES OF IT, and it still
+       read SJGP over a paragraph promising a 100-mark evaluation with
+       photographic evidence — work this register does not take. The wordmark
+       and the line under it are this register's own. */
+    const wm = document.querySelector('.brandband h1');
+    if(wm) wm.textContent = 'GP';
+    const two = document.querySelector('.brandband .two');
+    if(two) two.textContent = 'The district’s field register for the Revenue department — ' +
+      'attendance carrying the place it was marked from, and leave, working offline in the village.';
+    /* the desktop rail's own wordmark is drawn in CSS content, which no
+       amount of textContent reaches; index.html answers this attribute. */
     document.documentElement.setAttribute('data-tenant', 'gp');
   }catch(e){}
 }
@@ -292,10 +303,10 @@ const isDistrict = r => IS_GP ? (r==='COLLECTOR')
 const isMandal   = r => IS_GP ? (r==='MRI' || r==='ARI')
                               : (r==='MPDO' || r==='MSO' || r==='MPO');
 /* The Secretary is the officer being evaluated. Read access only, everywhere. */
-/* NOBODY IS A VIEWER ON THE GRAM PANCHAYAT REGISTER. A Gram Panchayat Officer
+/* NOBODY IS A VIEWER ON THE GRAM PALANA REGISTER. A Gram Palana Officer
    is not the officer being evaluated — he is the officer keeping the register. */
 const isViewer = r => !IS_GP && r === 'PS';
-/* WHO MAY FILE AN EVALUATION. On the Gram Panchayat register: nobody, because
+/* WHO MAY FILE AN EVALUATION. On the Gram Palana register: nobody, because
    the register does not take them — the server refuses `kind:'inspection'` at
    the door. The app agrees with the server rather than offering a button that
    can only fail. */
@@ -395,9 +406,9 @@ const TAB_DEFS = {
 };
 function buildTabs(){
   /* THE TABS A REGISTER ACTUALLY HAS. Inspect and Records are the 100-mark
-     village evaluation and the drafts waiting to be filed; the Gram Panchayat
+     village evaluation and the drafts waiting to be filed; the Gram Palana
      register was never asked for either, and its server refuses both at the
-     door. Showing a Gram Panchayat Officer a tab that can only refuse him is
+     door. Showing a Gram Palana Officer a tab that can only refuse him is
      worse than not showing it — he would try it, be told no, and trust the
      rest of the screen less. Nothing here is reached on the sanitation
      register: IS_GP is false and the list is the one it has always had. */
@@ -915,8 +926,8 @@ async function _syncAttendance(){
    ============================================================ */
 const roleName = r => ({PS:'Panchayat Secretary', MPDO:'MPDO', MSO:'Mandal Special Officer', MPO:'MPO',
   DPO:'District Panchayat Officer', DLPO:'Divisional Panchayat Officer',
-  /* the Gram Panchayat register's own */
-  GPO:'Gram Panchayat Officer', MRI:'Mandal Revenue Inspector', ARI:'Assistant Revenue Inspector',
+  /* the Gram Palana register's own */
+  GPO:'Gram Palana Officer', MRI:'Mandal Revenue Inspector', ARI:'Assistant Revenue Inspector',
   COLLECTOR:'Collector & District Magistrate'}[r] || r);
 /* ============================================================
    SHOW-CAUSE NOTICES
@@ -1281,10 +1292,10 @@ function viewerTrend(gp){
 /* THE HOME SCREEN OF A REGISTER WITH NO EVALUATION.
    districtHome is the sanitation register's picture: villages reported, the
    average SJ-SCORE, grades A to D, the red flags and the ranking. Every one of
-   those is the 100-mark evaluation, which the Gram Panchayat register does not
+   those is the 100-mark evaluation, which the Gram Palana register does not
    take and its server refuses at the door. Drawn there they would be four
    empty tiles and a heading with nothing under it — figures for work this
-   register was never asked to do. What a Gram Panchayat Officer is asked for
+   register was never asked to do. What a Gram Palana Officer is asked for
    is his attendance and his leave, so that is what his screen carries. */
 function gpHome(u){
   const a = DB.att[todayStr()];
@@ -1323,7 +1334,7 @@ function gpHome(u){
   }
   h += `<p style="font-size:12.5px;color:var(--ink-3);text-align:center;padding:18px 24px 0;line-height:1.55">
      Your attendance carries the place it was marked from. The district reads the distance from your
-     Gram Panchayat office; it raises no notice and debits no leave.</p>`;
+     place of duty; it raises no notice and debits no leave.</p>`;
   return h;
 }
 function districtHome(u, ym){
@@ -2537,7 +2548,7 @@ const OH_REDUCED_BALANCE = 3;
 
 /* THE OPENING YEAR IS PRO-RATED TO THE MONTHS THE REGISTER COVERS, and the
    two registers opened in different months — the sanitation one in August
-   (15 x 5/12, taken as 6) and the Gram Panchayat one on 19.09.2026, counting
+   (15 x 5/12, taken as 6) and the Gram Palana one on 19.09.2026, counting
    from October (CL 15 x 3/12 = 3.75 taken as 4, EL 30 x 3/12 = 7.5 taken as
    8). The same figures the server keeps in TENANTS; they must agree, and the
    server is the authority (rule 6) — this is only what the screen shows while
@@ -2571,7 +2582,7 @@ function leaveBalance(type, year, phone){
 }
 /* WHO APPLIES FOR LEAVE ON THIS REGISTER. The same list the server keeps in
    TENANTS; they must agree, and the server is the authority (rule 6). Without
-   this a Gram Panchayat Officer was shown no way to apply for the leave his
+   this a Gram Palana Officer was shown no way to apply for the leave his
    own register grants him. */
 const canApplyLeave   = r => (IS_GP ? ['GPO','MRI','ARI'] : ['MPO','PS','MPDO']).includes(r);
 /* The Collector is not asked to mark in. The office is not one that reports
@@ -2738,9 +2749,9 @@ function notifyLocal(title, body, tag){
 
 /* Is the district still waiting on this officer's plan? */
 function gpdpPending(){
-  /* THE DEVELOPMENT PLAN IS THE SANITATION REGISTER'S. The Gram Panchayat
+  /* THE DEVELOPMENT PLAN IS THE SANITATION REGISTER'S. The Gram Palana
      register was never asked for one — its server does not call for it — so
-     nothing here chases a Gram Panchayat Officer for a plan nobody wants. */
+     nothing here chases a Gram Palana Officer for a plan nobody wants. */
   if(IS_GP) return false;
   const st = gpdpState();
   return !!(st && st.due !== false && !st.mine);

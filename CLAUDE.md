@@ -701,10 +701,10 @@ has failed, and a line saying plainly that the square is **not a credential**.
 
 ---
 
-## The second register · Gram Panchayat
+## The second register · Gram Palana
 
-**Ordered 18.09.2026.** A second tenant for the Gram Panchayat domain: 115 Gram
-Panchayat Officers across 180 revenue villages, and 19 Revenue Inspectors —
+**Ordered 18.09.2026.** A second tenant for the Gram Palana domain: 115 Gram
+Palana Officers across 180 revenue villages, and 19 Revenue Inspectors —
 134 officers, carrying attendance, leave, the geo-tagged mark, the map and the
 daily report. `DEPLOY-GP.md` is how it is put up.
 
@@ -713,7 +713,7 @@ own Apps Script project bound to its own spreadsheet behind its own `/exec`.
 **There is no Tenant column and there must not be one.** A logical filter is
 the wrong boundary for a register that issues notices under the Conduct Rules:
 every read in four thousand lines would have to carry it, and one missed filter
-puts a Gram Panchayat Officer's absence into a Panchayat Secretary's show-cause
+puts a Gram Palana Officer's absence into a Panchayat Secretary's show-cause
 notice. Two spreadsheets cannot leak into one another because there is nothing
 between them to leak through.
 
@@ -740,7 +740,7 @@ the GP register — not hidden, refused — rather than growing a half-filled
 Inspections tab nobody reads.
 
 **And this register can do what the other cannot.** Every revenue village
-carries its GP office on the roll, so for the first time a mark has a place of
+carries its village office on the roll, so for the first time a mark has a place of
 duty to be measured against. It **measures and it accuses nobody** — the same
 restraint as rule 10, which exists precisely because the sanitation register
 had nothing to check against. The distance is printed; the mark stands. An

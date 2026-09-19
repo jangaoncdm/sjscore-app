@@ -69,7 +69,7 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
     Object.assign({}, r, { role:'GPO', dutyKm: Math.round((r.km || 1) * 10) / 10 }));
   GPFIX.today.onLeave = GPFIX.today.onLeave.slice(0, 3);
   GPFIX.today.absent  = GPFIX.today.absent.slice(0, 5).map(r => Object.assign({}, r, { role:'GPO' }));
-  /* the Gram Panchayat register takes no evaluation: no filings, no grades */
+  /* the Gram Palana register takes no evaluation: no filings, no grades */
   GPFIX.month = { rows:[], grades:{A:0,B:0,C:0,D:0}, avg:null, rfCount:0 };
   GPFIX.trend = [];
   GPFIX.coverage = [];
@@ -210,7 +210,8 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
           /* THE HEADER SAYS WHICH ONE. Reading one register believing it is
              the other is the single mistake this control can cause. */
           const nm = await page.$eval('#tenName', e => e.hidden ? '' : e.textContent).catch(() => '');
-          if(!/Gram Panchayat/i.test(nm)) problems.push(lbl + ': the header does not name the register being read — "' + nm + '"');
+          if(!/Gram Palana/i.test(nm) || /Swachh Jangaon/i.test(nm))
+            problems.push(lbl + ': the header does not name the register being read — "' + nm + '"');
 
           /* AND THE RAIL SHOWS ONLY WHAT THAT REGISTER HAS. The GP register
              takes no evaluation and carries no filing schedule; its server
@@ -233,7 +234,7 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
           ['Evaluation outcomes', 'Villages evaluated', 'District average', 'Red flags'].forEach(w => {
             if(gpText.indexOf(w) >= 0) problems.push(lbl + ': the GP overview still shows "' + w + '"');
           });
-          if(gpText.indexOf('Marked at the GP office') < 0)
+          if(gpText.indexOf('Marked at the village office') < 0)
             problems.push(lbl + ': the GP overview does not show the place of duty, which is what that register has');
           if(!/a distance, not a default/.test(gpText))
             problems.push(lbl + ': the GP overview does not say that a distance accuses nobody');

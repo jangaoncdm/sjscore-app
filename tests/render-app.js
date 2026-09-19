@@ -94,7 +94,7 @@ function router(route){
 
 const SIZES = [{ w:2560, h:1440, n:'2560' }, { w:1500, h:1000, n:'1500' }, { w:390, h:844, n:'390' }];
 const TABS = ['home', 'records', 'notices', 'more'];
-/* a Gram Panchayat Officer holding two revenue villages — 54 of the 115 do */
+/* a Gram Palana Officer holding two revenue villages — 54 of the 115 do */
 const GP_OFFICER = { name:'K. Surya Prakash', role:'GPO', phone:'9111100001',
                      mandal:'Bachannapeta', gp:'', gps:['Bachannapet','Itikalapally'] };
 /* THE TABS EACH REGISTER HAS. Inspect and Records are the 100-mark evaluation

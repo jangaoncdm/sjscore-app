@@ -1,5 +1,5 @@
 # ============================================================================
-# STAND UP THE GRAM PANCHAYAT REGISTER — once, from a button.
+# STAND UP THE GRAM PALANA REGISTER — once, from a button.
 # ----------------------------------------------------------------------------
 # Everything the forty minutes in DEPLOY-GP.md asked a person to do, except the
 # one step that moves personal data:
@@ -33,7 +33,7 @@
 # IT REFUSES TO RUN TWICE. If GP_SCRIPT_ID is already set it stops: a second
 # run would create a SECOND register and orphan the first with its data in it.
 # ============================================================================
-name: Provision the Gram Panchayat register
+name: Provision the Gram Palana register
 
 on:
   workflow_dispatch:
@@ -41,7 +41,7 @@ on:
       title:
         description: 'Name for the new Google Sheet'
         required: true
-        default: 'SJGP - Gram Panchayat register'
+        default: 'SJGP - Gram Palana register'
       confirm:
         description: 'Type CREATE to confirm this makes a new Sheet and Apps Script project'
         required: true
@@ -88,7 +88,7 @@ jobs:
           # pick them up even by accident.
           {
             echo "/* Written by the provisioning pipeline. This file exists ONLY in the"
-            echo "   Gram Panchayat project and is never in backend/, so it cannot reach"
+            echo "   Gram Palana project and is never in backend/, so it cannot reach"
             echo "   the sanitation register. A Script Property named TENANT outranks it."
             echo ""
             echo "   BOOTSTRAP_KEY lets the district's own machine post the roll ONCE, to"
@@ -153,7 +153,7 @@ jobs:
             sleep 15
             OUT=$(curl -sL --max-time 45 "$URL" || true)
             if echo "$OUT" | grep -q '"tenant":"GP"'; then
-              echo "It answered, and it knows it is the Gram Panchayat register."
+              echo "It answered, and it knows it is the Gram Palana register."
               echo "ok=yes" >> "$GITHUB_OUTPUT"; exit 0
             fi
             if echo "$OUT" | grep -q '"ok":true'; then
@@ -200,13 +200,13 @@ jobs:
           git config user.name  "SJGP deploy"
           git config user.email "deploy@users.noreply.github.com"
           git add gp/config.js
-          git diff --staged --quiet || git commit -m "provision: the Gram Panchayat register is live at /gp/"
+          git diff --staged --quiet || git commit -m "provision: the Gram Palana register is live at /gp/"
           git push
 
       - name: What is left to a person
         run: |
           echo "=============================================================="
-          echo " The Gram Panchayat register is stood up."
+          echo " The Gram Palana register is stood up."
           echo ""
           echo "   Script  https://script.google.com/d/${{ steps.create.outputs.script_id }}/edit"
           echo "   Server  ${{ steps.deploy.outputs.exec_url }}"

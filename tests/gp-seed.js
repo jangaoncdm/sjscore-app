@@ -10,7 +10,7 @@
 
    WHAT IT DOES TO THE DATA, AND WHAT IT REFUSES TO DO:
 
-   · ONE OFFICER, ONE ROW. 54 of the 115 Gram Panchayat Officers hold more than
+   · ONE OFFICER, ONE ROW. 54 of the 115 Gram Palana Officers hold more than
      one revenue village — "Incharge GPO" — and one holds four. The register
      has folded a number across rows since v5 (a Secretary holding two GPs has
      two rows and one login), but the roll reads better as one row per officer
@@ -136,7 +136,7 @@ const csv = rows => '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n')
     let lat = Number(r.E), lng = Number(r.F);
     if(!isFinite(lat) || !isFinite(lng) ||
        lat < BOX.latMin || lat > BOX.latMax || lng < BOX.lngMin || lng > BOX.lngMax){
-      notes.push(line + ': ' + mandal + ' · ' + gp + ' — the GP office coordinate cannot be believed (' +
+      notes.push(line + ': ' + mandal + ' · ' + gp + ' — the village office coordinate cannot be believed (' +
         r.E + ', ' + r.F + '). WRITTEN BLANK. No distance will be measured for this village until it is corrected.');
       lat = ''; lng = '';
     }
@@ -190,7 +190,7 @@ const csv = rows => '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n')
   console.log('officers : ' + officers.length + '  (GPO ' + officers.filter(o => o.role === 'GPO').length +
     ', MRI ' + officers.filter(o => o.role === 'MRI').length +
     ', ARI ' + officers.filter(o => o.role === 'ARI').length + ')');
-  console.log('villages : ' + villages.length + '  (' + villages.filter(v => v.lat !== '').length + ' with a usable GP office)');
+  console.log('villages : ' + villages.length + '  (' + villages.filter(v => v.lat !== '').length + ' with a usable village office)');
   console.log('written  : Domain/GP/seed-Users.csv, seed-GPs.csv, seed-report.txt   (gitignored)');
   if(notes.length){
     console.log('\nWHAT COULD NOT BE READ, OR WAS CHANGED  (' + notes.length + ')');

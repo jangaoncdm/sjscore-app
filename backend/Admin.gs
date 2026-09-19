@@ -2394,7 +2394,7 @@ function menuRestampFilingMonths(){
 /* ============================================================================
  * WHAT IS LEFT IN THE DAY'S MAIL ALLOWANCE · 18.09.2026
  * ----------------------------------------------------------------------------
- * Asked for when the Gram Panchayat register was ordered, because the two
+ * Asked for when the Gram Palana register was ordered, because the two
  * registers DRAW ON ONE ALLOWANCE. Both web apps run as the deploying user, so
  * Google counts their mail against the same account: the sanitation register's
  * ~280 officers and the GP register's 134 come to 414 recipients on a busy
@@ -2426,7 +2426,7 @@ function checkMailQuota(){
     ? 'Enough for both registers today (' + need + ' officers between them).'
     : 'NOT ENOUGH FOR BOTH REGISTERS. ' + need + ' officers between them and ' + left +
       ' mails left. The daily report and the reminders will stop part way through, ' +
-      'on the sanitation register as well as the Gram Panchayat one, and nothing will say why.';
+      'on the sanitation register as well as the Gram Palana one, and nothing will say why.';
   var msg = 'Mails left today: ' + left + '\n' +
             'Running as: ' + (who || 'unknown') + '\n' +
             'This looks like ' + kind + '.\n\n' + verdict + '\n\n' +

@@ -331,7 +331,7 @@ const OH_REDUCED_BALANCE = 3;
    opening year is PRO-RATED to the months the register actually runs for —
    the same arithmetic the sanitation register was opened on (adopted
    20.07.2026, counted from August, 15 x 5/12 taken as 6).
-   The Gram Panchayat register opened on 19.09.2026, so it counts from October:
+   The Gram Palana register opened on 19.09.2026, so it counts from October:
      CL  15 x 3/12 = 3.75, taken as 4
      EL  30 x 3/12 = 7.5,  taken as 8
    OPTIONAL HOLIDAYS ARE NOT PRO-RATED, on either register. The G.O. grants
@@ -353,7 +353,7 @@ function entitlement_(type, year){
  * This same file serves two registers. SJGP is the sanitation register the
  * district has run since July: 280 Panchayat Secretaries, MPOs, MSOs and
  * MPDOs, the 100-mark village evaluation, and the show-cause ladder. GP is the
- * Gram Panchayat register ordered on 18.09.2026: 115 Gram Panchayat Officers
+ * Gram Palana register ordered on 18.09.2026: 115 Gram Palana Officers
  * across 180 revenue villages, and 19 Revenue Inspectors.
  *
  * THEY DO NOT SHARE A SPREADSHEET, AND THAT IS THE WHOLE OF THE ISOLATION.
@@ -361,7 +361,7 @@ function entitlement_(type, year){
  * own /exec. There is no Tenant column anywhere and there must not be one: a
  * logical filter is the wrong boundary for a register that issues notices
  * under the Conduct Rules, because every read in four thousand lines would
- * have to carry it and ONE missed filter puts a Gram Panchayat Officer's
+ * have to carry it and ONE missed filter puts a Gram Palana Officer's
  * absence into a Panchayat Secretary's show-cause notice. Two spreadsheets
  * cannot leak into one another, because there is nothing between them to leak
  * through. Neither register can read the other's data even in principle — not
@@ -403,7 +403,7 @@ const TENANTS = {
     roles:['PS','MPO','MSO','MPDO','DLPO','DPO','COLLECTOR']
   },
   GP: {
-    key:'GP', name:'Gram Panchayat Register · Jangaon', short:'GP',
+    key:'GP', name:'Gram Palana Register · Jangaon', short:'GP',
     /* GPO holds the village and marks in; the Revenue Inspectors supervise a
        mandal, ARI under MRI. No role here is a viewer: a GPO is not an officer
        being evaluated, he is the officer keeping the register. */
@@ -417,7 +417,7 @@ const TENANTS = {
        18.09.2026. Attendance, leave, the geo-tagged mark, the map and the
        daily report are what was asked for; no show-cause notice is proposed,
        no casual leave is debited and no app is locked. Turning this to true
-       serves numbered notices to Gram Panchayat Officers, and that is the
+       serves numbered notices to Gram Palana Officers, and that is the
        Collector's written order and not a code edit — suite 26 holds it off
        and is where the change is made first, deliberately. */
     sanction:false,
@@ -425,7 +425,7 @@ const TENANTS = {
        register's work and are not asked of this one */
     evaluation:false, schedule:false,
     /* AND THIS REGISTER CAN DO WHAT THE OTHER CANNOT. Every revenue village
-       carries its GP office on the roll, so a mark has a place of duty to be
+       carries its village office on the roll, so a mark has a place of duty to be
        measured against for the first time. It MEASURES AND IT ACCUSES NOBODY
        (rule 10): the distance is printed and the mark stands. */
     placeOfDuty:true,
@@ -497,7 +497,7 @@ function tenant_(){
   /* AND A REGISTER WRITES DOWN WHAT IT IS, THE FIRST TIME IT IS TOLD.
      The overlay is a FILE, and `clasp push --force` deletes remote files that
      are not present locally — so one routine deploy that forgot to assemble it
-     took the Gram Panchayat register's identity away and it reverted to
+     took the Gram Palana register's identity away and it reverted to
      reporting itself as the sanitation one, which would have switched the
      show-cause ladder on for officers who are expressly not under it.
 
@@ -530,7 +530,7 @@ const rank_ = () => tenant_().rank;
 /* THE VILLAGE ROLL, AND WHAT IT CARRIES.
    SJGP's GPs tab is Mandal, GP and nothing else — that is the whole reason
    rule 10 exists: the register had nothing to measure a mark against, so it
-   measured nothing and said so. The GP register's roll carries the GP office
+   measured nothing and said so. The GP register's roll carries the village office
    of every revenue village, so it CAN measure. The two extra columns are
    written only on the register that has them; SJGP's tab is not touched. */
 const GPS_HEAD = () => tenant_().placeOfDuty ? ['Mandal','GP','Lat','Lng'] : ['Mandal','GP'];
@@ -739,7 +739,7 @@ const pub_ = u => ({ name:u.name, role:u.role, phone:u.phone, mandal:u.mandal, m
 /* WHAT A ROLE MAY DO IS THE REGISTER'S TO SAY, not this file's. In SJGP the
    district is the DPO, the DLPO and the Collector and the Secretary is a
    viewer; in GP the Revenue Inspectors hold the mandal and nobody is a viewer,
-   because a Gram Panchayat Officer is not an officer being evaluated — he is
+   because a Gram Palana Officer is not an officer being evaluated — he is
    the officer keeping the register. */
 const districtRole_ = r => tenant_().district.indexOf(String(r || '').toUpperCase()) >= 0;
 const mandalRole_   = r => tenant_().mandal.indexOf(String(r || '').toUpperCase()) >= 0;
@@ -1581,7 +1581,7 @@ function gpRoll_(){
 /* ----------------------------------------------------------------------------
  * THE PLACE OF DUTY.
  *
- * Every revenue village on the GP register carries its GP office on the roll,
+ * Every revenue village on the GP register carries its village office on the roll,
  * so for the first time a mark has something to be measured against. Read by
  * header, like every other column on this register, and empty where the roll
  * has nothing — a village with no coordinate yields no distance rather than a
@@ -3191,7 +3191,7 @@ function doGet(e){
     /* WHICH REGISTER THIS ADDRESS SERVES. Both projects run the same bytes, so
        an ok:true proves only that SOMETHING answered — it would say exactly the
        same from a GP address whose TENANT property was never set, and the first
-       Gram Panchayat Officer to sign in would land in the sanitation register.
+       Gram Palana Officer to sign in would land in the sanitation register.
        The deploy checks this by name. It reveals nothing: the name of the
        register is on the sign-in page. */
     return json_({ ok:true, stamp:'SJGP-6.9-diag12', tenant:tenant_().key, tenantName:tenant_().name,
@@ -3355,7 +3355,7 @@ function doGet(e){
        and by nobody else: it raises no reminder, no notice, no debit and no
        lock. A distant mark is still a mark. */
     const centres = mandalCentres_(histFix);
-    /* the GP offices, and which of them each officer holds — empty on a
+    /* the village offices, and which of them each officer holds — empty on a
        register whose roll carries no coordinates, which is SJGP's */
     const places = tenant_().placeOfDuty ? gpPlaces_() : null;
     const dutyGps = {};
@@ -4756,7 +4756,7 @@ function doPost(e){
    *      strips out again — so this is not a standing door, it is one that
    *      exists only in the minutes after a provisioning run;
    *   2. the row must be a COLLECTOR. It can never be pointed at an officer,
-   *      so it cannot be used to take over a Gram Panchayat Officer's account
+   *      so it cannot be used to take over a Gram Palana Officer's account
    *      and mark attendance in his name;
    *   3. it resets one row and touches nothing else.
    *
@@ -5008,7 +5008,7 @@ function doPost(e){
   /* leave — an applicant may only write his own, and only the Collector may decide */
   if(b.kind === 'leave'){
     /* NAME THE ROLES OF THIS REGISTER, not the other one's. Hardcoded, this
-       told a Gram Panchayat Officer that leave is applied for by the MPO, the
+       told a Gram Palana Officer that leave is applied for by the MPO, the
        Panchayat Secretary and the MPDO — three roles that do not exist on his
        register at all. */
     if(!canApplyLeave_(u.role))

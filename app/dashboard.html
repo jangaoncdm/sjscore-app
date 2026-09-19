@@ -1221,7 +1221,7 @@ const $=s=>document.querySelector(s);
  * on its own server (rule 6).
  *
  * THE SWITCH APPEARS ONLY WHEN THERE IS SOMETHING TO SWITCH TO. Until the
- * Gram Panchayat register exists and the Collector has signed into it once on
+ * Gram Palana register exists and the Collector has signed into it once on
  * this device, there is no second store and no control — a dead option that
  * can only explain itself is worse than no option.
  *
@@ -1230,14 +1230,14 @@ const $=s=>document.querySelector(s);
  * Panchayat register's figures believing they are the sanitation register's is
  * the one mistake this control can cause, so it is made hard to make.
  * ========================================================================== */
-/* Beyond this, a mark is far enough from the officer's own GP office to be
+/* Beyond this, a mark is far enough from the officer's own village office to be
    worth the Collector's eye. It is a READING and not a rule: nothing is
    raised by it, and the officer may be at a mandal meeting, at the
    Collectorate or on tour (rule 10). */
 const FAR_DUTY_KM = 3;
 const TENANCY = {
   SJGP:{ key:'SJGP', name:'Swachh Jangaon', full:'Swachh Jangaon Gram Panchayat', store:'sjf5' },
-  GP:  { key:'GP',   name:'Gram Panchayat', full:'Gram Panchayat Register',       store:'sjgp-gp1' }
+  GP:  { key:'GP',   name:'Gram Palana',    full:'Gram Palana Register',       store:'sjgp-gp1' }
 };
 let TVIEW='SJGP';
 function tenantSession(k){
@@ -1277,7 +1277,7 @@ function paintTenant(){
     sel.onchange=()=>{ if(!useTenant(sel.value)) sel.value=TVIEW; };
   }
   document.body.dataset.tenant = TVIEW.toLowerCase();
-  /* THE RAIL SHOWS WHAT THE REGISTER HAS. The Gram Panchayat register takes no
+  /* THE RAIL SHOWS WHAT THE REGISTER HAS. The Gram Palana register takes no
      village evaluation and carries no filing schedule; its server refuses both
      at the door, so a rail item for either could only lead to an empty screen. */
   const off = TVIEW==='GP' ? ['villages','schedule','gpdp'] : [];
@@ -1516,7 +1516,7 @@ function analyse(j){
   const by10=j.today.present.filter(r=>istHour(r.at)<10).length;
   /* WHAT A DISTRICT'S HEALTH IS MADE OF, on the register in front of you.
      Three of these five are the 100-mark evaluation — coverage, scores and red
-     flags. The Gram Panchayat register does not take one, so on that register
+     flags. The Gram Palana register does not take one, so on that register
      they are not zero, they are ABSENT: scored as nothing filed they would
      drag the health figure down for work nobody was asked to do, and named in
      the legend they would put "Red flags" on a screen that has no flags to
@@ -2129,7 +2129,7 @@ function vOverview(j,A){
   if(TVIEW==='GP'){
     /* THE TILES OF THE REGISTER IN FRONT OF YOU. Villages evaluated, the
        district average and the red flags are the 100-mark evaluation, which
-       the Gram Panchayat register does not take — drawn here they read
+       the Gram Palana register does not take — drawn here they read
        "0 of 0", "—" and "0", which is not a district doing badly, it is three
        figures for work nobody was asked to do. What that register HAS that the
        other has not is the place of duty, so that is what its third tile says.
@@ -2137,11 +2137,11 @@ function vOverview(j,A){
     const marks=(j.today.present||[]).filter(r=>r.dutyKm!=null);
     const far=marks.filter(r=>r.dutyKm>FAR_DUTY_KM).length;
     const near=marks.length-far;
-    h+=kpi('Marked at the GP office',IC.h,near,'',
+    h+=kpi('Marked at the village office',IC.h,near,'',
       marks.length?near+' of '+marks.length+' measured · within '+FAR_DUTY_KM+' km':'no located marks yet');
     h+=kpi('Marked away from it',IC.f,far,'',
       far?'a distance, not a default — read on the facts':'none today','view:attendance');
-    h+=kpi('Revenue villages',IC.h,(j.totals&&j.totals.gps)||0,'','on the Gram Panchayat roll');
+    h+=kpi('Revenue villages',IC.h,(j.totals&&j.totals.gps)||0,'','on the Gram Palana roll');
   } else {
     h+=kpi('Villages evaluated',IC.h,A.filed,'','of '+A.cov.t+' · tap to open','view:villages');
     h+=kpi('District average',IC.s,A.avg==null?'—':A.avg,delta(A.avg,A.prevAvg,true),'vs last month','view:villages');

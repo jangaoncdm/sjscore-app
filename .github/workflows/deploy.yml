@@ -64,7 +64,7 @@ jobs:
             echo "::error::config.js is missing. Copy app/config.example.js to config.js once, with the district's /exec address."
             exit 1
           fi
-      - name: Publish the Gram Panchayat app to gp/, leaving its config.js alone
+      - name: Publish the Gram Palana app to gp/, leaving its config.js alone
         # THE SECOND REGISTER IS THE SAME BYTES AT A SECOND ADDRESS. Its
         # config.js says which register it is and where its server lives, and
         # like the root one it is never carried by a publish. The console is
@@ -76,13 +76,23 @@ jobs:
         # of app that answers to no server is worse than no folder.
         run: |
           if [ ! -f gp/config.js ]; then
-            echo "gp/config.js does not exist yet — the Gram Panchayat app is not published. See DEPLOY-GP.md."
+            echo "gp/config.js does not exist yet — the Gram Palana app is not published. See DEPLOY-GP.md."
             exit 0
           fi
           mkdir -p gp
-          for f in index.html app.js sw.js manifest.webmanifest privacy.html; do
+          for f in index.html app.js sw.js; do
             [ -f "app/$f" ] && cp "app/$f" "gp/$f" && echo "published gp/$f"
           done
+          # THE MANIFEST AND THE PRIVACY PAGE ARE THIS REGISTER'S OWN, and are
+          # the two files that are NOT the same bytes. Publishing the
+          # sanitation manifest here put both registers on the identical
+          # "id": in.jangaon.sjscore -- an id is resolved against the ORIGIN
+          # and not the folder, so the browser saw one installable app, on the
+          # one device that has to hold both: the Collector's. It also named
+          # the Gram Palana app "SJGP" on the officer's home screen and
+          # described it as a sanitation evaluation it does not take.
+          cp app/manifest-gp.webmanifest gp/manifest.webmanifest && echo "published gp/manifest.webmanifest"
+          cp app/privacy-gp.html         gp/privacy.html        && echo "published gp/privacy.html"
           [ -d app/icons ] && cp -r app/icons gp/ || true
       - name: Commit whatever changed
         # The commit message travels as an environment variable, never pasted
@@ -102,7 +112,7 @@ jobs:
   # is no build to get wrong, and no way for a GP-shaped file to reach the
   # sanitation project. This job does nothing at all until GP_SCRIPT_ID is set.
   backend-gp:
-    name: Push and deploy the Gram Panchayat backend
+    name: Push and deploy the Gram Palana backend
     needs: guard
     runs-on: ubuntu-latest
     if: ${{ vars.GP_SCRIPT_ID != '' }}
@@ -118,10 +128,10 @@ jobs:
         run: |
           # `clasp push --force` DELETES REMOTE FILES THAT ARE NOT PRESENT
           # LOCALLY. Pushing rootDir: backend therefore removed Tenant.gs from
-          # the Gram Panchayat project on the first routine deploy after it was
+          # the Gram Palana project on the first routine deploy after it was
           # provisioned, and the register quietly reverted to reporting itself
           # as SJGP — which would have switched the show-cause ladder ON for
-          # Gram Panchayat Officers, who are expressly not under it.
+          # Gram Palana Officers, who are expressly not under it.
           #
           # The verify step below caught it, which is the only reason this is a
           # footnote rather than an incident. Every deploy now re-assembles the
@@ -142,7 +152,7 @@ jobs:
           MSG: ${{ github.event.head_commit.message }}
         run: |
           clasp deploy -i "${{ vars.GP_DEPLOYMENT_ID }}" -d "auto ${{ github.run_number }}: $(printf '%s' "$MSG" | head -n 1 | cut -c1-120)"
-      - name: Confirm the Gram Panchayat register is answering, AND that it knows which register it is
+      - name: Confirm the Gram Palana register is answering, AND that it knows which register it is
         # The stamp alone is not enough here. Both projects run the same bytes,
         # so a diag that says ok:true proves only that SOMETHING answered — it
         # would say exactly the same if TENANT had never been set and the GP
@@ -161,7 +171,7 @@ jobs:
           # silence from it is a real fault.
           CODE=$(curl -sL -o /tmp/gp.out -w '%{http_code}' --max-time 45 "$URL" || echo 000)
           if [ "$CODE" = "403" ] && grep -qi 'accounts.google\|ppConfig\|permission' /tmp/gp.out; then
-            echo "::warning::The Gram Panchayat register is deployed but its scopes have not been approved yet, so it answers 403. Open https://script.google.com/d/${{ vars.GP_SCRIPT_ID }}/edit , run any function once and accept the permissions. Nothing else is outstanding; re-run this workflow afterwards."
+            echo "::warning::The Gram Palana register is deployed but its scopes have not been approved yet, so it answers 403. Open https://script.google.com/d/${{ vars.GP_SCRIPT_ID }}/edit , run any function once and accept the permissions. Nothing else is outstanding; re-run this workflow afterwards."
             exit 0
           fi
           for i in 1 2 3 4 5 6; do
@@ -169,7 +179,7 @@ jobs:
             OUT=$(curl -sL --max-time 45 "$URL" || true)
             if echo "$OUT" | grep -q '"ok":true'; then
               if echo "$OUT" | grep -q '"tenant":"GP"'; then
-                echo "The Gram Panchayat register answered on attempt $i, and knows it is GP."
+                echo "The Gram Palana register answered on attempt $i, and knows it is GP."
                 exit 0
               fi
               echo "::error::That address answered, but it does NOT report tenant GP. Set the Script Property TENANT=GP on the GP project before anyone signs in."
@@ -178,7 +188,7 @@ jobs:
             fi
             echo "attempt $i: not yet — $(echo "$OUT" | tr -d '\n' | head -c 100)"
           done
-          echo "::error::The Gram Panchayat register did not answer with ok:true after deploying."
+          echo "::error::The Gram Palana register did not answer with ok:true after deploying."
           exit 1
 
   backend:

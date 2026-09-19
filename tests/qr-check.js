@@ -1,6 +1,6 @@
 /* DOES THE SQUARE ACTUALLY SCAN?
 
-   134 officers install the Gram Panchayat register by photographing a QR code.
+   134 officers install the Gram Palana register by photographing a QR code.
    A wrong one cannot be spotted by looking — a QR is unreadable to a person by
    design — and the failure lands on 134 people at once, on the morning they
    are told to install it.
@@ -66,7 +66,7 @@ function turn(img){
 }
 
 const CASES = [
-  { what: 'the Gram Panchayat app', text: 'https://jangaoncdm.github.io/sjscore-app/gp/' },
+  { what: 'the Gram Palana app', text: 'https://jangaoncdm.github.io/sjscore-app/gp/' },
   { what: 'the sanitation app',     text: 'https://jangaoncdm.github.io/sjscore-app/' },
   { what: 'a short address',        text: 'https://x.in/' },
   { what: 'a long address',         text: 'https://jangaoncdm.github.io/sjscore-app/gp/index.html?from=collectorate&v=2' },

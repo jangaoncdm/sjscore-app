@@ -1,7 +1,7 @@
-# The Gram Panchayat register — putting it up
+# The Gram Palana register — putting it up
 
 Ordered 18.09.2026. A second register for the **134 officers of the Gram
-Panchayat domain** — 115 Gram Panchayat Officers across 180 revenue villages,
+Panchayat domain** — 115 Gram Palana Officers across 180 revenue villages,
 and 19 Revenue Inspectors — carrying attendance, leave, the geo-tagged mark,
 the map and the daily report.
 
@@ -19,11 +19,11 @@ Everything below is done in a browser. About forty minutes.
 ## Before you start — three things to know
 
 **1. The show-cause ladder is built and switched off.** By your direction, a
-Gram Panchayat Officer who does not mark draws no notice, no debit and no lock.
+Gram Palana Officer who does not mark draws no notice, no debit and no lock.
 The machinery is in place; `TENANTS.GP.sanction` in `Code.gs` turns it on, and
 that is your written order, not a code edit. Suite 26 holds it off.
 
-**2. Two of the 180 GP office coordinates are wrong** and are written blank
+**2. Two of the 180 village office coordinates are wrong** and are written blank
 rather than guessed at — **Salvapur** (longitude `7852556`) and **Kalvalally**
 (the latitude copied into the longitude). Those two villages will show no
 distance until the district corrects them. Everything else measures.
@@ -39,7 +39,7 @@ from the Admin menu after step 4 and it will tell you what is left today.
 
 ## 1. Make the Sheet
 
-Drive ▸ New ▸ Google Sheets. Name it **SJGP — Gram Panchayat register**.
+Drive ▸ New ▸ Google Sheets. Name it **SJGP — Gram Palana register**.
 Leave it empty; the tabs make themselves.
 
 ## 2. Put the roster in it
@@ -57,7 +57,7 @@ and this repository is public:
 | file | what it is |
 |---|---|
 | `seed-Users.csv` | 134 officers, one row each, villages joined in the GP column |
-| `seed-GPs.csv` | 180 revenue villages with their GP office coordinates |
+| `seed-GPs.csv` | 180 revenue villages with their village office coordinates |
 | `seed-report.txt` | **read this** — every row it could not read, and every spelling it changed |
 
 In the new Sheet: File ▸ Import ▸ Upload ▸ `seed-Users.csv` ▸ *Insert new
@@ -177,13 +177,13 @@ five seconds and it is the only test done on the paper itself.
 
 ## What each register does, side by side
 
-| | sanitation (SJGP) | Gram Panchayat (GP) |
+| | sanitation (SJGP) | Gram Palana (GP) |
 |---|---|---|
 | officers | ~280 PS / MPO / MSO / MPDO / DPO / DLPO | 134 GPO / MRI / ARI |
 | attendance, geo-tagged | yes | yes |
 | leave | yes | yes |
 | map, daily report | yes | yes |
-| **distance from the place of duty** | **no — the roll has no coordinates** | **yes — every village carries its GP office** |
+| **distance from the place of duty** | **no — the roll has no coordinates** | **yes — every village carries its village office** |
 | 100-mark village evaluation | yes | **refused at the door** |
 | filing schedule | yes | **refused at the door** |
 | show-cause ladder, CL debit | yes | **built, switched off** |

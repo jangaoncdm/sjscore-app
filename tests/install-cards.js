@@ -1,6 +1,6 @@
 /* THE INSTALL CARD — what an officer is actually handed.
 
-   134 Gram Panchayat Officers and Revenue Inspectors, and ~280 on the
+   134 Gram Palana Officers and Revenue Inspectors, and ~280 on the
    sanitation register, install by photographing a square. This writes one A5
    card per register: the QR, the address in type large enough to key in when
    the camera will not focus, and the three steps that follow.
@@ -31,8 +31,8 @@ const OUT = process.argv[2] || path.join(__dirname, '..', 'Info', 'install');
 
 const CARDS = [
   { file: 'install-gp.html',
-    tag: 'Gram Panchayat Register',
-    who: 'Gram Panchayat Officers · Mandal and Assistant Revenue Inspectors',
+    tag: 'Gram Palana Register',
+    who: 'Gram Palana Officers · Mandal and Assistant Revenue Inspectors',
     url: 'https://jangaoncdm.github.io/sjscore-app/gp/',
     accent: '#0F766E',
     note: 'Attendance with the place of duty, leave, and the day’s report.' },

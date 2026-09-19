@@ -1,5 +1,5 @@
 /* A QR ENCODER, BECAUSE A CODE NOBODY CAN CHECK IS WORSE THAN NO CODE.
-   134 officers install the Gram Panchayat register by photographing a square.
+   134 officers install the Gram Palana register by photographing a square.
    If that square is wrong they cannot install it, and nobody finds out from
    looking at it — a QR is unreadable to a person by design. So this is written
    here, in the open, and tests/qr-check.js decodes what it produces with an

@@ -1,13 +1,13 @@
-/* THE GRAM PANCHAYAT REGISTER — a second tenant, ordered 18.09.2026.
+/* THE GRAM PALANA REGISTER — a second tenant, ordered 18.09.2026.
 
    The same Code.gs serves two registers. SJGP is the sanitation register that
-   has run since July; GP is the Gram Panchayat register — 115 Gram Panchayat
+   has run since July; GP is the Gram Palana register — 115 Gram Palana
    Officers across 180 revenue villages, and 19 Revenue Inspectors.
 
    THEY DO NOT SHARE A SPREADSHEET, AND THAT IS THE WHOLE OF THE ISOLATION.
    There is no Tenant column and there must not be one: a logical filter is the
    wrong boundary for a register that issues notices under the Conduct Rules,
-   because one missed filter puts a Gram Panchayat Officer's absence into a
+   because one missed filter puts a Gram Palana Officer's absence into a
    Panchayat Secretary's show-cause notice. This suite cannot test two
    spreadsheets against each other — that is the point, there is nothing
    between them — so what it holds instead is that the SWITCH is real: that the
@@ -90,7 +90,7 @@ function tokenFor(env, phone, pin){
 }
 
 module.exports = {
-  name: 'the Gram Panchayat register (a second tenant, isolated by its Sheet)',
+  name: 'the Gram Palana register (a second tenant, isolated by its Sheet)',
   run(t){
     /* ---- 1. THE DEFAULT IS THE REGISTER THAT ALREADY EXISTS ---- */
     {
@@ -115,6 +115,28 @@ module.exports = {
       t.eq(e.ctx.tenant_().key, 'GP', JSON.stringify(good) + ' selects the GP register');
     });
 
+    /* ---- 1a-ii. AND IT IS CALLED BY ITS RIGHT NAME ----
+       GP is Gram PALANA — the Revenue department's officer — and not Gram
+       Panchayat. The whole register was built and shipped under the wrong
+       expansion, and it was read back from the district in those words. The
+       two names differ by one word and the abbreviation is identical, so
+       nothing but an assertion will keep them apart: a Gram Panchayat is a
+       real thing on the OTHER register — the roll, the scorecard, the
+       development plan — and that is exactly why the wrong word looked
+       right everywhere it appeared. */
+    {
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e.props.TENANT = 'GP';
+      const nm = String(e.ctx.tenant_().name || '');
+      t.ok(/Gram Palana/i.test(nm), 'the GP register names itself Gram Palana — "' + nm + '"');
+      t.ok(!/Panchayat/i.test(nm), 'and never Gram Panchayat, which is the other register’s');
+      t.eq(e.ctx.tenant_().roles.indexOf('GPO') >= 0, true, 'GPO is a role on it');
+      /* and the sanitation register keeps its own name, which IS a Panchayat one */
+      const s2 = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      t.ok(/Gram Panchayat/i.test(String(s2.ctx.tenant_().name || '')),
+        'while the sanitation register is still Swachh Jangaon Gram Panchayat');
+    }
+
     /* ---- 1b. THE SPREADSHEET MAY SAY WHICH REGISTER IT IS ----
        A Script Property has to be typed in by a person, in a browser, on the
        day the register is created; a register that cannot be stood up without
@@ -124,7 +146,7 @@ module.exports = {
     {
       const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
       e.mkSheet('Config', ['Key','Value'], [{ Key:'TENANT', Value:'GP' }]);
-      t.eq(e.ctx.tenant_().key, 'GP', 'a Config tab naming GP selects the Gram Panchayat register');
+      t.eq(e.ctx.tenant_().key, 'GP', 'a Config tab naming GP selects the Gram Palana register');
     }
     {
       /* THE PROPERTY STILL WINS, so nothing already standing moves */
@@ -148,7 +170,7 @@ module.exports = {
     /* ---- 1b-ii. AND IT WRITES DOWN WHAT IT IS ----
        The overlay is a FILE, and `clasp push --force` deletes remote files not
        present locally. One routine deploy that forgot to assemble it took the
-       Gram Panchayat register's identity away on the live system: it reverted
+       Gram Palana register's identity away on the live system: it reverted
        to reporting itself as the sanitation register, which would have
        switched the show-cause ladder ON for officers expressly not under it.
        A file can be pushed away; the spreadsheet is the register. */
@@ -246,7 +268,7 @@ module.exports = {
       t.eq(good.ok, true, 'the right key on an empty register seeds it');
       t.eq(good.officers, 2, 'two officers');
       t.eq(good.villages, 2, 'two villages');
-      t.eq(good.tenant, 'GP', 'into the Gram Panchayat register');
+      t.eq(good.tenant, 'GP', 'into the Gram Palana register');
       t.eq(e.sheets['Users'].rows.length, 3, 'the roll is on the Users tab');
       t.eq(e.sheets['GPs'].rows.length, 3, 'and the villages on GPs');
       /* the officer can then actually sign in — the seeding is not cosmetic */
@@ -298,7 +320,7 @@ module.exports = {
       t.eq(e.get('dashboard', { token:tok }).ok, true, 'and the console opens for him');
       const gpTok = e.post({ kind:'login', u:'9111100001',
         p:e.ctx.dayPin_('9111100001') }).token;
-      t.ok(!!gpTok, 'and a Gram Panchayat Officer can sign in with his own');
+      t.ok(!!gpTok, 'and a Gram Palana Officer can sign in with his own');
 
       /* CLOSED FOR GOOD. It cannot be used to re-issue PINs on a working
          register, which would lock 134 people out at once. */
@@ -409,7 +431,7 @@ module.exports = {
     }
 
     /* ---- 1h. WHAT THIS REGISTER DOES NOT ASK FOR ----
-       Reported from the field on the first day: a Gram Panchayat Officer was
+       Reported from the field on the first day: a Gram Palana Officer was
        being chased for a Gram Panchayat Development Plan. It was never asked
        of this register, and a register that calls for a document nobody wants
        teaches its officers to ignore what it does ask for. */
@@ -418,7 +440,7 @@ module.exports = {
       e.mkSheet('Config', ['Key','Value'], [{ Key:'TENANT', Value:'GP' }]);
       seedLike(e);
       const tok = tokenFor(e, '9111100001', '2222');
-      t.eq(e.eval("gpdpDue_('GPO')"), false, 'no plan is called for from a Gram Panchayat Officer');
+      t.eq(e.eval("gpdpDue_('GPO')"), false, 'no plan is called for from a Gram Palana Officer');
       t.eq(e.eval("gpdpDue_('MRI')"), false, 'nor from a Revenue Inspector');
       const reg = e.get('gpdp', { token:tok });
       t.eq(reg.due, false, 'the register tells the app it is not due');
@@ -487,7 +509,7 @@ module.exports = {
     t.eq(env.eval("mandalRole_('ARI')"), true, 'and so does his assistant');
     t.eq(env.eval("mandalRole_('MPDO')"), false, 'the MPDO is not on this register');
     t.eq(env.eval("viewerRole_('GPO')"), false,
-      'NOBODY IS A VIEWER HERE — a Gram Panchayat Officer is not the officer being evaluated, he keeps the register');
+      'NOBODY IS A VIEWER HERE — a Gram Palana Officer is not the officer being evaluated, he keeps the register');
     t.eq(env.eval("viewerRole_('PS')"), false, 'and the Secretary does not exist on it');
     t.eq(env.eval("attExempt_('GPO')"), false, 'a GPO is asked to mark in');
     t.eq(env.eval("attExempt_('MRI')"), false, 'so is a Revenue Inspector');
@@ -501,7 +523,7 @@ module.exports = {
     const cdm  = tokenFor(env, '9000000001', '1111');
     const gpo1 = tokenFor(env, '9111100001', '2222');
     const mri  = tokenFor(env, '9111100010', '3333');
-    t.ok(!!gpo1, 'a Gram Panchayat Officer can sign in');
+    t.ok(!!gpo1, 'a Gram Palana Officer can sign in');
     t.eq(env.post({ kind:'login', u:'9111100001', p:'2222' }).user.role, 'GPO', 'and is greeted as a GPO');
 
     /* ---- 3. THE LADDER IS BUILT AND SWITCHED OFF ---- */
@@ -599,7 +621,7 @@ module.exports = {
     /* ---- THE ADDRESS SAYS WHICH REGISTER IT IS ----
        Both projects run the same bytes. An ok:true proves only that something
        answered; it would say exactly the same from a GP address whose TENANT
-       property was never set, and the first Gram Panchayat Officer to sign in
+       property was never set, and the first Gram Palana Officer to sign in
        would land in the sanitation register. The deploy checks the name, so
        the name has to be there. */
     const dg = env.get('diag', {});
