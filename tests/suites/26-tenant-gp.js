@@ -262,6 +262,55 @@ module.exports = {
       t.ok(audit.indexOf('9111100001') < 0, 'and does NOT record the numbers it seeded');
     }
 
+    /* ---- 1e. THE FIRST PINS, ONCE, ON A REGISTER NOBODY CAN OPEN ----
+       A seeded register is still a register nobody can sign in to: names and
+       numbers, no PIN against any of them — and the console action that resets
+       a PIN is itself behind a sign-in. */
+    {
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e.eval('var BOOTSTRAP_KEY = "k";');
+      e.mkSheet('Config', ['Key','Value'], [{ Key:'TENANT', Value:'GP' }]);
+      e.mkSheet('Users', ['Phone','Name','Role','Mandal','GP','Email','InitPin','Hash','Active'], [
+        { Phone:'9111100001', Name:'K. Surya Prakash', Role:'GPO', Mandal:'Bachannapeta', GP:'Bachannapet', Active:'TRUE' },
+        { Phone:'9111100010', Name:'T. Lokesh Kumar', Role:'MRI', Mandal:'Bachannapeta', GP:'', Active:'TRUE' }]);
+
+      t.eq(e.post({ kind:'issuePins', key:'wrong' }).ok, false, 'a wrong key issues nothing');
+
+      const r = e.post({ kind:'issuePins', key:'k',
+        collector:{ phone:'9000000001', name:'Sandeep Kumar Jha' } });
+      t.eq(r.ok, true, 'the right key on a register nobody can open issues the first PINs');
+      t.eq(r.issued, 3, 'one for each officer, and one for the Collector just added');
+      t.eq(r.collectorAdded, true, 'the Collector was not on the roll and now is');
+      t.ok(!!r.collectorPin, 'and his PIN is returned in the answer to the call that made it');
+
+      /* and they actually work */
+      const tok = e.post({ kind:'login', u:'9000000001', p:r.collectorPin }).token;
+      t.ok(!!tok, 'the Collector can sign in with it');
+      t.eq(e.get('dashboard', { token:tok }).ok, true, 'and the console opens for him');
+      const gpTok = e.post({ kind:'login', u:'9111100001',
+        p:e.ctx.dayPin_('9111100001') }).token;
+      t.ok(!!gpTok, 'and a Gram Panchayat Officer can sign in with his own');
+
+      /* CLOSED FOR GOOD. It cannot be used to re-issue PINs on a working
+         register, which would lock 134 people out at once. */
+      const again = e.post({ kind:'issuePins', key:'k' });
+      t.eq(again.ok, false, 'it refuses the moment one officer can sign in');
+      t.contains(again.error, 'reset one at a time', 'and says where a reset belongs instead');
+
+      /* the log records that PINs were issued, never a PIN */
+      const audit = JSON.stringify((e.sheets['Audit'] || { rows:[] }).rows);
+      t.contains(audit, 'ISSUE_PINS', 'the Audit tab records it');
+      t.ok(audit.indexOf(r.collectorPin) < 0, 'and does NOT record the PIN');
+    }
+    {
+      /* the sanitation register has no key and never will */
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e.mkSheet('Users', ['Phone','Name','Role','Mandal','GP','Email','InitPin','Hash','Active'],
+        [{ Phone:'9000000001', Name:'X', Role:'COLLECTOR', Active:'TRUE' }]);
+      t.eq(e.post({ kind:'issuePins', key:'anything' }).ok, false,
+        'a register with no key issues nothing, whatever is posted to it');
+    }
+
     /* ---- 2. THE SHAPE FOLLOWS THE TENANT ---- */
     const env = mock.load({ now:'2026-09-21T09:00:00+05:30' });
     const c = env.ctx;

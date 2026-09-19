@@ -4620,6 +4620,90 @@ function doPost(e){
     return json_({ ok:true, tenant:tenant_().key, officers:users.length, villages:gps.length });
   }
 
+  /* ==========================================================================
+   * ISSUING THE FIRST PINS, ONCE.
+   *
+   * A seeded register is still a register nobody can open: the roll has names
+   * and numbers but no PIN against any of them, so not one officer — and not
+   * the Collector — can sign in. That is a chicken and an egg, because the
+   * console action that resets a PIN is itself behind a sign-in.
+   *
+   * IT CAN ONLY EVER RUN ON A REGISTER NOBODY CAN SIGN IN TO. Three guards:
+   *
+   *   1. the key baked into this project alone, as the seeding uses;
+   *   2. NOT ONE row may already carry a PIN. The moment a single officer can
+   *      sign in, this is dead for good — so it cannot be used to re-issue
+   *      PINs on a working register, which would lock 134 people out at once;
+   *   3. it adds a Collector only if that number is not already on the roll,
+   *      because one number on two rows is what makes the app greet a man with
+   *      somebody else's name.
+   *
+   * The PINs it issues are the day-derived ones every other part of this
+   * register uses, so a second run on the same day would be the same answer
+   * anyway. The Collector's is returned in the answer to the call that made
+   * it, shown once, and written nowhere — the Audit tab records that PINs were
+   * issued and to how many, never the PINs.
+   * ======================================================================== */
+  if(b.kind === 'issuePins'){
+    let key = '';
+    try{ if(typeof BOOTSTRAP_KEY !== 'undefined') key = String(BOOTSTRAP_KEY || ''); }catch(e){}
+    if(!key) return json_({ ok:false, error:'This register issues its PINs by hand.' });
+    if(String(b.key || '') !== key) return json_({ ok:false, error:'auth' });
+
+    const t = uidx_();
+    if(t.ix.hash < 0) return json_({ ok:false, error:'The Users tab has no Hash column.' });
+    let already = 0;
+    {
+      const v0 = t.sh.getDataRange().getValues();
+      for(let i = 1; i < v0.length; i++) if(String(v0[i][t.ix.hash] || '').trim()) already++;
+    }
+    if(already) return json_({ ok:false, error:'This register already has ' + already +
+      ' officer(s) who can sign in. PINs are reset one at a time, from the console.' });
+
+    const lock = LockService.getScriptLock();
+    try{ lock.waitLock(30000); }catch(e){ return json_({ ok:false, error:'busy — try again' }); }
+    let made = 0, collectorPin = '', collectorAdded = false;
+    try{
+      /* the Collector, if he is not on the roll already */
+      const want = phone10_((b.collector && b.collector.phone) || '');
+      if(want){
+        const vv = t.sh.getDataRange().getValues();
+        let seen = false;
+        for(let i = 1; i < vv.length; i++) if(phone10_(vv[i][t.ix.phone]) === want) seen = true;
+        if(!seen){
+          const ush = sheet_('Users', U_HEAD), um = headMap_(ush, U_HEAD);
+          const row = new Array(um.width).fill('');
+          const put = (k, val) => { if(um.ix[k] >= 0) row[um.ix[k]] = val; };
+          put('Phone', "'" + want); put('Name', String((b.collector && b.collector.name) || 'Collector'));
+          put('Role', 'COLLECTOR'); put('Mandal', ''); put('GP', '');
+          put('Email', String((b.collector && b.collector.email) || '')); put('Active', 'TRUE');
+          ush.appendRow(row);
+          collectorAdded = true;
+        }
+      }
+      /* and a PIN against every row that has none */
+      const t2 = uidx_(), rng = t2.sh.getDataRange(), v = rng.getValues();
+      for(let i = 1; i < v.length; i++){
+        const ph = phone10_(v[i][t2.ix.phone]);
+        if(ph.length !== 10) continue;
+        if(String(v[i][t2.ix.hash] || '').trim()) continue;
+        const pin = dayPin_(ph);
+        v[i][t2.ix.hash] = hash_(ph, pin);
+        if(t2.ix.initpin >= 0) v[i][t2.ix.initpin] = '';
+        if(want && ph === want) collectorPin = pin;
+        made++;
+      }
+      rng.setValues(v);
+    } finally { lock.releaseLock(); }
+
+    admAudit_('ISSUE_PINS', tenant_().key, made + ' PIN(s) issued' +
+      (collectorAdded ? ', and a Collector added to the roll' : '') + '. No PIN is recorded here.');
+    return json_({ ok:true, tenant:tenant_().key, issued:made,
+      collectorAdded:collectorAdded, collectorPin:collectorPin,
+      note:'Every officer’s PIN is the one this register derives for his number today. ' +
+           'This endpoint is now closed for good.' });
+  }
+
   if(b.kind === 'login'){
     const u = findByPhone_(b.u || '');
     if(!u || !u.active) return json_({ ok:false, error:'This number is not registered. Contact the District Panchayat Office.' });
