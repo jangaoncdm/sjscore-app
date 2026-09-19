@@ -479,6 +479,32 @@ function wipeOfficerStore(){
      would take the CURRENT officer's photographs with it. */
   saveNow();
 }
+/* One officer's number written three ways is one officer (rule 4). */
+function own10(v){ return String(v == null ? '' : v).replace(/\D/g, '').slice(-10); }
+
+/* IS THERE ANYBODY'S WORK ON THIS HANDSET? Read wide, not narrowly: an
+   unattributable store is only safe to keep if it holds nothing at all, and a
+   leave application or a queued receipt belongs to a man just as a mark does. */
+function storeHasWork(){
+  const n = o => o ? Object.keys(o).length : 0;
+  const a = x => (x && x.length) || 0;
+  return !!(n(DB.att) || n(DB.records) || a(DB.leave) || a(DB.cache) ||
+            n(DB.schedDone) || a(DB.schedAckQ) || n(DB.advDone) || a(DB.advAckQ) ||
+            a(DB.noticeAckQ) || n(DB.noticeDone) || (DB.gpdp && DB.gpdp.mine));
+}
+
+/* THE STORE OF A SERVING OFFICER IS HIS, and is adopted the first time this
+   runs so that the sweep above can never catch him. Everybody in the district
+   was signed in when this shipped; without this, the next person to open the
+   app would have had his own unsent work cleared for want of a label nothing
+   had ever written. */
+function officerOwn(){
+  try{
+    const p = own10(((DB.session || {}).user || {}).phone || '');
+    if(p && own10(DB.who) !== p){ DB.who = p; saveNow(); }
+  }catch(e){}
+}
+
 function endSession(){ DB.session=null; saveNow(); gate(); }
 
 /* ============================================================
@@ -649,19 +675,38 @@ async function signIn(){
          So a different number wipes what belonged to the last one. The same
          number signing back in keeps his own unsynced work, which is the
          whole reason it is held on the phone. */
-      const lastWho = DB.who || '';
-      if(lastWho && lastWho !== phone){
+      /* AND A HANDSET THAT NEVER RECORDED AN OWNER IS NOT THEREFORE HIS.
+         The first cut of this only wiped when it already knew whose the store
+         was — but a handset written by the app as it stood before this fix
+         carries no owner at all, because nothing used to write one. So the
+         ONE switch that mattered, the first one after the update, went
+         through unguarded, and it was reported again in the same words:
+         signed in as another user, showing attendance marked. Every device in
+         the district was in exactly that state on the day this shipped.
+         Where the store names nobody and yet holds somebody's work, the app
+         cannot prove it is this officer's — and on this register the wrong
+         way to be wrong is to credit him with a mark the district has no row
+         for. So it is cleared, and he is told why. He loses at most his own
+         unsent work; the alternative is another man's mark standing in his
+         name. Nobody serving is caught by this: officerOwn() adopts the store
+         for whoever is already signed in, at every start. */
+      const lastWho = own10(DB.who || ((DB.session || {}).user || {}).phone || '');
+      const unowned = !lastWho && storeHasWork();
+      if(unowned || (lastWho && lastWho !== own10(phone))){
         const lostRecords = Object.values(DB.records || {}).filter(x => x.sync !== 'synced').length;
         const lostAtt = Object.values(DB.att || {}).filter(a => a.sync !== 'synced').length;
         wipeOfficerStore();
-        if(lostRecords || lostAtt)
-          toast('This phone was signed in as another officer. ' +
-                (lostRecords ? lostRecords + ' unsynced inspection(s) ' : '') +
-                (lostRecords && lostAtt ? 'and ' : '') +
-                (lostAtt ? lostAtt + ' unsent mark(s) ' : '') +
-                'of his could not be carried over and were cleared.', 9000);
+        toast(unowned
+          ? ('This phone was carrying work from an earlier sign-in that it could not attribute, ' +
+             'so it has been cleared. Nothing of yours is affected — anything already sent to the ' +
+             'district stands and will come back when you next refresh.')
+          : ('This phone was signed in as another officer. ' +
+             (lostRecords ? lostRecords + ' unsynced inspection(s) ' : '') +
+             (lostRecords && lostAtt ? 'and ' : '') +
+             (lostAtt ? lostAtt + ' unsent mark(s) ' : '') +
+             'of his could not be carried over and were cleared.'), 9000);
       }
-      DB.who = phone;
+      DB.who = own10(phone);
       DB.url=url; DB.session={token:r.token, user:r.user}; saveNow();
       $('#lPin').value=''; m.textContent='';
       try{ const g = await get({op:'gps'}); if(g.ok){ DB.master=g.gps; saveNow(); } }catch(e){}
@@ -3978,6 +4023,7 @@ function markLeaveDay(){
    further down is still in its dead zone when boot reaches it. */
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
 load();
+officerOwn();      /* the store of whoever is signed in is his, and is labelled so */
 applyPrefs();
 brandRegister();   /* the app says which register it is before it draws anything */
 netBar();

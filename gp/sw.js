@@ -11,7 +11,11 @@
    config.js, so it takes the tenant from its own address — which is the one
    thing about it that is already different. */
 const TENANT = /\/gp\//.test(self.location.pathname) ? 'gp' : 'sjf';
-const CACHE = TENANT + '-v6-13-0';
+/* BUMPED so a handset that started offline cannot go on serving a shell
+   from before one officer's mark stopped showing against another's name.
+   Code is fetched newest-first, so an online phone was never stale; this
+   is for the one that opened the app on a village road with no signal. */
+const CACHE = TENANT + '-v6-13-1';
 const SHELL = [
   './', './index.html', './app.js', './manifest.webmanifest', './privacy.html',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',
