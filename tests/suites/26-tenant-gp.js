@@ -136,6 +136,46 @@ module.exports = {
       t.eq(e.ctx.tenant_().key, 'SJGP', 'a Config tab with no TENANT row changes nothing');
     }
 
+    /* ---- 1b-ii. AND IT WRITES DOWN WHAT IT IS ----
+       The overlay is a FILE, and `clasp push --force` deletes remote files not
+       present locally. One routine deploy that forgot to assemble it took the
+       Gram Panchayat register's identity away on the live system: it reverted
+       to reporting itself as the sanitation register, which would have
+       switched the show-cause ladder ON for officers expressly not under it.
+       A file can be pushed away; the spreadsheet is the register. */
+    {
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e.eval('var TENANT_OVERLAY = "GP";');
+      t.eq(e.ctx.tenant_().key, 'GP', 'the overlay names the register');
+      const cfg = e.sheets['Config'];
+      t.ok(!!cfg, 'and the register writes it onto its own Config tab at once');
+      const flat = JSON.stringify(cfg.rows);
+      t.contains(flat, 'TENANT', 'the row is there');
+      t.contains(flat, 'GP', 'naming GP');
+      t.contains(flat, 'RECORDED_AT', 'with the moment it was recorded');
+      /* A LATER DEPLOY THAT LOSES THE FILE CANNOT CHANGE WHAT IT IS. */
+      const e2 = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e2.mkSheet('Config', ['Key','Value'], [{ Key:'TENANT', Value:'GP' }]);
+      t.eq(e2.ctx.tenant_().key, 'GP',
+        'with no overlay at all, the Config tab still holds the register to what it is');
+    }
+    {
+      /* IT DOES NOT WRITE ON A REGISTER THAT WAS NEVER TOLD. The sanitation
+         register has no overlay, so nothing is added to its tabs. */
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      t.eq(e.ctx.tenant_().key, 'SJGP', 'the sanitation register takes the default');
+      t.ok(!e.sheets['Config'], 'and no Config tab is created on it');
+    }
+    {
+      /* AND IT NEVER OVERWRITES ONE THAT EXISTS. */
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });
+      e.eval('var TENANT_OVERLAY = "GP";');
+      e.mkSheet('Config', ['Key','Value'], [{ Key:'TENANT', Value:'GP' }, { Key:'NOTE', Value:'put here by hand' }]);
+      e.ctx.tenant_();
+      t.contains(JSON.stringify(e.sheets['Config'].rows), 'put here by hand',
+        'an existing Config tab is left exactly as it was');
+    }
+
     /* ---- 1c. A NEW REGISTER MAKES ITS OWN SALT ----
        The step most likely to be skipped, mistyped, or copied from the other
        register — which would make the same PIN hash identically on both. */

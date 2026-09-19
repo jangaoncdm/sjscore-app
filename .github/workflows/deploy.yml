@@ -114,9 +114,28 @@ jobs:
         run: npm install -g @google/clasp@2.4.2
       - name: Sign in with the stored credential
         run: echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
-      - name: Push the code
+      - name: Push the code, WITH the line that says which register this is
         run: |
-          printf '{"scriptId":"%s","rootDir":"backend"}\n' "${{ vars.GP_SCRIPT_ID }}" > .clasp.json
+          # `clasp push --force` DELETES REMOTE FILES THAT ARE NOT PRESENT
+          # LOCALLY. Pushing rootDir: backend therefore removed Tenant.gs from
+          # the Gram Panchayat project on the first routine deploy after it was
+          # provisioned, and the register quietly reverted to reporting itself
+          # as SJGP — which would have switched the show-cause ladder ON for
+          # Gram Panchayat Officers, who are expressly not under it.
+          #
+          # The verify step below caught it, which is the only reason this is a
+          # footnote rather than an incident. Every deploy now re-assembles the
+          # overlay alongside backend/, so the identity cannot be pushed away.
+          mkdir -p gpbuild
+          cp backend/Code.gs backend/Admin.gs backend/appsscript.json gpbuild/
+          {
+            echo "/* Written by the deploy pipeline. This file exists ONLY in the Gram"
+            echo "   Panchayat project — it is assembled here and is never in backend/,"
+            echo "   so it cannot reach the sanitation register. A Script Property named"
+            echo "   TENANT, and the Config tab of the bound spreadsheet, both outrank it. */"
+            echo "var TENANT_OVERLAY = 'GP';"
+          } > gpbuild/Tenant.gs
+          printf '{"scriptId":"%s","rootDir":"gpbuild"}\n' "${{ vars.GP_SCRIPT_ID }}" > .clasp.json
           clasp push --force
       - name: Deploy a new version
         env:

@@ -432,8 +432,14 @@ function tenant_(){
      and nothing else — so it CANNOT reach the other project. That is the whole
      of why this is safe to read here. It is checked before the Sheet only
      because it is cheaper; the property still outranks both. */
+  let fromOverlay = false;
   if(!TENANTS[v]){
-    try{ if(typeof TENANT_OVERLAY !== 'undefined') v = String(TENANT_OVERLAY || '').toUpperCase().trim(); }catch(e){}
+    try{
+      if(typeof TENANT_OVERLAY !== 'undefined'){
+        v = String(TENANT_OVERLAY || '').toUpperCase().trim();
+        fromOverlay = !!TENANTS[v];
+      }
+    }catch(e){}
   }
   if(!TENANTS[v]){
     try{
@@ -453,6 +459,33 @@ function tenant_(){
      cannot be read must not silently turn the sanitation register into
      something else. */
   TENANT_CACHE = TENANTS[v] || TENANTS.SJGP;
+  /* AND A REGISTER WRITES DOWN WHAT IT IS, THE FIRST TIME IT IS TOLD.
+     The overlay is a FILE, and `clasp push --force` deletes remote files that
+     are not present locally — so one routine deploy that forgot to assemble it
+     took the Gram Panchayat register's identity away and it reverted to
+     reporting itself as the sanitation one, which would have switched the
+     show-cause ladder on for officers who are expressly not under it.
+
+     A file can be pushed away; the spreadsheet is the register. So the moment
+     the overlay tells this project what it is, it is recorded on the bound
+     Sheet's Config tab, where every later deploy will find it whatever happens
+     to the code. Written once and never again — if a Config row already says
+     something, that row is what was read above and nothing is touched here.
+
+     Best effort, and silent if it cannot: this runs on the read path of every
+     request, and a register that refuses to answer because it could not write
+     a note to itself would be a far worse failure than the one it prevents. */
+  if(fromOverlay){
+    try{
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      if(ss && !ss.getSheetByName('Config')){
+        const sh = ss.insertSheet('Config');
+        sh.appendRow(['Key', 'Value']);
+        sh.appendRow(['TENANT', TENANT_CACHE.key]);
+        sh.appendRow(['RECORDED_AT', new Date().toISOString()]);
+      }
+    }catch(e){}
+  }
   return TENANT_CACHE;
 }
 const isGP_ = () => tenant_().key === 'GP';
