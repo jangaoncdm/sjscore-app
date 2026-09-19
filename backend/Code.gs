@@ -3293,6 +3293,10 @@ function doGet(e){
           return out.sort();
         }catch(err){ return ['(could not read: ' + err + ')']; }
       })(),
+      /* AND THE ORDER IT WILL ACTUALLY APPLY. A publish assigns a month's
+         work to 280 officers and mails it, so the shares it will deal by
+         are readable before it is pressed rather than taken on trust. */
+      schedule:tenant_().schedule ? { shares:SCH_SHARE, subdivision:SCH_SUBDIVISION } : null,
       can:{ sanction:!!tenant_().sanction, evaluation:!!tenant_().evaluation,
             schedule:!!tenant_().schedule, gpdp:!!tenant_().gpdp,
             placeOfDuty:!!tenant_().placeOfDuty },
