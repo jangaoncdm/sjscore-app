@@ -61,6 +61,11 @@ const PASSES = [
           'officer’s work — including one written before any of this existed, which records no owner at all — ' +
           'and one carrying the serving officer’s own, which must survive untouched.',
     cmd: ['tests/render-handset.js'], needs: BROWSER ? null : 'playwright is not installed', shots: null },
+  { name: 'The address the console calls',
+    what: 'Both registers’ stores carrying a STALE /exec, as a browser that signed in once does. The console must ' +
+          'call the address the district publishes beside it and never the remembered one — a write sent to an old ' +
+          'deployment comes back as an unknown request and reads as a bug in the page.',
+    cmd: ['tests/render-address.js'], needs: BROWSER ? null : 'playwright is not installed', shots: null },
   { name: 'The Admin view, pressed',
     what: 'The console’s Admin screen with its buttons actually pressed, and the gate that keeps everyone but the ' +
           'Collector out of it.',

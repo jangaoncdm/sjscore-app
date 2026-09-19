@@ -97,6 +97,15 @@ function serve(){
   return new Promise(res => {
     const srv = http.createServer((req, rq) => {
       const u = decodeURIComponent(req.url.split('?')[0]);
+      /* the two config files the district publishes beside the console.
+         It reads them at boot to learn each register's address, so a
+         harness that does not serve them is not serving production. */
+      if(u === '/config.js' || u === '/gp/config.js'){
+        rq.writeHead(200, { 'Content-Type':'text/javascript' });
+        rq.end("window.SJGP_SERVER='https://mock.district/exec';" +
+               (u.indexOf('/gp/') === 0 ? "window.SJGP_TENANT='GP';" : ''));
+        return;
+      }
       const f = path.join(ROOT, u === '/' ? 'index.html' : u);
       if(!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()){
         rq.writeHead(404); rq.end('no'); return;

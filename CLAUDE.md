@@ -798,6 +798,22 @@ the other one does not. The threshold is `FAR_DUTY_KM` (3 km), not the 15 km a
 mandal-median needs. **It accuses nobody** (rule 10): the distance is printed,
 and the mark stands.
 
+**The address the district publishes beats the one a phone remembered.** The
+console took each register's `/exec` entirely from that app's own store —
+whatever address it happened to write at some past sign-in — and never looked
+at the `config.js` published beside it. So an address stored once lived in the
+console for ever, and a button pressed today could call a deployment made
+weeks ago: the endpoint added since comes back as an unknown request, falls
+through `doPost` to the last guard, and answers *This register does not take
+village evaluations*, which is indistinguishable from a bug in the page. The
+field app already heals itself this way — it writes `SERVER_URL` over `DB.url`
+at every start — but the console reads ANOTHER app's store and had nothing of
+its own to correct it with. `learnAddresses()` reads both config files off this
+very origin before the console boots, by pattern and never by evaluating a
+fetched script, and they win. A refusal now names the register and the tail of
+the address that gave it, so the next one is evidence rather than a puzzle.
+`tests/render-address.js` holds it.
+
 **`op=diag` says what the running build can answer.** With two projects on the
 same bytes, *is the code I think is live actually live* is a question that
 cannot be settled by reading either side. The console offered **Load the year**

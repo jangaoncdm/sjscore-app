@@ -31,7 +31,13 @@ const ROLL={ ok:true, roles:['PS','MPO','MSO','MPDO','DLPO','DPO','COLLECTOR'],
   ]};
 
 function serve(){return new Promise(res=>{const srv=http.createServer((q,rq)=>{
-  const u=decodeURIComponent(q.url.split('?')[0]);const f=path.join(APP,u==='/'?'index.html':u);
+  const u=decodeURIComponent(q.url.split('?')[0]);
+  /* the config files the district publishes beside the console */
+  if(u==='/config.js'||u==='/gp/config.js'){ const gp=u.indexOf('/gp/')===0;
+    rq.writeHead(200,{'Content-Type':'text/javascript'});
+    rq.end("window.SJGP_SERVER='"+(gp?'https://mock.gpalana/exec':'https://mock.district/exec')+"';"+
+           (gp?"window.SJGP_TENANT='GP';":'')); return; }
+  const f=path.join(APP,u==='/'?'index.html':u);
   if(!fs.existsSync(f)||fs.statSync(f).isDirectory()){rq.writeHead(404);rq.end('no');return;}
   rq.writeHead(200,{'Content-Type':MIME[path.extname(f)]||'application/octet-stream'});
   fs.createReadStream(f).pipe(rq);});srv.listen(0,'127.0.0.1',()=>res(srv));});}
