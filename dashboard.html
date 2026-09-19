@@ -1163,7 +1163,7 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
       <button data-v="advisory"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/><path d="M12 8v3M12 13.4v.2"/></svg>Advisory</button>
       <button data-v="admin" id="navAdmin" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M4.5 20c1.2-3.6 4-5.4 7.5-5.4 1.2 0 2.3.2 3.3.6"/><path d="M17.5 15.5v5M15 18h5"/></svg>Admin</button>
     </nav>
-    <div class="railfoot">District Operations Center<br><a href="./">Open the field app</a></div>
+    <div class="railfoot">District Operations Center<br><a href="./">Open the field app</a><br><span id="buildTag" style="opacity:.62;font-family:var(--mono);font-size:10.5px"></span></div>
   </aside>
   <div class="main">
     <div class="top">
@@ -1352,7 +1352,18 @@ function initTheme(){
   document.body.classList.toggle('dark', t==='dark');
   paintTheme();
 }
+/* WHICH BUILD THIS IS, where a person can read it.
+   “I cannot see the update” was asked three times and could not be
+   answered without fetching the page myself and comparing it. The deploy
+   writes the commit and the hour into this line, so the console says what
+   it is and a stale copy is visible rather than deduced. */
+const BUILD_STAMP = '16c71c9 - 19 Sep 20:21';
+function paintBuild(){
+  const el = document.getElementById('buildTag'); if(!el) return;
+  el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
+}
 function boot(){
+  paintBuild();
   initTheme();
   const tb=$('#thm');
   if(tb) tb.onclick=()=>{

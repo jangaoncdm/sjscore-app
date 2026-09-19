@@ -15,7 +15,7 @@ const TENANT = /\/gp\//.test(self.location.pathname) ? 'gp' : 'sjf';
    from before one officer's mark stopped showing against another's name.
    Code is fetched newest-first, so an online phone was never stale; this
    is for the one that opened the app on a village road with no signal. */
-const CACHE = TENANT + '-v6-13-1';
+const CACHE = TENANT + '-v6-14-0';
 const SHELL = [
   './', './index.html', './app.js', './manifest.webmanifest', './privacy.html',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',
@@ -84,7 +84,16 @@ self.addEventListener('fetch', e => {
                  url.pathname.endsWith('/');
   if (isCode) {
     e.respondWith(
-      fetch(req).then(res => {
+    /* STRAIGHT PAST THE BROWSER OWN CACHE. Newest-first was already the rule
+       here, but fetch(req) is itself served from the HTTP cache, and GitHub
+       Pages sends a ten-minute one - so an officer online, with this worker
+       doing exactly what it was told, could still be handed the console and
+       the app as they were ten minutes ago. Reported three times as "I cannot
+       see the update", and answered three times with "hard reload", which is
+       not an answer you can give 414 people. no-store goes to the network
+       itself; the cache below is still the fallback the moment there is no
+       network. */
+      fetch(req, { cache: 'no-store' }).then(res => {
         if (res && res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {}); }
         return res;
       }).catch(() => caches.match(req).then(hit => hit || caches.match('./index.html')))
