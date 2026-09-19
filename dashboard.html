@@ -2936,12 +2936,59 @@ function vLeave(j,A){
    row would orphan all of it and no file could be produced afterwards.
    ========================================================================== */
 let ROLL=null, ROLLQ='', ROLLBUSY=false, ROLLPIN=null, ROLLMSG='', ROLLBAD=false, ROLLADD=false;
+/* THE DISTRICT'S OWN ROSTER TABLE, PASTED. The office keeps mandal, name,
+   mobile, official email and the office with its coordinates in a table, and
+   that table is the truth the register is meant to agree with. Agreeing with
+   it used to mean a code edit and a deploy for one officer.
+   IT IS PASTED AND NEVER COMMITTED. Those are officers' personal mobile
+   numbers and this repository is public — it is public so that handsets can
+   install the app. So the table goes from this screen to the district's own
+   register over HTTPS and nowhere else, exactly as the Gram Palana roster did. */
+let TBL_TEXT='', TBL_ROLE='MPO', TBL_PLANS=null, TBL_DONE=null;
 const ROLLFORM={phone:'',name:'',role:'PS',mandal:'',gp:'',email:''};
 
 function pullRoll(){
   return fetch(ST.url+'?op=roll&token='+encodeURIComponent(ST.token))
     .then(r=>r.json()).then(j=>{ if(j&&j.ok){ ROLL=j; if(VIEW==='admin'&&DATA) render(DATA); } })
     .catch(()=>{});
+}
+/* READ THE TABLE AS IT IS ACTUALLY COPIED, not as a tidy CSV. A cell pasted
+   out of a spreadsheet or a Word table arrives with the office address and its
+   two coordinates on three lines inside one cell, columns separated by tabs in
+   one paste and by runs of spaces in the next. So the pieces that can be
+   recognised on sight are taken first — the ten-digit mobile, the address with
+   an @ in it, "Latitude:" and "Longitude:" — and only what is left is split
+   into columns. A parser that insisted on a shape would be defeated by the
+   first paste from a different machine. */
+/* how each verdict reads on the screen: what it is, and in what colour */
+const VERDICT_PILL={ unchanged:['ok','already agrees'], correct:['warn','correct in place'],
+  succession:['bad','a different officer'], register:['warn','not on the roll'],
+  refused:['bad','refused'], ambiguous:['bad','two in one chair'] };
+function parseRoster(text, role){
+  const out = [], bad = [];
+  const blocks = String(text||'').replace(/\r/g,'').split(/\n(?=\s*\d{1,3}[\s\t])/);
+  blocks.forEach(b => {
+    const raw = b.trim(); if(!raw) return;
+    const phone = (raw.match(/\b([6-9]\d{9})\b/)||[])[1] || '';
+    const email = (raw.match(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/)||[])[0] || '';
+    const lat = parseFloat((raw.match(/Lat(?:itude)?\s*[:\-]?\s*([\d.]+)/i)||[])[1]);
+    const lng = parseFloat((raw.match(/Long(?:itude)?\s*[:\-]?\s*([\d.]+)/i)||[])[1]);
+    let rest = raw
+      .replace(/Lat(?:itude)?\s*[:\-]?\s*[\d.]+/ig,' ')
+      .replace(/Long(?:itude)?\s*[:\-]?\s*[\d.]+/ig,' ')
+      .replace(phone||'\u0000',' ').replace(email||'\u0000',' ');
+    const cells = rest.split(/\t|\n|\s{2,}/).map(x=>x.trim()).filter(Boolean);
+    /* the serial number leads and is not a column of the roll */
+    if(cells.length && /^\d{1,3}$/.test(cells[0])) cells.shift();
+    const mandal = cells[0] || '', name = cells[1] || '';
+    const office = cells.slice(2).join(' ').trim();
+    if(!mandal || !name || !phone){
+      bad.push(raw.replace(/\s+/g,' ').slice(0,70)); return;
+    }
+    out.push({ mandal, role, name, phone, email, office,
+               lat: isFinite(lat)?lat:'', lng: isFinite(lng)?lng:'' });
+  });
+  return { rows: out, bad };
 }
 function rollSay(t,bad){ ROLLMSG=t||''; ROLLBAD=!!bad; if(DATA) render(DATA); }
 
@@ -3062,6 +3109,50 @@ function vAdmin(j,A){
       </div>`:'')
     ,'rl');
 
+  /* ---- THE ROLL AGAINST THE DISTRICT'S TABLE ---- */
+  const parsed = TBL_TEXT.trim() ? parseRoster(TBL_TEXT, TBL_ROLE) : null;
+  h+=panel('c12','Correct the roll from your roster',
+    'paste the table \u00b7 nothing is written until you say so',
+    `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
+      Paste the office's own table \u2014 serial, mandal, name, mobile, official email, and the office
+      with its latitude and longitude. It is read here, compared against the register, and
+      <b>nothing is written until you press Apply</b>. The table is sent to your own register and
+      is never stored anywhere else.</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:9px">
+      <label style="font-size:12px;color:var(--tx-2)">These officers are
+        <select class="rsel" id="rlTblRole" style="margin-left:6px">${
+          ((ROLL.roles)||['MPO']).map(r=>'<option value="'+esc(r)+'"'+(TBL_ROLE===r?' selected':'')+'>'+esc(r)+'</option>').join('')
+        }</select></label>
+      ${parsed?'<span style="font-size:12px;color:var(--tx-3)">'+parsed.rows.length+' line(s) read'+
+        (parsed.bad.length?' \u00b7 <span style="color:var(--red)">'+parsed.bad.length+' not understood</span>':'')+'</span>':''}
+    </div>
+    <textarea id="rlTbl" rows="${TBL_TEXT?4:6}" placeholder="Paste the table here"
+      style="width:100%;padding:10px;border:1px solid var(--ln);border-radius:9px;background:var(--bg-2);
+             color:var(--tx);font:12.5px/1.6 var(--mono);resize:vertical">${esc(TBL_TEXT)}</textarea>
+    ${parsed&&parsed.bad.length?'<div style="font-size:12px;color:var(--red);margin-top:7px">Not understood, and left alone: '+
+      parsed.bad.map(b=>esc(b)).join(' &nbsp;|&nbsp; ')+'</div>':''}
+    <div style="margin-top:11px;display:flex;gap:9px;flex-wrap:wrap">
+      <button class="tbtn" id="rlTblRead"${(!parsed||!parsed.rows.length||ROLLBUSY)?' disabled':''}>Compare with the register</button>
+      ${TBL_PLANS?'<button class="tbtn pri" id="rlTblApply"'+(ROLLBUSY?' disabled':'')+'>Apply what is listed</button>':''}
+      ${TBL_TEXT?'<button class="fchip" id="rlTblClear">Clear</button>':''}
+    </div>
+    ${TBL_DONE?`<div style="margin-top:12px;font-size:13px;color:var(--tx-2);line-height:1.7;
+        border-left:3px solid var(--st-ok);padding-left:12px">${esc(TBL_DONE)}</div>`:''}
+    ${TBL_PLANS?`<div class="twrap" style="margin-top:13px;max-height:420px"><table>
+      <thead><tr><th>Mandal</th><th>Officer</th><th>Mobile</th><th>What it is</th><th>What would change</th></tr></thead>
+      <tbody>${TBL_PLANS.map(p=>{
+        const V=VERDICT_PILL[p.verdict]||['warn',p.verdict];
+        return '<tr><td>'+esc(p.mandal||'\u2014')+'</td><td>'+esc(p.name||'\u2014')+'</td>'+
+          '<td class="num mut">'+esc(p.phone||'\u2014')+'</td>'+
+          '<td><span class="pill '+V[0]+'">'+esc(V[1])+'</span></td>'+
+          '<td style="color:var(--tx-2)">'+esc((p.changes&&p.changes.length?p.changes.join('; '):(p.why||'\u2014')))+'</td></tr>';
+      }).join('')}</tbody></table></div>
+      <div class="expnote" style="margin-top:9px"><b>A different officer in the chair is never written over the one on the row.</b>
+      His attendance, his notices and his leave are counted against that row \u2014 overwriting it would show the incoming
+      officer present on days he had not joined, and a notice served on one officer standing against another. The outgoing
+      row is marked inactive and keeps everything pointing at it; the incoming officer gets a row of his own, and a PIN
+      from the list above.</div>`:''}`,'rl');
+
   /* ---- the roll ---- */
   const q=ROLLQ.trim().toLowerCase();
   const shown=q?rows.filter(r=>(r.name+' '+r.phone+' '+r.mandal+' '+r.gp+' '+r.role).toLowerCase().indexOf(q)>=0):rows;
@@ -3102,6 +3193,56 @@ function wireAdmin(){
   const bind=(id,k)=>{ const el=$(id); if(el) el.oninput=el.onchange=()=>{ ROLLFORM[k]=el.value; }; };
   bind('#rlPhone','phone'); bind('#rlName','name'); bind('#rlRole','role');
   bind('#rlMandal','mandal'); bind('#rlGp','gp'); bind('#rlEmail','email');
+
+  const tbl=$('#rlTbl');
+  /* THE TYPED TABLE MUST SURVIVE THE RE-RENDER that shows how much of it was
+     understood, and the caret with it — the advisory composer lost a typed
+     circular exactly this way and the Collector would have written it twice.
+     Same treatment as the roll search above. */
+  if(tbl) tbl.oninput=()=>{
+    TBL_TEXT=tbl.value; TBL_PLANS=null;
+    const at=tbl.selectionStart, top=tbl.scrollTop;
+    if(DATA) render(DATA);
+    const t2=$('#rlTbl');
+    if(t2){ t2.focus(); try{ t2.setSelectionRange(at,at); t2.scrollTop=top; }catch(e){} }
+  };
+  const tblRole=$('#rlTblRole');
+  if(tblRole) tblRole.onchange=()=>{ TBL_ROLE=tblRole.value; TBL_PLANS=null; if(DATA) render(DATA); };
+  const tblClear=$('#rlTblClear');
+  if(tblClear) tblClear.onclick=()=>{ TBL_TEXT=''; TBL_PLANS=null; TBL_DONE=null; if(DATA) render(DATA); };
+  const tblRead=$('#rlTblRead');
+  if(tblRead) tblRead.onclick=()=>{
+    const p=parseRoster(TBL_TEXT,TBL_ROLE);
+    if(!p.rows.length){ rollSay('Nothing in that paste could be read as a roster line.',true); return; }
+    TBL_DONE=null;
+    rollPost({kind:'rollUpdate',rows:p.rows,dry:true}, r=>{
+      TBL_PLANS=r.plans||[];
+      const n=k=>TBL_PLANS.filter(x=>x.verdict===k).length;
+      ROLLMSG='Read against the register: '+n('unchanged')+' already agree, '+n('correct')+' to correct, '+
+        n('succession')+' succession(s), '+n('register')+' to register'+
+        ((n('refused')+n('ambiguous'))?', '+(n('refused')+n('ambiguous'))+' left alone':'')+
+        (r.offices?' \u00b7 '+r.offices+' mandal office(s) to write':'')+'. Nothing has been written.';
+      ROLLBAD=false;
+    });
+  };
+  const tblApply=$('#rlTblApply');
+  if(tblApply) tblApply.onclick=()=>{
+    const p=parseRoster(TBL_TEXT,TBL_ROLE);
+    const succ=(TBL_PLANS||[]).filter(x=>x.verdict==='succession');
+    if(!confirm('Write this to the roll?\n\n'+
+      (TBL_PLANS||[]).filter(x=>x.verdict==='correct').length+' row(s) corrected in place\n'+
+      succ.length+' succession(s) \u2014 the outgoing officer is taken off the roll, his row and his record stay\n'+
+      (TBL_PLANS||[]).filter(x=>x.verdict==='register').length+' officer(s) registered\n\n'+
+      'Nothing is deleted. Every change is written to the Audit tab.')) return;
+    rollPost({kind:'rollUpdate',rows:p.rows,dry:false}, r=>{
+      TBL_PLANS=null;
+      TBL_DONE=r.corrected+' row(s) corrected, '+r.registered+' officer(s) registered, '+
+        r.retired+' taken off the roll, '+r.offices+' mandal office(s) written.'+
+        ((r.pins&&r.pins.length)?' These still need a PIN \u2014 use Reset PIN on the roll below: '+
+          r.pins.map(x=>x.name+' ('+x.phone+')').join(', ')+'.':'');
+      ROLLMSG=''; ROLLBAD=false;
+    });
+  };
 
   const hol=$('#rlHol');
   if(hol) hol.onclick=()=>{
