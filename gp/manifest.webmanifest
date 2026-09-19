@@ -1,8 +1,8 @@
 {
-  "name": "SJGP — Swachh Jangaon Gram Panchayat",
-  "short_name": "SJGP",
-  "description": "Official field application of the Jangaon District administration. Attendance, the monthly 100-mark sanitation evaluation of Gram Panchayats, clause evidence and leave, for the Mandal Sanitation Task Force.",
-  "id": "in.jangaon.sjscore",
+  "name": "Gram Palana Register — Jangaon",
+  "short_name": "Gram Palana",
+  "description": "Official field application of the Jangaon District administration, Revenue department. Attendance with the place it was marked from, leave, the district map and the daily report, for Gram Palana Officers and Revenue Inspectors.",
+  "id": "in.jangaon.gpalana",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -62,26 +62,6 @@
       "src": "icons/apple-touch-icon-180.png",
       "sizes": "180x180",
       "type": "image/png"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "screenshots/shot-1.png",
-      "sizes": "1080x1920",
-      "type": "image/png",
-      "form_factor": "narrow"
-    },
-    {
-      "src": "screenshots/shot-2.png",
-      "sizes": "1080x1920",
-      "type": "image/png",
-      "form_factor": "narrow"
-    },
-    {
-      "src": "screenshots/shot-3.png",
-      "sizes": "1080x1920",
-      "type": "image/png",
-      "form_factor": "narrow"
     }
   ],
   "lang": "en-IN",

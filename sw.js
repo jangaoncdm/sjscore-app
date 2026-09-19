@@ -7,7 +7,7 @@
    government app for no reason. */
 /* ONE ORIGIN, TWO APPS, TWO CACHES. Caches are keyed by NAME and shared
    across an origin, so the GP app published at /gp/ would otherwise serve the
-   sanitation app's shell to a Gram Panchayat Officer. A worker cannot read
+   sanitation app's shell to a Gram Palana Officer. A worker cannot read
    config.js, so it takes the tenant from its own address — which is the one
    thing about it that is already different. */
 const TENANT = /\/gp\//.test(self.location.pathname) ? 'gp' : 'sjf';

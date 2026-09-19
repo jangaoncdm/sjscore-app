@@ -558,6 +558,12 @@ body.kb .tabs,body.kb .strip{transform:translateY(160%);pointer-events:none}
   .tabs::after{
     content:"Swachh Jangaon Gram Panchayat";position:absolute;top:72px;left:24px;right:18px;
     font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;line-height:1.5;color:var(--ink-3)}
+  /* THE RAIL SAYS WHICH REGISTER THIS IS. It is drawn in CSS content, so
+     brandRegister cannot reach it with textContent; it sets data-tenant on
+     the root instead and this answers it. On a monitor the rail is the only
+     place the register is named at all. */
+  html[data-tenant="gp"] .tabs::before{content:"GP"}
+  html[data-tenant="gp"] .tabs::after{content:"Gram Palana Register · Jangaon"}
   .tabs button{
     flex:0 0 auto;   /* the rail stacks; without this the phone's flex:1 spreads
                         the five buttons down the whole height of the monitor */
