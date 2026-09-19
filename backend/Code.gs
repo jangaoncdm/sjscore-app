@@ -4301,16 +4301,40 @@ function rollRegister_(u){
      and nothing on the console says so — the figures simply come out wrong
      and look like figures. It is counted here, for THIS calendar year, and
      the Admin panel says it plainly with the button to put it right. */
-  let hol = 0, holYear = 0;
+  let hol = 0, holYear = 0, holExtra = [], holMissing = [];
   try{
     const yr = Number(today_().slice(0, 4));
     holYear = yr;
     const all = holidaySet_();
-    hol = Object.keys(all).filter(k => String(k).slice(0, 4) === String(yr)).length;
+    const mine = Object.keys(all).filter(k => String(k).slice(0, 4) === String(yr));
+    hol = mine.length;
+    /* AND WHETHER THEY ARE THE G.O.'s. tsHolidays_ only ever ADDS what is
+       missing — it removes nothing, by design — so a date put on the tab by
+       any other hand stays for ever and is silently counted as an off day.
+       The two registers were loaded from the same order and disagreed by
+       nine, which is the number of holidays the US-locale day/month swap once
+       put on the wrong date (rule 3). A spurious off day accuses nobody, but
+       it takes a working day out of the count that the pace forecast, the
+       filing chase and the leave arithmetic all read.
+       IT IS REPORTED AND NEVER TOUCHED. Whether a date the Collector's office
+       put there belongs on the register is his word, not a table's. */
+    const canon = {};
+    try{
+      TS_HOLIDAYS_2026.forEach(function(h){ canon[h[0]] = h[1]; });
+      TS_SECOND_SATURDAYS_2026.forEach(function(d){ canon[d] = 'Second Saturday'; });
+    }catch(err){}
+    if(Object.keys(canon).length){
+      mine.forEach(function(d){ if(!canon[d]) holExtra.push({ date:d, occasion:String(all[d] || '') }); });
+      Object.keys(canon).forEach(function(d){
+        if(String(d).slice(0, 4) === String(yr) && !all[d]) holMissing.push({ date:d, occasion:canon[d] }); });
+      holExtra.sort(function(a, b){ return a.date < b.date ? -1 : 1; });
+      holMissing.sort(function(a, b){ return a.date < b.date ? -1 : 1; });
+    }
   }catch(e){}
   return json_({ ok:true, rows:rows, roles:Object.keys(rank_()),
                  tenant:tenant_().key, tenantName:tenant_().name,
-                 holidays:{ year:holYear, count:hol },
+                 holidays:{ year:holYear, count:hol, onOrder:hol - holExtra.length,
+                            extra:holExtra.slice(0, 60), missing:holMissing.slice(0, 60) },
                  mandals:gpRoll_().map(r => r.mandal).filter((m, i, A) => m && A.indexOf(m) === i).sort() });
 }
 

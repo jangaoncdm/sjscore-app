@@ -23,7 +23,12 @@ const ROLL={ ok:true, roles:['PS','MPO','MSO','MPDO','DLPO','DPO','COLLECTOR'],
   /* A REGISTER STOOD UP WITH AN EMPTY CALENDAR. The Gram Palana one was, and
      nothing on the console said so — it simply counted Dasara and every
      second Saturday as working days and every figure came out wrong. */
-  holidays:{ year:2026, count:0 },
+  /* a register whose tab carries a date no order names — as the sanitation
+     one does: the two live registers were loaded from the same G.O. and
+     disagreed by nine */
+  holidays:{ year:2026, count:0, onOrder:0,
+    extra:[{date:'2026-03-07',occasion:'Local festival'}],
+    missing:[{date:'2026-01-26',occasion:'Republic Day'}] },
   rows:[
     {phone:'9000000001',name:'Sandeep Kumar Jha',role:'COLLECTOR',mandal:'',gp:'',hasPin:true,active:true,rows:1},
     {phone:'9848100203',name:'Burra Bhanuchander',role:'PS',mandal:'Devaruppula',gp:'Ramboji Gudem',hasPin:false,active:true,rows:1},
@@ -160,6 +165,12 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   const tH = await txt();
   ck(tH.indexOf('no holiday calendar')>=0,'an empty calendar is stated plainly, not left to be inferred');
   ck(tH.indexOf('second Saturday')>=0,'and it says what that costs');
+  /* THE AUDIT AGAINST THE ORDER, both ways round */
+  ck(/does not name/i.test(tH),'a date the order does not name is reported');
+  ck(tH.indexOf('7 Mar')>=0,'by its date',JSON.stringify(tH.slice(tH.indexOf('does not name'),tH.indexOf('does not name')+90)));
+  ck(/NOT on this register/i.test(tH),'and a date of the order that is missing is reported too');
+  ck(/nothing here ever[\s\S]{0,40}takes a date off|never/i.test(tH) || /by your own hand/i.test(tH),
+     'with the plain word that loading will not remove it');
   /* the confirm is already accepted by the handler set at the top */
   await page.click('#rlHol'); await page.waitForTimeout(700);
   const hp=posts.find(p=>p.kind==='holidaysLoad');

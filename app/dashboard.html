@@ -3029,6 +3029,7 @@ function vAdmin(j,A){
      and not a trigger. */
   const HOL=ROLL.holidays||{year:0,count:0};
   const holShort=HOL.count<10;
+  const holExtra=HOL.extra||[], holMissing=HOL.missing||[];
   h+=panel('c12','The year’s holidays',
     HOL.year?('G.O.Rt.No.1715 · '+HOL.year):'',
     `<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
@@ -3040,7 +3041,26 @@ function vAdmin(j,A){
         <br>The optional holidays of Annexure&nbsp;II are an officer’s own choice and are deliberately not loaded.
       </div>
       <button class="tbtn${holShort?' pri':''}" id="rlHol"${ROLLBUSY?' disabled':''}>${holShort?'Load the year':'Load them again'}</button>
-    </div>`,'rl');
+    </div>` +
+    /* WHAT IS ON THE TAB THAT THE ORDER DOES NOT NAME. Loading only ever adds;
+       nothing has ever taken a date off, so a date put there by another hand
+       stays and is counted as an off day for ever. The two registers were
+       loaded from the same G.O. and disagreed by nine. It is shown and never
+       touched — whether such a date belongs is the Collector's word. */
+    ((holExtra.length||holMissing.length)?
+      `<div style="margin-top:14px;border-top:1px solid var(--ln);padding-top:12px;font-size:13px;line-height:1.7">
+        ${holMissing.length?`<div style="color:var(--red)"><b>${holMissing.length} date(s) of the order are NOT on this register:</b>
+          ${holMissing.map(x=>esc(dm(x.date))+' · '+esc(x.occasion)).join(' &nbsp;|&nbsp; ')}
+          <br><span style="color:var(--tx-2)">Press Load the year to put them on.</span></div>`:''}
+        ${holExtra.length?`<div style="margin-top:${holMissing.length?'10px':'0'}">
+          <b>${holExtra.length} date(s) stand on this register that G.O.Rt.No.1715 does not name:</b>
+          <div style="color:var(--tx-2);margin-top:4px">${holExtra.map(x=>esc(dm(x.date))+(x.occasion?' · '+esc(x.occasion):'')).join(' &nbsp;|&nbsp; ')}</div>
+          <div style="color:var(--tx-2);margin-top:6px">Each one is treated as an off day: attendance is voluntary, the day is
+          not counted, and no notice can arise on it. Loading the order again will not remove them — nothing here ever
+          takes a date off a government register. If they do not belong, they come off the Holidays tab by your own hand.</div>
+        </div>`:''}
+      </div>`:'')
+    ,'rl');
 
   /* ---- the roll ---- */
   const q=ROLLQ.trim().toLowerCase();

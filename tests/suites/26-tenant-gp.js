@@ -581,6 +581,32 @@ module.exports = {
       t.eq(roll.holidays.year, 2026, 'this calendar year');
       t.ok(roll.holidays.count > 20, 'and its count — ' + roll.holidays.count);
       t.eq(roll.tenant, 'GP', 'named as the register it is');
+
+      /* ---- AND WHETHER THE DATES ARE THE ORDER'S ----
+         Loading only ever ADDS; nothing removes a date from a government
+         register. So a date put on the tab by another hand stands for ever
+         and is counted as an off day. The two live registers were loaded from
+         the same G.O. and disagreed by nine, which is the number the
+         US-locale day/month swap once put on the wrong date (rule 3). */
+      t.ok(roll.holidays.extra.length === 0,
+        'a register loaded from the order carries nothing the order does not name');
+      t.ok(roll.holidays.missing.length === 0, 'and nothing of the order is missing from it');
+      t.eq(roll.holidays.onOrder, roll.holidays.count, 'so every date it holds is on the order');
+
+      /* a date no order names — put there by a hand, as one was */
+      const hsh = e.sheets['Holidays'];
+      hsh.rows.push(["'2026-03-07", 'Local festival']);
+      const roll2 = e.get('roll', { token:cdm });
+      t.eq(roll2.holidays.count, roll.holidays.count + 1, 'it counts as an off day like any other');
+      t.eq(roll2.holidays.extra.length, 1, 'and it is named as one the order does not');
+      t.eq(roll2.holidays.extra[0].date, '2026-03-07', 'by date');
+      t.contains(roll2.holidays.extra[0].occasion, 'Local', 'and by what the tab calls it');
+      t.eq(roll2.holidays.onOrder, roll.holidays.count, 'the order’s own count is unchanged');
+      /* RULE 7: naming it is not removing it */
+      const after = e.post({ kind:'holidaysLoad', token:cdm });
+      t.eq(after.ok, true, 'loading again is still allowed');
+      t.eq(e.get('roll', { token:cdm }).holidays.extra.length, 1,
+        'and it does NOT take the date off — nothing here destroys a record');
     }
 
     /* ---- 2. THE SHAPE FOLLOWS THE TENANT ---- */
