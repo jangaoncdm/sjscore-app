@@ -60,6 +60,17 @@ jobs:
           done
           [ -d app/icons ] && cp -r app/icons ./ || true
           [ -d app/screenshots ] && cp -r app/screenshots ./ || true
+          # WHICH BUILD THIS IS, written where a person can read it. "I cannot
+          # see the update" was asked three times and could not be answered
+          # without fetching the page and comparing it by hand. The commit and
+          # the hour go into the console's own footer, so a stale copy on a
+          # desk is visible rather than deduced. In the working tree the
+          # placeholder stays a placeholder, and the console says so.
+          STAMP="$(git rev-parse --short HEAD) - $(TZ=Asia/Kolkata date '+%d %b %H:%M')"
+          if [ -f dashboard.html ]; then
+            sed -i "s|__BUILD__|${STAMP}|g" dashboard.html
+            echo "stamped dashboard.html  ${STAMP}"
+          fi
           if [ ! -f config.js ]; then
             echo "::error::config.js is missing. Copy app/config.example.js to config.js once, with the district's /exec address."
             exit 1
