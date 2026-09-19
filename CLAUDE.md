@@ -798,6 +798,20 @@ the other one does not. The threshold is `FAR_DUTY_KM` (3 km), not the 15 km a
 mandal-median needs. **It accuses nobody** (rule 10): the distance is printed,
 and the mark stands.
 
+**`op=diag` says what the running build can answer.** With two projects on the
+same bytes, *is the code I think is live actually live* is a question that
+cannot be settled by reading either side. The console offered **Load the year**
+and the register replied *This register does not take village evaluations* —
+the answer of a `doPost` that matched no kind and fell through to the last
+guard, because the publish job and the backend job are separate steps of the
+same run and the page had the button before the register had the endpoint.
+Driving the live console against a mocked register proved the client was
+sending the right thing to the right address; nothing could prove the server
+half without a Collector's token. Diag now lists the POST kinds the build
+answers, what the tenant can do, and how many holidays it holds for the year.
+It reveals nothing — they are endpoint names, and every one re-checks the
+caller (rule 6).
+
 **Two Sheets, and that is the whole of the isolation.** Each register is its
 own Apps Script project bound to its own spreadsheet behind its own `/exec`.
 **There is no Tenant column and there must not be one.** A logical filter is
