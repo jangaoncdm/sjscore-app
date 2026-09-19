@@ -165,17 +165,25 @@ jobs:
           echo "ok=no" >> "$GITHUB_OUTPUT"
           echo "::warning::The new web app has not answered yet. A first deployment usually has to have its scopes approved once in the browser: open the script, Run, and accept. Everything else below is already done."
 
-      - name: Record the three variables on the repository
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The repository variables are NOT set from here. GITHUB_TOKEN cannot
+      # manage them — that needs a personal token with repo scope, and putting
+      # one in this repository to save a step would be a worse trade than
+      # printing the values and setting them once. They are printed below.
+      - name: The values to record
         run: |
-          gh variable set GP_SCRIPT_ID     --body '${{ steps.create.outputs.script_id }}'
-          gh variable set GP_PROVISIONED_AT --body "$(date -u +%Y-%m-%dT%H:%M:%SZ) run ${{ github.run_number }}"
-          gh variable set GP_DEPLOYMENT_ID --body '${{ steps.deploy.outputs.deployment_id }}'
-          gh variable set GP_EXEC_URL      --body '${{ steps.deploy.outputs.exec_url }}'
-          echo "GP_SCRIPT_ID, GP_DEPLOYMENT_ID and GP_EXEC_URL are set."
+          echo "GP_SCRIPT_ID     = ${{ steps.create.outputs.script_id }}"
+          echo "GP_DEPLOYMENT_ID = ${{ steps.deploy.outputs.deployment_id }}"
+          echo "GP_EXEC_URL      = ${{ steps.deploy.outputs.exec_url }}"
 
+      # NOTHING IS PUBLISHED AT /gp/ UNTIL THE SERVER ANSWERS. An app whose
+      # backend returns 403 is worse than no app: an officer installs it,
+      # cannot sign in, and stops trusting the one that does work. The first
+      # deployment of a web app has to have its scopes approved once in the
+      # browser, and there is no API for granting consent — that is a security
+      # boundary, not a gap. Re-run this workflow after approving; every step
+      # above is safe to repeat and this one will then fire.
       - name: Publish the app by committing gp/config.js
+        if: steps.verify.outputs.ok == 'yes'
         run: |
           mkdir -p gp
           {
