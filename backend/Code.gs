@@ -4258,7 +4258,21 @@ function rollRegister_(u){
   rows.sort((a, b) => (a.mandal || '').localeCompare(b.mandal || '') ||
                       (rank_()[b.role] || 0) - (rank_()[a.role] || 0) ||
                       (a.name || '').localeCompare(b.name || ''));
+  /* WHAT THE REGISTER KNOWS OF THE YEAR. A register whose Holidays tab is
+     empty counts Dasara, Diwali and every second Saturday as working days,
+     and nothing on the console says so — the figures simply come out wrong
+     and look like figures. It is counted here, for THIS calendar year, and
+     the Admin panel says it plainly with the button to put it right. */
+  let hol = 0, holYear = 0;
+  try{
+    const yr = Number(today_().slice(0, 4));
+    holYear = yr;
+    const all = holidaySet_();
+    hol = Object.keys(all).filter(k => String(k).slice(0, 4) === String(yr)).length;
+  }catch(e){}
   return json_({ ok:true, rows:rows, roles:Object.keys(rank_()),
+                 tenant:tenant_().key, tenantName:tenant_().name,
+                 holidays:{ year:holYear, count:hol },
                  mandals:gpRoll_().map(r => r.mandal).filter((m, i, A) => m && A.indexOf(m) === i).sort() });
 }
 
@@ -4584,6 +4598,34 @@ function weatherRead_(u, forDraft){
 }
 
 /* ---------------- POST ---------------- */
+/* THE YEAR ONTO THE REGISTER, BY WHICHEVER DOOR.
+   G.O.Rt.No.1715 (dt. 06.12.2025): the 27 General Holidays and every second
+   Saturday. The same dates on both registers, because it is the same state
+   and the same order.
+
+   NOTE, PLAINLY, THAT THIS REACHES INTO Admin.gs, which nothing else here
+   does. applyTsHolidays is an Admin.gs job and the rule is that the Collector
+   presses that button and not a robot. That rule is kept and not bent: there
+   is no trigger on this, no schedule and no automatic call anywhere — it runs
+   only when a person asks for it, either during provisioning or from the
+   console under the Collector's own token, which is the same hand pressing
+   the same button through a screen he is already looking at. It writes to
+   one tab, it writes only dates the G.O. published, it names no officer, and
+   running it twice changes nothing.
+
+   The alternative was worse: the Gram Palana register stood with an empty
+   Holidays tab, counting Dasara, Diwali and every second Saturday as working
+   days, and every leave figure and working-day count on it wrong by thirty
+   days. */
+function holidayLoad_(who){
+  let before = 0, after = 0;
+  try{ before = Object.keys(holidaySet_()).length; }catch(e){}
+  try{ applyTsHolidays(); }catch(err){ return json_({ ok:false, error:'could not load them: ' + err }); }
+  try{ after = Object.keys(holidaySet_()).length; }catch(e){}
+  admAudit_('SEED_HOLIDAYS', tenant_().key, before + ' before, ' + after + ' after, by ' + who + '.');
+  return json_({ ok:true, tenant:tenant_().key, before:before, after:after, added:Math.max(0, after - before) });
+}
+
 function doPost(e){
   let b;
   try{ b = JSON.parse(e.postData.contents); }catch(err){ return json_({ ok:false, error:'bad request' }); }
@@ -4855,14 +4897,15 @@ function doPost(e){
   if(b.kind === 'seedHolidays'){
     let key = '';
     try{ if(typeof BOOTSTRAP_KEY !== 'undefined') key = String(BOOTSTRAP_KEY || ''); }catch(e){}
-    if(!key) return json_({ ok:false, error:'This register loads its holidays by hand.' });
+    /* NOT AN ERROR AND NOT A DEAD END. The key lives in the Gram Palana
+       project only while it is being stood up — the first routine deploy
+       re-assembles Tenant.gs and strips it, by design. Afterwards the door is
+       the Collector's own, from the console, and the message says so rather
+       than reading as a fault. */
+    if(!key) return json_({ ok:false,
+      error:'This register has no bootstrap key. The Collector loads the year from the console, under Admin.' });
     if(String(b.key || '') !== key) return json_({ ok:false, error:'auth' });
-    let before = 0, after = 0;
-    try{ before = Object.keys(holidaySet_()).length; }catch(e){}
-    try{ applyTsHolidays(); }catch(err){ return json_({ ok:false, error:'could not load them: ' + err }); }
-    try{ after = Object.keys(holidaySet_()).length; }catch(e){}
-    admAudit_('SEED_HOLIDAYS', tenant_().key, before + ' before, ' + after + ' after.');
-    return json_({ ok:true, tenant:tenant_().key, before:before, after:after });
+    return holidayLoad_('bootstrap key');
   }
 
   if(b.kind === 'login'){
@@ -5092,6 +5135,14 @@ function doPost(e){
 
   /* the officer roll from the console. Each re-checks the Collector's own
      role on the server; none of them deletes anything. */
+  /* THE YEAR'S HOLIDAYS, from the console, by the Collector alone. The
+     bootstrap key is gone from a register the moment it is deployed
+     normally, and a register that cannot be given its holidays afterwards is
+     a register that counts festivals as working days for ever. */
+  if(b.kind === 'holidaysLoad'){
+    if(u.role !== 'COLLECTOR') return json_({ ok:false, error:'The year is loaded by the Collector alone.' });
+    return holidayLoad_('COLLECTOR ' + u.phone);
+  }
   if(b.kind === 'userCreate') return createUser_(b, u);
   if(b.kind === 'userPin')    return resetUserPin_(b, u);
   if(b.kind === 'userActive') return setUserActive_(b, u);

@@ -498,6 +498,58 @@ module.exports = {
       t.eq(again.after, r.after, 'a second run adds not one date');
     }
 
+    /* ---- 1j-ii. AND AFTERWARDS, BY THE COLLECTOR'S OWN HAND ----
+       The bootstrap key exists in the Gram Palana project only while it is
+       being stood up: the first routine deploy re-assembles Tenant.gs and
+       strips it, which is the design. That left a register that could never
+       be given its holidays — it was deployed with an empty tab and the key
+       was gone before anyone noticed. The door afterwards is the console,
+       under the Collector's own token, re-checked on the server (rule 6).
+       It stays a button and never a trigger: applyTsHolidays is an Admin.gs
+       job and the Collector presses that button, not a robot. */
+    {
+      const e = mock.load({ now:'2026-09-21T09:00:00+05:30', admin:true });
+      e.mkSheet('Config', ['Key','Value'], [{ Key:'TENANT', Value:'GP' }]);
+      e.mkSheet('Holidays', ['Date','Occasion'], []);
+      seed(e);
+      /* NO KEY AT ALL — the register as the deploy pipeline leaves it */
+      const noKey = e.post({ kind:'seedHolidays', key:'anything' });
+      t.eq(noKey.ok, false, 'with the key stripped, the bootstrap door is shut');
+      t.ok(/console/i.test(String(noKey.error)),
+        'and it says where the door is instead of reading as a fault — "' + noKey.error + '"');
+
+      const gpo = tokenFor(e, '9111100001', '2222');
+      const cdm = tokenFor(e, '9000000001', '1111');
+      t.eq(e.post({ kind:'holidaysLoad', token:gpo }).ok, false,
+        'an officer cannot load the year');
+      t.eq(e.post({ kind:'holidaysLoad', token:'' }).ok, false, 'nor can a caller with no token');
+
+      t.eq(Object.keys(e.ctx.holidaySet_()).length, 0, 'the register still has none');
+      const r2 = e.post({ kind:'holidaysLoad', token:cdm });
+      t.eq(r2.ok, true, 'the Collector loads it');
+      t.ok(r2.after > 30, 'and the year is on the register — ' + r2.after + ' dates');
+      t.eq(r2.added, r2.after, 'every one of them newly added');
+      t.eq(e.ctx.isWorkingDay_('2026-09-12'), false, 'the second Saturday stops being a working day');
+      /* rule 8 again, by this door too */
+      const r3 = e.post({ kind:'holidaysLoad', token:cdm });
+      t.eq(r3.after, r2.after, 'a second press adds not one date');
+      t.eq(r3.added, 0, 'and says so');
+      /* rule 7: the register says who did it */
+      const aud = JSON.stringify((e.sheets['Audit'] || { rows:[] }).rows);
+      t.contains(aud, 'SEED_HOLIDAYS', 'every load is on the Audit tab');
+      t.contains(aud, 'COLLECTOR 9000000001', 'named to the hand that passed it');
+
+      /* AND THE CONSOLE CAN SEE IT COMING. The count rides op=roll, so an
+         empty calendar is visible on the Admin panel rather than silently
+         wrong in every figure on the screen. */
+      const roll = e.get('roll', { token:cdm });
+      t.eq(roll.ok, true, 'the Collector reads the roll');
+      t.ok(!!roll.holidays, 'which carries what the register knows of the year');
+      t.eq(roll.holidays.year, 2026, 'this calendar year');
+      t.ok(roll.holidays.count > 20, 'and its count — ' + roll.holidays.count);
+      t.eq(roll.tenant, 'GP', 'named as the register it is');
+    }
+
     /* ---- 2. THE SHAPE FOLLOWS THE TENANT ---- */
     const env = mock.load({ now:'2026-09-21T09:00:00+05:30' });
     const c = env.ctx;

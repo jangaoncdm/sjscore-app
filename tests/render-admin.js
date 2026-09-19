@@ -19,6 +19,11 @@ const DASH = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-dashboard.
 
 const ROLL={ ok:true, roles:['PS','MPO','MSO','MPDO','DLPO','DPO','COLLECTOR'],
   mandals:['Chilpur','Devaruppula','Jangaon'],
+  tenant:'SJGP', tenantName:'Swachh Jangaon Gram Panchayat',
+  /* A REGISTER STOOD UP WITH AN EMPTY CALENDAR. The Gram Palana one was, and
+     nothing on the console said so — it simply counted Dasara and every
+     second Saturday as working days and every figure came out wrong. */
+  holidays:{ year:2026, count:0 },
   rows:[
     {phone:'9000000001',name:'Sandeep Kumar Jha',role:'COLLECTOR',mandal:'',gp:'',hasPin:true,active:true,rows:1},
     {phone:'9848100203',name:'Burra Bhanuchander',role:'PS',mandal:'Devaruppula',gp:'Ramboji Gudem',hasPin:false,active:true,rows:1},
@@ -31,7 +36,16 @@ function serve(){return new Promise(res=>{const srv=http.createServer((q,rq)=>{
   rq.writeHead(200,{'Content-Type':MIME[path.extname(f)]||'application/octet-stream'});
   fs.createReadStream(f).pipe(rq);});srv.listen(0,'127.0.0.1',()=>res(srv));});}
 
-const posts=[];
+const GPROLL={ ok:true, roles:['GPO','ARI','MRI','COLLECTOR'],
+  mandals:['Chilpur','Jangaon'],
+  tenant:'GP', tenantName:'Gram Palana Register · Jangaon',
+  holidays:{ year:2026, count:0 },
+  rows:[
+    {phone:'9000000001',name:'Sandeep Kumar Jha',role:'COLLECTOR',mandal:'',gp:'',hasPin:true,active:true,rows:1},
+    {phone:'6302363194',name:'Nasa Raju',role:'GPO',mandal:'Narasapur',gp:'Abdulnagaram',hasPin:true,active:true,rows:1}
+  ]};
+
+const posts=[], gpPosts=[];
 let pass=0, fail=0;
 const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'   — '+detail:''));}
   else {fail++;console.log('  FAIL  '+what+(detail?'   — '+detail:''));} };
@@ -44,6 +58,9 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   await ctx.addInitScript(()=>{
     localStorage.setItem('sjf5',JSON.stringify({url:'https://mock.district/exec',
       session:{token:'T',user:{name:'Sandeep Kumar Jha',role:'COLLECTOR',phone:'9000000001'}}}));
+    /* SIGNED INTO BOTH, as the Collector is: one console, two registers. */
+    localStorage.setItem('sjgp-gp1',JSON.stringify({url:'https://mock.gpalana/exec',
+      session:{token:'TGP',user:{name:'Sandeep Kumar Jha',role:'COLLECTOR',phone:'9000000001'}}}));
     localStorage.setItem('sjgp-theme','light');
     localStorage.setItem('sjgp-console-seen','{}');
   });
@@ -51,6 +68,22 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   const errs=[];page.on('pageerror',e=>errs.push(String(e)));
   page.on('dialog',d=>d.accept());
   await page.route('**tile.openstreetmap.org**',r=>r.abort());
+  /* THE GRAM PALANA REGISTER, ON ITS OWN ADDRESS. Everything it answers is
+     recorded separately, so a call that went to the wrong register cannot
+     pass for one that went to the right one. */
+  await page.route('**/mock.gpalana/**',async r=>{
+    const q=r.request();
+    const reply=b=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(b)});
+    if(q.method()==='POST'){
+      let b={};try{b=JSON.parse(q.postData()||'{}');}catch(e){}
+      gpPosts.push(b);
+      if(b.kind==='holidaysLoad'){ GPROLL.holidays={year:2026,count:53};
+        return reply({ok:true,tenant:'GP',before:0,after:53,added:53}); }
+      return reply({ok:true});
+    }
+    if(/op=roll/.test(q.url())) return reply(GPROLL);
+    return reply(DASH);
+  });
   await page.route('**/mock.district/**',async r=>{
     const q=r.request();
     const reply=b=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(b)});
@@ -60,6 +93,8 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
       if(b.kind==='userCreate') return reply({ok:true,phone:b.phone,name:b.name,role:b.role,pin:'4821'});
       if(b.kind==='userPin')    return reply({ok:true,phone:b.phone,name:'Burra Bhanuchander',pin:'7391',rows:2,unlocked:10,inactive:false});
       if(b.kind==='userActive') return reply({ok:true,phone:b.phone,name:'Gone Away',active:b.active,rows:1,written:1});
+      if(b.kind==='holidaysLoad'){ ROLL.holidays={year:2026,count:53};
+        return reply({ok:true,tenant:'SJGP',before:0,after:53,added:53}); }
       return reply({ok:true});
     }
     if(/op=roll/.test(q.url())) return reply(ROLL);
@@ -114,6 +149,38 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   const act=posts.find(p=>p.kind==='userActive');
   ck(!!act&&act.phone==='9848100207'&&act.active===true,
     'Put back sends active:true for the man who is off the roll',act?String(act.active):'');
+
+  /* --- THE YEAR'S HOLIDAYS, which is a button and never a trigger --- */
+  const tH = await txt();
+  ck(tH.indexOf('no holiday calendar')>=0,'an empty calendar is stated plainly, not left to be inferred');
+  ck(tH.indexOf('second Saturday')>=0,'and it says what that costs');
+  /* the confirm is already accepted by the handler set at the top */
+  await page.click('#rlHol'); await page.waitForTimeout(700);
+  const hp=posts.find(p=>p.kind==='holidaysLoad');
+  ck(!!hp,'Load the year reaches the district');
+  ck(!!hp&&!!hp.token,'under the Collector’s own token, which the server re-checks',hp?String(hp.token):'');
+  ck(!!hp&&hp.key===undefined,'and carries no bootstrap key — this door is the token');
+  await page.screenshot({path:path.join(OUT,'admin-holidays.png'),fullPage:true});
+
+  /* --- AND THE SAME BUTTON ON THE OTHER REGISTER GOES TO THE OTHER REGISTER ---
+     Reading one register believing it is the other is the single mistake the
+     tenant switch can cause, and loading a year is a write. */
+  await page.selectOption('#tenPick','GP'); await page.waitForTimeout(1200);
+  await page.click('#nav [data-v="admin"]'); await page.waitForTimeout(700);
+  const tG=await txt();
+  ck(tG.indexOf('Nasa Raju')>=0,'the console is reading the Gram Palana roll');
+  ck(tG.indexOf('Revenue village')>=0||tG.indexOf('no holiday calendar')>=0,
+    'and its Admin panel is that register’s');
+  const beforeSj=posts.filter(p=>p.kind==='holidaysLoad').length;
+  await page.click('#rlHol'); await page.waitForTimeout(900);
+  const gh=gpPosts.find(p=>p.kind==='holidaysLoad');
+  ck(!!gh,'Load the year reaches the GRAM PALANA register');
+  ck(!!gh&&gh.token==='TGP','under that register’s own token',gh?String(gh.token):'');
+  ck(posts.filter(p=>p.kind==='holidaysLoad').length===beforeSj,
+    'and NOTHING went to the sanitation register — a write cannot land on the wrong one');
+  await page.screenshot({path:path.join(OUT,'admin-holidays-gp.png'),fullPage:true});
+  await page.selectOption('#tenPick','SJGP'); await page.waitForTimeout(1200);
+  await page.click('#nav [data-v="admin"]'); await page.waitForTimeout(600);
 
   /* --- the Collector is not offered a way to shut himself out --- */
   ck(!(await page.$('[data-rlact="9000000001"]')),'the Collector’s own row has no Take off button');

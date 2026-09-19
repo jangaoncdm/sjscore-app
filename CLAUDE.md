@@ -708,6 +708,40 @@ Palana Officers across 180 revenue villages, and 19 Revenue Inspectors —
 134 officers, carrying attendance, leave, the geo-tagged mark, the map and the
 daily report. `DEPLOY-GP.md` is how it is put up.
 
+**GP is Gram PALANA — the Revenue department's officer — and not Gram
+Panchayat.** The register was built, tested, seeded and shipped under the wrong
+expansion of its own abbreviation, and the mistake was invisible because a Gram
+Panchayat is a real thing on the *other* register — the village roll, the
+100-mark scorecard, the development plan — so the wrong word read correctly
+everywhere it stood. Corrected 19.09.2026. The abbreviation is identical and
+the names differ by one word, so suite 26 asserts the two apart; nothing else
+can. The place of duty is a **village office**, not a "GP office", for the same
+reason.
+
+**A register stood up with an empty Holidays tab counts Dasara, Diwali and
+every second Saturday as working days**, and says nothing about it — the leave
+figures, the working-day counts and the daily report simply come out wrong and
+look like figures. The Gram Palana register was deployed exactly so. The count
+for the calendar year now rides `op=roll`, and the console's Admin panel states
+it with the button to put it right.
+
+**That button is the one place this codebase reaches into `Admin.gs`, and the
+rule is kept rather than bent.** `applyTsHolidays()` is an Admin.gs job and the
+Collector presses that button, not a robot — so `holidayLoad_` has **no
+trigger, no schedule and no automatic call anywhere**. It runs when a person
+asks: during provisioning behind `BOOTSTRAP_KEY`, or afterwards from the
+console under the Collector's own token, re-checked on the server (rule 6),
+which is the same hand pressing the same button through a screen he is already
+looking at. It writes one tab, only dates the G.O. published, names no officer,
+and a second press adds nothing. **The bootstrap door shuts by itself**: the
+key lives in the Gram Palana project only while it is being stood up, and the
+first routine deploy re-assembles `Tenant.gs` and strips it — which is the
+design, and which is why the endpoint's refusal now names the console instead
+of reading as a fault. The alternative considered was a workflow that planted
+the key back for one call; it was rejected because it would have automated an
+Admin.gs job *and* put a live key into the deployed project, to save the
+Collector one click in a console he is already in.
+
 **Two Sheets, and that is the whole of the isolation.** Each register is its
 own Apps Script project bound to its own spreadsheet behind its own `/exec`.
 **There is no Tenant column and there must not be one.** A logical filter is

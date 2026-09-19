@@ -2932,11 +2932,35 @@ function vAdmin(j,A){
       <label>Role<select id="rlRole">${roles.map(r=>`<option value="${esc(r)}"${ROLLFORM.role===r?' selected':''}>${esc(r)}</option>`).join('')}</select></label>
       <label>Mandal<input id="rlMandal" list="rlMandals" value="${esc(ROLLFORM.mandal)}">
         <datalist id="rlMandals">${(ROLL.mandals||[]).map(m=>`<option value="${esc(m)}">`).join('')}</datalist></label>
-      <label>Gram Panchayat<input id="rlGp" placeholder="for a Secretary" value="${esc(ROLLFORM.gp)}"></label>
+      <label>${TVIEW==='GP'?'Revenue village':'Gram Panchayat'}<input id="rlGp" placeholder="${TVIEW==='GP'?'the village he holds':'for a Secretary'}" value="${esc(ROLLFORM.gp)}"></label>
       <label>Email<input id="rlEmail" placeholder="for notices" value="${esc(ROLLFORM.email)}"></label>
       </div>
       <div style="margin-top:12px"><button class="tbtn pri" id="rlAdd"${ROLLBUSY?' disabled':''}>Register and set a PIN</button></div>
       <p style="font-size:12px;color:var(--tx-3);margin-top:10px;line-height:1.6">A number already on the roll is refused and its holder named — one number, one officer. The PIN is shown once, here, and written nowhere.</p>`);
+
+  /* ---- THE YEAR ITSELF ----
+     A register whose Holidays tab is empty counts Dasara, Diwali and every
+     second Saturday as working days, and says nothing about it: the leave
+     figures, the working-day counts and the daily report simply come out
+     wrong and look like figures. The Gram Palana register was stood up empty
+     and there was no way to see it from here. It is stated plainly, and where
+     it is short the Collector loads the G.O. himself — this is an Admin.gs
+     job and it is his button to press, which is exactly why it is a button
+     and not a trigger. */
+  const HOL=ROLL.holidays||{year:0,count:0};
+  const holShort=HOL.count<10;
+  h+=panel('c12','The year’s holidays',
+    HOL.year?('G.O.Rt.No.1715 · '+HOL.year):'',
+    `<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+      <div style="font-family:var(--mono);font-size:38px;font-weight:700;color:${holShort?'var(--red)':'var(--tx)'}">${HOL.count}</div>
+      <div style="font-size:13px;color:var(--tx-2);line-height:1.6;flex:1;min-width:260px">
+        ${holShort
+          ? '<b style="color:var(--red)">This register has no holiday calendar.</b> Until it does it counts Dasara, Diwali and every second Saturday as working days, and every leave figure and working-day count on it is wrong.'
+          : 'The 27 General Holidays and every second Saturday are on the register for '+HOL.year+'. Loading them again changes nothing.'}
+        <br>The optional holidays of Annexure&nbsp;II are an officer’s own choice and are deliberately not loaded.
+      </div>
+      <button class="tbtn${holShort?' pri':''}" id="rlHol"${ROLLBUSY?' disabled':''}>${holShort?'Load the year':'Load them again'}</button>
+    </div>`,'rl');
 
   /* ---- the roll ---- */
   const q=ROLLQ.trim().toLowerCase();
@@ -2978,6 +3002,19 @@ function wireAdmin(){
   const bind=(id,k)=>{ const el=$(id); if(el) el.oninput=el.onchange=()=>{ ROLLFORM[k]=el.value; }; };
   bind('#rlPhone','phone'); bind('#rlName','name'); bind('#rlRole','role');
   bind('#rlMandal','mandal'); bind('#rlGp','gp'); bind('#rlEmail','email');
+
+  const hol=$('#rlHol');
+  if(hol) hol.onclick=()=>{
+    const H=(ROLL&&ROLL.holidays)||{year:'',count:0};
+    if(!confirm('Load the '+H.year+' holidays onto '+((ROLL&&ROLL.tenantName)||'this register')+'?\n\n'+
+      'The 27 General Holidays of G.O.Rt.No.1715 and every second Saturday. '+
+      'It adds what is missing and changes nothing else; running it twice does nothing the second time.')) return;
+    rollPost({kind:'holidaysLoad'},
+      r=>{ ROLLMSG = r.added
+             ? ('The year is on the register — '+r.added+' date(s) added, '+r.after+' now standing.')
+             : ('Nothing to add: the '+r.after+' dates already on the register are the whole year.');
+           ROLLBAD=false; });
+  };
 
   const add=$('#rlAdd');
   if(add) add.onclick=()=>{
