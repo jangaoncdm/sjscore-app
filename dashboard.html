@@ -1242,17 +1242,51 @@ const TENANCY = {
      role there would have gone to nobody at all, and the Collector would have
      read the word "Panchayat" on a Revenue register. */
   SJGP:{ key:'SJGP', name:'Swachh Jangaon', full:'Swachh Jangaon Gram Panchayat', store:'sjf5',
+    cfg:'config.js',
     aud:[['PS','Panchayat Secretaries'],['MPDO','MPDOs'],['MPO','MPOs'],['MSO','MSOs']] },
   GP:  { key:'GP',   name:'Gram Palana',    full:'Gram Palana Register',       store:'sjgp-gp1',
+    cfg:'gp/config.js',
     aud:[['GPO','Gram Palana Officers'],['ARI','Assistant Revenue Inspectors'],['MRI','Mandal Revenue Inspectors']] }
 };
 let TVIEW='SJGP';
+
+/* THE ADDRESS THE DISTRICT PUBLISHES BEATS THE ONE A PHONE REMEMBERED.
+   The console took each register's /exec entirely from the app's own store —
+   whatever address that app happened to write at some past sign-in — and never
+   looked at the config the district publishes beside it. So an address stored
+   once lived in the console for ever: the Collector pressed a button, the call
+   went to a deployment made weeks earlier, and an endpoint added since came
+   back as an unknown request. On this register that reads as "This register
+   does not take village evaluations", which is simply the last guard in
+   doPost, and it is indistinguishable from a bug in the page.
+   The field app already heals itself this way — it writes SERVER_URL over
+   DB.url at every start — but the console reads ANOTHER app's store and had
+   nothing of its own to correct it with. Both config files sit on this very
+   origin; they are read at boot and they win. */
+const PUBLISHED = {};
+function learnAddresses(){
+  const want = Object.keys(TENANCY).filter(k => TENANCY[k].cfg);
+  return Promise.all(want.map(k =>
+    fetch(TENANCY[k].cfg + '?t=' + Date.now(), { cache:'no-store' })
+      .then(r => r.ok ? r.text() : '')
+      .then(txt => {
+        /* our own file, read with a pattern rather than evaluated: a console
+           that eval()s a fetched script to find one string is a worse idea
+           than a stale address. */
+        const m = /SJGP_SERVER\s*=\s*['"]([^'"]+)['"]/.exec(txt || '');
+        if(m && /^https:\/\//.test(m[1])) PUBLISHED[k] = m[1];
+      })
+      .catch(() => {})
+  ));
+}
 function tenantSession(k){
   const t=TENANCY[k]; if(!t) return null;
   let d=null; try{ d=JSON.parse(localStorage.getItem(t.store)||'null'); }catch(e){ return null; }
   if(!d||!d.session||!d.session.token||!d.url) return null;
   if(String((d.session.user||{}).role||'').toUpperCase()!=='COLLECTOR') return null;
-  return { url:d.url, token:d.session.token, user:d.session.user, tenant:k };
+  /* the sign-in is the store's; the address is the district's */
+  return { url:PUBLISHED[k]||d.url, token:d.session.token, user:d.session.user, tenant:k,
+           stale:!!(PUBLISHED[k] && d.url && PUBLISHED[k]!==d.url) };
 }
 /* everything the console has read is the OTHER register's the moment this
    changes — every cache is dropped, not merged */
@@ -1330,7 +1364,7 @@ function boot(){
   let d=null; try{ d=JSON.parse(localStorage.getItem('sjf5')||'null'); }catch(e){}
   if(!d||!d.session||!d.session.token||!d.url){ gate('Sign in once in the SJGP app on this device, then open this page again. The console uses that sign-in.',true); return; }
   if((d.session.user||{}).role!=='COLLECTOR'){ gate('<span class="rd">The monitoring console is available to the Collector alone.</span> This device is signed in as '+esc((d.session.user||{}).name||'another officer')+'.',true); return; }
-  ST={url:d.url,token:d.session.token,user:d.session.user,tenant:'SJGP'};
+  ST={url:PUBLISHED.SJGP||d.url,token:d.session.token,user:d.session.user,tenant:'SJGP'};
   /* the register this device was last reading, if it is still signed in to it */
   let want=''; try{ want=localStorage.getItem('sjgp-console-tenant')||''; }catch(e){}
   if(want && want!=='SJGP'){ const alt=tenantSession(want); if(alt){ TVIEW=want; ST=alt; } }
@@ -2919,7 +2953,13 @@ function rollPost(body,after){
     body:JSON.stringify(Object.assign({token:ST.token},body))})
     .then(r=>r.json()).then(j=>{
       ROLLBUSY=false;
-      if(!j||j.ok===false){ rollSay((j&&j.error)||'The district refused it.',true); return; }
+      if(!j||j.ok===false){
+        /* AND WHICH REGISTER SAID SO. A refusal with no address behind it cost
+           a day: the message was read as a fault in the button when it was the
+           answer of a different deployment. */
+        const who=(TENANCY[TVIEW]||{}).name||TVIEW;
+        const tail=String(ST.url||'').replace(/\/exec$/,'').slice(-10);
+        rollSay(((j&&j.error)||'The district refused it.')+'  ['+who+' · …'+tail+']',true); return; }
       after(j);
       pullRoll().then(()=>{ if(DATA) render(DATA); });
     })
@@ -4347,7 +4387,9 @@ async function writeBrief(){
   BRIEFING=false; if(DATA) render(DATA);
 }
 function openDrawer(t,s,b){ $('#dTitle').textContent=t; $('#dSub').textContent=s; $('#dBody').innerHTML=b; $('#drawer').hidden=false; }
-boot();
+/* the addresses first, then the console: a call made before they are known
+   would go to the very address this is here to stop trusting */
+learnAddresses().then(boot, boot);
 </script>
 </body>
 </html>
