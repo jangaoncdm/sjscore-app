@@ -44,6 +44,34 @@ module.exports = {
 
     /* ---- the roll as the console reads it ---- */
     const roll = env.get('roll', { token: cdm });
+
+    /* ---- HAS THE APP REACHED THEM? ----
+       THE REGISTER CANNOT KNOW WHO HAS INSTALLED IT and must not pretend to:
+       putting the app on a home screen is the phone's own doing and is
+       reported to nobody. What it knows exactly is who has SIGNED IN, because
+       a sign-in issues a token and every token is a row with a day on it. */
+    t.ok(!!roll.adoption, 'the roll carries what is known about adoption');
+    t.eq(roll.adoption.onRoll, roll.rows.filter(r => r.active).length,
+      'measured against the active roll and not the whole tab');
+    t.eq(roll.adoption.signedIn + roll.adoption.never, roll.adoption.onRoll,
+      'every active officer is either in or not — the two always add up');
+    t.ok(roll.adoption.signedIn >= 1, 'the Collector himself has signed in, so at least one has');
+    t.ok(roll.rows.some(r => r.lastLogin), 'and an officer who has signed in carries the day he last did');
+
+    /* AN OFFICER WHO HAS NEVER SIGNED IN CARRIES NO DAY, and is counted as
+       never rather than quietly as nothing. */
+    const untouched = roll.rows.filter(r => r.active && !r.lastLogin);
+    t.eq(untouched.length, roll.adoption.never, 'and those with no day are exactly the ones counted never');
+
+    /* A SECOND SIGN-IN IS NOT A SECOND OFFICER (rule 9 in spirit): the count
+       is of people, not of tokens. */
+    const beforeIn = roll.adoption.signedIn;
+    c.issueToken_(c.findByPhone_('9000000001'));
+    c.issueToken_(c.findByPhone_('9000000001'));
+    const roll1b = env.get('roll', { token: cdm });
+    t.eq(roll1b.adoption.signedIn, beforeIn, 'signing in again does not make him two officers');
+    t.ok((roll1b.rows.find(r => r.phone === '9000000001') || {}).logins >= 3,
+      'though his own count of sign-ins rises');
     t.eq(roll.ok, true, 'the Collector reads it');
     t.eq(roll.rows.length, 9, 'one line per officer on the seeded roll');
     const mine = roll.rows.find(r => r.phone === '9000000014');

@@ -20,6 +20,10 @@ const DASH = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-dashboard.
 const ROLL={ ok:true, roles:['PS','MPO','MSO','MPDO','DLPO','DPO','COLLECTOR'],
   mandals:['Chilpur','Devaruppula','Jangaon'],
   tenant:'SJGP', tenantName:'Swachh Jangaon Gram Panchayat',
+  /* WHO HAS ACTUALLY BEEN IN THE APP — sign-ins, which the register knows,
+     and never installs, which it cannot. */
+  adoption:{ onRoll:3, signedIn:2, never:1, last7:1, last30:2,
+    firstWeek:[{date:'2026-09-17',n:1},{date:'2026-09-19',n:1}] },
   /* A REGISTER STOOD UP WITH AN EMPTY CALENDAR. The Gram Palana one was, and
      nothing on the console said so — it simply counted Dasara and every
      second Saturday as working days and every figure came out wrong. */
@@ -30,7 +34,7 @@ const ROLL={ ok:true, roles:['PS','MPO','MSO','MPDO','DLPO','DPO','COLLECTOR'],
     extra:[{date:'2026-03-07',occasion:'Local festival'}],
     missing:[{date:'2026-01-26',occasion:'Republic Day'}] },
   rows:[
-    {phone:'9000000001',name:'Sandeep Kumar Jha',role:'COLLECTOR',mandal:'',gp:'',hasPin:true,active:true,rows:1},
+    {phone:'9000000001',name:'Sandeep Kumar Jha',role:'COLLECTOR',mandal:'',gp:'',hasPin:true,active:true,rows:1,lastLogin:'2026-09-19',firstLogin:'2026-09-17',logins:9},
     {phone:'9848100203',name:'Burra Bhanuchander',role:'PS',mandal:'Devaruppula',gp:'Ramboji Gudem',hasPin:false,active:true,rows:1},
     {phone:'9848100207',name:'Gone Away',role:'PS',mandal:'Chilpur',gp:'Old Charge',hasPin:true,active:false,rows:1}
   ]};
@@ -160,6 +164,16 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   const act=posts.find(p=>p.kind==='userActive');
   ck(!!act&&act.phone==='9848100207'&&act.active===true,
     'Put back sends active:true for the man who is off the roll',act?String(act.active):'');
+
+  /* --- HAS THE APP REACHED THEM? Sign-ins, never installs. --- */
+  const tA = await txt();
+  ck(/Has the app reached them/i.test(tA),'the adoption panel is on the Admin screen');
+  ck(/Signed in at least once/i.test(tA),'it counts officers who have signed in');
+  ck(!/install/i.test(tA.split('Has the app reached them')[1]||'')||/cannot/i.test(tA),
+     'and never claims to count installs');
+  ck(/never signed in/i.test(tA),'it names the officers still to be reached');
+  ck(/Burra Bhanuchander/.test(tA),'by name');
+  ck(/no PIN/i.test(tA),'and says which of them cannot get in at all yet');
 
   /* --- THE YEAR'S HOLIDAYS, which is a button and never a trigger --- */
   const tH = await txt();

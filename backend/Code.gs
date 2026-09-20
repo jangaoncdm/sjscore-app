@@ -4346,6 +4346,51 @@ function rollRows_(t, v, p){
 /* op=roll — the officer roll as the console shows it. Collector only: it
    carries every officer's mobile number, which is not a thing to hand to a
    mandal login. */
+/* ============================================================================
+ * HAS THE APP ACTUALLY REACHED THE OFFICER?
+ * ----------------------------------------------------------------------------
+ * THE REGISTER CANNOT KNOW WHO HAS INSTALLED IT, and it must not pretend to.
+ * Putting the app on a home screen is done by the phone's own browser and is
+ * reported to nobody; there is no call, no receipt and no way to ask. A tile
+ * headed "installed" would be a number somebody made up, and on this register
+ * a made-up number is how officers get chased for things they did not do.
+ *
+ * What CAN be known, exactly, is who has signed in — because a sign-in issues
+ * a token and every token is a row on the Tokens tab with the day on it. One
+ * row is one successful sign-in by one number; nothing prunes them, and
+ * issueToken_ has exactly one caller. So the first row for a number is the day
+ * that officer first got into the app, the last is the last time he did, and
+ * an officer with no row at all has never opened it.
+ *
+ * That is the honest measure of adoption, and it is the one the district
+ * actually wants: not how many downloaded it, but how many are using it and
+ * who is still to be reached.
+ * ========================================================================== */
+function adoption_(){
+  const sh = sheet_('Tokens', ['Token','Name','Phone','Created','Expires']);
+  const v = sh.getDataRange().getValues();
+  const by = {};
+  for(let i = 1; i < v.length; i++){
+    const p = phone10_(v[i][2]);
+    if(p.length !== 10) continue;
+    let d = '';
+    try{ d = dateText_(v[i][3]); }catch(err){}
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(d))) continue;
+    const r = by[p] || (by[p] = { first:d, last:d, logins:0 });
+    if(d < r.first) r.first = d;
+    if(d > r.last) r.last = d;
+    r.logins++;
+  }
+  return by;
+}
+/* a day, n days back from the district's own today */
+function daysBack_(n){
+  const d = new Date(today_() + 'T00:00:00');
+  d.setDate(d.getDate() - n);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+         '-' + String(d.getDate()).padStart(2, '0');
+}
+
 function rollRegister_(u){
   if(u.role !== 'COLLECTOR') return json_({ ok:false, error:'The roll is the Collector’s.' });
   const t = uidx_(), v = t.sh.getDataRange().getValues();
@@ -4410,7 +4455,29 @@ function rollRegister_(u){
       holMissing.sort(function(a, b){ return a.date < b.date ? -1 : 1; });
     }
   }catch(e){}
-  return json_({ ok:true, rows:rows, roles:Object.keys(rank_()),
+  /* WHO HAS ACTUALLY BEEN IN THE APP. Read off the sign-in record, never
+     guessed at, and never called "installed" — see adoption_. */
+  let adopt = { onRoll:0, signedIn:0, never:0, last7:0, last30:0, firstWeek:[] };
+  try{
+    const ad = adoption_(), d7 = daysBack_(7), d30 = daysBack_(30);
+    rows.forEach(function(r){
+      const a = ad[r.phone];
+      if(a){ r.firstLogin = a.first; r.lastLogin = a.last; r.logins = a.logins; }
+    });
+    const live = rows.filter(function(r){ return r.active; });
+    adopt.onRoll = live.length;
+    adopt.signedIn = live.filter(function(r){ return !!r.lastLogin; }).length;
+    adopt.never = live.length - adopt.signedIn;
+    adopt.last7 = live.filter(function(r){ return r.lastLogin && r.lastLogin >= d7; }).length;
+    adopt.last30 = live.filter(function(r){ return r.lastLogin && r.lastLogin >= d30; }).length;
+    /* how it spread, day by day: the day each officer FIRST got in, which is
+       the only curve that says whether the rollout is still moving */
+    const spread = {};
+    live.forEach(function(r){ if(r.firstLogin) spread[r.firstLogin] = (spread[r.firstLogin] || 0) + 1; });
+    adopt.firstWeek = Object.keys(spread).sort().map(function(d){ return { date:d, n:spread[d] }; });
+  }catch(e){}
+
+  return json_({ ok:true, rows:rows, roles:Object.keys(rank_()), adoption:adopt,
                  tenant:tenant_().key, tenantName:tenant_().name,
                  holidays:{ year:holYear, count:hol, onOrder:hol - holExtra.length,
                             extra:holExtra.slice(0, 60), missing:holMissing.slice(0, 60) },
