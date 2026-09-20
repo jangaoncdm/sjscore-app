@@ -1357,7 +1357,7 @@ function initTheme(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '16c71c9 - 19 Sep 20:21';
+const BUILD_STAMP = '519e29a - 20 Sep 08:07';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -3075,6 +3075,51 @@ function vAdmin(j,A){
       </div>
       <div style="margin-top:12px"><button class="tbtn pri" id="rlAdd"${ROLLBUSY?' disabled':''}>Register and set a PIN</button></div>
       <p style="font-size:12px;color:var(--tx-3);margin-top:10px;line-height:1.6">A number already on the roll is refused and its holder named — one number, one officer. The PIN is shown once, here, and written nowhere.</p>`);
+
+  /* ---- HAS THE APP REACHED THE OFFICER? ----
+     NOT "INSTALLED". Putting the app on a home screen is done by the phone's
+     own browser and is reported to nobody — there is no call and no receipt,
+     and a tile headed "installed" would be a number somebody made up. On this
+     register a made-up number is how officers get chased for things they did
+     not do. What is counted here is SIGNING IN, which the register knows
+     exactly, because every sign-in issues a token and every token is a row
+     with the day on it. The panel says which it is measuring, in as many
+     words, so nobody reads it as the other thing. */
+  const AD = ROLL.adoption || { onRoll:0, signedIn:0, never:0, last7:0, last30:0, firstWeek:[] };
+  const pctOf = (n, d) => d ? Math.round(n * 100 / d) : 0;
+  const notIn = rows.filter(r => r.active && !r.lastLogin)
+    .sort((a,b) => (a.mandal||'').localeCompare(b.mandal||'') || (a.name||'').localeCompare(b.name||''));
+  const curve = (AD.firstWeek||[]).slice(-14);
+  const curveMax = curve.reduce((m,x) => Math.max(m, x.n), 0) || 1;
+  h+=panel('c12','Has the app reached them?',
+    'signing in, which the register knows \u2014 not installing, which it cannot',
+    `<div class="kpirow" style="margin:0 0 4px">
+      ${kpi('Signed in at least once',IC.u,AD.signedIn,'',pctOf(AD.signedIn,AD.onRoll)+'% of '+AD.onRoll+' on the roll')}
+      ${kpi('Never opened it',IC.u,AD.never,'',AD.never?'named below \u2014 they are the rollout':'every officer has been in')}
+      ${kpi('In the last 7 days',IC.u,AD.last7,'',pctOf(AD.last7,AD.onRoll)+'% of the roll')}
+      ${kpi('In the last 30 days',IC.u,AD.last30,'',pctOf(AD.last30,AD.onRoll)+'% of the roll')}
+    </div>
+    ${curve.length?`<div style="margin-top:6px">
+      <div class="lbl" style="margin-bottom:7px">First sign-in, day by day \u2014 whether the rollout is still moving</div>
+      <div style="display:flex;align-items:flex-end;gap:5px;height:74px;justify-content:flex-start">
+        ${curve.map(x=>`<div style="flex:1 1 0;min-width:0;max-width:72px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px" title="${esc(x.date)}: ${x.n}">
+          <div style="width:100%;background:var(--cs1);border-radius:3px 3px 0 0;height:${Math.max(3, Math.round(x.n*52/curveMax))}px"></div>
+          <div style="font:9.5px/1 var(--mono);color:var(--tx-3);white-space:nowrap">${esc(dm(x.date))}</div>
+        </div>`).join('')}
+      </div></div>`:''}
+    ${notIn.length?`<div style="margin-top:14px">
+      <div class="lbl" style="margin-bottom:7px">${notIn.length} officer(s) have never signed in</div>
+      <div class="twrap" style="max-height:260px"><table>
+        <thead><tr><th>Officer</th><th>Role</th><th>Mandal</th><th>Number</th><th>PIN</th></tr></thead>
+        <tbody>${notIn.map(r=>'<tr><td>'+esc(r.name||'\u2014')+'</td><td class="mut">'+esc(r.role||'')+'</td>'+
+          '<td class="mut">'+esc(r.mandal||'\u2014')+'</td><td class="num mut">'+esc(r.phone)+'</td>'+
+          '<td>'+(r.hasPin?'<span class="pill ok">set</span>':'<span class="pill bad">no PIN</span>')+'</td></tr>').join('')}
+        </tbody></table></div>
+      <div class="expnote" style="margin-top:8px">A man with <b>no PIN</b> cannot get in at all \u2014 issue one with Reset PIN
+      on the roll below. A man whose PIN is set but who has never signed in has the app to be shown to him, not a fault to
+      answer for. <b>This counts sign-ins and nothing else:</b> an officer may have installed the app and not yet opened
+      it, and the register has no way to see that.</div></div>`:
+      '<div class="expnote" style="margin-top:12px">Every active officer on the roll has signed in at least once.</div>'}`,'rl');
 
   /* ---- THE YEAR ITSELF ----
      A register whose Holidays tab is empty counts Dasara, Diwali and every
