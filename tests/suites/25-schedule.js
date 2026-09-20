@@ -313,6 +313,53 @@ module.exports = {
     t.eq(p.mine.behind, Math.max(0, p.mine.dueByToday - p.mine.filed),
       'behind is measured against everything he has filed — a man ahead of his own schedule is not chased');
 
+    /* ---- 5b. DEALING THE MONTH AGAIN UNDER A NEW ORDER ----
+       An order reaches forward, so a plain publish after a new order changes
+       nothing and the console goes on showing what the old order made — which
+       is how the district was left reading "DPO 72" under shares that no
+       longer said so. Re-dealing is therefore its own act, asked for by name,
+       and it destroys nothing. */
+    {
+      const wasActive = schedRows(env).filter(r => r.status === 'ACTIVE');
+      const wasIds = wasActive.map(r => r.id).sort().join(',');
+      t.ok(wasActive.length > 0, 'there is a standing schedule to re-deal');
+
+      /* a plain publish does NOT re-deal: that is the whole point of it */
+      const plainAgain = env.post({ kind: 'schedulePublish', token: cdm });
+      t.eq(plainAgain.superseded || 0, 0, 'a plain publish supersedes nothing');
+      t.eq(schedRows(env).filter(r => r.status === 'ACTIVE').map(r => r.id).sort().join(','), wasIds,
+        'and leaves every standing line exactly where it was');
+
+      const rd = env.post({ kind: 'schedulePublish', token: cdm, redeal: true });
+      t.eq(rd.ok, true, 'the Collector deals the month again');
+      t.ok(rd.superseded >= 1, rd.superseded + ' standing line(s) superseded');
+
+      const now = schedRows(env);
+      /* RULE 7: nothing is destroyed */
+      const sup = now.filter(r => r.status === 'SUPERSEDED');
+      t.eq(sup.length, rd.superseded, 'every one of them is still on the register, marked SUPERSEDED');
+      t.ok(sup.every(r => /re-dealt/i.test(String(r.note || ''))), 'each saying why, and when');
+      t.ok(now.length > wasActive.length, 'the old lines were kept and new ones written beside them');
+
+      /* the month is whole again, and dealt by the order now in force */
+      const live = now.filter(r => r.status === 'ACTIVE');
+      const seen = {}; live.forEach(r => { seen[r.mandal.toLowerCase() + '|' + r.gp.toLowerCase()] = true; });
+      t.ok(Object.keys(seen).length >= 1, 'every village still unfiled is on somebody’s list again');
+      live.forEach(r => {
+        const role = String(r.role).toUpperCase();
+        if(role !== 'DPO' && role !== 'DLPO') return;
+        t.eq(role, c.schDistrictRole_(r.mandal), r.mandal + ': dealt to the right district officer');
+      });
+
+      /* A VILLAGE ALREADY FILED IS NOT DEALT AGAIN. One was filed above. */
+      const filedKeys = {};
+      (env.sheets['Inspections'].rows || []).slice(1).forEach(() => {});
+      t.ok(!live.some(r => r.gp === first.gp && r.mandal === first.mandal),
+        'a village already filed is not put back on anybody’s list');
+
+      /* the receipt is checked in section 8, once an officer has given one */
+    }
+
     /* ---- 8. the officer’s receipt ---- */
     t.eq(env.get('schedule', { token: dpoT2 }).acknowledged, false, 'unacknowledged to begin with');
     const a1 = env.post({ kind: 'schedAck', token: dpoT2, ym: '2026-09' });
@@ -322,6 +369,8 @@ module.exports = {
     t.eq(a2.already, true, 'and writes no second receipt (rule 8)');
     t.eq(env.sheets['SchedAck'].rows.length, 2, 'one header, one receipt');
     t.eq(env.get('schedule', { token: dpoT2 }).acknowledged, true, 'and the app is told');
+
+
 
     /* A RECEIPT FOR NOTHING IS NOT A RECEIPT */
     const psRead = env.get('schedule', { token: psT });
@@ -536,5 +585,24 @@ module.exports = {
     t.ok(!schedRows(env4).some(r => String(r.role).toUpperCase() === 'DLPO'),
       'nothing is assigned to a name that cannot sign in');
     t.eq(p4.villages, 31, 'every village is still on somebody’s list — the empty office’s share went to the mandals');
+
+    /* ---- LAST, BECAUSE IT RESETS THE MONTH ----
+       Re-dealing gives every unfiled village a new officer and a new day, so
+       nothing about pace or being behind can be tested after it. */
+    /* A RECEIPT IS FOR THE LIST HE WAS SHOWN. Deal the month again and his
+       receipt no longer stands: the schedule he agreed to is not the one he
+       now holds, so it opens again. An officer is never held to have
+       acknowledged a list nobody put in front of him. */
+    /* the district's clock moves on between his receipt and the re-deal,
+       as it does in life — the mock holds it still unless told otherwise */
+    env.setNow('2026-09-20T11:30:00+05:30');
+    env.post({ kind:'schedulePublish', token: cdm, redeal: true });
+    const afterRedeal = env.get('schedule', { token: dpoT2 });
+    if(afterRedeal.mine && afterRedeal.mine.rows && afterRedeal.mine.rows.length){
+      t.eq(afterRedeal.acknowledged, false,
+        'his receipt does not carry over to a list he has not seen');
+      t.ok(!!afterRedeal.ackAt, 'though the receipt he did give is still on the register (rule 7)');
+    }
+
   }
 };

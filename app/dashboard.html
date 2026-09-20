@@ -3472,6 +3472,7 @@ function vSchedule(j,A){
           value="${esc(SCHEDFORM.start)}"></label>
       <button class="tbtn" data-sc="publish">Take in newly pending villages</button>
       <button class="tbtn" data-sc="respread">Re-spread the remaining dates</button>
+      <button class="tbtn" data-sc="redeal">Deal the month again</button>
       <button class="tbtn pri" data-sc="remind"${behindOff.length?'':' disabled'}>Remind the ${behindOff.length} officer${behindOff.length===1?'':'s'} behind</button>
       <button class="tbtn" data-sc="share">Send the schedule to all ${offs.length}</button>
       <button class="tbtn" data-sc="compose">Send a message</button>
@@ -3635,6 +3636,28 @@ function wireSchedule(){
         'Nothing already assigned moves, and no date already given to an officer is changed.')) return;
       schedPost({kind:'schedulePublish', from:SCHEDFORM.start||''}, r=>{
         SCHEDMSG=schedPubWords(r); SCHEDBAD=false;
+      });
+      return;
+    }
+    if(a==='redeal'){
+      /* A PUBLISH CANNOT DO THIS, AND SHOULD NOT. An order reaches forward:
+         a village already assigned stays where it was put, so publishing
+         again after a new order changes nothing and the console goes on
+         showing the allocation the old order made. That is right for a
+         publish and wrong for the day the order itself changes, which is how
+         the district was left reading "DPO 72" under shares that no longer
+         said so. It is therefore its own act, asked for by name. */
+      const n=(SCHED&&SCHED.district&&SCHED.district.villages)||0;
+      if(!confirm('Deal '+(SCHED&&SCHED.ym||'this month')+' again, under the order now in force?\n\n'+
+        'Every village still unfiled is taken off its present officer and dealt afresh by the current shares'+
+        schedFromWords()+'.\n\n'+
+        'Nothing is deleted: each standing line is marked SUPERSEDED where it is, and every reminder and receipt '+
+        'already written against it stays readable. A village already FILED is not touched.\n\n'+
+        'Every officer whose list changes will be asked to acknowledge it again, and should be sent the new one.')) return;
+      schedPost({kind:'schedulePublish', redeal:true, from:SCHEDFORM.start||''}, r=>{
+        SCHEDMSG=(r.superseded?r.superseded+' standing line(s) superseded and ':'')+
+          schedPubWords(r)+' Send it to them, or they are working to the old list.';
+        SCHEDBAD=false;
       });
       return;
     }

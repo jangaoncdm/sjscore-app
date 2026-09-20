@@ -444,6 +444,27 @@ the proportion the order set between them — and the publish says so rather tha
 letting a tenth of a mandal disappear into whoever happened to be first. A
 mandal with nobody at all is **named, not swallowed**.
 
+**An order reaches forward — and that is why there is a button to deal the
+month again.** A village already assigned stays where it was put, so a fresh
+publish after a NEW order changes nothing at all and the console goes on
+showing what the old order made: the district was left reading *DPO 72* under
+shares that no longer said so. Re-dealing is therefore its own act, asked for
+by name (*Deal the month again*), exactly as re-spreading the dates is.
+**Nothing is destroyed** (rule 7): every standing line is marked `SUPERSEDED`
+where it is, carrying the day and the reason, and every reminder and receipt
+written against it stays readable. A village already **filed** is never
+re-dealt, because the allocation only ever deals what is still pending. A
+superseded line does **not** block the line replacing it — a re-dealt village
+often falls to the same officer again and the id is derived from month,
+officer and village, so a superseded row would match the new line exactly and
+the whole re-deal would write nothing; suite 25 caught that before it ever ran
+against the district.
+
+**A receipt is for the list he was shown.** An officer whose own lines were
+dealt again after he acknowledged them is asked again, because his rows carry
+a newer `assignedAt` than his receipt — and only those officers, since an
+untouched row keeps its old one. The receipt he did give stays on the register.
+
 **An order reaches forward.** Assignments already made stand; only villages
 still unspoken-for are dealt under the new shares. Re-spreading the dates
 remains a separate, explicit act.

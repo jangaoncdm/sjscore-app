@@ -2149,13 +2149,49 @@ function schPublish_(b, u){
   try{
     const sh = sheet_('Schedule', SCH_HEAD), m = headMap_(sh, SCH_HEAD);
     const existing = schRows_(ym);
+    /* DEALING THE MONTH AGAIN UNDER A NEW ORDER.
+       An order reaches forward: a village already assigned stays where it was
+       put, so a fresh publish after a new order changes nothing at all and the
+       console goes on showing the old allocation. That is right for a publish
+       and wrong for the day the order itself changes — the shares of
+       19.09.2026 could not reach a month already dealt out under the sixty-
+       each of the 17th, and the district went on reading "DPO 72".
+
+       So this is its own act, asked for by name, exactly as re-spreading the
+       dates is. NOTHING IS DESTROYED (rule 7): every standing line is marked
+       SUPERSEDED where it is, carrying the day it was superseded and the order
+       it was dealt under, and every reminder and receipt already written
+       against it stays readable. A village already FILED is not re-dealt at
+       all, because the allocation only ever deals what is still pending.
+
+       An officer whose list is re-dealt must acknowledge it again: his rows
+       carry a newer assignedAt than his receipt, and the app reads that. He is
+       not asked to acknowledge a schedule he has not been shown. */
+    let superseded = 0;
+    if(b.redeal === true || String(b.redeal) === 'true'){
+      existing.forEach(r => {
+        if(r.status !== 'ACTIVE') return;
+        if(m.ix.status >= 0) sh.getRange(r.at, m.ix.status + 1).setValue('SUPERSEDED');
+        if(m.ix.note >= 0) sh.getRange(r.at, m.ix.note + 1)
+          .setValue('Re-dealt on ' + today_() + ' under the order in force');
+        r.status = 'SUPERSEDED'; superseded++;
+      });
+      if(superseded) admAudit_('SCHEDULE_REDEAL', ym,
+        superseded + ' standing line(s) superseded and the month dealt again by ' + u.name + ' (' + u.phone + ')');
+    }
     /* the shares are the order's; there is nothing here for the console to
        set, which is the point of an order */
     const alloc = schAllocate_(ym, existing, SCH_SHARE);
 
     const now = new Date().toISOString();
     const by = u.name + ' (' + u.phone + ')';
-    const byId = {}; existing.forEach(r => { byId[r.id] = r; });
+    /* A SUPERSEDED LINE IS NOT AN ASSIGNMENT, and must not block the one
+       replacing it. A re-dealt village often falls to the same officer
+       again, and the id is derived from the month, the officer and the
+       village — so a superseded row would match the new line exactly and
+       the whole re-deal would write nothing at all. Caught by suite 25
+       before it ever ran against the district. */
+    const byId = {}; existing.forEach(r => { if(r.status === 'ACTIVE') byId[r.id] = r; });
 
     /* NOTHING IS DESTROYED. A village that has left the roll since the
        schedule was published is marked DROPPED where it stands; the row, and
@@ -2257,7 +2293,8 @@ function schPublish_(b, u){
       startFrom:days[0] || '', startTo:days[days.length - 1] || '',
       pending:alloc.pending, villages:villagesOf(after), rows:after.length,
       workingDaysLeft:days.length, offices:offices, notes:alloc.notes,
-      unassigned:alloc.unassigned, shares:SCH_SHARE, subdivision:SCH_SUBDIVISION, at:now });
+      unassigned:alloc.unassigned, shares:SCH_SHARE, subdivision:SCH_SUBDIVISION,
+      superseded:superseded, at:now });
   } finally { lock.releaseLock(); }
 }
 
@@ -2318,7 +2355,9 @@ function schPaceBuild_(ym, today){
     if(f) o.filed++;
     if(r.dueDate && r.dueDate <= t) o.dueByToday++;
     if(r.dueDate === t) o.dueToday++;
-    o.rows.push({ id:r.id, mandal:r.mandal, gp:r.gp, dueDate:r.dueDate,
+    /* WHEN THIS LINE WAS DEALT rides with it, so the app can tell a schedule
+       the officer has seen from one dealt again since he acknowledged it. */
+    o.rows.push({ id:r.id, mandal:r.mandal, gp:r.gp, dueDate:r.dueDate, assignedAt:r.assignedAt,
                   filed:!!f, filedOn:f ? f.date : '', score:f ? f.score : null,
                   filedBy:f ? String(f.officer || '').replace(/\s*\(\d+\)$/, '') : '' });
   });
@@ -2430,7 +2469,19 @@ function schRegister_(u, p){
     mine: mineRow ? { assigned:mineRow.assigned, filed:mineRow.filed, left:mineRow.left,
       dueByToday:mineRow.dueByToday, dueToday:mineRow.dueToday, behind:mineRow.behind,
       mandals:mineRow.mandals, rows:mineRow.rows } : null,
-    acknowledged: !!acks[u.phone], ackAt:acks[u.phone] || '',
+    /* A RECEIPT IS FOR THE LIST HE WAS SHOWN. If his own lines were dealt
+       again after he acknowledged them, the schedule he agreed to is not the
+       one he now holds, so it opens again — and only for the officers whose
+       lines actually moved, because an untouched row keeps its old
+       assignedAt. */
+    acknowledged: !!acks[u.phone] && !(function(){
+      /* the newest moment any of HIS OWN lines was dealt */
+      const mine = (mineRow && mineRow.rows) || [];
+      let newest = '';
+      mine.forEach(function(x){ const a = String(x.assignedAt || ''); if(a > newest) newest = a; });
+      return !!newest && String(acks[u.phone]) < newest;
+    })(),
+    ackAt:acks[u.phone] || '',
     workingDaysLeft:pace.workingDaysLeft,
     district:{ villages:pace.villages, filed:pace.filed, needPerDay:pace.needPerDay },
     nudges:nudges,
