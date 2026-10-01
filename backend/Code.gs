@@ -249,7 +249,7 @@ const N_HEAD = ['id','no','date','phone','name','role','mandal','seq','issuedAt'
    So Status is appended (ensureHeaders_ does that by itself, no migration)
    and a VOIDED row is skipped by every count — while the row, its occasion,
    and who struck it out stay exactly where they are, readable (rule 7). */
-const H_HEAD = ['Date','Occasion','Status','Note'];
+const H_HEAD = ['Date','Occasion','Status','Note','VoidedOn'];
 /* THE LADDER. A missed day is not met with an instrument on the first
    occasion. The first two misses of a calendar month draw a REMINDER —
    pushed, but informal: no number, no lock, no debit, and it never enters
@@ -898,13 +898,27 @@ function holidaySet_(){
   try{ disp = rng.getDisplayValues(); }catch(e){ disp = []; }
   /* by header name, never by position (the tab predates the Status column) */
   const head = v[0].map(function(h){ return String(h).toLowerCase().trim(); });
-  const si = head.indexOf('status');
+  const si = head.indexOf('status'), vi = head.indexOf('voidedon');
   const set = {};
   for(let i = 1; i < v.length; i++){
-    /* struck off the calendar, still on the tab */
-    if(si >= 0 && String(v[i][si] || '').toUpperCase() === 'VOIDED') continue;
     const d = holidayKey_(v[i][0], disp[i] ? disp[i][0] : '');
-    if(d) set[d] = String(v[i][1] || (disp[i] ? disp[i][1] : '') || 'Holiday');
+    if(!d) continue;
+    /* STRUCK OFF THE CALENDAR, STILL ON THE TAB — AND REACHING FORWARD ONLY.
+       Several of the wrong dates had already gone by when they were found:
+       05.09.2026 stood as an off day all that day, and 280 officers were told
+       so. Making it a working day now would count every one of them unmarked
+       on a day the register itself declared shut, and the 18:00 read would
+       turn that into reminders and notices — the exact thing this register
+       exists not to do. So a strike takes the date off from the day AFTER it
+       was struck: the day it was struck, and every day before it, stand as
+       they were announced. The same rule the optional-holiday cap and the
+       filing order run under, for the same reason. */
+    if(si >= 0 && String(v[i][si] || '').toUpperCase() === 'VOIDED'){
+      const from = vi >= 0 ? holidayKey_(v[i][vi], disp[i] ? disp[i][vi] : '') : '';
+      if(!from || d > from) continue;          /* after the strike: not a holiday */
+      /* on or before it: it stood, and it stands */
+    }
+    set[d] = String(v[i][1] || (disp[i] ? disp[i][1] : '') || 'Holiday');
   }
   return set;
 }
@@ -4589,7 +4603,10 @@ function rollRegister_(u){
     adopt.firstWeek = Object.keys(spread).sort().map(function(d){ return { date:d, n:spread[d] }; });
   }catch(e){}
 
-  return json_({ ok:true, rows:rows, roles:Object.keys(rank_()), adoption:adopt,
+  /* THE DISTRICT'S DAY RIDES WITH THE ROLL (rule 1). The holiday panel has
+     to know which of these dates have already gone by, and a console open
+     on a machine a day out would say one had passed when it had not. */
+  return json_({ ok:true, rows:rows, roles:Object.keys(rank_()), adoption:adopt, today:today_(),
                  tenant:tenant_().key, tenantName:tenant_().name,
                  holidays:{ year:holYear, count:hol, onOrder:hol - holExtra.length,
                             extra:holExtra.slice(0, 60), missing:holMissing.slice(0, 60) },
@@ -5294,8 +5311,10 @@ function holidayVoid_(b, u){
     const v = rng.getValues();
     let disp = []; try{ disp = rng.getDisplayValues(); }catch(e){ disp = []; }
     const head = v[0].map(function(h){ return String(h).toLowerCase().trim(); });
-    const si = head.indexOf('status'), ni = head.indexOf('note');
+    const si = head.indexOf('status'), ni = head.indexOf('note'), vi = head.indexOf('voidedon');
     if(si < 0) return json_({ ok:false, error:'The Holidays tab has no Status column.' });
+    if(vi < 0) return json_({ ok:false,
+      error:'The Holidays tab has no VoidedOn column, and without it a strike could reach backwards.' });
 
     const done = [];
     for(let i = 1; i < v.length; i++){
@@ -5303,15 +5322,20 @@ function holidayVoid_(b, u){
       if(!d || !want[d]) continue;
       if(String(v[i][si] || '').toUpperCase() === 'VOIDED') continue;   /* rule 8 */
       sh.getRange(i + 1, si + 1).setValue('VOIDED');
+      sh.getRange(i + 1, vi + 1).setValue("'" + today_());
       if(ni >= 0) sh.getRange(i + 1, ni + 1)
         .setValue('Struck off on ' + today_() + ' \u2014 G.O.Rt.No.1715 does not name this date');
-      done.push({ date:d, occasion:String(v[i][1] || '') });
+      /* a date already gone stays as it was announced; only a future one moves */
+      done.push({ date:d, occasion:String(v[i][1] || ''), takesEffect: d > today_() });
     }
     done.forEach(function(x){
       admAudit_('HOLIDAY STRUCK OFF', x.date,
         (x.occasion || '(no occasion)') + ' \u2014 not named by G.O.Rt.No.1715 \u2014 by ' + u.name + ' (' + u.phone + ')');
     });
     return json_({ ok:true, struck:done.length, dates:done, refused:refused,
+                   /* what actually changes, and what was left as it was announced */
+                   forward:done.filter(function(x){ return x.takesEffect; }).length,
+                   stood:done.filter(function(x){ return !x.takesEffect; }).length,
                    offToday:offInfo_(today_()) });
   } finally { lock.releaseLock(); }
 }

@@ -831,6 +831,43 @@ look like figures. The Gram Palana register was deployed exactly so. The count
 for the calendar year now rides `op=roll`, and the console's Admin panel states
 it with the button to put it right.
 
+**A WRONG DATE CANNOT BE CURED BY LOADING THE ORDER AGAIN.** On 01.10.2026, a
+Thursday, the sanitation register answered that the day was a *Second
+Saturday* and stood its attendance gate down across 280 officers. It was
+`2026-01-10` — the second Saturday of **January** — on the Holidays tab with
+its day and month swapped: rule 3, in a live register, nine months after the
+rule was written for it. The swap is only possible where both numbers are
+twelve or less, which is why it lay unseen — it fires on one date in the year
+and looks like nothing on the other 364. `applyTsHolidays` only ever **adds**
+what is missing, by design, and a wrong date is not missing.
+
+So `holidayVoid_` takes a date off the calendar **without taking it off the
+tab**: `Status` and `VoidedOn` are appended to `H_HEAD` (ensureHeaders_ does
+that by itself) and the row stays with its occasion and the hand that struck
+it (rule 7). It **cannot strike a date G.O.Rt.No.1715 names** — refused and
+named, so no hand here removes Dasara — and it **fails closed**: if the
+order's own list cannot be read, nothing is struck at all.
+
+**AND A STRIKE REACHES FORWARD.** Several of the wrong dates had already gone
+by when they were found: 05.09.2026 stood as an off day all that day and 280
+officers were told so. Making it a working day now would count every one of
+them unmarked on a day the register itself declared shut, and the 18:00 read
+would turn that into reminders and notices — the precise thing this register
+exists not to do. So the day a date is struck, and every day before it, stand
+as they were announced; only the days after it change. The same rule the
+optional-holiday cap and the filing order run under. The console says which
+dates would actually move and which merely stand, and `op=roll` carries the
+district's day so that is read off the register and never off the browser
+(rule 1). Suite 28 holds all of it.
+
+**The G.O.'s own dates live in `Code.gs`, not `Admin.gs`.** They are not a job,
+they are the fact the register counts working days by, and the holiday audit
+reads them to say which dates on the tab the order does not name. While they
+sat in Admin.gs the app could not see them without reaching across — and the
+suites, which load Admin.gs only when asked, were checking that audit against
+an empty list and passing because there was nothing to find. Writing them to
+the tab is still `applyTsHolidays`, which is the Collector's own act.
+
 **That button is the one place this codebase reaches into `Admin.gs`, and the
 rule is kept rather than bent.** `applyTsHolidays()` is an Admin.gs job and the
 Collector presses that button, not a robot — so `holidayLoad_` has **no

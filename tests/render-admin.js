@@ -19,7 +19,7 @@ const DASH = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-dashboard.
 
 const ROLL={ ok:true, roles:['PS','MPO','MSO','MPDO','DLPO','DPO','COLLECTOR'],
   mandals:['Chilpur','Devaruppula','Jangaon'],
-  tenant:'SJGP', tenantName:'Swachh Jangaon Gram Panchayat',
+  tenant:'SJGP', tenantName:'Swachh Jangaon Gram Panchayat', today:'2026-10-01',
   /* WHO HAS ACTUALLY BEEN IN THE APP — sign-ins, which the register knows,
      and never installs, which it cannot. */
   adoption:{ onRoll:3, signedIn:2, never:1, last7:1, last30:2,
@@ -31,7 +31,9 @@ const ROLL={ ok:true, roles:['PS','MPO','MSO','MPDO','DLPO','DPO','COLLECTOR'],
      one does: the two live registers were loaded from the same G.O. and
      disagreed by nine */
   holidays:{ year:2026, count:0, onOrder:0,
-    extra:[{date:'2026-10-01',occasion:'Second Saturday'},{date:'2026-03-07',occasion:'Local festival'}],
+    extra:[{date:'2026-10-01',occasion:'Second Saturday'},
+           {date:'2026-11-04',occasion:'Second Saturday'},
+           {date:'2026-03-07',occasion:'Local festival'}],
     missing:[{date:'2026-01-26',occasion:'Republic Day'}] },
   rows:[
     {phone:'9000000001',name:'Sandeep Kumar Jha',role:'COLLECTOR',mandal:'',gp:'',hasPin:true,active:true,rows:1,lastLogin:'2026-09-19',firstLogin:'2026-09-17',logins:9},
@@ -183,6 +185,10 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   const tV = await txt();
   ck(/not a Saturday/i.test(tV),'a Second Saturday falling on a Thursday is called out as such');
   ck(/Take it off/i.test(tV),'and it can be taken off');
+  /* A STRIKE REACHES FORWARD: the panel must say which dates actually move */
+  ck(/makes it a working day/i.test(tV),'a date still to come is shown as one that would change');
+  ck(/already announced/i.test(tV),
+     'while today and the dates gone are shown as standing — nobody is marked absent in retrospect');
   ck(/cannot cure this/i.test(tV),'the panel says loading the order again will not fix it');
   ck(/no hand here removes Dasara|no date the G.O. names/i.test(tV),
      'and that a date the order names cannot be taken off by this button');
