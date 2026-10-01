@@ -4590,7 +4590,9 @@ function rollRegister_(u){
       TS_SECOND_SATURDAYS_2026.forEach(function(d){ canon[d] = 'Second Saturday'; });
     }catch(err){}
     if(Object.keys(canon).length){
-      mine.forEach(function(d){ if(!canon[d]) holExtra.push({ date:d, occasion:String(all[d] || '') }); });
+      const struck = voidedHolidays_();
+      mine.forEach(function(d){ if(!canon[d]) holExtra.push({ date:d,
+        occasion:String(all[d] || ''), voided: !!struck[d] }); });
       Object.keys(canon).forEach(function(d){
         if(String(d).slice(0, 4) === String(yr) && !all[d]) holMissing.push({ date:d, occasion:canon[d] }); });
       holExtra.sort(function(a, b){ return a.date < b.date ? -1 : 1; });
@@ -5295,6 +5297,30 @@ function orderedHolidays_(){
        VOIDED, carrying who struck it and when;
      · it is idempotent (rule 8) — a second press changes nothing;
      · and every one is written to Audit with the date and the reason. */
+/* WHICH DATES HAVE ALREADY BEEN STRUCK. One struck AFTER its own day has gone
+   still stands for that day — which is right, and would otherwise read on the
+   console as a button that did nothing. It is marked instead. */
+function voidedHolidays_(){
+  const out = {};
+  try{
+    const sh = sheet_('Holidays', H_HEAD);
+    const last = sh.getLastRow(); if(last < 2) return out;
+    const width = Math.max(sh.getLastColumn(), 2);
+    const rng = sh.getRange(1, 1, last, width);
+    const v = rng.getValues();
+    let disp = []; try{ disp = rng.getDisplayValues(); }catch(e){}
+    const head = v[0].map(function(h){ return String(h).toLowerCase().trim(); });
+    const si = head.indexOf('status'), vi = head.indexOf('voidedon');
+    if(si < 0) return out;
+    for(let i = 1; i < v.length; i++){
+      if(String(v[i][si] || '').toUpperCase() !== 'VOIDED') continue;
+      const d = holidayKey_(v[i][0], disp[i] ? disp[i][0] : '');
+      if(d) out[d] = vi >= 0 ? (holidayKey_(v[i][vi], disp[i] ? disp[i][vi] : '') || true) : true;
+    }
+  }catch(err){}
+  return out;
+}
+
 function holidayVoid_(b, u){
   if(u.role !== 'COLLECTOR') return json_({ ok:false, error:'The calendar is the Collector\u2019s alone.' });
   const canon = orderedHolidays_();

@@ -3175,10 +3175,13 @@ function vAdmin(j,A){
                 /* A STRIKE REACHES FORWARD. A date already gone stood as an off day
                    and 280 officers were told so; making it a working day now would
                    count every one of them unmarked on a day the register closed. */
-                '<td class="mut">'+(x.date>DTODAY
-                   ? 'makes it a working day'
-                   : '<span class="pill ok">no change</span> already announced — it stands')+'</td>'+
-                '<td><button class="tbtn" data-holoff="'+esc(x.date)+'"'+(ROLLBUSY?' disabled':'')+'>Take it off</button></td></tr>';
+                '<td class="mut">'+(x.voided
+                   ? '<span class="pill ok">struck</span> it stands for its own day only'
+                   : (x.date>DTODAY ? 'makes it a working day'
+                      : '<span class="pill ok">no change</span> already announced — it stands'))+'</td>'+
+                '<td>'+(x.voided ? '' :
+                   '<button class="tbtn" data-holoff="'+esc(x.date)+'"'+(ROLLBUSY?' disabled':'')+'>Take it off</button>')+
+                 '</td></tr>';
             }).join('')}</tbody></table></div>
           <div style="margin-top:9px"><button class="tbtn pri" id="rlHolOffAll"${ROLLBUSY?' disabled':''}>Take all ${holExtra.length} off the calendar</button></div>
           <div style="color:var(--tx-2);margin-top:8px">Each one is treated as an off day: attendance is voluntary, the day is
@@ -3348,7 +3351,7 @@ function wireAdmin(){
   });
   const offAll=$('#rlHolOffAll');
   if(offAll) offAll.onclick=()=>{
-    const ds=(((ROLL.holidays||{}).extra)||[]).map(x=>x.date);
+    const ds=(((ROLL.holidays||{}).extra)||[]).filter(x=>!x.voided).map(x=>x.date);
     strike(ds, 'Take all '+ds.length+' off the calendar?\n\n'+
       'Every date on this register that G.O.Rt.No.1715 does not name becomes a working day again.\n\n'+
       'Nothing is deleted: each row stays on the Holidays tab marked VOIDED. Any date the order DOES name is '+

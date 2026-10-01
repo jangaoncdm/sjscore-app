@@ -202,6 +202,16 @@ module.exports = {
       const roll = e.get('roll', { token:cdm });
       t.ok(!(roll.holidays.extra || []).some(x => x.date === '2026-11-04'),
         'and the Admin panel stops naming a date it no longer counts');
+      /* A DATE STRUCK AFTER ITS OWN DAY HAS GONE still stands for that day,
+         and the panel must say so rather than offer a button that does
+         nothing. */
+      e.post({ kind:'holidayVoid', token:cdm, dates:['2026-09-05'] });
+      const roll2 = e.get('roll', { token:cdm });
+      const past = (roll2.holidays.extra || []).find(x => x.date === '2026-09-05');
+      t.ok(!!past, 'a date struck after its own day is still listed');
+      t.eq(past.voided, true, 'and is marked as already struck');
+      t.eq(e.ctx.isWorkingDay_('2026-09-05'), false, 'because it still stands for its own day');
+
       t.ok((roll.holidays.extra || []).some(x => x.date === '2026-10-01'),
         'while today, which still stands, is still named \u2014 nothing is hidden');
     }
