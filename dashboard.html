@@ -1357,7 +1357,7 @@ function initTheme(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = 'd8a3e6c - 01 Oct 14:04';
+const BUILD_STAMP = '2cc2cb0 - 01 Oct 14:19';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -3085,6 +3085,9 @@ function vAdmin(j,A){
      exactly, because every sign-in issues a token and every token is a row
      with the day on it. The panel says which it is measuring, in as many
      words, so nobody reads it as the other thing. */
+  /* THE DISTRICT'S DAY, NOT THE BROWSER'S (rule 1): a console open on a
+     machine a day out would say a date had passed when it had not. */
+  const DTODAY = ROLL.today || (DATA && DATA.district && DATA.district.today) || '';
   const AD = ROLL.adoption || { onRoll:0, signedIn:0, never:0, last7:0, last30:0, firstWeek:[] };
   const pctOf = (n, d) => d ? Math.round(n * 100 / d) : 0;
   const notIn = rows.filter(r => r.active && !r.lastLogin)
@@ -3158,7 +3161,7 @@ function vAdmin(j,A){
         ${holExtra.length?`<div style="margin-top:${holMissing.length?'10px':'0'}">
           <b>${holExtra.length} date(s) stand on this register that G.O.Rt.No.1715 does not name:</b>
           <div class="twrap" style="margin-top:7px;max-height:300px"><table>
-            <thead><tr><th>Date</th><th>Day</th><th>It claims to be</th><th></th></tr></thead>
+            <thead><tr><th>Date</th><th>Day</th><th>It claims to be</th><th>Striking it</th><th></th></tr></thead>
             <tbody>${holExtra.map(x=>{
               const dd=new Date(x.date+'T00:00:00');
               const dayName=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][dd.getDay()];
@@ -3169,6 +3172,12 @@ function vAdmin(j,A){
               return '<tr><td class="num">'+esc(dm(x.date))+'</td>'+
                 '<td class="'+(odd?'':'mut')+'">'+esc(dayName)+(odd?' <span class="pill bad">not a Saturday</span>':'')+'</td>'+
                 '<td class="mut">'+esc(x.occasion||'—')+'</td>'+
+                /* A STRIKE REACHES FORWARD. A date already gone stood as an off day
+                   and 280 officers were told so; making it a working day now would
+                   count every one of them unmarked on a day the register closed. */
+                '<td class="mut">'+(x.date>DTODAY
+                   ? 'makes it a working day'
+                   : '<span class="pill ok">no change</span> already announced — it stands')+'</td>'+
                 '<td><button class="tbtn" data-holoff="'+esc(x.date)+'"'+(ROLLBUSY?' disabled':'')+'>Take it off</button></td></tr>';
             }).join('')}</tbody></table></div>
           <div style="margin-top:9px"><button class="tbtn pri" id="rlHolOffAll"${ROLLBUSY?' disabled':''}>Take all ${holExtra.length} off the calendar</button></div>
@@ -3177,7 +3186,10 @@ function vAdmin(j,A){
           what is missing, and a wrong date is not missing.<br>
           Taking one off <b>deletes nothing</b>: the row stays on the Holidays tab marked VOIDED, carrying what it claimed to be
           and who struck it. And <b>no date the G.O. names can be taken off by this button</b> — it is refused and named, so no
-          hand here removes Dasara.</div>
+          hand here removes Dasara.<br>
+          <b>A strike reaches forward.</b> A date already gone — and today, which the officers were told this
+          morning was a holiday — stands exactly as it was announced. Nobody is marked absent in retrospect
+          for a day this register itself closed. Only the dates still to come change.</div>
         </div>`:''}
       </div>`:'')
     ,'rl');
