@@ -239,7 +239,17 @@ const L_HEAD = ['id','appliedAt','phone','name','role','mandal','type','fromDate
    lock, never the debit. Status: PROPOSED → PENDING → ACK, or DROPPED. */
 const N_HEAD = ['id','no','date','phone','name','role','mandal','seq','issuedAt','emailedAt',
                 'status','ackAt','ackNote','ackReceivedAt','clDebited','leaveId','debitAt','decidedBy','decidedAt'];
-const H_HEAD = ['Date','Occasion'];
+/* A DATE CAN BE TAKEN OFF THE CALENDAR WITHOUT BEING TAKEN OFF THE TAB.
+   On 01.10.2026 — a Thursday — the sanitation register answered that the day
+   was a Second Saturday and stood its attendance gate down across 280
+   officers. It was 2026-01-10, the second Saturday of JANUARY, read with the
+   day and the month swapped: rule 3, in a live register, nine months after
+   the rule was written. Loading the G.O. again could never cure it, because
+   loading only ever ADDS what is missing and the wrong date is not missing.
+   So Status is appended (ensureHeaders_ does that by itself, no migration)
+   and a VOIDED row is skipped by every count — while the row, its occasion,
+   and who struck it out stay exactly where they are, readable (rule 7). */
+const H_HEAD = ['Date','Occasion','Status','Note'];
 /* THE LADDER. A missed day is not met with an instrument on the first
    occasion. The first two misses of a calendar month draw a REMINDER —
    pushed, but informal: no number, no lock, no debit, and it never enters
@@ -833,15 +843,66 @@ function holidayKey_(v, shown){
   if(m) return m[3] + '-' + p2(m[2]) + '-' + p2(m[1]);
   return '';
 }
+/* ============================================================================
+ * G.O.Rt.No.1715, dt. 06.12.2025 — the year the state declared.
+ * ----------------------------------------------------------------------------
+ * The 27 General Holidays and every second Saturday of 2026. Annexure-II's
+ * optional holidays are an individual's choice and are deliberately not here.
+ *
+ * THESE ARE IN Code.gs AND NOT IN Admin.gs because they are not a job, they
+ * are a fact: the register counts its working days by them, and the console's
+ * holiday audit reads them to say which dates on the Holidays tab the order
+ * does not name. WRITING them to the tab is still Admin.gs's applyTsHolidays,
+ * which is the Collector's own act.
+ * ========================================================================== */
+var TS_HOLIDAYS_2026 = [
+  ['2026-01-14','Bhogi'],
+  ['2026-01-15','Sankranti / Pongal'],
+  ['2026-01-26','Republic Day'],
+  ['2026-02-15','Maha Shivaratri'],
+  ['2026-03-03','Holi'],
+  ['2026-03-19','Ugadi'],
+  ['2026-03-21','Eidul Fitr (Ramzan)'],
+  ['2026-03-22','Following day of Ramzan'],
+  ['2026-03-27','Sri Rama Navami'],
+  ['2026-04-03','Good Friday'],
+  ['2026-04-05','Babu Jagjivan Ram’s Birthday'],
+  ['2026-04-14','Dr. B.R. Ambedkar’s Birthday'],
+  ['2026-05-27','Eidul Azha (Bakrid)'],
+  ['2026-06-26','Shahadat Imam Hussain (R.A) 10th Moharam'],
+  ['2026-08-10','Bonalu'],
+  ['2026-08-15','Independence Day'],
+  ['2026-08-26','Eid Miladun Nabi'],
+  ['2026-09-04','Sri Krishna Astami'],
+  ['2026-09-14','Vinayaka Chavithi'],
+  ['2026-10-02','Mahatma Gandhi Jayanthi'],
+  ['2026-10-18','Saddula Bathukamma'],
+  ['2026-10-20','Vijaya Dasami / Dushera'],
+  ['2026-10-21','Following day of Vijaya Dasami'],
+  ['2026-11-08','Deepavali'],
+  ['2026-11-24','Kartika Purnima / Guru Nanak’s Jayanthi'],
+  ['2026-12-25','Christmas'],
+  ['2026-12-26','Following day of Christmas (Boxing Day)']
+];
+/* para 2 of the G.O.: every second Saturday of 2026 */
+var TS_SECOND_SATURDAYS_2026 = ['2026-01-10','2026-02-14','2026-03-14','2026-04-11','2026-05-09','2026-06-13',
+  '2026-07-11','2026-08-08','2026-09-12','2026-10-10','2026-11-14','2026-12-12'];
+
 function holidaySet_(){
   const sh = sheet_('Holidays', H_HEAD);
   const last = sh.getLastRow(); if(last < 2) return {};
-  const rng = sh.getRange(1, 1, last, 2);
+  const width = Math.max(sh.getLastColumn(), 2);
+  const rng = sh.getRange(1, 1, last, width);
   const v = rng.getValues();
   let disp = [];
   try{ disp = rng.getDisplayValues(); }catch(e){ disp = []; }
+  /* by header name, never by position (the tab predates the Status column) */
+  const head = v[0].map(function(h){ return String(h).toLowerCase().trim(); });
+  const si = head.indexOf('status');
   const set = {};
   for(let i = 1; i < v.length; i++){
+    /* struck off the calendar, still on the tab */
+    if(si >= 0 && String(v[i][si] || '').toUpperCase() === 'VOIDED') continue;
     const d = holidayKey_(v[i][0], disp[i] ? disp[i][0] : '');
     if(d) set[d] = String(v[i][1] || (disp[i] ? disp[i][1] : '') || 'Holiday');
   }
@@ -5178,6 +5239,83 @@ function rollUpdate_(b, u){
   } finally { lock.releaseLock(); }
 }
 
+/* WHAT THE ORDER ACTUALLY NAMES, as a set of dates. Read from the G.O.'s own
+   lists. If they cannot be read this returns null and the caller must REFUSE
+   rather than allow — a guard that fails open is not a guard, and the thing
+   it is guarding is a government holiday calendar. */
+function orderedHolidays_(){
+  try{
+    const out = {};
+    TS_HOLIDAYS_2026.forEach(function(h){ out[h[0]] = h[1]; });
+    TS_SECOND_SATURDAYS_2026.forEach(function(d){ out[d] = 'Second Saturday'; });
+    return Object.keys(out).length ? out : null;
+  }catch(err){ return null; }
+}
+
+/* TAKE A DATE OFF THE CALENDAR THAT THE ORDER DOES NOT NAME.
+   This is the one thing the holiday panel could not do, and 01.10.2026 is why
+   it must. It is deliberately narrow:
+     · the Collector's alone, re-checked on the server (rule 6);
+     · it will NOT touch a date G.O.Rt.No.1715 names — the button can only
+       remove what the order does not, so no hand here can strike Dasara off;
+     · it DELETES NOTHING (rule 7): the row stays with its occasion, marked
+       VOIDED, carrying who struck it and when;
+     · it is idempotent (rule 8) — a second press changes nothing;
+     · and every one is written to Audit with the date and the reason. */
+function holidayVoid_(b, u){
+  if(u.role !== 'COLLECTOR') return json_({ ok:false, error:'The calendar is the Collector\u2019s alone.' });
+  const canon = orderedHolidays_();
+  if(!canon) return json_({ ok:false,
+    error:'The order\u2019s own list could not be read, so nothing was struck off. A date is removed only when the register can prove the order does not name it.' });
+
+  const want = {};
+  (b.dates && b.dates.length ? b.dates : (b.date ? [b.date] : [])).forEach(function(d){
+    const k = String(d || '').trim();
+    if(/^\d{4}-\d{2}-\d{2}$/.test(k)) want[k] = true;
+  });
+  if(!Object.keys(want).length) return json_({ ok:false, error:'No date was named.' });
+
+  const refused = [];
+  Object.keys(want).forEach(function(d){
+    if(canon[d]){ refused.push({ date:d, occasion:canon[d] }); delete want[d]; }
+  });
+  if(!Object.keys(want).length)
+    return json_({ ok:false, refused:refused,
+      error:'Every date named is on G.O.Rt.No.1715 and stands. Nothing was struck off.' });
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try{
+    const sh = sheet_('Holidays', H_HEAD);
+    const last = sh.getLastRow();
+    if(last < 2) return json_({ ok:false, error:'There is no calendar to strike from.' });
+    const width = Math.max(sh.getLastColumn(), H_HEAD.length);
+    const rng = sh.getRange(1, 1, last, width);
+    const v = rng.getValues();
+    let disp = []; try{ disp = rng.getDisplayValues(); }catch(e){ disp = []; }
+    const head = v[0].map(function(h){ return String(h).toLowerCase().trim(); });
+    const si = head.indexOf('status'), ni = head.indexOf('note');
+    if(si < 0) return json_({ ok:false, error:'The Holidays tab has no Status column.' });
+
+    const done = [];
+    for(let i = 1; i < v.length; i++){
+      const d = holidayKey_(v[i][0], disp[i] ? disp[i][0] : '');
+      if(!d || !want[d]) continue;
+      if(String(v[i][si] || '').toUpperCase() === 'VOIDED') continue;   /* rule 8 */
+      sh.getRange(i + 1, si + 1).setValue('VOIDED');
+      if(ni >= 0) sh.getRange(i + 1, ni + 1)
+        .setValue('Struck off on ' + today_() + ' \u2014 G.O.Rt.No.1715 does not name this date');
+      done.push({ date:d, occasion:String(v[i][1] || '') });
+    }
+    done.forEach(function(x){
+      admAudit_('HOLIDAY STRUCK OFF', x.date,
+        (x.occasion || '(no occasion)') + ' \u2014 not named by G.O.Rt.No.1715 \u2014 by ' + u.name + ' (' + u.phone + ')');
+    });
+    return json_({ ok:true, struck:done.length, dates:done, refused:refused,
+                   offToday:offInfo_(today_()) });
+  } finally { lock.releaseLock(); }
+}
+
 function doPost(e){
   let b;
   try{ b = JSON.parse(e.postData.contents); }catch(err){ return json_({ ok:false, error:'bad request' }); }
@@ -5691,6 +5829,7 @@ function doPost(e){
      bootstrap key is gone from a register the moment it is deployed
      normally, and a register that cannot be given its holidays afterwards is
      a register that counts festivals as working days for ever. */
+  if(b.kind === 'holidayVoid') return holidayVoid_(b, u);
   if(b.kind === 'holidaysLoad'){
     if(u.role !== 'COLLECTOR') return json_({ ok:false, error:'The year is loaded by the Collector alone.' });
     return holidayLoad_('COLLECTOR ' + u.phone);

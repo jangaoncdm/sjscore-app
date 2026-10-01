@@ -31,7 +31,7 @@ const ROLL={ ok:true, roles:['PS','MPO','MSO','MPDO','DLPO','DPO','COLLECTOR'],
      one does: the two live registers were loaded from the same G.O. and
      disagreed by nine */
   holidays:{ year:2026, count:0, onOrder:0,
-    extra:[{date:'2026-03-07',occasion:'Local festival'}],
+    extra:[{date:'2026-10-01',occasion:'Second Saturday'},{date:'2026-03-07',occasion:'Local festival'}],
     missing:[{date:'2026-01-26',occasion:'Republic Day'}] },
   rows:[
     {phone:'9000000001',name:'Sandeep Kumar Jha',role:'COLLECTOR',mandal:'',gp:'',hasPin:true,active:true,rows:1,lastLogin:'2026-09-19',firstLogin:'2026-09-17',logins:9},
@@ -108,6 +108,8 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
       if(b.kind==='userCreate') return reply({ok:true,phone:b.phone,name:b.name,role:b.role,pin:'4821'});
       if(b.kind==='userPin')    return reply({ok:true,phone:b.phone,name:'Burra Bhanuchander',pin:'7391',rows:2,unlocked:10,inactive:false});
       if(b.kind==='userActive') return reply({ok:true,phone:b.phone,name:'Gone Away',active:b.active,rows:1,written:1});
+      if(b.kind==='holidayVoid'){ return reply({ok:true,struck:(b.dates||[]).length,
+        dates:(b.dates||[]).map(d=>({date:d,occasion:'Second Saturday'})),refused:[]}); }
       if(b.kind==='holidaysLoad'){ ROLL.holidays={year:2026,count:53};
         return reply({ok:true,tenant:'SJGP',before:0,after:53,added:53}); }
       return reply({ok:true});
@@ -174,6 +176,21 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   ck(/never signed in/i.test(tA),'it names the officers still to be reached');
   ck(/Burra Bhanuchander/.test(tA),'by name');
   ck(/no PIN/i.test(tA),'and says which of them cannot get in at all yet');
+
+  /* --- A DATE THE ORDER DOES NOT NAME CAN BE TAKEN OFF ---
+     01.10.2026 was a Thursday and the register called it a Second
+     Saturday: 2026-01-10 with the day and month swapped (rule 3). */
+  const tV = await txt();
+  ck(/not a Saturday/i.test(tV),'a Second Saturday falling on a Thursday is called out as such');
+  ck(/Take it off/i.test(tV),'and it can be taken off');
+  ck(/cannot cure this/i.test(tV),'the panel says loading the order again will not fix it');
+  ck(/no hand here removes Dasara|no date the G.O. names/i.test(tV),
+     'and that a date the order names cannot be taken off by this button');
+  await page.click('[data-holoff="2026-10-01"]'); await page.waitForTimeout(700);
+  const hv=posts.find(p=>p.kind==='holidayVoid');
+  ck(!!hv,'taking one off reaches the district');
+  ck(!!hv&&(hv.dates||[]).join()==='2026-10-01','for exactly that date',hv?String(hv.dates):'');
+  ck(!!hv&&!!hv.token,'under the Collector’s own token');
 
   /* --- THE YEAR'S HOLIDAYS, which is a button and never a trigger --- */
   const tH = await txt();

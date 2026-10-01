@@ -1277,38 +1277,15 @@ function msoRelief_(commit){
  * already on the tab are skipped, so the job runs twice without harm.
  * Run showTsHolidays() first, read, then applyTsHolidays().
  * ========================================================================== */
-var TS_HOLIDAYS_2026 = [
-  ['2026-01-14','Bhogi'],
-  ['2026-01-15','Sankranti / Pongal'],
-  ['2026-01-26','Republic Day'],
-  ['2026-02-15','Maha Shivaratri'],
-  ['2026-03-03','Holi'],
-  ['2026-03-19','Ugadi'],
-  ['2026-03-21','Eidul Fitr (Ramzan)'],
-  ['2026-03-22','Following day of Ramzan'],
-  ['2026-03-27','Sri Rama Navami'],
-  ['2026-04-03','Good Friday'],
-  ['2026-04-05','Babu Jagjivan Ram’s Birthday'],
-  ['2026-04-14','Dr. B.R. Ambedkar’s Birthday'],
-  ['2026-05-27','Eidul Azha (Bakrid)'],
-  ['2026-06-26','Shahadat Imam Hussain (R.A) 10th Moharam'],
-  ['2026-08-10','Bonalu'],
-  ['2026-08-15','Independence Day'],
-  ['2026-08-26','Eid Miladun Nabi'],
-  ['2026-09-04','Sri Krishna Astami'],
-  ['2026-09-14','Vinayaka Chavithi'],
-  ['2026-10-02','Mahatma Gandhi Jayanthi'],
-  ['2026-10-18','Saddula Bathukamma'],
-  ['2026-10-20','Vijaya Dasami / Dushera'],
-  ['2026-10-21','Following day of Vijaya Dasami'],
-  ['2026-11-08','Deepavali'],
-  ['2026-11-24','Kartika Purnima / Guru Nanak’s Jayanthi'],
-  ['2026-12-25','Christmas'],
-  ['2026-12-26','Following day of Christmas (Boxing Day)']
-];
-/* para 2 of the G.O.: every second Saturday of 2026 */
-var TS_SECOND_SATURDAYS_2026 = ['2026-01-10','2026-02-14','2026-03-14','2026-04-11','2026-05-09','2026-06-13',
-  '2026-07-11','2026-08-08','2026-09-12','2026-10-10','2026-11-14','2026-12-12'];
+/* THE G.O.'S OWN DATES NOW LIVE IN Code.gs.
+   They are not an Admin job: they are the fact the register counts working
+   days by, and the console's holiday audit reads them to say which dates on
+   the tab the order does not name. Leaving them here meant the app could not
+   see them without reaching into Admin.gs, which it must not do — and it
+   meant the suites, which load Admin.gs only when asked, were checking that
+   audit against an empty list and passing because there was nothing to find.
+   applyTsHolidays stays here, because WRITING them is the Collector's act. */
+
 
 function showTsHolidays(){ tsHolidays_(false); }
 function applyTsHolidays(){ tsHolidays_(true); }
