@@ -3426,6 +3426,22 @@ function doGet(e){
       can:{ sanction:!!tenant_().sanction, evaluation:!!tenant_().evaluation,
             schedule:!!tenant_().schedule, gpdp:!!tenant_().gpdp,
             placeOfDuty:!!tenant_().placeOfDuty },
+      /* AND WHAT THE CALENDAR ACTUALLY HOLDS. The count alone said 48 against
+         the order's 39 and no more: which nine, and whether the console was
+         even being shown them, could not be answered without the Collector's
+         own token, and a day was spent guessing at his screen. These are
+         published dates from a published G.O. — they reveal nothing. */
+      calendar:(function(){ try{
+        var y = today_().slice(0,4), all = holidaySet_(), canon = orderedHolidays_();
+        if(!canon) return null;
+        var mine = Object.keys(all).filter(function(k){ return String(k).slice(0,4)===y; });
+        return {
+          extra: mine.filter(function(d){ return !canon[d]; })
+                     .sort().map(function(d){ return { date:d, occasion:String(all[d]||'') }; }),
+          missing: Object.keys(canon).filter(function(d){
+                     return String(d).slice(0,4)===y && !all[d]; }).sort()
+        };
+      }catch(err){ return { error:String(err) }; } })(),
       holidays:(function(){ try{ var y=today_().slice(0,4);
         return { year:Number(y), count:Object.keys(holidaySet_()).filter(function(k){
           return String(k).slice(0,4)===y; }).length }; }catch(err){ return null; } })(),
