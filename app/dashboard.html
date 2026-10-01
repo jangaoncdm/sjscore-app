@@ -3135,7 +3135,7 @@ function vAdmin(j,A){
      and not a trigger. */
   const HOL=ROLL.holidays||{year:0,count:0};
   const holShort=HOL.count<10;
-  const holExtra=HOL.extra||[], holMissing=HOL.missing||[];
+  const holExtra=HOL.extra||[];
   h+=panel('c12','The year’s holidays',
     HOL.year?('G.O.Rt.No.1715 · '+HOL.year):'',
     `<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
@@ -3153,46 +3153,15 @@ function vAdmin(j,A){
        stays and is counted as an off day for ever. The two registers were
        loaded from the same G.O. and disagreed by nine. It is shown and never
        touched — whether such a date belongs is the Collector's word. */
-    ((holExtra.length||holMissing.length)?
+    (holExtra.length?
       `<div style="margin-top:14px;border-top:1px solid var(--ln);padding-top:12px;font-size:13px;line-height:1.7">
-        ${holMissing.length?`<div style="color:var(--red)"><b>${holMissing.length} date(s) of the order are NOT on this register:</b>
-          ${holMissing.map(x=>esc(dm(x.date))+' · '+esc(x.occasion)).join(' &nbsp;|&nbsp; ')}
-          <br><span style="color:var(--tx-2)">Press Load the year to put them on.</span></div>`:''}
-        ${holExtra.length?`<div style="margin-top:${holMissing.length?'10px':'0'}">
+        ${holExtra.length?`<div style="margin-top:0">
           <b>${holExtra.length} date(s) stand on this register that G.O.Rt.No.1715 does not name:</b>
-          <div class="twrap" style="margin-top:7px;max-height:300px"><table>
-            <thead><tr><th>Date</th><th>Day</th><th>It claims to be</th><th>Striking it</th><th></th></tr></thead>
-            <tbody>${holExtra.map(x=>{
-              const dd=new Date(x.date+'T00:00:00');
-              const dayName=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][dd.getDay()];
-              /* THE TELL. A row calling itself a Second Saturday on a Thursday is
-                 the day and the month swapped — rule 3 — and that is what put a
-                 Thursday down as an off day across 280 officers. */
-              const odd = /second saturday/i.test(x.occasion||'') && dd.getDay()!==6;
-              return '<tr><td class="num">'+esc(dm(x.date))+'</td>'+
-                '<td class="'+(odd?'':'mut')+'">'+esc(dayName)+(odd?' <span class="pill bad">not a Saturday</span>':'')+'</td>'+
-                '<td class="mut">'+esc(x.occasion||'—')+'</td>'+
-                /* A STRIKE REACHES FORWARD. A date already gone stood as an off day
-                   and 280 officers were told so; making it a working day now would
-                   count every one of them unmarked on a day the register closed. */
-                '<td class="mut">'+(x.voided
-                   ? '<span class="pill ok">struck</span> it stands for its own day only'
-                   : (x.date>DTODAY ? 'makes it a working day'
-                      : '<span class="pill ok">no change</span> already announced — it stands'))+'</td>'+
-                '<td>'+(x.voided ? '' :
-                   '<button class="tbtn" data-holoff="'+esc(x.date)+'"'+(ROLLBUSY?' disabled':'')+'>Take it off</button>')+
-                 '</td></tr>';
-            }).join('')}</tbody></table></div>
-          <div style="margin-top:9px"><button class="tbtn pri" id="rlHolOffAll"${ROLLBUSY?' disabled':''}>Take all ${holExtra.length} off the calendar</button></div>
-          <div style="color:var(--tx-2);margin-top:8px">Each one is treated as an off day: attendance is voluntary, the day is
-          not counted, and no notice can arise on it. <b>Loading the order again cannot cure this</b> — loading only ever ADDS
-          what is missing, and a wrong date is not missing.<br>
-          Taking one off <b>deletes nothing</b>: the row stays on the Holidays tab marked VOIDED, carrying what it claimed to be
-          and who struck it. And <b>no date the G.O. names can be taken off by this button</b> — it is refused and named, so no
-          hand here removes Dasara.<br>
-          <b>A strike reaches forward.</b> A date already gone — and today, which the officers were told this
-          morning was a holiday — stands exactly as it was announced. Nobody is marked absent in retrospect
-          for a day this register itself closed. Only the dates still to come change.</div>
+          <div style="color:var(--tx-2);margin-top:4px">${holExtra.map(x=>esc(dm(x.date))+(x.occasion?' · '+esc(x.occasion):'')).join(' &nbsp;|&nbsp; ')}</div>
+          <div style="color:var(--tx-2);margin-top:6px"><b>They no longer affect anything.</b> The calendar this register counts by is
+          the General Holidays of G.O.Rt.No.1715 and the second Saturdays of the Gregorian calendar, worked out rather than typed.
+          These rows stay on the Holidays tab as the record of what was once declared, and days already announced as holidays stay
+          shut — officers were told not to mark on them.</div>
         </div>`:''}
       </div>`:'')
     ,'rl');
@@ -3330,32 +3299,6 @@ function wireAdmin(){
           r.pins.map(x=>x.name+' ('+x.phone+')').join(', ')+'.':'');
       ROLLMSG=''; ROLLBAD=false;
     });
-  };
-
-  const strike=(dates,words)=>{
-    if(!confirm(words)) return;
-    rollPost({kind:'holidayVoid', dates:dates}, r=>{
-      const names=(r.dates||[]).map(x=>dm(x.date)).join(', ');
-      ROLLMSG=(r.struck?r.struck+' date(s) taken off the calendar'+(names?' — '+names:'')+'. '+
-                 'The rows stay on the Holidays tab, marked VOIDED.':'Nothing was taken off.')+
-              ((r.refused&&r.refused.length)?' '+r.refused.length+' were refused: the order names them.':'');
-      ROLLBAD=false;
-    });
-  };
-  document.querySelectorAll('#g [data-holoff]').forEach(b=>b.onclick=()=>{
-    const d=b.dataset.holoff;
-    strike([d], 'Take '+dm(d)+' off the calendar?\n\n'+
-      'It becomes a working day again on this register. The row is NOT deleted — it stays on the Holidays tab '+
-      'marked VOIDED, carrying what it claimed to be and who struck it.\n\n'+
-      'If G.O.Rt.No.1715 names this date it will be refused and nothing will happen.');
-  });
-  const offAll=$('#rlHolOffAll');
-  if(offAll) offAll.onclick=()=>{
-    const ds=(((ROLL.holidays||{}).extra)||[]).filter(x=>!x.voided).map(x=>x.date);
-    strike(ds, 'Take all '+ds.length+' off the calendar?\n\n'+
-      'Every date on this register that G.O.Rt.No.1715 does not name becomes a working day again.\n\n'+
-      'Nothing is deleted: each row stays on the Holidays tab marked VOIDED. Any date the order DOES name is '+
-      'refused and left exactly as it is.');
   };
 
   const hol=$('#rlHol');

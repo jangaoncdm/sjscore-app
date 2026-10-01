@@ -518,7 +518,13 @@ module.exports = {
       e.eval('var BOOTSTRAP_KEY = "k";');
       e.mkSheet('Config', ['Key','Value'], [{ Key:'TENANT', Value:'GP' }]);
       e.mkSheet('Holidays', ['Date','Occasion'], []);
-      t.eq(Object.keys(e.ctx.holidaySet_()).length, 0, 'a new register starts with none');
+      /* IT NO LONGER STARTS WITH NONE. The calendar is the order and the
+         Gregorian second Saturdays, so a register whose tab was never loaded
+         still knows the rest of the year — which is the whole of the fault
+         this register was stood up with. The TAB is what is empty. */
+      t.eq(Object.keys(e.ctx.holidayTab_()).length, 0, 'a new register’s TAB starts empty');
+      t.ok(Object.keys(e.ctx.holidaySet_()).length >= 10,
+        'but it already has the rest of the year, because the order is the calendar');
       t.eq(e.post({ kind:'seedHolidays', key:'no' }).ok, false, 'a wrong key loads nothing');
       const r = e.post({ kind:'seedHolidays', key:'k' });
       t.eq(r.ok, true, 'the right key loads the G.O.’s dates');
@@ -557,11 +563,12 @@ module.exports = {
         'an officer cannot load the year');
       t.eq(e.post({ kind:'holidaysLoad', token:'' }).ok, false, 'nor can a caller with no token');
 
-      t.eq(Object.keys(e.ctx.holidaySet_()).length, 0, 'the register still has none');
+      t.eq(Object.keys(e.ctx.holidayTab_()).length, 0, 'the tab is still empty');
       const r2 = e.post({ kind:'holidaysLoad', token:cdm });
       t.eq(r2.ok, true, 'the Collector loads it');
       t.ok(r2.after > 30, 'and the year is on the register — ' + r2.after + ' dates');
-      t.eq(r2.added, r2.after, 'every one of them newly added');
+      t.ok(r2.added > 20, 'and the year is written to the tab as the record — ' + r2.added + ' date(s)');
+      t.ok(Object.keys(e.ctx.holidayTab_()).length > 30, 'which the tab now carries');
       t.eq(e.ctx.isWorkingDay_('2026-09-12'), false, 'the second Saturday stops being a working day');
       /* rule 8 again, by this door too */
       const r3 = e.post({ kind:'holidaysLoad', token:cdm });
@@ -590,7 +597,9 @@ module.exports = {
          US-locale day/month swap once put on the wrong date (rule 3). */
       t.ok(roll.holidays.extra.length === 0,
         'a register loaded from the order carries nothing the order does not name');
-      t.ok(roll.holidays.missing.length === 0, 'and nothing of the order is missing from it');
+      t.eq(roll.holidays.missing, undefined,
+        'and nothing is reported MISSING any more — a date the tab does not list is' + ' ' +
+        'a holiday regardless, because the order is the calendar');
       t.eq(roll.holidays.onOrder, roll.holidays.count, 'so every date it holds is on the order');
 
       /* a date no order names — put there by a hand, as one was */

@@ -1291,7 +1291,10 @@ function showTsHolidays(){ tsHolidays_(false); }
 function applyTsHolidays(){ tsHolidays_(true); }
 function tsHolidays_(commit){
   const sh = sheet_('Holidays', H_HEAD);
-  const have = holidaySet_();                       /* read the tab as the engine reads it */
+  /* THE TAB, NOT THE CALENDAR. holidaySet_ now works the year out from the
+     order, so asking it what is "already there" would answer yes to every
+     date and write nothing at all. This writes the record. */
+  const have = holidayTab_();
   const want = TS_HOLIDAYS_2026.concat(TS_SECOND_SATURDAYS_2026.map(d => [d, 'Second Saturday']));
   const out = []; let added = 0, skipped = 0;
   want.forEach(w => {

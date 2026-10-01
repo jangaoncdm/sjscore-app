@@ -34,7 +34,7 @@ const ROLL={ ok:true, roles:['PS','MPO','MSO','MPDO','DLPO','DPO','COLLECTOR'],
     extra:[{date:'2026-10-01',occasion:'Second Saturday'},
            {date:'2026-11-04',occasion:'Second Saturday'},
            {date:'2026-03-07',occasion:'Local festival'}],
-    missing:[{date:'2026-01-26',occasion:'Republic Day'}] },
+  },
   rows:[
     {phone:'9000000001',name:'Sandeep Kumar Jha',role:'COLLECTOR',mandal:'',gp:'',hasPin:true,active:true,rows:1,lastLogin:'2026-09-19',firstLogin:'2026-09-17',logins:9},
     {phone:'9848100203',name:'Burra Bhanuchander',role:'PS',mandal:'Devaruppula',gp:'Ramboji Gudem',hasPin:false,active:true,rows:1},
@@ -110,8 +110,6 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
       if(b.kind==='userCreate') return reply({ok:true,phone:b.phone,name:b.name,role:b.role,pin:'4821'});
       if(b.kind==='userPin')    return reply({ok:true,phone:b.phone,name:'Burra Bhanuchander',pin:'7391',rows:2,unlocked:10,inactive:false});
       if(b.kind==='userActive') return reply({ok:true,phone:b.phone,name:'Gone Away',active:b.active,rows:1,written:1});
-      if(b.kind==='holidayVoid'){ return reply({ok:true,struck:(b.dates||[]).length,
-        dates:(b.dates||[]).map(d=>({date:d,occasion:'Second Saturday'})),refused:[]}); }
       if(b.kind==='holidaysLoad'){ ROLL.holidays={year:2026,count:53};
         return reply({ok:true,tenant:'SJGP',before:0,after:53,added:53}); }
       return reply({ok:true});
@@ -179,24 +177,19 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   ck(/Burra Bhanuchander/.test(tA),'by name');
   ck(/no PIN/i.test(tA),'and says which of them cannot get in at all yet');
 
-  /* --- A DATE THE ORDER DOES NOT NAME CAN BE TAKEN OFF ---
-     01.10.2026 was a Thursday and the register called it a Second
-     Saturday: 2026-01-10 with the day and month swapped (rule 3). */
+  /* --- THE TAB'S OWN ROWS ARE A RECORD, NOT THE CALENDAR ---
+     01.10.2026 was a Thursday and the register called it a Second Saturday:
+     2026-01-10 with the day and month transposed. The calendar is now the
+     G.O.'s General Holidays and the Gregorian second Saturdays, worked out
+     rather than typed, so such a row simply is not a holiday and there is
+     nothing to press. The Collector is still told the rows are there. */
   const tV = await txt();
-  ck(/not a Saturday/i.test(tV),'a Second Saturday falling on a Thursday is called out as such');
-  ck(/Take it off/i.test(tV),'and it can be taken off');
-  /* A STRIKE REACHES FORWARD: the panel must say which dates actually move */
-  ck(/makes it a working day/i.test(tV),'a date still to come is shown as one that would change');
-  ck(/already announced/i.test(tV),
-     'while today and the dates gone are shown as standing — nobody is marked absent in retrospect');
-  ck(/cannot cure this/i.test(tV),'the panel says loading the order again will not fix it');
-  ck(/no hand here removes Dasara|no date the G.O. names/i.test(tV),
-     'and that a date the order names cannot be taken off by this button');
-  await page.click('[data-holoff="2026-10-01"]'); await page.waitForTimeout(700);
-  const hv=posts.find(p=>p.kind==='holidayVoid');
-  ck(!!hv,'taking one off reaches the district');
-  ck(!!hv&&(hv.dates||[]).join()==='2026-10-01','for exactly that date',hv?String(hv.dates):'');
-  ck(!!hv&&!!hv.token,'under the Collector’s own token');
+  ck(/1 Oct/.test(tV),'the transposed date is still named, as the record it is');
+  ck(/no longer affect anything/i.test(tV),'and the panel says it decides nothing');
+  ck(/Gregorian/i.test(tV),'because the calendar is the order and the Gregorian second Saturdays');
+  ck(/stay shut/i.test(tV) || /told not to mark/i.test(tV),
+     'while days already announced stay shut — nobody is marked absent in retrospect');
+  ck(!/Take it off/i.test(tV),'there is no button to press any more');
 
   /* --- THE YEAR'S HOLIDAYS, which is a button and never a trigger --- */
   const tH = await txt();
@@ -205,7 +198,9 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   /* THE AUDIT AGAINST THE ORDER, both ways round */
   ck(/does not name/i.test(tH),'a date the order does not name is reported');
   ck(tH.indexOf('7 Mar')>=0,'by its date',JSON.stringify(tH.slice(tH.indexOf('does not name'),tH.indexOf('does not name')+90)));
-  ck(/NOT on this register/i.test(tH),'and a date of the order that is missing is reported too');
+  /* NOTHING IS REPORTED MISSING ANY MORE: the order is the calendar, so a
+     date the tab does not list is a holiday regardless. */
+  ck(!/NOT on this register/i.test(tH),'nothing is reported as missing — there is no such thing now');
   ck(/nothing here ever[\s\S]{0,40}takes a date off|never/i.test(tH) || /by your own hand/i.test(tH),
      'with the plain word that loading will not remove it');
   /* the confirm is already accepted by the handler set at the top */
