@@ -1085,6 +1085,82 @@ destroys nothing.
 
 ---
 
+## Features are modules, and restore points are cheap
+
+**A feature is a file, and the main code calls it.** Every feature up to
+02.10.2026 was cut into `Code.gs`: a kind in `doPost`, an op in `doGet`, a
+block in the payload. That file is six thousand lines and it serves two
+registers that issue show-cause notices; each new incision is a chance to break
+something that had nothing to do with the feature being added, and what it
+breaks is somebody’s attendance record. So a new feature is one file in
+`backend/`, one function named `feature_<name>`, and **one line in**
+`FEATURE_MODULES`. `Code.gs` has three lines that know features exist at all:
+the hook in `doPost`, the hook in `doGet`, and the report in `op=diag`.
+
+**What a module cannot do**, and suite 29 holds every one:
+
+- **Run before the token is checked.** Modules dispatch after `auth_` and are
+  handed the authenticated officer; there is no path to an anonymous call.
+- **Take over what the core answers.** Registration reads the core’s own
+  dispatch out of `doPost`/`doGet` — never a list somebody typed — and refuses a
+  module claiming an existing kind or op, so a feature cannot quietly change
+  what attendance or leave does. Two modules may not claim the same kind.
+- **Take the register down.** Loading and answering are each inside their own
+  try/catch, as every backup step is. A module that throws is recorded on
+  `Audit`, named in `op=diag` and skipped; the request carries on to the core
+  as though it were not there.
+- **Appear on a register it was not meant for.** A module names its tenants.
+
+**And it comes out of the road in a minute.** The script property `FEATURE_OFF`
+is a comma-separated list of module names; anything on it is not loaded, with no
+deploy. That is the rollback when a feature misbehaves at four in the afternoon,
+and it is the reason the rest of the design is worth having.
+
+**The pre-flight is itself the first module** (`backend/FeatureHealth.gs`),
+deliberately: the feature that says whether the others may be built is the one
+that proves the arrangement. `op=health` is Collector-only and answers what has
+each cost a day — are the daily jobs installed, is the nightly backup actually
+running (counted off the **calendar**, not the folder), how much mail is left of
+the hundred both registers share, what the roll and the calendar hold, and which
+modules this build carries. Every step is caught on its own, so a slow Drive
+still lets the register tell you about its triggers. Its one action, **Install
+the district’s daily jobs**, installs the reports AND the backup — they were two
+separate editor jobs and nothing ever said so, so a district that pressed the one
+button it was given had reports and no backup.
+
+**Before a series of features, run the pre-flight and take a restore point:**
+
+```bash
+node tests/preflight.js                        # GO / NO-GO, from eleven checks
+git tag -a pre-<what>-<date> <last deployed commit> -m '...'
+git push origin <tag>
+```
+
+`tests/preflight.js` **writes nothing anywhere** — a pre-flight that changes what
+it inspects is not one. It checks that every `backend/*.gs` parses, that no salt
+or key is in this **public** repository, that the suite passes, that the tree is
+pushed, that a restore point exists and is not stale, that the last deploy went
+green, that both registers answer **and agree about what day it is**, that every
+published surface serves, and that the console names its build. The register’s
+own half — triggers, backup, mail — is behind the Collector’s token and is read
+from the Admin screen.
+
+**Coming back** is `git checkout <tag> -- app/ backend/`, a commit and a push;
+the Action republishes and redeploys from that, and rolling forward again is the
+same move in reverse. Restore points so far: `pre-desktop-2026-09-18`,
+`pre-tenant-console-2026-09-18`, `pre-features-2026-10-02`. **A single feature
+never needs one** — `FEATURE_OFF` is faster and touches nothing.
+
+**Adding a .gs file is a pipeline change too.** The Gram Palana build copies
+`backend/*.gs` rather than a list of names, and the suites’ mock loads every
+`.gs` as Apps Script does. Naming them would mean a module that works on the
+sanitation register is silently absent from the other — the shape of fault
+`clasp --force` already caused once with `Tenant.gs`. **Apps Script also gives
+each file its own lexical scope**: a top-level `const` is invisible to the other
+files, which is why `FEATURE_MODULES` and `TS_HOLIDAYS_2026` are `var`.
+
+---
+
 ## House style
 
 The prose in this project is plain, unhurried, and written for an officer

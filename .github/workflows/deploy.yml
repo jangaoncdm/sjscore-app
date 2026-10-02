@@ -148,7 +148,11 @@ jobs:
           # footnote rather than an incident. Every deploy now re-assembles the
           # overlay alongside backend/, so the identity cannot be pushed away.
           mkdir -p gpbuild
-          cp backend/Code.gs backend/Admin.gs backend/appsscript.json gpbuild/
+          # EVERY .gs, NOT A LIST OF NAMES. A feature is a file of its own now;
+          # naming them here would mean a module that works on the sanitation
+          # register is silently absent from the Gram Palana one, which is the
+          # shape of fault clasp --force already caused once with Tenant.gs.
+          cp backend/*.gs backend/appsscript.json gpbuild/
           {
             echo "/* Written by the deploy pipeline. This file exists ONLY in the Gram"
             echo "   Panchayat project — it is assembled here and is never in backend/,"

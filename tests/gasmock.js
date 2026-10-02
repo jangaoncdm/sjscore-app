@@ -178,6 +178,8 @@ function load(opts){
     sheetTz: opts.sheetTz || opts.scriptTz || 'Asia/Calcutta',
     adminEmail: 'collector.jangaon@mock.example',
     driveRoot: new MockFolder('root'),
+    /* the allowance both registers share: a consumer account is 100 a day */
+    mailQuota: 100,
     installed: [],
     ssId: 'mock-spreadsheet-id'
   };
@@ -237,10 +239,20 @@ function load(opts){
       MimeType: { JSON: 'application/json' }
     },
     LockService: { getScriptLock: () => ({ waitLock(){}, releaseLock(){}, tryLock(){ return true; } }) },
-    MailApp: { sendEmail: (to, subject, body, options) => { env.outbox.push({ to: to, subject: subject, body: body, htmlBody: options && options.htmlBody, attachments: (options && options.attachments) || [] }); } },
+    MailApp: {
+      sendEmail: (to, subject, body, options) => { env.outbox.push({ to: to, subject: subject, body: body, htmlBody: options && options.htmlBody, attachments: (options && options.attachments) || [] }); },
+      /* 414 officers share one allowance — 100 a day on a consumer account,
+         1,500 on Workspace. The pre-flight reads it rather than guessing. */
+      getRemainingDailyQuota: () => env.mailQuota
+    },
     GmailApp: { sendEmail: (to, subject, body, options) => { env.outbox.push({ to: to, subject: subject, body: body, htmlBody: options && options.htmlBody, attachments: (options && options.attachments) || [] }); } },
     DriveApp: {
       getRootFolder: () => env.driveRoot,
+      /* the pre-flight walks the backup folder by name, so the mock must be
+         able to hand one back — and to hand back NOTHING, which is the case
+         that matters: a folder that was never made looks exactly like one
+         that is working if nobody asks. */
+      getFoldersByName: name => env.driveRoot.getFoldersByName(name),
       /* the live register itself is a Drive file: the backup copies it by id */
       getFileById: id => {
         if(id !== env.ssId) throw new Error('no such file: ' + id);
@@ -285,6 +297,16 @@ function load(opts){
 
   const ctx = vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(path.join(BACKEND, 'Code.gs'), 'utf8'), ctx, { filename: 'Code.gs' });
+  /* EVERY OTHER .gs FILE, AS APPS SCRIPT DOES. A project is all of its files
+     in one global scope, so a feature module that is live in the district
+     must be live in the suites too — otherwise the one place a module could
+     break something is the one place nothing tests. Admin.gs stays opt-in:
+     it is the Collector's own and most suites have no business loading it.
+     NOTE for anything added here: Apps Script gives each file its own
+     lexical scope, so a top-level const is NOT visible to the other files.
+     Anything another file must see is a function declaration or a var. */
+  fs.readdirSync(BACKEND).filter(f => /\.gs$/.test(f) && f !== 'Code.gs' && f !== 'Admin.gs')
+    .sort().forEach(f => vm.runInContext(fs.readFileSync(path.join(BACKEND, f), 'utf8'), ctx, { filename: f }));
   if(opts.admin)
     vm.runInContext(fs.readFileSync(path.join(BACKEND, 'Admin.gs'), 'utf8'), ctx, { filename: 'Admin.gs' });
   env.ctx = ctx;

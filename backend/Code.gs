@@ -3509,6 +3509,10 @@ function doGet(e){
       /* AND THE ORDER IT WILL ACTUALLY APPLY. A publish assigns a month's
          work to 280 officers and mails it, so the shares it will deal by
          are readable before it is pressed rather than taken on trust. */
+      /* WHICH FEATURE MODULES THIS BUILD CARRIES, and why any was not
+         loaded. "Is my feature live" cost a day once; it is answered by
+         reading now. Names only, and every one re-checks the caller. */
+      features:(function(){ try{ return featureReport_(); }catch(err){ return { error:String(err) }; } })(),
       schedule:tenant_().schedule ? { shares:SCH_SHARE, subdivision:SCH_SUBDIVISION } : null,
       can:{ sanction:!!tenant_().sanction, evaluation:!!tenant_().evaluation,
             schedule:!!tenant_().schedule, gpdp:!!tenant_().gpdp,
@@ -3983,6 +3987,14 @@ function doGet(e){
   if(p.op === 'roll') return rollRegister_(u);
   /* the sky over the district — one call an hour, cached, keyless */
   if(p.op === 'weather') return weatherRead_(u, p.draft === '1');
+
+  /* ---- FEATURE MODULES ---- the same rule on the way out: a module is
+     offered the read after the officer is known and before op=list, which is
+     this dispatcher's catch-all and would otherwise swallow an unknown op. */
+  {
+    const fr = featureGet_(p, u);
+    if(fr) return fr;
+  }
 
   if(p.op === 'attendance'){
     const want = p.date ? dateText_(p.date) : today_();
@@ -5896,6 +5908,19 @@ function doPost(e){
   if(b.kind === 'userCreate') return createUser_(b, u);
   if(b.kind === 'userPin')    return resetUserPin_(b, u);
   if(b.kind === 'userActive') return setUserActive_(b, u);
+
+  /* ---- FEATURE MODULES ----
+     A feature added since is a file of its own; see backend/Features.gs. It is
+     offered the request HERE: after the token has been checked, after the core
+     has had its say, and before the guards that belong to the evaluation. A
+     module cannot claim a kind the core already answers — registration refuses
+     it — and a module that throws is caught and reported rather than taking the
+     register down with it. This is the only line in doPost that knows features
+     exist, and adding one changes nothing here. */
+  {
+    const fr = featurePost_(b, u);
+    if(fr) return fr;
+  }
 
   /* everything below writes an evaluation, which a Secretary may not do */
   if(viewerRole_(u.role))

@@ -62,6 +62,18 @@ const GPROLL={ ok:true, roles:['GPO','ARI','MRI','COLLECTOR'],
     {phone:'6302363194',name:'Nasa Raju',role:'GPO',mandal:'Narasapur',gp:'Abdulnagaram',hasPin:true,active:true,rows:1}
   ]};
 
+/* A REGISTER WITH NO DAILY JOBS AND NO BACKUP — which is exactly what a
+   freshly stood-up one looks like, and looks identical to a working one
+   until something asks. */
+const HEALTH={ ok:true, today:'2026-10-02', tenant:'SJGP', allWell:false,
+  concerns:['triggers','backup'],
+  triggers:{ installed:[], missing:['dailyCollectorReport','dailyBackup'], ok:false },
+  backup:{ ok:false, why:'no SJ-SCORE Backups folder yet' },
+  mail:{ remaining:100, looksLike:'a consumer allowance', ok:true },
+  roll:{ active:3, withoutPin:1, ok:true },
+  calendar:{ year:2026, days:44, declared:true, nextYearDeclared:false, ok:true },
+  features:{ live:[{name:'health',post:['installJobs'],get:['health']}], skipped:[] } };
+
 const posts=[], gpPosts=[];
 let pass=0, fail=0;
 const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'   — '+detail:''));}
@@ -110,10 +122,12 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
       if(b.kind==='userCreate') return reply({ok:true,phone:b.phone,name:b.name,role:b.role,pin:'4821'});
       if(b.kind==='userPin')    return reply({ok:true,phone:b.phone,name:'Burra Bhanuchander',pin:'7391',rows:2,unlocked:10,inactive:false});
       if(b.kind==='userActive') return reply({ok:true,phone:b.phone,name:'Gone Away',active:b.active,rows:1,written:1});
+      if(b.kind==='installJobs') return reply({ok:true,installed:['dailyBackup','dailyCollectorReport','scheduleReminders','villageFilingReminders']});
       if(b.kind==='holidaysLoad'){ ROLL.holidays={year:2026,count:53};
         return reply({ok:true,tenant:'SJGP',before:0,after:53,added:53}); }
       return reply({ok:true});
     }
+    if(/op=health/.test(q.url())) return reply(HEALTH);
     if(/op=roll/.test(q.url())) return reply(ROLL);
     return reply(DASH);
   });
@@ -176,6 +190,24 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   ck(/never signed in/i.test(tA),'it names the officers still to be reached');
   ck(/Burra Bhanuchander/.test(tA),'by name');
   ck(/no PIN/i.test(tA),'and says which of them cannot get in at all yet');
+
+  /* --- THE PRE-FLIGHT, read from the register and not from the page --- */
+  const tP = await txt();
+  ck(/fit to be changed/i.test(tP),'the pre-flight panel is on the Admin screen');
+  ck(/not installed/i.test(tP),'a register with no daily jobs says so');
+  ck(/dailyBackup/.test(tP),'naming the jobs that are missing');
+  ck(/not running/i.test(tP),'and that the nightly backup is not running');
+  ck(/consumer allowance/i.test(tP),'the mail allowance is read from the register');
+  ck(/2027 is not declared/i.test(tP),'and it says the next year has no order yet');
+  ck(/health/.test(tP),'the feature modules it carries are named');
+  const jb = await page.$('#rlJobs');
+  ck(!!jb,'and there is a button to install them');
+  if(jb){
+    await page.click('#rlJobs'); await page.waitForTimeout(700);
+    const ij = posts.find(p=>p.kind==='installJobs');
+    ck(!!ij,'which reaches the district');
+    ck(!!ij && !!ij.token,'under the Collector’s own token');
+  }
 
   /* --- THE TAB'S OWN ROWS ARE A RECORD, NOT THE CALENDAR ---
      01.10.2026 was a Thursday and the register called it a Second Saturday:

@@ -2956,8 +2956,18 @@ let ROLL=null, ROLLQ='', ROLLBUSY=false, ROLLPIN=null, ROLLMSG='', ROLLBAD=false
    install the app. So the table goes from this screen to the district's own
    register over HTTPS and nowhere else, exactly as the Gram Palana roster did. */
 let TBL_TEXT='', TBL_ROLE='MPO', TBL_PLANS=null, TBL_DONE=null;
+/* THE REGISTER'S OWN PRE-FLIGHT. Read once when the Admin screen is opened,
+   because it walks Drive and that is not something to do on every poll. */
+let HEALTH=null, HEALTHAT=0;
 const ROLLFORM={phone:'',name:'',role:'PS',mandal:'',gp:'',email:''};
 
+function pullHealth(force){
+  if(!force && HEALTH && Date.now() - HEALTHAT < 120000) return Promise.resolve();
+  return fetch(ST.url+'?op=health&token='+encodeURIComponent(ST.token))
+    .then(r=>r.json()).then(j=>{ if(j&&j.ok){ HEALTH=j; HEALTHAT=Date.now();
+      if(VIEW==='admin'&&DATA) render(DATA); } })
+    .catch(()=>{});
+}
 function pullRoll(){
   return fetch(ST.url+'?op=roll&token='+encodeURIComponent(ST.token))
     .then(r=>r.json()).then(j=>{ if(j&&j.ok){ ROLL=j; if(VIEW==='admin'&&DATA) render(DATA); } })
@@ -3075,6 +3085,55 @@ function vAdmin(j,A){
       </div>
       <div style="margin-top:12px"><button class="tbtn pri" id="rlAdd"${ROLLBUSY?' disabled':''}>Register and set a PIN</button></div>
       <p style="font-size:12px;color:var(--tx-3);margin-top:10px;line-height:1.6">A number already on the roll is refused and its holder named — one number, one officer. The PIN is shown once, here, and written nowhere.</p>`);
+
+  /* ---- IS THE REGISTER FIT TO BE CHANGED? ----
+     The pre-flight, asked of the register itself: are the daily jobs
+     installed, is the nightly backup running, how much mail is left today,
+     and what feature modules is this build carrying. Each of those has looked
+     exactly like "working" while being absent — a trigger that was never
+     installed sends nothing, and so does one that is running fine. */
+  const HL = HEALTH;
+  const hbit = (o, good, bad2) => !o ? '<span class="pill warn">not read</span>'
+    : o.error ? '<span class="pill bad">could not be read</span>'
+    : (o.ok ? '<span class="pill ok">'+esc(good)+'</span>' : '<span class="pill bad">'+esc(bad2)+'</span>');
+  h+=panel('c12','Is the register fit to be changed?',
+    HL ? (HL.allWell ? '<span class="pill ok">all clear</span>'
+                     : '<span class="pill bad">'+HL.concerns.length+' to see to</span>') : 'reading…',
+    HL ? `<div class="twrap"><table>
+      <thead><tr><th>Check</th><th>State</th><th>What it says</th></tr></thead><tbody>
+        <tr><td>The daily jobs</td><td>${hbit(HL.triggers,'installed','not installed')}</td>
+          <td class="mut">${HL.triggers && HL.triggers.missing && HL.triggers.missing.length
+            ? 'missing: '+esc(HL.triggers.missing.join(', '))
+            : esc((HL.triggers&&HL.triggers.installed||[]).join(', ')||'—')}</td></tr>
+        <tr><td>The nightly backup</td><td>${hbit(HL.backup,'running','not running')}</td>
+          <td class="mut">${HL.backup && HL.backup.newest
+            ? 'newest '+esc(dm(HL.backup.newest))+(HL.backup.missingLast14 && HL.backup.missingLast14.length
+                ? ' · <b>'+HL.backup.missingLast14.length+' of the last 14 days have none</b>' : ' · nothing missing in 14 days')
+            : esc((HL.backup&&(HL.backup.why||HL.backup.error))||'—')}</td></tr>
+        <tr><td>Mail left today</td><td>${hbit(HL.mail,'available','exhausted')}</td>
+          <td class="mut">${HL.mail && HL.mail.remaining!=null
+            ? esc(String(HL.mail.remaining))+' recipient(s) · '+esc(HL.mail.looksLike||'')+
+              ' · shared by both registers'
+            : esc((HL.mail&&HL.mail.error)||'—')}</td></tr>
+        <tr><td>The roll</td><td>${hbit(HL.roll,'in order','empty')}</td>
+          <td class="mut">${HL.roll ? esc(String(HL.roll.active))+' active'+
+            (HL.roll.withoutPin ? ' · '+HL.roll.withoutPin+' without a PIN' : '') : '—'}</td></tr>
+        <tr><td>The calendar</td><td>${hbit(HL.calendar,'declared','not declared')}</td>
+          <td class="mut">${HL.calendar ? esc(String(HL.calendar.days))+' days for '+esc(String(HL.calendar.year))+
+            (HL.calendar.nextYearDeclared ? '' : ' · <b>'+(Number(HL.calendar.year)+1)+' is not declared yet</b>') : '—'}</td></tr>
+        <tr><td>Feature modules</td><td><span class="pill ok">${((HL.features||{}).live||[]).length} loaded</span></td>
+          <td class="mut">${((HL.features||{}).live||[]).map(f=>esc(f.name)).join(', ')||'none'}${
+            ((HL.features||{}).skipped||[]).length ? ' · <b>not loaded:</b> '+
+              ((HL.features||{}).skipped||[]).map(f=>esc(f.name)+' ('+esc(f.why)+')').join('; ') : ''}</td></tr>
+      </tbody></table></div>
+      ${(HL.triggers && !HL.triggers.ok) ? `<div style="margin-top:11px">
+        <button class="tbtn pri" id="rlJobs"${ROLLBUSY?' disabled':''}>Install the district’s daily jobs</button>
+        <span class="expnote" style="margin-left:9px">the evening report, the filing chase, the schedule reminder and the nightly backup</span>
+      </div>`:''}
+      <div class="expnote" style="margin-top:9px">Read from this register, not from the page. A trigger that was never
+      installed looks exactly like one that is working: nothing arrives, and nothing says why. The same is true of a
+      backup, which is why the days with none are counted off the calendar rather than off the folder.</div>`
+      : '<div class="empty">Reading the register’s own state…</div>', 'rl');
 
   /* ---- HAS THE APP REACHED THE OFFICER? ----
      NOT "INSTALLED". Putting the app on a home screen is done by the phone's
@@ -3298,6 +3357,18 @@ function wireAdmin(){
         ((r.pins&&r.pins.length)?' These still need a PIN \u2014 use Reset PIN on the roll below: '+
           r.pins.map(x=>x.name+' ('+x.phone+')').join(', ')+'.':'');
       ROLLMSG=''; ROLLBAD=false;
+    });
+  };
+
+  pullHealth();
+  const jobs=$('#rlJobs');
+  if(jobs) jobs.onclick=()=>{
+    if(!confirm('Install the district\u2019s daily jobs on ' + ((ROLL&&ROLL.tenantName)||'this register') + '?\n\n'+
+      'The evening report, the filing chase, the schedule reminder and the nightly backup.\n\n'+
+      'Each replaces its own trigger first, so pressing this twice changes nothing.')) return;
+    rollPost({kind:'installJobs'}, r=>{
+      ROLLMSG='The daily jobs are installed: '+(r.installed||[]).join(', ')+'.';
+      ROLLBAD=false; HEALTH=null; pullHealth(true);
     });
   };
 
