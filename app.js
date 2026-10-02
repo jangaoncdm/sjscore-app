@@ -211,6 +211,11 @@ function load(){
           records:{}, cache:[], cacheAt:'', att:{}, leave:[], prefs:{sun:0,big:0}, iosTipSeen:!!(old&&old.iosTipSeen)};
   }
   DB.att = DB.att || {}; DB.prefs = DB.prefs || {sun:0,big:0};
+  /* MARKING OUT IS THE OFFICER'S OWN WORK AND IS HELD LIKE HIS MARK IN:
+     written on the phone first, sent when there is a line. DB.outState is
+     the district's last answer about the hour, which is the district's to
+     decide and never this handset's (rule 1). */
+  DB.out = DB.out || {};
   DB.records = DB.records || {}; DB.cache = DB.cache || []; DB.master = DB.master || []; DB.leave = DB.leave || [];
   DB.notices = DB.notices || {rows:[], at:0, grace:3};
   DB.reminders = DB.reminders || [];        /* informal nudges — they never lock the app */
@@ -463,7 +468,8 @@ async function get(params){
    is what the device knows about itself: the server address, the reading
    preferences, and whether the iOS tip has been seen. */
 function wipeOfficerStore(){
-  DB.att = {}; DB.records = {}; DB.cache = []; DB.cacheAt = ''; DB.master = [];
+  DB.att = {}; DB.out = {}; DB.outState = null;
+  DB.records = {}; DB.cache = []; DB.cacheAt = ''; DB.master = [];
   DB.leave = []; DB.attToday = null;
   DB.notices = {rows:[], at:0, grace:3}; DB.reminders = []; DB.remSeen = {};
   DB.noticeAckQ = []; DB.noticeDone = {}; DB.holidays = {};
@@ -488,7 +494,7 @@ function own10(v){ return String(v == null ? '' : v).replace(/\D/g, '').slice(-1
 function storeHasWork(){
   const n = o => o ? Object.keys(o).length : 0;
   const a = x => (x && x.length) || 0;
-  return !!(n(DB.att) || n(DB.records) || a(DB.leave) || a(DB.cache) ||
+  return !!(n(DB.att) || n(DB.out) || n(DB.records) || a(DB.leave) || a(DB.cache) ||
             n(DB.schedDone) || a(DB.schedAckQ) || n(DB.advDone) || a(DB.advAckQ) ||
             a(DB.noticeAckQ) || n(DB.noticeDone) || (DB.gpdp && DB.gpdp.mine));
 }
@@ -724,6 +730,14 @@ let ATT = null;     /* work in progress for today */
 let attTries = 0;
 
 /* the two steps, held as a template so the sanctioned-leave panel can take their place */
+/* WHAT IS RECORDED, said on the screen where it is recorded. The mark out
+   takes exactly what the mark in takes, so the paragraph says exactly the
+   same thing with the one word changed — and it still says plainly that the
+   app holds no background location, because that is the question an
+   officer actually has. */
+const ATT_PRIVACY = '<b>What is recorded.</b> One photograph, one set of coordinates and the time, at the moment you press <b>Mark attendance</b> — nothing else, and nothing at any other time. The app does not follow your movements during the day and holds no background location. Attendance can be marked without a network; it is kept on the phone and goes to the district when signal returns.';
+const OUT_PRIVACY = '<b>What is recorded.</b> One photograph, one set of coordinates and the time, at the moment you press <b>Mark out</b> — nothing else, and nothing at any other time. The app does not follow your movements during the day and holds no background location. No hours are worked out from it and nothing is counted against you: marking out is a record of the end of your day, and the district reads it as that. It can be marked without a network and goes up when signal returns.';
+
 const ATT_STEPS = `
   <div class="step" id="stepGeo">
     <span class="n" id="geoN">1</span>
@@ -733,10 +747,23 @@ const ATT_STEPS = `
     <span class="n" id="camN">2</span>
     <span class="t"><b>Photograph</b><span id="camTxt">Take one photograph of yourself at the place of duty. The date, time and coordinates are printed onto the picture.</span></span>
   </div>`;
-function openAttendance(){
+/* THE SAME SCREEN, THE OTHER END OF THE DAY. Marking out records exactly
+   what marking in records — one photograph, one set of coordinates, how
+   precise they were and the time — so it is taken on the same screen rather
+   than on a second one built to look like it. Two screens drift apart: the
+   OUT would have been the one that quietly stopped stamping the
+   coordinates onto the picture, and nobody would notice for a month.
+
+   IT IS NEVER A GATE. gate() does not call this with out:true and must not.
+   The mark in stands between sign-in and the app because marking it is the
+   whole point of the morning; an officer who forgot to close his day must
+   not be shut out of his own records all evening for it. */
+function openAttendance(out){
   const u = user(); if(!u) return;
-  ATT = {id:uid(), date:todayStr(), fix:null, photoId:null, b64:null, geoFailed:false};
+  ATT = {id:uid(), date:todayStr(), fix:null, photoId:null, b64:null, geoFailed:false, out:!!out};
   attTries = 0;
+  $('#attTitle').textContent = out ? 'Mark out for today' : 'Mark today' + '’' + 's attendance';
+  $('#attPriv').innerHTML = out ? OUT_PRIVACY : ATT_PRIVACY;
   $('#attDate').textContent = dayName(todayStr());
   $('#attWho').innerHTML = `${esc(u.name)} · ${esc(roleName(u.role))}${u.mandal?' · '+esc(u.mandal)+' mandal':''}`;
   $('#attMsg').textContent = ''; $('#attShot').hidden = true;
@@ -744,12 +771,14 @@ function openAttendance(){
 
   /* On a holiday the gate is voluntary — say so in the header; the way
      back is drawn by drawAttendance with the rest of the actions. */
-  if(dayOff() && !DB.att[todayStr()])
+  if(!out && dayOff() && !DB.att[todayStr()])
     $('#attDate').textContent = dayName(todayStr()) + ' · Holiday — ' + dayOff();
 
   /* Sanctioned leave is not absence. Nobody is asked for a photograph and a
      location on a day the Collector has already granted them. */
-  const lv = approvedLeaveToday();
+  /* and sanctioned leave is the mark IN's question: a day with no mark in
+     has no mark out to make, so this screen is never reached in out mode */
+  const lv = out ? null : approvedLeaveToday();
   if(lv){
     $('#attSteps').innerHTML = `<div class="step done"><span class="n">${ICON.tick}</span>
       <span class="t"><b>On sanctioned leave today</b>
@@ -764,13 +793,17 @@ function openAttendance(){
   startAttFix();
   /* said on the screen, because it is done from this screen — no location
      is ever noted that the officer was not told about while it happened */
-  if(!document.getElementById('pingNote'))
-    $('#attSteps').insertAdjacentHTML('afterend',
-      '<div id="pingNote" style="font-size:11.5px;line-height:1.5;color:#6B7280;padding:8px 4px 0">Opening this screen notes your location for the district until attendance is marked.</div>');
+  const pn = document.getElementById('pingNote');
+  if(pn) pn.remove();
+  $('#attSteps').insertAdjacentHTML('afterend',
+    '<div id="pingNote" style="font-size:11.5px;line-height:1.5;color:#6B7280;padding:8px 4px 0">' +
+    (out ? 'Opening this screen notes your location for the district until you mark out.'
+         : 'Opening this screen notes your location for the district until attendance is marked.') +
+    '</div>');
 
   /* the orders may have been passed since this phone last spoke to the district,
      so ask once — and if leave has been sanctioned, put the gate up again as leave */
-  if(canApplyLeave(u.role) && navigator.onLine){
+  if(!out && canApplyLeave(u.role) && navigator.onLine){
     refreshLeave().then(() => {
       if(approvedLeaveToday() && !DB.att[todayStr()] && $('#attend').classList.contains('on')) openAttendance();
     }).catch(()=>{});
@@ -843,12 +876,18 @@ function drawAttendance(){
       (canShoot ? `<p class="hint" style="margin-top:9px">Camera does not open? Open this app in <b>Chrome</b> rather than inside WhatsApp, and allow the camera when the phone asks.</p>` : '');
     const b = $('#attShoot'); if(b) b.addEventListener('click', () => $('#camAtt').click());
   } else {
-    box.innerHTML = `<button class="btn" id="attMark">Mark attendance</button>
+    box.innerHTML = `<button class="btn" id="attMark">${(ATT&&ATT.out)?'Mark out':'Mark attendance'}</button>
       <button class="btn quiet" id="attRetake">Take it again</button>`;
     $('#attRetake').addEventListener('click', () => { ATT.b64=null; ATT.photoId=null; $('#attShot').hidden=true; drawAttendance(); });
     $('#attMark').addEventListener('click', markAttendance);
   }
-  if(attExempt((user()||{}).role)){
+  /* THE WAY OUT OF A SCREEN THAT IS NOT A GATE. In out mode there is always
+     a way back to the app, whatever the officer's role — he came here by
+     tapping a card and he may leave the same way. */
+  if(ATT && ATT.out){
+    box.insertAdjacentHTML('beforeend', `<button class="btn quiet" id="attOutBack" style="margin-top:9px">Not now</button>`);
+    $('#attOutBack').addEventListener('click', closeOut);
+  } else if(attExempt((user()||{}).role)){
     box.insertAdjacentHTML('beforeend', `<button class="btn quiet" id="attSkip" style="margin-top:9px">Not now</button>`);
     $('#attSkip').addEventListener('click', () => { stopAttWatch(); ATT = null; $('#attend').classList.remove('on'); $('#app').hidden = false; buildTabs(); go(TAB); });
   } else if(holBack){
@@ -887,7 +926,7 @@ $('#camAtt').addEventListener('change', async ev => {
   $('#attMsg').className = 'msg info'; $('#attMsg').textContent = 'Preparing the photograph…';
   try{
     const b64 = await grabPhoto(f, {max:900, quality:0.62, lines:[
-      'SJGP ATTENDANCE · JANGAON',
+      (ATT && ATT.out) ? 'SJGP ATTENDANCE OUT · JANGAON' : 'SJGP ATTENDANCE · JANGAON',
       (u.name || '') + ' · ' + roleName(u.role),
       stampTime(ts),
       ATT.fix ? `${ATT.fix.lat.toFixed(5)}, ${ATT.fix.lng.toFixed(5)}  \u00b1${Math.round(ATT.fix.acc)} m`
@@ -901,8 +940,14 @@ $('#camAtt').addEventListener('change', async ev => {
     setTimeout(()=>{ const a=$('#attActions'); if(a) a.scrollIntoView({behavior:'smooth', block:'end'}); }, 120);
   }catch(e){ $('#attMsg').className='msg'; $('#attMsg').textContent = e.message; }
 });
+function closeOut(){
+  stopAttWatch(); ATT = null;
+  $('#attend').classList.remove('on'); $('#app').hidden = false;
+  buildTabs(); go('home');
+}
 async function markAttendance(){
   if(!ATT || !ATT.b64) return;
+  if(ATT.out) return markOut();
   stopAttWatch();                              /* whatever fix stands now is the one filed */
   const btn = $('#attMark'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Marking';
   const u = user(), key = todayStr();
@@ -930,6 +975,92 @@ $('#attSignOut').addEventListener('click', () => {
     DB.session = null; saveNow(); gate();
   });
 });
+/* MARKING OUT, written on the phone and sent after — exactly as the mark in
+   is. The hour it opens is the district's and the district checks it again
+   when the mark lands (rule 6); if it answers that the mark was early, the
+   local record is taken off this phone rather than left standing as a mark
+   the register does not hold. That is the whole of the honesty here: a card
+   saying 'marked out' when the district refused it is the fault this app
+   already learnt from the advisory receipt. */
+async function markOut(){
+  const btn = $('#attMark'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Marking out';
+  stopAttWatch();
+  const u = user(), key = todayStr();
+  const pid = 'out_' + ATT.id;
+  await BLOBS.put(pid, ATT.b64);
+  DB.out[key] = {
+    id: ATT.id, date: key, ts: ATT.ts || new Date().toISOString(),
+    lat: ATT.fix ? ATT.fix.lat : null, lng: ATT.fix ? ATT.fix.lng : null,
+    acc: ATT.fix ? ATT.fix.acc : null,
+    verified: !!ATT.fix && Number(ATT.fix.acc) <= ACC_LIMIT,
+    photoId: pid, phone: u.phone, name: u.name, role: u.role, mandal: u.mandal || '',
+    tz: Intl.DateTimeFormat().resolvedOptions().timeZone || '', sync: 'local'
+  };
+  saveNow();
+  closeOut();
+  toast('Marked out for ' + dayName(key).split(',')[0]);
+  syncOut().catch(()=>{});
+}
+let OUT_SYNCING = null;
+function syncOut(){
+  if(OUT_SYNCING) return OUT_SYNCING;
+  OUT_SYNCING = _syncOut().finally(()=>{ OUT_SYNCING = null; });
+  return OUT_SYNCING;
+}
+async function _syncOut(){
+  const list = Object.values(DB.out || {}).filter(o => o.sync !== 'synced');
+  if(!list.length || !navigator.onLine || !(DB.session && DB.session.token)) return 0;
+  let done = 0;
+  for(const o of list){
+    try{
+      const b64 = await BLOBS.get(o.photoId);
+      /* the same id every time, so a re-send is a retry and not a second
+         mark (rule 5) — the server answers already:true and nothing doubles */
+      const r = await post({kind:'attendanceOut', token:DB.session.token, att:{
+        id:o.id, ts:o.ts, lat:o.lat, lng:o.lng, acc:o.acc, verified:o.verified, tz:o.tz
+      }, photo: b64 ? {name:`OUT_${o.phone}_${o.date}.jpg`, b64} : null});
+      if(r && r.ok){ o.sync = 'synced'; if(o.photoId) BLOBS.del(o.photoId); done++; }
+      else if(r && r.early){
+        /* THE DISTRICT DECIDED, AND IT SAID NOT YET. Keeping the row would
+           show him a closed day the register has no record of. */
+        if(o.photoId) BLOBS.del(o.photoId);
+        delete DB.out[o.date];
+        DB.outState = null;
+        if(document.visibilityState === 'visible')
+          toast((r.error || 'Marking out is not open yet.'), 7000);
+      }
+      else if(r && r.ok === false){
+        /* any other refusal is the district's and is shown once, and the row
+           is not left on the phone pretending to be a mark */
+        if(o.photoId) BLOBS.del(o.photoId);
+        delete DB.out[o.date];
+        if(document.visibilityState === 'visible') toast((r.error || 'Marking out was not accepted.'), 7000);
+      }
+    }catch(e){ /* no line: it stays on the phone and goes up next time */ }
+  }
+  saveNow();
+  if(done) refreshOut();
+  return done;
+}
+/* WHAT THE DISTRICT SAYS ABOUT THE HOUR. The app does no arithmetic of its
+   own on the hour that matters: a handset eleven minutes fast would open the
+   button eleven minutes early, which is the fault rule 1 exists for. */
+function refreshOut(){
+  if(!navigator.onLine || !(DB.session && DB.session.token)) return;
+  get({op:'out'}).then(r => {
+    if(!r || !r.ok) return;                /* a register that does not carry it */
+    DB.outState = r;
+    /* THE RECEIPT THE PHONE HOLDS BEATS THE DISTRICT'S ANSWER, as the
+       advisory's does and for the same reason: a mark still queued on a
+       village road must not come back as unmarked and set the card asking
+       him to do it again. That was reported twice about the circular. */
+    const o = (DB.out || {})[todayStr()];
+    if(o && !r.markedOut){ DB.outState.markedOut = true; DB.outState.outAt = o.ts; }
+    save();
+    if(TAB === 'home') renderHome();
+  }).catch(()=>{});
+}
+
 let ATT_SYNCING = null;
 function syncAttendance(){
   if(ATT_SYNCING) return ATT_SYNCING;                 /* the race, closed at the source */
@@ -1153,6 +1284,8 @@ function renderHome(){
         if(TAB==='home') renderHome(); }
     }).catch(()=>{});
     if(!isViewer(u.role)) get({op:'attendance'}).then(r=>{ if(r&&r.ok){ DB.attToday=r.rows; if(TAB==='home') renderHome(); } }).catch(()=>{});
+    if(DB.att[todayStr()]) refreshOut();   /* and the hour, which is the district's */
+    syncOut().catch(()=>{});               /* any mark out the signal swallowed */
     if(gpdpOffered()) refreshGpdp();  /* and never asked for on a register that keeps no plan */
     refreshAdvisory();  /* and the circular is put up the moment it is issued */
     refreshSchedule();  /* his own villages, his own days, and what the district has sent him */
@@ -1168,6 +1301,8 @@ function renderHome(){
   $('#homeSub').textContent = roleName(u.role) + (u.mandal ? ' · ' + u.mandal + ' mandal' : ' · Jangaon District');
   const ym=ymNow(), body=$('#homeBody');
   let h2 = attendanceStrip();
+  /* the other end of the same record, directly under it */
+  h2 += outStrip();
   /* PINNED WHILE IT IS OUTSTANDING. An officer opens this screen and the first
      thing on it is what the district is waiting for; once the plan is in, it
      drops back below the circular where it belongs. */
@@ -1198,6 +1333,15 @@ function renderHome(){
   body.innerHTML = h2;
   const b=$('#homeStart'); if(b) b.addEventListener('click', ()=>openPicker());
   const aw=$('#attAnyway'); if(aw) aw.addEventListener('click', ()=>{ $('#app').hidden=true; openAttendance(); });
+  const og=$('#outGo'); if(og) og.addEventListener('click', ()=>{ $('#app').hidden=true; openAttendance(true); });
+  const op2=$('#outPush');
+  if(op2) op2.addEventListener('click', async ()=>{
+    if(!navigator.onLine){ toast('No signal yet. The app keeps trying by itself.', 5000); return; }
+    op2.disabled=true; op2.innerHTML='<span class="spin"></span>Sending';
+    const n=await syncOut().catch(()=>0);
+    toast(n?'The district has your marking out now.':'It did not get through. The app will keep trying.', 5000);
+    renderHome();
+  });
   const ap=$('#attPush');
   if(ap) ap.addEventListener('click', async ()=>{
     if(!navigator.onLine){ toast('No signal yet. The app keeps trying by itself — keep it open where there is a line.', 5000); return; }
@@ -1229,6 +1373,62 @@ function renderHome(){
 }
 function banner(kind, icon, text){
   return `<div class="banner ${kind}">${icon}<span>${esc(text)}</span></div>`;
+}
+/* MARKING OUT, ON THE HOME SCREEN AND NOWHERE ELSE. It sits directly under
+   the mark in because it is the same record's other end, and it appears at
+   all only once there is a mark in to close.
+
+   IT ASKS AND IT NEVER ACCUSES. Nothing on this card is a warning, there is
+   no red, and a day left unclosed draws a reminder by mail the next morning
+   and nothing whatever besides — no notice, no debit, no lock. The card says
+   so in as many words, because an officer who reads 'not marked' on a
+   government register assumes the worst and rings the mandal office. */
+function outStrip(){
+  const key = todayStr();
+  const a = DB.att[key];
+  if(!a) return '';                    /* no mark in: nothing to close */
+  const st = (DB.outState && DB.outState.date === key) ? DB.outState : null;
+  const o = (DB.out || {})[key];
+
+  /* THE PHONE'S OWN RECEIPT COMES FIRST. A mark still queued is a mark he
+     made, and the card must not ask him for it again. */
+  if(o || (st && st.markedOut)){
+    const when = o ? o.ts : st.outAt;
+    const t = new Date(when).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+    const bits = ['Marked out at ' + t];
+    if(o){
+      if(o.verified) bits.push('location recorded');
+      else if(o.acc) bits.push('location only to ±' + Math.round(o.acc) + ' m — filed as unverified');
+      else bits.push('no location fix — filed as unverified');
+    }
+    let html = banner('ok', ICON.tickC, bits.join(' · ') + '.');
+    if(o && o.sync !== 'synced')
+      html = banner('warn', ICON.cloud, bits.join(' · ') + '. It is on this phone and has not reached the district yet — it goes up by itself when there is a line.') +
+             '<div style="padding:0 var(--pad) 4px"><button class="btn sm quiet" id="outPush">Send it now</button></div>';
+    return html;
+  }
+
+  /* THE DISTRICT DECIDES THE HOUR (rule 1), so where it has told us, that is
+     the hour. Where it has not — no line yet, or the mark in itself still
+     queued — the phone offers the button on its own reading and says that the
+     district confirms it, because the SERVER is what refuses an early mark
+     (rule 6) and a refusal is recoverable while a button that never appears
+     is not. Withholding it wrongly costs the officer his evening; offering
+     it wrongly costs one refusal he is told about. */
+  if(st && !st.outFrom && st.why)
+    return banner('info', ICON.cal,
+      'Marking out is not open today — seven and a half hours from your mark in would run past the end of the day. Nothing is counted against you.');
+
+  const openAt = (st && st.outFrom) ? new Date(st.outFrom).getTime()
+                                    : (new Date(a.ts).getTime() + 450*60000);
+  const told = !!(st && st.outFrom);
+  const t = new Date(openAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+  if(Date.now() < openAt)
+    return banner('info', ICON.cloud, 'Marking out opens at ' + t +
+      (told ? '.' : ', seven and a half hours after you marked in. The district confirms the exact time.'));
+  return banner('info', ICON.cloud, 'Your day is not closed yet. Marking out has been open since ' + t +
+    '. It takes one photograph, as marking in did, and nothing is counted against you either way.') +
+    '<div style="padding:0 var(--pad) 4px"><button class="btn sm" id="outGo">Mark out</button></div>';
 }
 function attendanceStrip(){
   const a = DB.att[todayStr()];
