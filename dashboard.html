@@ -1357,7 +1357,7 @@ function initTheme(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = 'fd2190b - 02 Oct 11:56';
+const BUILD_STAMP = '74730f5 - 02 Oct 19:10';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -3193,6 +3193,13 @@ function vAdmin(j,A){
         <button class="tbtn pri" id="rlJobs"${ROLLBUSY?' disabled':''}>Install the district’s daily jobs</button>
         <span class="expnote" style="margin-left:9px">the evening report, the filing chase, the schedule reminder and the nightly backup</span>
       </div>`:''}
+      ${(HL.backup && !HL.backup.ok) ? `<div style="margin-top:11px">
+        <button class="tbtn" id="rlBackup"${ROLLBUSY?' disabled':''}>Run the backup now</button>
+        <span class="expnote" style="margin-left:9px">installing the trigger and knowing it works are two
+          different things — this runs the same job the trigger runs at 01:00, and hands back whatever it
+          says. It takes a minute or two. Running it twice is safe: each step asks whether its own output is
+          already there.</span>
+      </div>`:''}
       <div class="expnote" style="margin-top:9px">Read from this register, not from the page. A trigger that was never
       installed looks exactly like one that is working: nothing arrives, and nothing says why. The same is true of a
       backup, which is why the days with none are counted off the calendar rather than off the folder.</div>`
@@ -3432,6 +3439,28 @@ function wireAdmin(){
     rollPost({kind:'installJobs'}, r=>{
       ROLLMSG='The daily jobs are installed: '+(r.installed||[]).join(', ')+'.';
       ROLLBAD=false; HEALTH=null; pullHealth(true);
+    });
+  };
+
+  /* RUN IT, AND SAY WHAT HAPPENED. On 02.10.2026 the jobs read as installed
+     and the newest backup was 33 days old — which is what a trigger that was
+     never there and a job that throws every night at one in the morning BOTH
+     look like from the folder. Only running it tells them apart, and the
+     message it throws is the answer. rollPost already prints a refusal with
+     the register that gave it, so the failure path needs nothing here. */
+  const bk=$('#rlBackup');
+  if(bk) bk.onclick=()=>{
+    if(!confirm('Run the nightly backup now on ' + ((ROLL&&ROLL.tenantName)||'this register') + '?\n\n' +
+      'The same job the trigger runs at 01:00: the register twice, the server, the app and the console, the ' +
+      'Drive inventory and the property fingerprints. It may take a minute or two, and nothing is ever ' +
+      'deleted.\n\nIf it has been failing, this is what will say why.')) return;
+    rollPost({kind:'runBackup'}, r=>{
+      const made = r.made || 0;
+      ROLLMSG = 'The backup ran in ' + (r.seconds || 0) + 's · ' + made + ' file(s) written · newest now ' +
+        (r.newest || '—') + '.' +
+        (made ? '' : ' Nothing new was written, which means every step already had its output for today.');
+      ROLLBAD = false;
+      HEALTH = null; pullHealth(true);
     });
   };
 
