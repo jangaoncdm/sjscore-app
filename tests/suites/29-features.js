@@ -242,6 +242,36 @@ module.exports = {
       e.post({ kind:'installJobs', token:cdm });
       t.eq(e.installed.length, n1, 'a second press installs nothing twice');
       t.contains(JSON.stringify(e.sheets['Audit'].rows), 'DAILY JOBS INSTALLED', 'and it is on the Audit tab');
+
+      /* ---- AND RUNNING THE BACKUP BY HAND ----
+         Installing the trigger and knowing the backup works are two different
+         things. On 02.10.2026 the district had the jobs installed and a newest
+         backup 33 days old, which is what a trigger that was never there and a
+         job that throws every night BOTH look like from the folder. */
+      t.eq(e.post({ kind:'runBackup', token:ps }).ok, false,
+        'a Secretary cannot run the district’s backup');
+      const rb = e.post({ kind:'runBackup', token:cdm });
+      t.eq(rb.ok, true, 'the Collector can');
+      t.ok(rb.made > 0, 'and it writes what it says it writes — ' + rb.made + ' file(s)');
+      t.ok(!!rb.newest, 'the folder is read AFTER as well, so the answer is evidence and not a tick');
+      t.contains(JSON.stringify(e.sheets['Audit'].rows), 'BACKUP RUN BY HAND',
+        'and who ran it is on the Audit tab');
+
+      /* RULE 8: a nervous second press completes a run rather than doubling it */
+      const rb2 = e.post({ kind:'runBackup', token:cdm });
+      t.eq(rb2.ok, true, 'a second run is accepted');
+      t.eq(rb2.made, 0, 'AND WRITES NOTHING THE SECOND TIME — each step had its output already');
+
+      /* A BACKUP THAT FAILS QUIETLY IS A BELIEF. If the job throws, the
+         message is handed back whole, because that message is the whole
+         reason the button exists. */
+      const bad = mock.load({ now:'2026-10-02T09:00:00+05:30' }); seed(bad);
+      bad.ctx.dailyBackup = function(){ throw new Error('Drive quota exceeded'); };
+      const rf = bad.post({ kind:'runBackup', token: tok(bad, '9000000001') });
+      t.eq(rf.ok, false, 'a backup that throws is reported as having failed');
+      t.contains(rf.error, 'Drive quota exceeded', 'WITH WHAT IT ACTUALLY SAID, not a tidy summary');
+      t.contains(JSON.stringify(bad.sheets['Audit'].rows), 'FAILED',
+        'and the failure is on the Audit tab too');
     }
 
     /* ---- 8. AN UNKNOWN KIND IS STILL AN UNKNOWN KIND ----

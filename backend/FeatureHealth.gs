@@ -69,34 +69,7 @@ function feature_health(){
         })();
 
         /* ---- the nightly backup, by the calendar and not by the folder ---- */
-        out.backup = (function(){
-          try{
-            const it = DriveApp.getFoldersByName(BACKUP_FOLDER);
-            if(!it.hasNext()) return { ok:false, why:'no ' + BACKUP_FOLDER + ' folder yet' };
-            const folder = it.next();
-            const days = {};
-            let newest = '', n = 0;
-            const files = folder.getFiles();
-            while(files.hasNext()){
-              const f = files.next(), nm = f.getName();
-              const m = nm.match(/(\d{4}-\d{2}-\d{2})/);
-              if(!m) continue;
-              n++; days[m[1]] = true;
-              if(m[1] > newest) newest = m[1];
-            }
-            /* walk the last fourteen days and name the ones with nothing */
-            const missing = [];
-            for(let i = 1; i <= 14; i++){
-              const d = new Date(today_() + 'T00:00:00');
-              d.setDate(d.getDate() - i);
-              const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
-                          '-' + String(d.getDate()).padStart(2, '0');
-              if(!days[key]) missing.push(key);
-            }
-            return { files:n, newest:newest, missingLast14:missing,
-                     ok: missing.length === 0 && !!newest };
-          }catch(err){ return { error:String(err) }; }
-        })();
+        out.backup = healthBackup_();
 
         /* ---- what the register holds ---- */
         out.roll = (function(){
@@ -143,6 +116,49 @@ function feature_health(){
          looking at. It is idempotent: installReportTriggers deletes its own
          triggers before creating them, so a nervous second press changes
          nothing (rule 8). */
+      /* RUN THE BACKUP NOW, AND SAY WHAT HAPPENED.
+
+         Installing the trigger and knowing the backup WORKS are two different
+         things, and on 02.10.2026 the district had the second question: the
+         jobs were installed and the newest backup was 30 August, 33 days old.
+         A missing trigger and a job that throws every night at one in the
+         morning look identical from the folder — which is the whole of why
+         the check counts off the calendar — and only running it tells them
+         apart. Waiting until tomorrow to find out it still does not work is
+         another day with no backup of a government register.
+
+         It is a Code.gs job and not an Admin.gs one, so no rule is bent by
+         offering it on a screen the Collector is already looking at, and it is
+         the same call the trigger makes at 01:00. It is idempotent (rule 8):
+         each step asks whether its own output is already there, so pressing
+         this after a run that failed halfway COMPLETES it rather than starting
+         again. The folder is read before and after, so the answer is evidence
+         and not a tick — and if it throws, the message is handed back whole
+         rather than becoming 'it did not work'. */
+      runBackup: function(b, u){
+        if(u.role !== 'COLLECTOR')
+          return json_({ ok:false, error:'The backup is run by the Collector alone.' });
+        const before = healthBackup_();
+        let threw = '';
+        const t0 = Date.now();
+        try{ dailyBackup(); }
+        catch(err){ threw = String((err && err.message) || err); }
+        const after = healthBackup_();
+        const made = (after.files || 0) - (before.files || 0);
+        try{
+          admAudit_('BACKUP RUN BY HAND', tenant_().key,
+            (threw ? 'FAILED: ' + threw : 'completed') + ' · ' + made + ' file(s) made · by ' +
+            u.name + ' (' + u.phone + ')');
+        }catch(err){}
+        return json_({ ok: !threw, error: threw || '',
+          seconds: Math.round((Date.now() - t0) / 1000),
+          made: made, before: before, after: after,
+          /* A BACKUP THAT FAILS QUIETLY IS A BELIEF, NOT A BACKUP. Even a run
+             that threw may have completed some of its six steps, so what the
+             folder holds now is reported either way. */
+          newest: after.newest || '' });
+      },
+
       installJobs: function(b, u){
         if(u.role !== 'COLLECTOR')
           return json_({ ok:false, error:'The district’s daily jobs are installed by the Collector alone.' });
@@ -168,4 +184,37 @@ function feature_health(){
       }
     }
   };
+}
+
+/* WHAT THE BACKUP FOLDER HOLDS, counted off the CALENDAR and not off the
+   folder — a job that has been failing for three weeks looks exactly like one
+   that is working if you only read the newest file. Read by the health panel
+   and again by the run-it-now action, so the before and the after are the
+   same reading and a difference between them means something. */
+function healthBackup_(){
+  try{
+    const it = DriveApp.getFoldersByName(BACKUP_FOLDER);
+    if(!it.hasNext()) return { ok:false, why:'no ' + BACKUP_FOLDER + ' folder yet', files:0 };
+    const folder = it.next();
+    const days = {};
+    let newest = '', n = 0;
+    const files = folder.getFiles();
+    while(files.hasNext()){
+      const f = files.next(), nm = f.getName();
+      const m = nm.match(/(\d{4}-\d{2}-\d{2})/);
+      if(!m) continue;
+      n++; days[m[1]] = true;
+      if(m[1] > newest) newest = m[1];
+    }
+    const missing = [];
+    for(let i = 1; i <= 14; i++){
+      const d = new Date(today_() + 'T00:00:00');
+      d.setDate(d.getDate() - i);
+      const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+                  '-' + String(d.getDate()).padStart(2, '0');
+      if(!days[key]) missing.push(key);
+    }
+    return { files:n, newest:newest, missingLast14:missing,
+             ok: missing.length === 0 && !!newest };
+  }catch(err){ return { error:String(err), files:0 }; }
 }

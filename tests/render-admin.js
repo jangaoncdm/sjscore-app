@@ -209,6 +209,26 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
     ck(!!ij && !!ij.token,'under the Collector’s own token');
   }
 
+  /* --- AND KNOWING IT WORKS IS NOT THE SAME AS INSTALLING IT ---
+     On 02.10.2026 the district had every job installed and a newest backup 33
+     days old. A trigger that was never there and a job that throws every
+     night at one in the morning look identical from the folder, so the panel
+     offers the one thing that tells them apart. */
+  const bb = await page.$('#rlBackup');
+  ck(!!bb,'a backup that is not running can be RUN from the panel, not only installed');
+  if(bb){
+    const note = await page.evaluate(() => {
+      const b = document.getElementById('rlBackup');
+      return b && b.parentElement ? b.parentElement.innerText : '';
+    });
+    ck(/takes a minute or two/i.test(note),'and the Collector is told it will take a minute');
+    ck(/twice is safe|already there/i.test(note),'and that pressing it twice is safe (rule 8)');
+    await page.click('#rlBackup'); await page.waitForTimeout(700);
+    const rb = posts.find(p=>p.kind==='runBackup');
+    ck(!!rb,'and it reaches the district');
+    ck(!!rb && !!rb.token,'under the Collector’s own token, which the server re-checks');
+  }
+
   /* --- THE TAB'S OWN ROWS ARE A RECORD, NOT THE CALENDAR ---
      01.10.2026 was a Thursday and the register called it a Second Saturday:
      2026-01-10 with the day and month transposed. The calendar is now the
