@@ -107,13 +107,19 @@ function build(){
      driven as is an MPDO with villages, a day for each of them, and a message
      from the Collector waiting — because the schedule card, the modal and the
      day-by-day list are what this section has to look at. */
-  env.post({ kind:'schedulePublish', token:cdm, dpoCap:6, dlpoCap:6 });
+  env.post({ kind:'schedulePublish', token:cdm });
   const him = users.find(u => u.Role === 'MPDO');
   const himTok = env.post({ kind:'login', u:him.Phone, p:'1111' }).token;
   /* a village or two already filed by his own hand, so his list has both a
      line that is closed and lines that are not */
   const mineFirst = env.get('schedule', { token: himTok });
-  ((mineFirst.mine || {}).rows || []).slice(0, 2).forEach((r, i) => {
+  /* ALWAYS LEAVE HIM ONE OPEN. Under the order of 17.09.2026 the MPO and
+     the MPDO were named against every village of their mandal, so he held
+     plenty; under the shares of 19.09 a village has ONE officer and he may
+     hold only two. Filing a fixed two then closed his whole list and the
+     document pass had no open line to show. */
+  const hisRows = (mineFirst.mine || {}).rows || [];
+  hisRows.slice(0, Math.max(1, Math.min(2, hisRows.length - 1))).forEach((r, i) => {
     env.post({ kind:'inspection', token: himTok, record:{
       id: r.gp + '|' + mineFirst.ym, ym: mineFirst.ym, mandal: r.mandal, gp: r.gp,
       date: r.dueDate || '2026-08-23', score: 71 + i * 9, grade:'B' } });

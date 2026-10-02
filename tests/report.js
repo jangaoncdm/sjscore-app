@@ -56,6 +56,10 @@ const PASSES = [
     what: 'The real field app and the real console driven against payloads the real backend produced: the circular, ' +
           'the plan, the filing schedule, the receipts, and what each of them refuses.',
     cmd: ['tests/render-docs.js'], needs: BROWSER ? null : 'playwright is not installed', shots: 'docs-render' },
+  { name: 'The release record',
+    what: 'Rebuilt from the repository’s own history and from both live registers, then rendered at phone and '+
+          'monitor width in both themes. Nothing in it is retyped, so it cannot drift from the register it describes.',
+    cmd: ['tests/build-release.js'], needs: null, shots: null },
   { name: 'One handset, one officer',
     what: 'Two officers sharing a phone, which happens all day in this district. A handset carrying another ' +
           'officer’s work — including one written before any of this existed, which records no owner at all — ' +
