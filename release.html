@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SJGP &middot; Release record</title>
+<meta name="description" content="What the Jangaon district register has been given, release by release.">
+<style>
+  /* NO WEBFONT AND NO CDN: this is opened from a district machine that may
+     have neither, and printed from one that certainly has neither. */
+  :root{
+    --paper:#F3F4F9; --card:#FFFFFF; --ink:#10121C; --ink-2:#545A6E; --ink-3:#767D93;
+    --line:rgba(16,18,28,.12); --pri:#4A40CE; --teal:#0F766E; --ok:#126E4B;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#10121C; --card:#171B2D; --ink:#EEF0F7; --ink-2:#AEB4C8; --ink-3:#8A90A6;
+      --line:rgba(238,240,247,.14); --ok:#49C98B;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#10121C; --card:#171B2D; --ink:#EEF0F7; --ink-2:#AEB4C8; --ink-3:#8A90A6;
+    --line:rgba(238,240,247,.14); --ok:#49C98B;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans",sans-serif;
+    color:var(--ink);background:var(--paper);padding:30px 16px 72px}
+  .wrap{max-width:880px;margin:0 auto}
+  header{text-align:center;margin-bottom:28px}
+  .seal{font:700 11.5px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    letter-spacing:.17em;text-transform:uppercase;color:var(--ink-3)}
+  h1{font-size:30px;letter-spacing:-.022em;margin-top:10px;line-height:1.2}
+  .lede{color:var(--ink-2);margin-top:12px;font-size:15.5px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;margin-top:18px}
+  h2{font-size:19px;letter-spacing:-.01em;margin-bottom:4px}
+  h3{font-size:17px;letter-spacing:-.01em}
+  .eyebrow{font:700 10.5px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    letter-spacing:.15em;text-transform:uppercase;color:var(--ink-3)}
+  .mut{color:var(--ink-2);font-size:14.5px}
+  .grid{display:flex;gap:16px;flex-wrap:wrap;margin-top:4px}
+  .reg{flex:1 1 320px;min-width:0;background:var(--card);border:1px solid var(--line);
+    border-radius:14px;padding:18px}
+  dl{margin-top:12px;font-size:14px}
+  dl > div{display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--line)}
+  dl > div:last-child{border-bottom:0}
+  dt{color:var(--ink-3);flex:0 0 46%}
+  dd{color:var(--ink);flex:1 1 auto}
+  dd.ok{color:var(--ok);font-weight:600}
+  .kpis{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px}
+  .kpi{flex:1 1 150px;background:var(--card);border:1px solid var(--line);border-radius:13px;padding:15px 16px}
+  .kpi .n{font:700 25px/1.1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:-.02em}
+  .kpi .l{color:var(--ink-3);font-size:12.5px;margin-top:6px;line-height:1.45}
+  .chapter{margin-top:30px}
+  .chapter > .hd{border-left:3px solid var(--pri);padding-left:14px;margin-bottom:6px}
+  .chapter > .hd p{color:var(--ink-2);font-size:14.5px;margin-top:6px}
+  .day{margin-top:14px}
+  .day .d{font:700 11.5px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3)}
+  .day ul{margin:8px 0 0 19px}
+  .day li{margin-top:5px;color:var(--ink)}
+  .rules li{margin-top:7px;color:var(--ink-2)}
+  .rules b{color:var(--ink)}
+  footer{text-align:center;color:var(--ink-3);font-size:13px;margin-top:34px;line-height:1.75}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+  @media print{
+    body{background:#fff;padding:0}
+    .card,.reg,.kpi{break-inside:avoid;border-color:#ccc}
+    .chapter{break-inside:avoid-page}
+  }
+</style></head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="seal">Collectorate &middot; Jangaon District &middot; Telangana</p>
+    <h1>The district register &mdash; release record</h1>
+    <p class="lede">Everything the register has been given since the district adopted it on
+    20 July 2026, release by release, with what each one was for. Built from the repository&rsquo;s
+    own history and from the live registers on 2 October 2026.</p>
+  </header>
+
+  <section class="card">
+    <h2>What it is</h2>
+    <p class="mut" style="margin-top:8px">Two registers, each its own Apps Script project over its own
+    spreadsheet, serving the same application from one address. Officers mark attendance and file their
+    returns from their phones, often on weak rural signal; the Collector reads both from a single console.
+    <b>What it writes is a government record</b> &mdash; it is used to issue show-cause notices under the
+    Telangana Civil Services (Conduct) Rules 1964 and to debit casual leave &mdash; which is why the rules
+    further down are written the way they are.</p>
+    <div class="grid" style="margin-top:16px">
+      
+    <div class="reg">
+      <p class="eyebrow">Sanitation · since 20.07.2026</p>
+      <h3>Swachh Jangaon Gram Panchayat</h3>
+      <dl>
+        <div><dt>Answering</dt><dd class="ok">yes &middot; 2026-10-02</dd></div>
+        <div><dt>Today</dt><dd>an off day &mdash; Mahatma Gandhi Jayanthi</dd></div>
+        <div><dt>Calendar 2026</dt><dd>44 days</dd></div>
+        <div><dt>Show-cause ladder</dt><dd>in force</dd></div>
+        <div><dt>Village evaluation</dt><dd>taken</dd></div>
+        <div><dt>Filing schedule</dt><dd>carried</dd></div>
+        <div><dt>Development plan</dt><dd>called for</dd></div>
+        <div><dt>Place of duty</dt><dd>no coordinates to measure against</dd></div>
+      </dl>
+      <p class="mut" style="margin-top:12px">About 280 Panchayat Secretaries, MPOs, MSOs, MPDOs, the DPO and the DLPO across 12 mandals. Attendance, the monthly 100-mark village evaluation with photographic evidence, leave, the filing schedule, the development plan and the Collector’s circulars.</p>
+    </div>
+      
+    <div class="reg">
+      <p class="eyebrow">Revenue · since 19.09.2026</p>
+      <h3>Gram Palana Register</h3>
+      <dl>
+        <div><dt>Answering</dt><dd class="ok">yes &middot; 2026-10-02</dd></div>
+        <div><dt>Today</dt><dd>an off day &mdash; Mahatma Gandhi Jayanthi</dd></div>
+        <div><dt>Calendar 2026</dt><dd>39 days</dd></div>
+        <div><dt>Show-cause ladder</dt><dd>built and switched off</dd></div>
+        <div><dt>Village evaluation</dt><dd>not taken</dd></div>
+        <div><dt>Filing schedule</dt><dd>not carried</dd></div>
+        <div><dt>Development plan</dt><dd>not called for</dd></div>
+        <div><dt>Place of duty</dt><dd>measured</dd></div>
+      </dl>
+      <p class="mut" style="margin-top:12px">115 Gram Palana Officers across 180 revenue villages and 19 Revenue Inspectors. Attendance carrying the place it was marked from, leave, the map and the daily report. The show-cause ladder is built and switched off by order.</p>
+    </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Where it stands</h2>
+    <div class="kpis" style="margin-top:12px">
+      <div class="kpi"><div class="n">1845</div><div class="l">assertions, over 28 suites, run against the real backend before anything deploys</div></div>
+      <div class="kpi"><div class="n">8</div><div class="l">browser passes that drive the real app and console and measure what looking cannot</div></div>
+      <div class="kpi"><div class="n">101</div><div class="l">releases since adoption</div></div>
+      <div class="kpi"><div class="n">2c3b59a</div><div class="l">the build this document was written from</div></div>
+    </div>
+    <p class="mut" style="margin-top:14px">Server <code>v6.8.4</code> &middot; app <code>v6.10.0</code>.
+    Every commit to the main branch runs the suites, publishes the app and the console, deploys both backends and
+    then asks each register whether it is answering. Nothing untested reaches an officer&rsquo;s phone.</p>
+  </section>
+
+  <section class="card">
+    <h2>The rules that were paid for</h2>
+    <p class="mut" style="margin-top:8px">Each of these is a failure that reached officers in the field. They are
+    recorded here because they are the reason the register behaves as it does, and because undoing one of them
+    would repeat it.</p>
+    <ul class="rules" style="margin:12px 0 0 19px">
+      <li><b>The phone&rsquo;s clock is not evidence.</b> A handset eleven minutes fast was recording marks in the future. Compliance is judged on the earlier of the officer&rsquo;s claim and the district&rsquo;s receipt.</li>
+      <li><b>A mark on the phone is not a mark the district has.</b> The day is read at 18:00, and attendance is read three times before a day&rsquo;s leave is debited.</li>
+      <li><b>Dates from the sheet are not strings.</b> A spreadsheet silently transposes day and month when both are twelve or less. It put nine holidays on the wrong date, and in October 2026 it closed a working day across the district.</li>
+      <li><b>The server decides; the console only asks.</b> Every write re-checks role, ownership and balance.</li>
+      <li><b>Nothing is destroyed.</b> Withdrawn evaluations, superseded schedules, retired officers and reversed debits all remain on the register. A file can be produced afterwards.</li>
+      <li><b>Idempotence everywhere.</b> Every job runs twice without changing anything the second time.</li>
+      <li><b>Silence under sanction is leave, not absence.</b> Anything counting the unmarked consults the leave register first.</li>
+      <li><b>&ldquo;Verified&rdquo; is not &ldquo;present at the place of duty.&rdquo;</b> It means only that the handset returned a precise fix. The distance is printed and <b>accuses nobody</b>.</li>
+      <li><b>One handset is one officer.</b> Two officers sharing a phone must never inherit each other&rsquo;s marks or unsent work.</li>
+      <li><b>A plan of work is not a charge.</b> Falling behind the filing schedule, a missing development plan and an unacknowledged circular raise no notice, no debit and no lock.</li>
+    </ul>
+  </section>
+
+  
+  <section class="chapter">
+    <div class="hd">
+      <h2>The calendar straightened</h2>
+      <p>A Thursday was being read as a Second Saturday and the attendance gate stood down across the district. The calendar is now the General Holidays of the G.O. and the second Saturdays worked out from the Gregorian calendar, so a date cannot be mistyped into it. Days already announced as holidays stand.</p>
+    </div>
+    
+    <div class="card day">
+      <p class="d">1 Oct 2026</p>
+      <ul><li>The Thursday that was a Second Saturday</li><li>A strike reaches forward, or it accuses the whole district in retrospect</li><li>Diag reports the calendar the register actually holds</li><li>The register says which nine, and a struck date stops asking to be struck</li><li>The calendar is the order and the Gregorian second Saturdays</li></ul>
+    </div>
+  </section>
+  <section class="chapter">
+    <div class="hd">
+      <h2>The second register, and the orders that followed</h2>
+      <p>The Gram Palana register stood up for the Revenue department — 134 officers, isolated in its own spreadsheet. The filing schedule re-ordered to shares inside each mandal. The roll corrected from the district’s own roster. One handset, one officer.</p>
+    </div>
+    
+    <div class="card day">
+      <p class="d">20 Sept 2026</p>
+      <ul><li>Has the app reached them — sign-ins, which the register knows</li><li>Deal the month again — because an order reaches forward</li></ul>
+    </div>
+    <div class="card day">
+      <p class="d">19 Sept 2026</p>
+      <ul><li>Stand the second register up from a button</li><li>Provisioning resumes instead of restarting</li><li>Publish /gp/ only once its server answers</li><li>A register waiting for a click is not a failing build</li><li>A file can be pushed away; the spreadsheet is the register</li><li>A seeded register nobody can open is not a register</li><li>A register whose Collector cannot sign in has no way back</li><li>The console is at the root, and the roll has to be handed out</li><li>One handset is one officer, and this register was never asked for a plan</li><li>GP is Gram Palana, of the Revenue department — not Gram Panchayat</li><li>The year's holidays, by the Collector's own hand</li><li>A handset that names nobody is not therefore his</li><li>Not asked for means every door, and the console says Gram Palana</li><li>The register says what its build can answer</li><li>Note why diag reports the build's capabilities</li><li>Diag reads the dispatch off the running code, not off a list I typed</li><li>The console calls the address the district publishes, not one a phone remembered</li><li>The year is on the register, and the two registers disagreed by nine</li><li>One address the district can send, carrying both registers</li><li>The picture is what gets forwarded, and nothing was rebuilding it</li><li>The roll, corrected from the district's own roster</li><li>The schedule is split inside every mandal, not dealt out in whole mandals</li><li>Diag states the allocation order the register will apply</li><li>The console says which build it is, and stops being served a stale one</li></ul>
+    </div>
+  </section>
+  <section class="chapter">
+    <div class="hd">
+      <h2>The filing schedule</h2>
+      <p>The villages were not being filed and nobody could say whose they were. Every pending village given an officer and a day, with reminders, a console view and the day-by-day pivot — and nothing that accuses anybody.</p>
+    </div>
+    
+    <div class="card day">
+      <p class="d">18 Sept 2026</p>
+      <ul><li>Begin on the 21st, tell everyone, and say where the schedule stands</li><li>A monitor is not a large phone</li><li>A second register, isolated by its spreadsheet</li><li>The pipeline learns the second register</li><li>The app knows which register it is</li><li>One console, two registers, and it says which</li><li>A square nobody can check is worse than no square</li></ul>
+    </div>
+    <div class="card day">
+      <p class="d">17 Sept 2026</p>
+      <ul><li>The villages were not being filed, and nobody could say whose they were</li></ul>
+    </div>
+  </section>
+  <section class="chapter">
+    <div class="hd">
+      <h2>The reporting month</h2>
+      <p>The month a village is evaluated FOR runs from the 10th to the 9th, because a month’s returns are not complete when the month is.</p>
+    </div>
+    
+    <div class="card day">
+      <p class="d">5 Sept 2026</p>
+      <ul><li>A second Saturday falls on the 8th to the 14th, and the window opens on the 10th</li></ul>
+    </div>
+    <div class="card day">
+      <p class="d">4 Sept 2026</p>
+      <ul><li>A month's returns are not complete when the month is</li><li>A report that cannot be shown must still be readable</li></ul>
+    </div>
+  </section>
+  <section class="chapter">
+    <div class="hd">
+      <h2>The backup</h2>
+      <p>The whole system backed up nightly — the register, the server, the app, the console, the documents and the script properties — and a report that names the days that are missing.</p>
+    </div>
+    
+    <div class="card day">
+      <p class="d">30 Aug 2026</p>
+      <ul><li>A backup that fails quietly is a belief, not a backup</li></ul>
+    </div>
+  </section>
+  <section class="chapter">
+    <div class="hd">
+      <h2>The documents, the weather and the place of duty</h2>
+      <p>The development plan and the Collector’s circular, each with its own acknowledgement register. Weather over every mandal. And the word “verified” corrected: it never meant the officer was at his place of duty.</p>
+    </div>
+    
+    <div class="card day">
+      <p class="d">28 Aug 2026</p>
+      <ul><li>A camera that comes back with nothing used to say nothing</li><li>A reminder names no sanction</li></ul>
+    </div>
+    <div class="card day">
+      <p class="d">25 Aug 2026</p>
+      <ul><li>Fifteen days of medical leave at a time, and an order that reaches every row</li><li>One officer's PIN, reset from the menu instead of from a code edit</li><li>The file reference comes off the app</li><li>The officer roll on the console: register, reset a PIN, take a man off it</li></ul>
+    </div>
+    <div class="card day">
+      <p class="d">24 Aug 2026</p>
+      <ul><li>The plan is pinned, and the district can chase both documents</li><li>Weather over the district, badges, and the circular that would not go away</li><li>The weather is ground on the map, not a speck</li><li>An advisory is addressed by role AND by mandal</li><li>A retired circular is not a deleted one, and the console now says so</li><li>&quot;Verified&quot; never meant he was at his place of duty</li><li>Optional holidays: three for 2026, by the Collector's order</li><li>The receipt the phone holds beats the district's answer, everywhere</li></ul>
+    </div>
+    <div class="card day">
+      <p class="d">23 Aug 2026</p>
+      <ul><li>GPDP and the Collector's advisory: two document registers</li><li>The browser test builds its own report</li><li>The advisory section is alive before the first circular</li><li>An officers guide, built from the app itself</li><li>A guide for the plan on its own, and the day-one check its sibling failed</li></ul>
+    </div>
+  </section>
+  <section class="chapter">
+    <div class="hd">
+      <h2>The reporting layer</h2>
+      <p>The evening report, the filing reminders, the workbook downloads and a console with a validated chart system and a real dark theme.</p>
+    </div>
+    
+    <div class="card day">
+      <p class="d">22 Aug 2026</p>
+      <ul><li>The 22.08 field register, and the evaluation screen learns to wait</li><li>District maintenance moves onto the Sheet's own menu</li><li>Issue 19 anchors on her number, not on Theegaram</li><li>The console gets a validated chart system and a real dark theme</li><li>The daily mail and the console quote one morning, not two</li></ul>
+    </div>
+    <div class="card day">
+      <p class="d">21 Aug 2026</p>
+      <ul><li>The reporting layer: filing Gantt and downloads; reminders and the daily mail</li><li>The mock's outbox keeps the HTML body - so the mails the engine actually sends can be rendered and looked at, not imagined</li><li>The filing Gantt moves off the console and into the workbook</li><li>Sanctioned leave counts on the console, and the village roll counts villages</li><li>Rule 9, paid for on Varalakshmi Vratham: silence under sanction is leave, and the roll counts villages</li><li>The Excel writer ships with the app</li><li>The daily report opens with the dashboard: stat tiles and the Gantt</li><li>sendDailyReportNow(): a check copy that spares the evening mail</li><li>The daily mail: evaluations first, as a table; the names ride attached</li><li>The daily mail turns to light multi-accent, and the villages ride attached</li></ul>
+    </div>
+  </section>
+  <section class="chapter">
+    <div class="hd">
+      <h2>The field registers</h2>
+      <p>The faults the district reported in its first month on the register, fixed one by one and each with the test that holds it.</p>
+    </div>
+    
+    <div class="card day">
+      <p class="d">20 Aug 2026</p>
+      <ul><li>The Telangana holiday list of 2026, loaded once and proved</li><li>6.9.5: the Optional Holiday - a leave type with the G.O.'s own dates</li><li>6.9.6: leave comes back both ways - cancellation, and sent-back-for-correction</li><li>6.9.7: the whole waiting list in one order</li><li>6.9.8: the Optional Holiday label drops its bracket</li></ul>
+    </div>
+    <div class="card day">
+      <p class="d">19 Aug 2026</p>
+      <ul><li>6.9.4: MSO attendance is voluntary, and the past instruments come back</li><li>Console: ride out bad weather, and say what the wire actually carried</li><li>Pipeline: verify the district with patience, not one shot</li><li>Roll hygiene: the Collector's row gets his name</li><li>The photograph goes to Drive BEFORE the attendance lock</li><li>Console: the village drawer's photographs open at last</li></ul>
+    </div>
+    <div class="card day">
+      <p class="d">18 Aug 2026</p>
+      <ul><li>Console: replace the two-point trend line with a heat grid and movers</li><li>Pipeline: pass the commit message as an env var, never into the shell</li><li>Console: no phantom month columns, and the digits wear the mono font</li><li>Console: the village heat map - one tile per village</li><li>Console: neo multi-accent skin replaces the soft-UI embossing</li><li>Console: score trend as an area chart; attendance-by-mandal corrected</li><li>Console: the map pins, found and freed</li><li>Console: the unmarked on the map, at their last located mark</li><li>6.9.3: the seen ping - the app, opened without marking, says where</li></ul>
+    </div>
+    <div class="card day">
+      <p class="d">17 Aug 2026</p>
+      <ul><li>6.9.2: the 17.08 field issues - roster register, and a patient GPS</li><li>Fix two faults the 17.08 register's first run exposed</li></ul>
+    </div>
+  </section>
+  <section class="chapter">
+    <div class="hd">
+      <h2>The pipeline</h2>
+      <p>One commit, everything deployed: the suites run, the site publishes, the backend deploys, and the district is asked whether it is answering before the run is called green.</p>
+    </div>
+    
+    <div class="card day">
+      <p class="d">16 Aug 2026</p>
+      <ul><li>Add the test suite the pipeline was built to gate on</li><li>Put the deploy workflow where GitHub Actions can see it</li></ul>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:30px">
+    <h2>How to read this</h2>
+    <p class="mut" style="margin-top:8px">Each line is one release: a change that passed the suites, was published and
+    was deployed to the district the same day. The headings above each group say what that period of work was for;
+    the lines beneath are what was actually delivered. Reversals are not listed, because a change that was taken back
+    was never given.</p>
+    <p class="mut" style="margin-top:10px"><b>Nothing in this document is typed by hand</b> except the ten headings and
+    the rules above. The releases are read out of the repository&rsquo;s history, the figures out of the passes that
+    produced them, and the state of each register out of the register itself at the moment this was built. It carries
+    no officer&rsquo;s name, no mobile number and no PIN.</p>
+  </section>
+
+  <footer>
+    Office of the Collector &amp; District Magistrate, Jangaon District, Telangana.<br>
+    Built 2 October 2026 from <code>2c3b59a</code>.
+  </footer>
+</div>
+</body></html>
