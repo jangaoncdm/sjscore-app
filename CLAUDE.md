@@ -1155,9 +1155,97 @@ never needs one** — `FEATURE_OFF` is faster and touches nothing.
 `backend/*.gs` rather than a list of names, and the suites’ mock loads every
 `.gs` as Apps Script does. Naming them would mean a module that works on the
 sanitation register is silently absent from the other — the shape of fault
-`clasp --force` already caused once with `Tenant.gs`. **Apps Script also gives
-each file its own lexical scope**: a top-level `const` is invisible to the other
-files, which is why `FEATURE_MODULES` and `TS_HOLIDAYS_2026` are `var`.
+`clasp --force` already caused once with `Tenant.gs`. **The files share one
+global scope, and they are parsed in turn** — which is the whole of the rule, and
+an earlier line here had it wrong. A top-level `function` or `var` is hoisted and
+is visible to every file at any moment; a top-level `const` or `let` is visible
+to every file too, but only **once its own file has been parsed**. So every
+reference inside a function body is safe, whatever it names — no function here
+runs until the register is answering a request — and that is why Admin.gs has read
+`H_HEAD`, `L_HEAD` and `U_HEAD` out of `Code.gs` for weeks without a complaint.
+What is NOT safe is a **top-level initialiser** reading another file's `const`:
+whether it works is settled by the order the project lists its files, which this
+repository does not control. `FEATURE_MODULES` is a `var` of literals and would
+have been fine either way. `tests/scope.js` holds the narrow rule, and
+`tests/run.js` parses **every** `.gs` rather than the two it used to name.
+
+The wrong version of this paragraph cost an afternoon: believing it, a checker
+was built on it that reported fifty-three faults, forty of them in Admin.gs jobs
+the district has run. **The mock was not lying.** When a rule here and the
+register's own history disagree, the history is the fact.
+
+---
+
+## Marking out
+
+**Ordered 02.10.2026.** An officer marks in as he always has; **seven and a half
+hours later** he may mark out, and the register records of that mark exactly
+what it records of the first — the photograph, the coordinates, how precise
+they were, the time his handset claims and the time the district received it.
+`OUT_AFTER_MINUTES` (450) and `OUT_DAY_ENDS` (21:00) carry the order.
+
+**It is a feature module** (`backend/FeatureOut.gs`, one line in
+`FEATURE_MODULES`): `op=out` for the officer, `op=outday` for the console,
+`kind:attendanceOut` for the mark, and a `daily` hook for the morning after.
+`Code.gs` gained nothing for it. `FEATURE_OFF=out` takes the whole thing out
+with no deploy.
+
+**THE HOUR IS THE DISTRICT’S, AND THE SERVER CHECKS IT AGAIN** (rules 1 and 6).
+It is worked out from `effMarkAt_` — the earlier of his claim and our receipt,
+the same reading every other judgement about his morning is made on — and the
+app is TOLD the moment rather than given a rule to apply, because a phone
+eleven minutes fast would open the button eleven minutes early. **Compared as
+instants, never as strings**: the phone’s reading carries `+05:30` and ours
+carries `Z`, so `'…T17:29+05:30' < '…T12:00Z'` is false and every early mark was
+being accepted. Suite 30 caught it before it ran against the district.
+
+**Seven and a half hours that run past the day are not served.** An officer who
+marks in at four in the afternoon cannot complete them, so there is no marking
+out that day, the card says so, and **nothing whatever is held against him**.
+
+**A MISSING MARK OUT RAISES A REMINDER AND NOTHING ELSE.** No show-cause notice,
+no casual-leave debit, no lock on the app, and nothing written anywhere the
+absence ladder can read — the reminder is kept on this module’s own
+`OutReminders` tab and never on `Reminders`, so there is no table through which
+the two could ever meet. The ladder counts unmarked **attendance**, which is
+what a served notice recites under Rule 3, and a man who came to work and
+forgot to close his day has not been absent. Like the attendance reminder cut
+back on 28.08.2026 and the schedule mail, **it names no sanction**; the suites
+assert the words are absent. An MSO, whose attendance is voluntary, is never
+chased for it and is not counted as owing one.
+
+**It computes no hours worked.** Seven and a half hours is the gate on the
+button, not a figure the register publishes about a man. An hours total is a
+payroll claim and this register does not make one — the screen says so in as
+many words, because that is the question an officer actually has.
+
+**And it never gates the app.** The mark in stands between sign-in and
+everything else because marking it is the whole point of the morning; an OUT
+that did the same would shut an officer out of his own records all evening for
+forgetting. It is a card on the home screen with a way back out of it, and
+`tests/render-out.js` asserts the way back.
+
+**One day, one row.** The OUT is written onto the officer’s own attendance row
+for that date (`A_OUT_HEAD`, appended by `ensureHeaders_`, no migration). A
+separate tab would mean the evening reader, the daily report, the console and
+every export joining two sources for one officer’s day, and a join is exactly
+where “ninety sanctioned officers shown as unmarked” came from.
+
+**The receipt is the phone’s**, as the advisory’s is and for the reason it was
+reported twice: a mark still queued on a village road must not come back as
+unmarked and set the card chasing him. `DB.out[date]` beats the district’s
+answer everywhere. If the district answers `early:true` the local row is taken
+off the phone rather than left standing as a mark the register does not hold.
+
+**`doGet` no longer answers an unknown op with the village list.** Everything
+after the last named op read the `Inspections` register, so ANY unrecognised op
+came back `ok:true` with thirty-nine villages — a handset asking for a feature
+this register does not carry read the absence of its own fields as an empty
+answer, and the console tile printed `undefined of undefined`. That is the same
+fall-through `doPost`’s tail already caused once (“This register does not take
+village evaluations”, answered to a console button), which is why `op=diag`
+exists. An op this build does not answer is now refused **by name**. A missing
+op still gets the list, because an old handset asked that way.
 
 ---
 

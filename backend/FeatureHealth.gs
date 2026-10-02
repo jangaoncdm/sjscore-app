@@ -44,6 +44,7 @@ function feature_health(){
                            villageFilingReminders:'the filing chase, ~10:00',
                            scheduleReminders:'the schedule reminder, ~09:00',
                            dailyBackup:'the nightly backup, ~01:00',
+                           featureDaily:'the feature modules’ daily round, ~07:00',
                            autoCloseDay:'', issueAbsenceNotices:'', settleAbsenceDebits:'' };
             const have = {};
             ScriptApp.getProjectTriggers().forEach(function(t){
@@ -153,6 +154,9 @@ function feature_health(){
              a backup that was never installed looks exactly like one that is
              working. Both are idempotent, so this stays idempotent. */
           installBackupTrigger();
+          /* and the one trigger every feature's daily work runs on, so a new
+             feature never needs the editor opened again */
+          installFeatureTrigger();
           const have = [];
           ScriptApp.getProjectTriggers().forEach(function(t){ have.push(t.getHandlerFunction()); });
           admAudit_('DAILY JOBS INSTALLED', tenant_().key,

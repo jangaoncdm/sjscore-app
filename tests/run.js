@@ -21,7 +21,12 @@ const BACKEND = path.join(__dirname, '..', 'backend');
 const SUITES = path.join(__dirname, 'suites');
 
 /* ---- 1. the backend must parse ---- */
-for(const f of ['Code.gs', 'Admin.gs']){
+/* EVERY .gs FILE, not a list of two. The gate named Code.gs and Admin.gs
+   while the project had grown three more, so a feature module with a syntax
+   error in it got past the one check whose whole job is to catch that — and
+   a project with one file that does not parse deploys as a server that
+   answers nothing at all. */
+for(const f of fs.readdirSync(BACKEND).filter(f => /\.gs$/.test(f)).sort()){
   const src = fs.readFileSync(path.join(BACKEND, f), 'utf8');
   try{ new vm.Script(src, { filename: f }); }
   catch(err){
@@ -30,6 +35,20 @@ for(const f of ['Code.gs', 'Admin.gs']){
   }
   console.log('✓ ' + f + ' parses');
 }
+
+/* ---- 1b. and no top-level code may rely on another file being parsed ---- */
+/* Parsing is not the whole of it: the files share one global scope but are
+   parsed in turn, so a top-level initialiser reading another file's const is
+   a ReferenceError decided by the order the project happens to list its
+   files. Static, so the mock cannot hide it. */
+const scope = require('./scope.js').audit();
+if(scope.faults.length){
+  console.error('✗ FILE SCOPE — nothing else was run.');
+  scope.faults.forEach(x => console.error('  ' + x.file + ':' + x.line + '  ' + x.name +
+    ' is a top-level const/let in ' + x.from));
+  process.exit(1);
+}
+console.log('✓ file scope: nothing read before its file is parsed');
 
 /* ---- 2. the suites ---- */
 function makeT(suiteName){

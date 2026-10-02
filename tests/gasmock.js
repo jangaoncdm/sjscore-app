@@ -302,9 +302,11 @@ function load(opts){
      must be live in the suites too — otherwise the one place a module could
      break something is the one place nothing tests. Admin.gs stays opt-in:
      it is the Collector's own and most suites have no business loading it.
-     NOTE for anything added here: Apps Script gives each file its own
-     lexical scope, so a top-level const is NOT visible to the other files.
-     Anything another file must see is a function declaration or a var. */
+     NOTE, and the earlier note here was wrong: the files share one global
+     scope and are parsed in turn, so a top-level const IS visible to the
+     other files once its own file has been parsed — every reference inside
+     a function body is safe. Only a top-level INITIALISER reading another
+     file's const is a coin toss, and tests/scope.js is what checks that. */
   fs.readdirSync(BACKEND).filter(f => /\.gs$/.test(f) && f !== 'Code.gs' && f !== 'Admin.gs')
     .sort().forEach(f => vm.runInContext(fs.readFileSync(path.join(BACKEND, f), 'utf8'), ctx, { filename: f }));
   if(opts.admin)

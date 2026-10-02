@@ -48,6 +48,16 @@ const VIEWS = ['overview', 'attendance', 'villages', 'schedule', 'leave', 'notic
    built by fixture-dashboard.js off the same real backend run */
 const SCHEDFIX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-schedule.json'), 'utf8'));
 
+/* MARKING OUT, as the feature's own endpoint answers it. The tile and the
+   Out column read this and not the dashboard payload, so without a fixture
+   of its own the panel would be measured empty — and an empty panel is
+   exactly what the first run of this pass showed, reading
+   'undefined of undefined' off the dashboard payload it had fallen back to. */
+const OUTFIX = { ok:true, date:'2026-10-02', marked:87, closed:61, open:23, cannot:3,
+  sanction:false,
+  note:'A day left unclosed draws a reminder by mail the next working morning and nothing else — no notice, no debit and no lock.',
+  rows:[] };
+
 /* THE OFFICER ROLL the Admin view reads. Shaped like op=roll's answer, with
    the three states that view has to draw: a man off the roll, a man with no
    PIN, and a number sitting on two rows. */
@@ -123,7 +133,8 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
         r.fulfill({ status: 200, contentType: 'application/json',
           body: JSON.stringify(gp ? GPFIX
                              : /op=roll/.test(u) ? ROLLFIX
-                             : /op=schedule/.test(u) ? SCHEDFIX : payload) });
+                             : /op=schedule/.test(u) ? SCHEDFIX
+                             : /op=outday/.test(u) ? OUTFIX : payload) });
       });
       await page.route('**/gp.district/**', r =>
         r.fulfill({ status:200, contentType:'application/json', body:JSON.stringify(GPFIX) }));

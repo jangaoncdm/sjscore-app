@@ -857,37 +857,68 @@ function holidayKey_(v, shown){
  * does not name. WRITING them to the tab is still Admin.gs's applyTsHolidays,
  * which is the Collector's own act.
  * ========================================================================== */
-var TS_HOLIDAYS_2026 = [
-  ['2026-01-14','Bhogi'],
-  ['2026-01-15','Sankranti / Pongal'],
-  ['2026-01-26','Republic Day'],
-  ['2026-02-15','Maha Shivaratri'],
-  ['2026-03-03','Holi'],
-  ['2026-03-19','Ugadi'],
-  ['2026-03-21','Eidul Fitr (Ramzan)'],
-  ['2026-03-22','Following day of Ramzan'],
-  ['2026-03-27','Sri Rama Navami'],
-  ['2026-04-03','Good Friday'],
-  ['2026-04-05','Babu Jagjivan Ram’s Birthday'],
-  ['2026-04-14','Dr. B.R. Ambedkar’s Birthday'],
-  ['2026-05-27','Eidul Azha (Bakrid)'],
-  ['2026-06-26','Shahadat Imam Hussain (R.A) 10th Moharam'],
-  ['2026-08-10','Bonalu'],
-  ['2026-08-15','Independence Day'],
-  ['2026-08-26','Eid Miladun Nabi'],
-  ['2026-09-04','Sri Krishna Astami'],
-  ['2026-09-14','Vinayaka Chavithi'],
-  ['2026-10-02','Mahatma Gandhi Jayanthi'],
-  ['2026-10-18','Saddula Bathukamma'],
-  ['2026-10-20','Vijaya Dasami / Dushera'],
-  ['2026-10-21','Following day of Vijaya Dasami'],
-  ['2026-11-08','Deepavali'],
-  ['2026-11-24','Kartika Purnima / Guru Nanak’s Jayanthi'],
-  ['2026-12-25','Christmas'],
-  ['2026-12-26','Following day of Christmas (Boxing Day)']
-];
-/* para 2 of the G.O.: every second Saturday of 2026 */
-var TS_SECOND_SATURDAYS_2026 = ['2026-01-10','2026-02-14','2026-03-14','2026-04-11','2026-05-09','2026-06-13',
+var TS_HOLIDAYS_2026 = [
+
+  ['2026-01-14','Bhogi'],
+
+  ['2026-01-15','Sankranti / Pongal'],
+
+  ['2026-01-26','Republic Day'],
+
+  ['2026-02-15','Maha Shivaratri'],
+
+  ['2026-03-03','Holi'],
+
+  ['2026-03-19','Ugadi'],
+
+  ['2026-03-21','Eidul Fitr (Ramzan)'],
+
+  ['2026-03-22','Following day of Ramzan'],
+
+  ['2026-03-27','Sri Rama Navami'],
+
+  ['2026-04-03','Good Friday'],
+
+  ['2026-04-05','Babu Jagjivan Ram’s Birthday'],
+
+  ['2026-04-14','Dr. B.R. Ambedkar’s Birthday'],
+
+  ['2026-05-27','Eidul Azha (Bakrid)'],
+
+  ['2026-06-26','Shahadat Imam Hussain (R.A) 10th Moharam'],
+
+  ['2026-08-10','Bonalu'],
+
+  ['2026-08-15','Independence Day'],
+
+  ['2026-08-26','Eid Miladun Nabi'],
+
+  ['2026-09-04','Sri Krishna Astami'],
+
+  ['2026-09-14','Vinayaka Chavithi'],
+
+  ['2026-10-02','Mahatma Gandhi Jayanthi'],
+
+  ['2026-10-18','Saddula Bathukamma'],
+
+  ['2026-10-20','Vijaya Dasami / Dushera'],
+
+  ['2026-10-21','Following day of Vijaya Dasami'],
+
+  ['2026-11-08','Deepavali'],
+
+  ['2026-11-24','Kartika Purnima / Guru Nanak’s Jayanthi'],
+
+  ['2026-12-25','Christmas'],
+
+  ['2026-12-26','Following day of Christmas (Boxing Day)']
+
+];
+
+/* para 2 of the G.O.: every second Saturday of 2026 */
+
+var TS_SECOND_SATURDAYS_2026 = ['2026-01-10','2026-02-14','2026-03-14','2026-04-11','2026-05-09','2026-06-13',
+
   '2026-07-11','2026-08-08','2026-09-12','2026-10-10','2026-11-14','2026-12-12'];
 
 /* ============================================================================
@@ -4013,6 +4044,21 @@ function doGet(e){
     rows.forEach(o => { delete o.phone; });
     return json_({ ok:true, rows:rows, date:want });
   }
+
+  /* AN OP THIS BUILD DOES NOT ANSWER IS TOLD SO, BY NAME. Everything below
+     reads the Inspections register, and it used to be the catch-all: ANY
+     unrecognised op came back as a village list with ok:true. A handset
+     asking for a feature the register does not carry — one taken out with
+     FEATURE_OFF, or never meant for this register at all — was handed
+     thirty-nine villages and read the absence of its own fields as an empty
+     answer. That is the shape of fault doPost's own tail already caused once
+     ("This register does not take village evaluations", answered to a console
+     button), which is why op=diag exists. A missing op still gets the list,
+     because an old handset asked that way and nothing is gained by breaking
+     it. */
+  if(p.op && p.op !== 'list')
+    return json_({ ok:false, unknownOp:String(p.op),
+      error:'This register does not answer "' + p.op + '". It may be a feature it does not carry.' });
 
   const sh = sheet_('Inspections', HEADERS);
   const data = sh.getDataRange().getValues();

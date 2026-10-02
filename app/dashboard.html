@@ -2776,6 +2776,14 @@ function vAttendance(j,A){
   h+=kpi('Not marked',IC.u,A.off?'—':A.absent,'',A.off?esc(A.off)+' — not tracked today':'as of now');
   h+=kpi('Marked by 10:00',IC.u,A.present?pct(A.by10,A.present)+'%':'—','',A.by10+' of '+A.present);
   h+=kpi('Location not trustworthy',IC.u,j.today.present.filter(r=>suspect(r)||!r.verified).length,'','of '+A.present+' present');
+  /* MARKING OUT IS A FIGURE OF THE DAY, so it stands with the day's other
+     figures rather than in a panel of its own below the charts. It is filled
+     in when the feature's endpoint answers — a dash until then, never a
+     nought, because nought closed days and no answer yet are not the same
+     thing and only one of them is about the officers. */
+  h+=kpi('Marked out',IC.u,'<span id="outKpi">—</span>','',
+    '<span id="outKpiFoot">reading…</span>');
+  setTimeout(loadOutday, 0);        /* the tile must be in the page first */
   /* WHICH MEASURE THIS REGISTER CAN HONESTLY MAKE.
      The sanitation roll has no coordinates, so the only thing it can say is
      how far a mark is from the MIDDLE OF THE MANDAL, as that mandal's own
@@ -2838,7 +2846,7 @@ function vAttendance(j,A){
   window.__ROWS.att=attRows;
   h+=panel('c12','Officer by officer',A.present+' present · '+A.onLeave+' leave · '+A.absent+' not marked',
     `<input class="find" id="attFind" placeholder="Search name, role, mandal or status" style="margin-bottom:9px">
-     <div class="twrap" style="max-height:430px"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th>${DUTY()?'<th>Place of duty</th>':''}<th>Time</th><th>Location</th><th>Status</th></tr></thead><tbody id="attBody">`+
+     <div class="twrap" style="max-height:430px"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th>${DUTY()?'<th>Place of duty</th>':''}<th>Time</th><th>Out</th><th>Location</th><th>Status</th></tr></thead><tbody id="attBody">`+
     attRows.map((r,i)=>attRow(r,i)).join('')+`</tbody></table></div>`,'att');
   return h;
 }
@@ -2860,11 +2868,66 @@ function dutyCell(r){
   return '<td><span class="pill '+(near?'ok':'warn')+'">'+esc(txt)+'</span>'+
     (r.dutyGp?' <span class="mut">'+esc(r.dutyGp)+'</span>':'')+'</td>';
 }
+/* MARKING OUT, AGAINST THE MAN AND THE MORNING. It is read from the feature's
+   own endpoint rather than from the dashboard payload — a feature is a file,
+   and the payload is cached for fifty seconds besides, which is the wrong
+   behaviour for the one figure a Collector watching the evening refreshes.
+
+   IT ACCUSES NOBODY (rule 10, and the Collector's direction of 02.10.2026).
+   An officer who has not closed his day draws a reminder by mail the next
+   morning and nothing else, so this cell is never red and never says
+   'default'. A man may have gone straight from the village to a mandal
+   meeting; the register cannot know, and a table must not decide it. */
+let OUTDAY = null;
+function outCell(r){
+  if(r._s !== 'P') return '<td class="mut">—</td>';
+  if(!OUTDAY) return '<td class="mut">···</td>';
+  const o = (OUTDAY.by || {})[String(r.phone || '').slice(-10)];
+  if(!o) return '<td class="mut">—</td>';
+  if(o.outAt) return '<td class="num">' + esc(hm(o.outAt)) +
+    (o.outVerified ? '' : ' <span class="pill warn">no fix</span>') + '</td>';
+  if(!o.outFrom) return '<td class="mut">not open today</td>';
+  return '<td class="mut">from ' + esc(hm(o.outFrom)) + '</td>';
+}
+async function loadOutday(){
+  try{
+    const res = await fetch(ST.url + '?op=outday&token=' + encodeURIComponent(ST.token) +
+                            '&t=' + Date.now(), { cache:'no-store' });
+    const r = await res.json();
+    /* a register that does not carry the feature answers ok:false, and the
+       column simply stays as a dash rather than the console reporting a
+       fault at the Collector about something he did not ask for */
+    /* AND IT MUST BE THE ANSWER THIS FEATURE GIVES, not merely ok:true. Any
+       op this register does not know used to come back as the village list
+       with ok:true, and the tile printed 'undefined of undefined' at the
+       Collector. The doGet tail now refuses an unknown op by name, but the
+       tile checks the shape anyway: a panel that cannot say something true
+       says nothing. */
+    if(!r || !r.ok || typeof r.marked !== 'number') return;
+    r.by = {};
+    (r.rows || []).forEach(x => { r.by[String(x.phone).slice(-10)] = x; });
+    OUTDAY = r;
+    const b = document.getElementById('attBody');
+    if(b && window.__ROWS && window.__ROWS.att)
+      b.innerHTML = window.__ROWS.att.map((x,i) => attRow(x,i)).join('');
+    const v = document.getElementById('outKpi');
+    if(v) v.textContent = String(r.closed);
+    const f = document.getElementById('outKpiFoot');
+    /* AND IT ACCUSES NOBODY (the direction of 02.10.2026). The foot says
+       how many are still open and stops — it does not call them late, does
+       not call it a default, and there is no red: a day left unclosed draws
+       a reminder by mail the next morning and nothing else. */
+    if(f) f.textContent = 'of ' + r.marked + ' who marked in · ' +
+      r.open + ' still open' + (r.cannot ? ' · ' + r.cannot + ' could not serve the hours' : '');
+  }catch(e){}
+}
+
 function attRow(r,i){
   return `<tr data-di="att:${i}" data-f="${esc((r.name+' '+r.role+' '+(r.mandal||'')+' '+(r.dutyGp||'')+' '+(r._s==='P'?'present':r._s==='L'?'leave':'not marked')).toLowerCase())}">
     <td>${esc(r.name)}</td><td class="mut">${esc(r.role)}</td><td class="mut">${esc(r.mandal||'—')}</td>
     ${dutyCell(r)}
     <td class="num">${r._s==='P'?esc(hm(r.at)):'—'}</td>
+    ${outCell(r)}
     <td>${r._s==='P'?(suspect(r)?'<span class="pill bad">not trustworthy</span>':r.verified?'<span class="pill ok">'+locWord(r)+'</span>':'<span class="pill warn">no fix</span>')+farPill(r)+((r.marks||1)>1?' <span class="pill bad">'+r.marks+'×</span>':''):'—'}</td>
     <td>${r._s==='P'?'<span class="pill ok">present</span>':r._s==='L'?'<span class="pill warn">'+esc(r.leaveType||'leave')+'</span>':'<span class="pill bad">not marked</span>'}</td></tr>`;
 }

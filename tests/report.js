@@ -65,6 +65,9 @@ const PASSES = [
           'officer’s work — including one written before any of this existed, which records no owner at all — ' +
           'and one carrying the serving officer’s own, which must survive untouched.',
     cmd: ['tests/render-handset.js'], needs: BROWSER ? null : 'playwright is not installed', shots: null },
+  { name: 'Marking out',
+    what: 'The home-screen card and the screen it opens, driven in a real browser: the hour the district names, the button that is not offered before it, the mark itself with its photograph and coordinates, and the receipt the PHONE holds beating the district’s answer — the fault reported twice about the circular. Every state is read for words of sanction, because none arises.',
+    cmd: ['tests/render-out.js'], needs: BROWSER ? null : 'playwright is not installed', shots: 'out-render' },
   { name: 'The roll against the district’s roster',
     what: 'The office’s own table pasted into the console in the shape a spreadsheet actually gives it, read, '+
           'compared against the register, and written only on Apply. Guards the difference between correcting an '+

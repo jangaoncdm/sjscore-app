@@ -70,7 +70,7 @@
    so a top-level const is invisible to the other files — only function
    declarations and var reach across. That is also why TS_HOLIDAYS_2026 is a
    var, and why reading this wrong would make a module silently absent. */
-var FEATURE_MODULES = ['health'];
+var FEATURE_MODULES = ['health', 'out'];
 
 /* ---------------------------------------------------------------- the core's own dispatch */
 /* READ OFF THE RUNNING CODE, never a list typed here. A list would say what
@@ -193,6 +193,40 @@ function featureGet_(p, u){
     }
   }
   return null;
+}
+
+/* ---------------------------------------------------------------- the daily round */
+/* ONE TRIGGER FOR ALL OF THEM. A feature that needs daily work declares a
+   `daily` function; featureDaily() runs them, each inside its own try/catch,
+   and installJobs installs the single trigger. The alternative — a trigger per
+   feature — means every new feature needs somebody to open the Apps Script
+   editor, and the two jobs that already needed that went uninstalled for a
+   fortnight because nothing said they were missing.
+
+   It runs at ~07:00: after the day it is reporting on has closed, and before
+   the officers are out. Never on the running day (rule 2). */
+function featureDaily(){
+  const out = [];
+  let loaded;
+  try{ loaded = featureLoad_(); }catch(err){ return 'features could not be loaded: ' + err; }
+  loaded.live.forEach(function(f){
+    if(typeof f.daily !== 'function') return;
+    try{ out.push(f.name + ': ' + (f.daily() || 'done')); }
+    catch(err){
+      out.push(f.name + ': FAILED — ' + err);
+      try{ admAudit_('FEATURE DAILY FAILED', f.name, String(err)); }catch(e){}
+    }
+  });
+  const said = out.length ? out.join('\n') : 'no feature has daily work';
+  Logger.log(said);
+  return said;
+}
+function installFeatureTrigger(){
+  ScriptApp.getProjectTriggers().forEach(function(t){
+    if(t.getHandlerFunction() === 'featureDaily') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('featureDaily').timeBased().everyDays(1).atHour(7).create();
+  Logger.log('featureDaily installed, ~07:00.');
 }
 
 /* what diag reports, so a feature's presence is read rather than assumed */
