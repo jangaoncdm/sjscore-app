@@ -305,6 +305,44 @@ module.exports = {
       t.eq(JSON.stringify(gpsOf(e, '9000000041')), '["Bonakollur"]', 'and nothing was written');
     }
 
+    /* ---- 7d. THE REMARK SPELLS IT ONE WAY AND THE ROLL ANOTHER ----
+       Issues 4 and 5 of the 02.10.2026 list, and two of the four reports this
+       module exists for: “previously I had incharge Salvapur gp, still both
+       villages reflect in my app”. The roll spells its villages with an -e
+       where the mandals write -y — Basireddypalle for Basireddypalli,
+       Mansanpalle for Mansanpally — so an exact substring reads that remark as
+       naming nothing, proposes no release, and leaves the officer holding the
+       very village he wrote in to complain about. */
+    {
+      const e = start([
+        { Phone:'9000000042', Name:'Yakanna', Role:'PS', Mandal:'Bachannapeta', GP:'Mansanpalle', Email:'y@x', Active:'TRUE' },
+        { Phone:'9000000042', Name:'Yakanna', Role:'PS', Mandal:'Bachannapeta', GP:'Salvapure',  Email:'y@x', Active:'TRUE' }
+      ], [
+        { Mandal:'Bachannapeta', GP:'Mansanpalle' },
+        { Mandal:'Bachannapeta', GP:'Salvapure' },
+        { Mandal:'Bachannapeta', GP:'Bonakollur' }
+      ]);
+      const r = post(e, [{ mandal:'Bachannapet', gp:'Mansanpalle', name:'Yakanna',
+        phone:'9000000042', role:'Panchayat Secretary',
+        remark:'previously I had incharge Salvapur gp. still both villages (Mansanpally&Salvapur )reflects in my app.' }], true);
+      t.eq(r.plans[0].releases.length, 1,
+        'SALVAPUR IN THE REMARK IS SALVAPURE ON THE ROLL — the release is proposed');
+      t.eq(r.plans[0].releases[0].place, 'Salvapure', 'and it names the roll’s own spelling');
+      t.eq(r.plans[0].verdict, 'release',
+        'he already holds the village he was asked about, so the release is the whole of it');
+
+      /* AND IT IS STILL ONLY A PLACE HE ACTUALLY HOLDS. A remark naming a
+         village of somebody else’s, however close the spelling, releases
+         nothing of his. */
+      const f = post(e, [{ mandal:'Bachannapet', gp:'Mansanpalle', name:'Yakanna',
+        phone:'9000000042', role:'Panchayat Secretary',
+        remark:'previously I had incharge Bonakollur gp' }], true);
+      t.eq(f.plans[0].releases.length, 0, 'a village he does not hold releases nothing');
+
+      /* and nothing is written by a proposal, whatever it found */
+      t.eq(gpsOf(e, '9000000042').length, 2, 'and the proposal wrote nothing');
+    }
+
     /* ---- 8. ONE NUMBER, ONE OFFICER ---- */
     {
       const e = start([

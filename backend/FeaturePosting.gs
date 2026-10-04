@@ -308,7 +308,22 @@ function postPlan_(t, v, roll, r){
      anything else that speaks of a deputation means he has moved. */
   const g = remark.toLowerCase();
   const saysDeputed = /deput|dupt/.test(g);
-  const saysExtra   = /incharge|in charge|\bfac\b/.test(g) && !saysDeputed;
+  /* “PREVIOUSLY I HAD INCHARGE SALVAPUR GP” IS NOT A CHARGE BEING TAKEN ON.
+     It carries the word incharge and means the opposite of it: he HELD that
+     village and wants it off him. Issues 4 and 5 of the district’s list of
+     02.10.2026 are both written that way — issue 5 spells it out, “now it
+     shifted to badanagaram Secretary prashanth” — and reading them as
+     additions proposed nothing at all and left both officers holding the very
+     village they had written in to complain about.
+
+     This is the one place a remark is read for its SENSE rather than for a
+     name, and all it decides is whether to LOOK for a release. What may then
+     be released is still only a place the register shows against him, and the
+     Collector still ticks it before anything is written. Being too willing to
+     propose costs him a glance; not proposing costs the officer his
+     complaint. */
+  const saysPast    = /previously|no longer|used to|shifted|not working in/.test(g);
+  const saysExtra   = /incharge|in charge|\bfac\b/.test(g) && !saysDeputed && !saysPast;
 
   /* THE PLACE TO RELEASE IS FOUND IN THE REGISTER AND POINTED AT BY THE
      REMARK, never read out of the remark on its own. Only somewhere he
@@ -320,7 +335,7 @@ function postPlan_(t, v, roll, r){
       const samePlace = mandalOnly ? pkey_(h.mandal) === pkey_(out.mandal)
                                    : pkey_(h.gp) === pkey_(out.gp);
       if(samePlace) return;                       /* that is where he is going */
-      if(pkey_(remark).indexOf(pkey_(place)) < 0) return;
+      if(!postNamed_(remark, place)) return;
       out.releases.push({ row:h.row + 1, place:place, mandal:h.mandal,
                           why:'the remark names it: "' + remark + '"' });
     });
@@ -357,6 +372,37 @@ function postPlan_(t, v, roll, r){
     if(own) out.writeRow = own.row;
   }
   return out;
+}
+
+/* IS THIS PLACE NAMED IN THE REMARK? Not quite the same question as whether
+   its letters appear in it.
+
+   The mandals write the village as THEY spell it and the roll carries its own
+   spelling — Basireddypalli against Basireddypalle, Mansanpally against
+   Mansanpalle, Marigadi against Marigidi, all of them real on the district’s
+   list of 02.10.2026. An exact substring therefore reads “previously I had
+   incharge Salvapur gp” as naming nothing when the roll spells it Salvapure,
+   no release is proposed, and the officer goes on holding the very village he
+   wrote in to complain about. That is issues 4 and 5, and they are two of the
+   four reports this whole module exists for.
+
+   So the remark is cut into words and each run of one or two is compared with
+   the place, allowing the same small distance the suggestions allow. IT IS
+   STILL ONLY EVER A PLACE HE ACTUALLY HOLDS — the register names the
+   candidates and the remark only points at them — and the Collector still
+   ticks it before anything is written. */
+function postNamed_(remark, place){
+  const p = pkey_(place);
+  if(!p) return false;
+  const r = pkey_(remark);
+  if(r.indexOf(p) >= 0) return true;
+  const lim = Math.max(1, Math.floor(p.length / 5));
+  const w = String(remark || '').split(/[^A-Za-z0-9]+/).filter(String);
+  for(let i = 0; i < w.length; i++){
+    if(postDist_(p, pkey_(w[i])) <= lim) return true;
+    if(i + 1 < w.length && postDist_(p, pkey_(w[i] + w[i + 1])) <= lim) return true;
+  }
+  return false;
 }
 
 /* WHAT THE ROLL PROBABLY CALLS IT. Three candidates at most, nearest first, by
