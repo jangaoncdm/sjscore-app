@@ -1357,7 +1357,7 @@ function initTheme(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '74730f5 - 02 Oct 19:10';
+const BUILD_STAMP = 'fd00c4f - 04 Oct 11:22';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -3019,6 +3019,7 @@ let ROLL=null, ROLLQ='', ROLLBUSY=false, ROLLPIN=null, ROLLMSG='', ROLLBAD=false
    install the app. So the table goes from this screen to the district's own
    register over HTTPS and nowhere else, exactly as the Gram Palana roster did. */
 let TBL_TEXT='', TBL_ROLE='MPO', TBL_PLANS=null, TBL_DONE=null;
+let PST_TEXT='', PST_PLANS=null, PST_DONE=null;
 /* THE REGISTER'S OWN PRE-FLIGHT. Read once when the Admin screen is opened,
    because it walks Drive and that is not something to do on every poll. */
 let HEALTH=null, HEALTHAT=0;
@@ -3048,6 +3049,65 @@ function pullRoll(){
 const VERDICT_PILL={ unchanged:['ok','already agrees'], correct:['warn','correct in place'],
   succession:['bad','a different officer'], register:['warn','not on the roll'],
   refused:['bad','refused'], ambiguous:['bad','two in one chair'] };
+/* THE POSTING LIST AND THE ROSTER ARE BOTH READ AT THE TOP LEVEL, beside each
+   other. The first cut of parsePostings was declared INSIDE the render function
+   that draws its panel: the panel could call it and wireAdmin could not, so the
+   button was bound, enabled, and did nothing whatever when pressed. Nothing in
+   the page said a word about it; driving the screen in a browser is what found
+   it. The same shape of fault as a .gs file reaching into another one. */
+const POST_PILL = { move:['ok','moved'], add:['ok','also holds'], release:['warn','released'],
+  register:['ok','registered'], unchanged:['mut','nothing to do'],
+  refused:['bad','refused'], ambiguous:['bad','yours to settle'] };
+
+/* THE POSTING LIST, AS THE MANDALS SEND IT:
+     Sl. No. · Mandal · GP · Officer · Mobile · Designation · Remarks
+   which is the shape of the district's own issue workbook. Read the way the
+   roster parser reads its table — take first the pieces that can be recognised
+   on sight, a ten-digit mobile and a designation with "Secretary" or "Officer"
+   in it, and only then split what is left into columns. A parser that insisted
+   on a shape would be defeated by the first paste from another machine.
+
+   THE DESIGNATION SETTLES THE AMBIGUITY A BLANK CELL CREATES. Pasted with tabs
+   an empty village is preserved and the columns line up; pasted with runs of
+   spaces it collapses, and then "Bachannapet / A Krishnakumari" and
+   "Bachannapet / Mansanpally" are the same two cells. A Mandal Panchayat
+   Officer holds no village — that is not missing data — so for him two cells
+   are mandal and name; for a Panchayat Secretary they are not enough, and the
+   line is NAMED rather than guessed at. */
+const PST_MANDAL_ROLE = /mandal panchayat officer|mandal parishad|sanitation officer|\bmpo\b|\bmpdo\b|\bmso\b/i;
+function parsePostings(text){
+  const rows = [], bad = [];
+  String(text || '').split(/\r?\n/).forEach(line => {
+    if(!line.trim()) return;
+    let cells = line.indexOf('\t') >= 0 ? line.split('\t') : line.split(/\s{2,}/);
+    cells = cells.map(c => String(c).trim());
+    /* the workbook's own title and header lines */
+    if(/^sl\.?\s*no/i.test(cells[0] || '') || /name of the mandal/i.test(line)) return;
+    if(/details of/i.test(line) && !/\d{10}/.test(line.replace(/\D/g, ''))) return;
+
+    const digits = c => String(c).replace(/\D/g, '');
+    const pi = cells.findIndex(c => digits(c).length >= 10 && digits(c).length <= 12);
+    if(pi < 0){ bad.push(line.trim().slice(0, 60)); return; }
+    const phone = digits(cells[pi]).slice(-10);
+    const di = cells.findIndex((c, i) => i > pi && /secretary|officer|\bmpo\b|\bmpdo\b|\bmso\b|\bps\b/i.test(c));
+    const role = di >= 0 ? cells[di] : '';
+    const remark = di >= 0 ? cells.slice(di + 1).filter(String).join(' ') : '';
+
+    /* what sits before the mobile, with the serial number dropped */
+    let head = cells.slice(0, pi).filter((c, i) => !(i === 0 && /^\d+$/.test(c)));
+    while(head.length && !head[head.length - 1]) head.pop();
+    const mandalOnly = PST_MANDAL_ROLE.test(role);
+    let mandal = '', gp = '', name = '';
+    if(head.length >= 3){ mandal = head[0]; gp = head[1]; name = head.slice(2).filter(String).join(' '); }
+    else if(head.length === 2 && mandalOnly){ mandal = head[0]; name = head[1]; }
+    else { bad.push(line.trim().slice(0, 60)); return; }
+    if(mandalOnly) gp = '';
+    if(!mandal || !name){ bad.push(line.trim().slice(0, 60)); return; }
+    rows.push({ mandal, gp, name, phone, role, remark });
+  });
+  return { rows, bad };
+}
+
 function parseRoster(text, role){
   const out = [], bad = [];
   const blocks = String(text||'').replace(/\r/g,'').split(/\n(?=\s*\d{1,3}[\s\t])/);
@@ -3295,7 +3355,7 @@ function vAdmin(j,A){
       </div>`:'')
     ,'rl');
 
-  /* ---- THE ROLL AGAINST THE DISTRICT'S TABLE ---- */
+/* ---- THE ROLL AGAINST THE DISTRICT'S TABLE ---- */
   const parsed = TBL_TEXT.trim() ? parseRoster(TBL_TEXT, TBL_ROLE) : null;
   h+=panel('c12','Correct the roll from your roster',
     'paste the table \u00b7 nothing is written until you say so',
@@ -3338,6 +3398,56 @@ function vAdmin(j,A){
       officer present on days he had not joined, and a notice served on one officer standing against another. The outgoing
       row is marked inactive and keeps everything pointing at it; the incoming officer gets a row of his own, and a PIN
       from the list above.</div>`:''}`,'rl');
+
+  /* ---- WHO HOLDS WHICH PLACE ---- */
+  const pparsed = PST_TEXT.trim() ? parsePostings(PST_TEXT) : null;
+  h+=panel('c12','Postings — who holds which place',
+    'paste the mandals\u2019 list · nothing is written until you say so',
+    `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
+      Paste the list the mandals send — serial, mandal, GP, officer, mobile, designation and the
+      remark. <b>Deputed</b> is read as a transfer and releases the place he came from;
+      <b>in-charge</b> and <b>FAC</b> are read as a place taken on <b>in addition</b>. A release is only
+      ever proposed for somewhere the register already shows against him, and the sentence it was
+      read from is printed beside it. <b>Nothing is written until you press Apply.</b></div>
+    <div style="margin-bottom:9px">${pparsed?'<span style="font-size:12px;color:var(--tx-3)">'+pparsed.rows.length+' line(s) read'+
+      (pparsed.bad.length?' \u00b7 <span style="color:var(--red)">'+pparsed.bad.length+' not understood</span>':'')+'</span>':''}</div>
+    <textarea id="pstTbl" rows="${PST_TEXT?4:6}" placeholder="Paste the posting list here"
+      style="width:100%;padding:10px;border:1px solid var(--ln);border-radius:9px;background:var(--bg-2);
+             color:var(--tx);font:12.5px/1.6 var(--mono);resize:vertical">${esc(PST_TEXT)}</textarea>
+    ${pparsed&&pparsed.bad.length?'<div style="font-size:12px;color:var(--red);margin-top:7px">Not understood, and left alone: '+
+      pparsed.bad.map(b=>esc(b)).join(' &nbsp;|&nbsp; ')+'</div>':''}
+    <div style="margin-top:11px;display:flex;gap:9px;flex-wrap:wrap">
+      <button class="tbtn" id="pstRead"${(!pparsed||!pparsed.rows.length||ROLLBUSY)?' disabled':''}>Compare with the register</button>
+      ${PST_PLANS?'<button class="tbtn pri" id="pstApply"'+(ROLLBUSY?' disabled':'')+'>Apply what is listed</button>':''}
+      ${PST_TEXT?'<button class="fchip" id="pstClear">Clear</button>':''}
+    </div>
+    ${PST_DONE?`<div style="margin-top:12px;font-size:13px;color:var(--tx-2);line-height:1.7;
+        border-left:3px solid var(--st-ok);padding-left:12px">${esc(PST_DONE)}</div>`:''}
+    ${PST_PLANS?`<div class="twrap" style="margin-top:13px;max-height:460px"><table>
+      <thead><tr><th>Mandal</th><th>Place</th><th>Officer</th><th>What it is</th><th>What would change</th></tr></thead>
+      <tbody>${PST_PLANS.map(p=>{
+        const V=POST_PILL[p.verdict]||['warn',p.verdict];
+        const what=(p.changes&&p.changes.length)?p.changes.join('; '):(p.why||'\u2014');
+        /* EVERY RELEASE IS TICKED SEPARATELY. Eight of the forty-eight remarks
+           speak of neither a deputation nor a charge, and the village one of
+           them names is one the officer means to KEEP. The Collector reads the
+           sentence it was read from and unticks what he does not mean. */
+        const rel=(p.releases||[]).map(x=>
+          '<label style="display:block;margin-top:5px;font-size:11.5px;line-height:1.5">'+
+          '<input type="checkbox" class="pstRel" value="'+esc(x.id||'')+'" checked style="margin-right:6px">'+
+          'take <b>'+esc(x.place||'(no village)')+'</b>'+(x.from?' from '+esc(x.from):' off him')+
+          '<br><span class="mut" style="margin-left:20px">read from: '+esc(x.why||'')+'</span></label>').join('');
+        return '<tr><td>'+esc(p.mandal||'\u2014')+'</td><td>'+esc(p.gp||'\u2014')+'</td>'+
+          '<td>'+esc(p.name||'\u2014')+'<br><span class="mut num" style="font-size:11px">'+esc(p.phone||'')+'</span></td>'+
+          '<td><span class="pill '+V[0]+'">'+esc(V[1])+'</span></td>'+
+          '<td style="color:var(--tx-2)">'+esc(what)+rel+'</td></tr>';
+      }).join('')}</tbody></table></div>
+      <div class="expnote" style="margin-top:9px"><b>A place is never taken off a man on the strength of a
+      sentence alone.</b> The remarks are written by eleven offices in eleven ways, so the place to release is
+      found the other way round: every place the register ALREADY shows against him is looked for inside his
+      remark, and only one that is found there is proposed. A remark naming nothing he holds releases nothing.
+      Nothing is deleted either — the row stays, with his attendance, his notices and his leave still
+      pointing at it.</div>`:''}`,'rl');
 
   /* ---- the roll ---- */
   const q=ROLLQ.trim().toLowerCase();
@@ -3461,6 +3571,36 @@ function wireAdmin(){
         (made ? '' : ' Nothing new was written, which means every step already had its output for today.');
       ROLLBAD = false;
       HEALTH = null; pullHealth(true);
+    });
+  };
+
+  const pstT=$('#pstTbl');
+  if(pstT) pstT.onchange=()=>{ PST_TEXT=pstT.value; PST_PLANS=null; PST_DONE=null; if(DATA) render(DATA); };
+  if(pstT) pstT.onblur=()=>{ if(pstT.value!==PST_TEXT){ PST_TEXT=pstT.value; PST_PLANS=null; PST_DONE=null; if(DATA) render(DATA); } };
+  const pstC=$('#pstClear');
+  if(pstC) pstC.onclick=()=>{ PST_TEXT=''; PST_PLANS=null; PST_DONE=null; if(DATA) render(DATA); };
+  const pstR=$('#pstRead');
+  if(pstR) pstR.onclick=()=>{
+    const p=parsePostings(PST_TEXT); if(!p.rows.length) return;
+    PST_DONE=null;
+    rollPost({kind:'postingUpdate',rows:p.rows,dry:true}, r=>{ PST_PLANS=r.plans||[]; });
+  };
+  const pstA=$('#pstApply');
+  if(pstA) pstA.onclick=()=>{
+    const p=parsePostings(PST_TEXT); if(!p.rows.length) return;
+    const n=k=>(PST_PLANS||[]).filter(x=>x.verdict===k).length;
+    const keep=[...document.querySelectorAll('.pstRel')].filter(c=>c.checked).map(c=>c.value);
+    const rel=keep.length;
+    if(!confirm('Write these postings to '+((ROLL&&ROLL.tenantName)||'this register')+'?\n\n'+
+      n('move')+' moved \u00b7 '+n('add')+' taken on in addition \u00b7 '+n('register')+' newly registered\n'+
+      rel+' place(s) released \u2014 only the ones you left ticked.\n\n'+
+      'Nothing is deleted. Every change is written to the Audit tab.')) return;
+    rollPost({kind:'postingUpdate',rows:p.rows,keep:keep,dry:false}, r=>{
+      PST_PLANS=null;
+      PST_DONE=(r.moved||0)+' moved \u00b7 '+(r.added||0)+' taken on in addition \u00b7 '+
+        (r.released||0)+' released \u00b7 '+(r.registered||0)+' registered.'+
+        ((r.pins&&r.pins.length)?' These were given a PIN, shown once and written nowhere: '+
+          r.pins.map(x=>x.name+' ('+x.phone+') '+x.pin).join(', ')+'.':'');
     });
   };
 
