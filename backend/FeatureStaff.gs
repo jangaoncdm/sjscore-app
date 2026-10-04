@@ -58,6 +58,70 @@ function feature_staff(){
     tenants: ['SJGP'],
 
     post: {
+      /* THE PINS, ON DEMAND AND NOT ONLY ONCE.
+
+         A PIN is shown once and written nowhere, which is right, and it meant
+         the only moment the console could hand over 192 of them was the
+         instant after Apply. The district applied before that build was live,
+         the staff went on the roll, and the second Apply had nothing to
+         return — correctly, and uselessly. There was then no way to get the
+         PINs out at all without opening the script editor.
+
+         dayPin_ is seeded from the mobile number and TODAY'S date, so today's
+         PIN can be worked out again today and PROVED against the hash on his
+         row. Where it does not match, the PIN was issued on another day and
+         cannot be recovered — so today's is written to every row carrying the
+         number and that one is given. Run it twice in a day and the second
+         run writes nothing and prints the same list (rule 8). */
+      staffPins: function(b, u){
+        if(u.role !== 'COLLECTOR')
+          return json_({ ok:false, error:'The office roll is read by the Collector alone.' });
+        const lock = LockService.getScriptLock();
+        try{ lock.waitLock(30000); }
+        catch(err){ return json_({ ok:false, error:'busy — try again' }); }
+        try{
+          const t = uidx_(), sh = t.sh, v = sh.getDataRange().getValues();
+          const seen = {}, rows = [];
+          let issued = 0, stood = 0;
+          for(let i = 1; i < v.length; i++){
+            if(cell_(v[i], t.ix.role).toUpperCase() !== STAFF_ROLE) continue;
+            if(String(v[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
+            const ph = phone10_(v[i][t.ix.phone]);
+            if(!ph || seen[ph]) continue;          /* one man, one PIN, whatever his rows */
+            seen[ph] = true;
+
+            const pin = dayPin_(ph), want = hash_(ph, pin);
+            let have = '';
+            for(let j = 1; j < v.length; j++)
+              if(phone10_(v[j][t.ix.phone]) === ph && cell_(v[j], t.ix.hash)){ have = cell_(v[j], t.ix.hash); break; }
+
+            if(have === want) stood++;
+            else {
+              /* EVERY ROW CARRYING THE NUMBER. findByPhone_ takes the PIN from
+                 the first row that holds one, so a PIN written to the row
+                 somebody meant to fix hands him one that does not open the
+                 app — issue 4 of the 22.08 register, which came back three
+                 times as "still showing wrong PIN". */
+              for(let k = 1; k < v.length; k++){
+                if(phone10_(v[k][t.ix.phone]) !== ph) continue;
+                sh.getRange(k + 1, t.ix.hash + 1).setValue(want);
+                if(t.ix.initpin >= 0) sh.getRange(k + 1, t.ix.initpin + 1).setValue('');
+              }
+              /* and the lock-out with it: ten wrong tries within the hour and
+                 the server refuses him whatever his PIN is */
+              try{ cache_().remove('pl_' + ph); }catch(err){}
+              issued++;
+            }
+            rows.push({ name:cell_(v[i], t.ix.name),
+                        desig: t.ix.designation >= 0 ? cell_(v[i], t.ix.designation) : '',
+                        mandal:cell_(v[i], t.ix.mandal), phone:ph, pin:pin });
+          }
+          if(issued) admAudit_('STAFF PINS ISSUED', 'STAFF',
+            issued + ' PIN(s) set for ' + today_() + ' by ' + u.name + ' — PINs not recorded here');
+          return json_({ ok:true, rows:rows, issued:issued, stood:stood, date:today_() });
+        } finally { lock.releaseLock(); }
+      },
+
       staffUpdate: function(b, u){
         if(u.role !== 'COLLECTOR')
           return json_({ ok:false, error:'The office roll is written by the Collector alone.' });
