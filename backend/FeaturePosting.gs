@@ -208,22 +208,69 @@ function postPlan_(t, v, roll, r){
   /* A VILLAGE IS NEVER INVENTED. If the GPs tab does not carry it, the roll is
      what is wrong, and a posting written against a name no view can find is a
      posting nobody will ever see. */
+  /* THE VILLAGE DECIDES THE MANDAL, and a near miss is NAMED rather than
+     merely refused.
+
+     The mandals spell their own names differently in the same file — the
+     district's list of 02.10.2026 carries Lingalaghanpur and Lingalaghanapur,
+     Zafferghad and Zaffergadh, and the GPs tab says Bachannapeta where the
+     list says Bachannapet. Matching on the mandal refused an entire mandal
+     over a trailing letter. A VILLAGE NAME IS FAR MORE DISTINCTIVE than a
+     mandal name, so the village is looked up on its own and the mandal it
+     sits in on the roll is the mandal, whatever the paste called it; where
+     the two differ it is reported as a difference and not as a fault.
+
+     Matching the mandals LOOSELY instead was the alternative and was
+     rejected: Lingala Ghanpur is not Ghanpur (Stn), and a loose match would
+     quietly merge them — the rule the filing schedule already carries.
+
+     AND A REFUSAL THAT NAMES NOTHING IS NO USE TO THE MANDAL that has to
+     correct it. "Basireddypalli is not on the GPs tab" sends an officer
+     looking for a village he knows exists; "the roll spells it
+     Basireddypally" is a thing he can act on. */
   if(gp){
     const on = roll.filter(function(x){ return pkey_(x.gp) === pkey_(gp); });
     if(!on.length){
+      const near = postNear_(roll, gp, mandal);
+      out.near = near;
       out.verdict = 'refused';
-      out.why = '"' + gp + '" is not on the GPs tab. Put the village on the roll first — nothing is invented here.';
+      out.why = '"' + gp + '" is not on the GPs tab' +
+        (near.length ? '. The roll has ' + near.map(function(x){ return '"' + x.gp + '" (' + x.mandal + ')'; }).join(' or ') +
+                       ' — confirm which is right and the village will be taken.'
+                    : '. Put the village on the roll first — nothing is invented here.');
       return out;
     }
-    const inM = on.filter(function(x){ return pkey_(x.mandal) === pkey_(mandal); });
-    if(!inM.length){
-      out.verdict = 'refused';
-      out.why = '"' + gp + '" is on the roll under ' + on.map(function(x){ return x.mandal; }).join(', ') +
-                ', not under ' + mandal + '. One of the two is wrong and it is not this page’s to choose.';
-      return out;
+    /* the village named in more than one mandal is the Collector's to settle */
+    if(on.length > 1){
+      const inM = on.filter(function(x){ return pkey_(x.mandal) === pkey_(mandal); });
+      if(inM.length !== 1){
+        out.verdict = 'ambiguous';
+        out.why = '"' + gp + '" is on the roll in ' + on.map(function(x){ return x.mandal; }).join(' and ') +
+                  '. Which one is meant is yours to settle, not this page’s.';
+        return out;
+      }
+      out.gp = inM[0].gp; out.mandal = inM[0].mandal;
+    } else {
+      /* A SPELLING IS NOT A DIFFERENT MANDAL, AND A DIFFERENT MANDAL IS NOT A
+         SPELLING. Bachannapet against Bachannapeta is one letter and one
+         place; Palakurthi against Bachannapet is two places, and accepting
+         the roll's word for it would move a village between mandals on the
+         strength of a typo. Lingala Ghanpur is not Ghanpur (Stn) — the rule
+         the filing schedule already carries — and the distance keeps them
+         apart. */
+      if(pkey_(mandal) !== pkey_(on[0].mandal)){
+        const mk = pkey_(mandal), rk = pkey_(on[0].mandal);
+        if(postDist_(mk, rk) > Math.max(2, Math.floor(rk.length / 5))){
+          out.verdict = 'refused';
+          out.why = '"' + gp + '" is on the roll under ' + on[0].mandal + ', not under ' + mandal +
+                    '. Those are two different mandals: one of the two is wrong and it is not this page’s to choose.';
+          return out;
+        }
+        out.note = 'the roll spells the mandal "' + on[0].mandal + '", the list says "' + mandal + '"';
+      }
+      out.gp = on[0].gp;           /* the roll's own spelling, not the paste's */
+      out.mandal = on[0].mandal;
     }
-    out.gp = inM[0].gp;            /* the roll's own spelling, not the paste's */
-    out.mandal = inM[0].mandal;
   }
 
   const held = postHolds_(t, v, phone);
@@ -296,6 +343,7 @@ function postPlan_(t, v, roll, r){
   }
 
   out.releases.forEach(function(x){ x.id = relId_(out, x); });
+  if(out.note) out.changes.push(out.note);
   out.verdict = already ? 'release' : (saysExtra ? 'add' : 'move');
   if(!already)
     out.changes.push((saysExtra ? 'also holds ' : 'now holds ') + (gp ? out.gp + ', ' + out.mandal : out.mandal));
@@ -309,6 +357,43 @@ function postPlan_(t, v, roll, r){
     if(own) out.writeRow = own.row;
   }
   return out;
+}
+
+/* WHAT THE ROLL PROBABLY CALLS IT. Three candidates at most, nearest first, by
+   plain edit distance on the squashed name — enough to turn "Basireddypalli"
+   into "Basireddypally" and "Deshaithanda" into "Deshai Thanda" without
+   pretending to be clever. It SUGGESTS and never substitutes: the village
+   written is still refused, and the Collector or the mandal says which is
+   right. A register that guesses at a village name writes a man's attendance
+   against the wrong place. */
+function postDist_(a, b){
+  const m = a.length, n = b.length;
+  if(!m) return n; if(!n) return m;
+  let prev = [], cur = [];
+  for(let j = 0; j <= n; j++) prev[j] = j;
+  for(let i = 1; i <= m; i++){
+    cur[0] = i;
+    for(let j = 1; j <= n; j++){
+      const cost = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
+      cur[j] = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+    prev = cur.slice();
+  }
+  return prev[n];
+}
+function postNear_(roll, gp, mandal){
+  const k = pkey_(gp);
+  if(!k) return [];
+  const lim = Math.max(2, Math.floor(k.length / 4));
+  return roll.map(function(x){
+      let d = postDist_(k, pkey_(x.gp));
+      /* a village in the mandal the list named is the likelier reading */
+      if(pkey_(x.mandal) === pkey_(mandal)) d -= 0.5;
+      return { gp:x.gp, mandal:x.mandal, d:d };
+    })
+    .filter(function(x){ return x.d <= lim; })
+    .sort(function(p, q){ return p.d - q.d; })
+    .slice(0, 3);
 }
 
 /* A RELEASE NAMES ITS ROW, so the console can hand back exactly the ones the

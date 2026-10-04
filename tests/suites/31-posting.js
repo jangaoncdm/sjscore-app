@@ -233,6 +233,78 @@ module.exports = {
       t.contains(post(e, []).error, 'empty table', 'in those words');
     }
 
+    /* ---- 7b. THE MANDALS SPELL THEIR OWN NAMES THREE WAYS ----
+       The district's list of 02.10.2026 carries Lingalaghanpur AND
+       Lingalaghanapur, Zafferghad AND Zaffergadh, in the same file; the GPs
+       tab says Bachannapeta where the list says Bachannapet. Matching on the
+       mandal refused an entire mandal over a trailing letter. */
+    {
+      const e = start([
+        { Phone:'9000000040', Name:'Farzana', Role:'PS', Mandal:'Bachannapeta', GP:'Bonakollur', Email:'f@x', Active:'TRUE' }
+      ], [
+        { Mandal:'Bachannapeta', GP:'Bonakollur' },
+        { Mandal:'Bachannapeta', GP:'Basireddypally' },
+        { Mandal:'Lingalaghanapur', GP:'Nagaram' },
+        { Mandal:'Ghanpur (Stn)', GP:'Komatigudem' },
+        { Mandal:'Palakurthi', GP:'Valmidi' }
+      ]);
+      const r = post(e, [
+        { mandal:'Bachannapet', gp:'Basireddypally', name:'Farzana', phone:'9000000040',
+          role:'Panchayat Secretary', remark:'Incharge Gp' },
+        { mandal:'Lingalaghanpur', gp:'Nagaram', name:'Farzana', phone:'9000000040',
+          role:'Panchayat Secretary', remark:'Incharge Gp' }
+      ], true);
+      t.eq(r.plans[0].verdict, 'add',
+        'BACHANNAPET IS BACHANNAPETA — a mandal is not lost over a trailing letter');
+      t.contains(r.plans[0].changes.join(' '), 'Bachannapeta',
+        'and the roll’s own spelling is what is written');
+      t.contains(r.plans[0].note, 'the list says', 'the difference is reported, not hidden');
+      t.eq(r.plans[1].verdict, 'add', 'Lingalaghanpur is Lingalaghanapur too');
+
+      /* BUT A DIFFERENT MANDAL IS NOT A SPELLING. Accepting the roll’s word
+         would move a village between mandals on the strength of a typo, and
+         Lingala Ghanpur is not Ghanpur (Stn) — the rule the filing schedule
+         already carries. */
+      const far = post(e, [{ mandal:'Palakurthi', gp:'Bonakollur', name:'Farzana',
+        phone:'9000000040', role:'Panchayat Secretary', remark:'Incharge Gp' }], true);
+      t.eq(far.plans[0].verdict, 'refused', 'a village claimed for another mandal entirely is refused');
+      t.contains(far.plans[0].why, 'two different mandals', 'and it says so plainly');
+
+      const gh = post(e, [{ mandal:'Lingalaghanpur', gp:'Komatigudem', name:'Farzana',
+        phone:'9000000040', role:'Panchayat Secretary', remark:'Incharge Gp' }], true);
+      t.eq(gh.plans[0].verdict, 'refused', 'LINGALA GHANPUR IS NOT GHANPUR (STN)');
+    }
+
+    /* ---- 7c. A REFUSAL THAT NAMES NOTHING IS NO USE TO THE MANDAL ----
+       "Basireddypalli is not on the GPs tab" sends an officer looking for a
+       village he knows exists. The roll spells it Basireddypally, and saying
+       so is the difference between a refusal and an instruction. */
+    {
+      const e = start([
+        { Phone:'9000000041', Name:'Sai kumar', Role:'PS', Mandal:'Bachannapeta', GP:'Bonakollur', Email:'s@x', Active:'TRUE' }
+      ], [
+        { Mandal:'Bachannapeta', GP:'Bonakollur' },
+        { Mandal:'Bachannapeta', GP:'Basireddypally' },
+        { Mandal:'Chilpur', GP:'Deshai Thanda' }
+      ]);
+      const r = post(e, [
+        { mandal:'Bachannapet', gp:'Basireddypalli', name:'Sai kumar', phone:'9000000041',
+          role:'Panchayat Secretary', remark:'Incharge Gp' },
+        { mandal:'Bachannapet', gp:'Utterly Unlike Anything', name:'Sai kumar', phone:'9000000041',
+          role:'Panchayat Secretary', remark:'Incharge Gp' }
+      ], true);
+      t.eq(r.plans[0].verdict, 'refused', 'a village spelt differently is still refused');
+      t.contains(r.plans[0].why, 'Basireddypally',
+        'BUT THE ROLL’S OWN SPELLING IS NAMED, so the mandal has something to act on');
+      t.ok((r.plans[0].near || []).length > 0, 'and the candidates travel with the answer, for the table sent back');
+      t.eq(r.plans[1].verdict, 'refused', 'a name unlike anything on the roll is refused');
+      t.eq((r.plans[1].near || []).length, 0, 'with no suggestion invented for it');
+      t.contains(r.plans[1].why, 'Put the village on the roll first', 'and the roll named as the thing to fix');
+
+      /* IT SUGGESTS AND NEVER SUBSTITUTES: nothing is written by any of this */
+      t.eq(JSON.stringify(gpsOf(e, '9000000041')), '["Bonakollur"]', 'and nothing was written');
+    }
+
     /* ---- 8. ONE NUMBER, ONE OFFICER ---- */
     {
       const e = start([
