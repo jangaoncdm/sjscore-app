@@ -70,7 +70,7 @@
    so a top-level const is invisible to the other files — only function
    declarations and var reach across. That is also why TS_HOLIDAYS_2026 is a
    var, and why reading this wrong would make a module silently absent. */
-var FEATURE_MODULES = ['health', 'out', 'posting'];
+var FEATURE_MODULES = ['health', 'out', 'posting', 'staff'];
 
 /* ---------------------------------------------------------------- the core's own dispatch */
 /* READ OFF THE RUNNING CODE, never a list typed here. A list would say what

@@ -52,11 +52,17 @@ module.exports = {
     const env = mock.load({ admin: true });
     const c = env.ctx;
     seedRoll(env);
-    const before = JSON.stringify(env.sheets['Users'].rows);
+    /* THE OFFICER ROWS, NOT THE HEADER. ensureHeaders_ appends a column the
+       moment a new field joins U_HEAD — that is the documented way this
+       register grows and needs no migration — and it happened here when the
+       MPDO office staff brought Designation and EmpId with them on 04.10.2026.
+       What a dry run must not touch is an officer's row, and that is what is
+       compared. */
+    const before = JSON.stringify(env.sheets['Users'].rows.slice(1));
 
     /* the dry run writes nothing — not a cell, not an audit line */
     c.showFieldFixes2();
-    t.eq(JSON.stringify(env.sheets['Users'].rows), before, 'a dry run changes no cell');
+    t.eq(JSON.stringify(env.sheets['Users'].rows.slice(1)), before, 'a dry run changes no officer' + String.fromCharCode(8217) + 's row');
     t.ok(!env.sheets['Audit'], 'and writes nothing to Audit');
     t.ok(env.logs.some(l => /DRY RUN — nothing was written/.test(l)), 'and says so');
     t.ok(env.logs.some(l => /NOT TOUCHED/.test(l) && /9912383087/.test(l)), 'the contested Ramrajupalle number is flagged, not applied');

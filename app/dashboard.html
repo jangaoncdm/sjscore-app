@@ -3020,6 +3020,7 @@ let ROLL=null, ROLLQ='', ROLLBUSY=false, ROLLPIN=null, ROLLMSG='', ROLLBAD=false
    register over HTTPS and nowhere else, exactly as the Gram Palana roster did. */
 let TBL_TEXT='', TBL_ROLE='MPO', TBL_PLANS=null, TBL_DONE=null;
 let PST_TEXT='', PST_PLANS=null, PST_DONE=null;
+let STF_TEXT='', STF_PLANS=null, STF_DONE=null;
 /* THE REGISTER'S OWN PRE-FLIGHT. Read once when the Admin screen is opened,
    because it walks Drive and that is not something to do on every poll. */
 let HEALTH=null, HEALTHAT=0;
@@ -3049,6 +3050,45 @@ function pullRoll(){
 const VERDICT_PILL={ unchanged:['ok','already agrees'], correct:['warn','correct in place'],
   succession:['bad','a different officer'], register:['warn','not on the roll'],
   refused:['bad','refused'], ambiguous:['bad','two in one chair'] };
+const STAFF_PILL = { register:['ok','added'], add:['ok','second office'], correct:['ok','corrected'],
+  unchanged:['mut','nothing to do'], refused:['bad','refused'] };
+
+/* THE MPDO OFFICE STAFF LIST:
+     S No · Mandal · Name · Designation · Employee ID · Mobile · latitude · longitude
+   Read like the others: take first what can be recognised on sight — a
+   ten-digit mobile, and two numbers that look like coordinates — and only
+   then split what is left into columns. The employee id is the one field that
+   cannot be recognised by shape (JNMPDO005, CRD/12047 and 1169339 are all
+   employee ids on the district's own list), so it is taken by position: the
+   cell before the mobile. */
+function parseStaff(text){
+  const rows = [], bad = [];
+  String(text || '').split(/\r?\n/).forEach(line => {
+    if(!line.trim()) return;
+    let cells = line.indexOf('\t') >= 0 ? line.split('\t') : line.split(/\s{2,}/);
+    cells = cells.map(c => String(c).trim());
+    if(/^s\s*no/i.test(cells[0] || '') || /name of the mandal/i.test(line)) return;
+
+    const digits = c => String(c).replace(/\D/g, '');
+    const pi = cells.findIndex(c => /^[\d\s+-]+$/.test(c) && digits(c).length >= 10 && digits(c).length <= 12);
+    if(pi < 0){ bad.push(line.trim().slice(0, 60)); return; }
+    const phone = digits(cells[pi]).slice(-10);
+    const nums = cells.slice(pi + 1).map(Number).filter(n => isFinite(n));
+    const lat = nums.length > 0 ? nums[0] : NaN;
+    const lng = nums.length > 1 ? nums[1] : NaN;
+
+    let head = cells.slice(0, pi).filter((c, i) => !(i === 0 && /^\d+$/.test(c)));
+    while(head.length && !head[head.length - 1]) head.pop();
+    if(head.length < 3){ bad.push(line.trim().slice(0, 60)); return; }
+    const mandal = head[0], name = head[1];
+    const emp = head[head.length - 1];
+    const desig = head.slice(2, head.length - 1).filter(String).join(' ');
+    if(!mandal || !name){ bad.push(line.trim().slice(0, 60)); return; }
+    rows.push({ mandal, name, desig, emp, phone, lat, lng });
+  });
+  return { rows, bad };
+}
+
 /* THE POSTING LIST AND THE ROSTER ARE BOTH READ AT THE TOP LEVEL, beside each
    other. The first cut of parsePostings was declared INSIDE the render function
    that draws its panel: the panel could call it and wireAdmin could not, so the
@@ -3452,6 +3492,49 @@ function vAdmin(j,A){
       Nothing is deleted either — the row stays, with his attendance, his notices and his leave still
       pointing at it.</div>`:''}`,'rl');
 
+  /* ---- THE MPDO OFFICE STAFF ---- */
+  const sparsed = STF_TEXT.trim() ? parseStaff(STF_TEXT) : null;
+  const sdup = sparsed ? (function(){ const n = {}, d = [];
+      sparsed.rows.forEach(r => { n[r.phone] = (n[r.phone] || 0) + 1; });
+      Object.keys(n).forEach(p => { if(n[p] > 1) d.push(p); }); return d; })() : [];
+  h+=panel('c12','MPDO office staff — attendance and leave, and nothing else',
+    'paste the office list · nothing is written until you say so',
+    "<div style=\"font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px\">"+
+    "Paste the MPDO offices’ staff list — serial, mandal, name, designation, employee id, mobile, "+
+    "latitude, longitude. They are added for <b>attendance and leave</b> and for nothing else: "+
+    "<b>no show-cause notice, no casual-leave debit and no lock on the app</b>, and they are not "+
+    "called for a development plan or a village evaluation. The office coordinates are written to "+
+    "the Mandals tab, so a mark can be shown against the office — which measures and accuses "+
+    "nobody. <b>Nothing is written until you press Apply.</b></div>"+
+    (sparsed?'<div style=\"margin-bottom:9px;font-size:12px;color:var(--tx-3)\">'+sparsed.rows.length+' line(s) read'+
+      (sparsed.bad.length?' \u00b7 <span style=\"color:var(--red)\">'+sparsed.bad.length+' not understood</span>':'')+
+      (sdup.length?' \u00b7 <span style=\"color:var(--amb)\">'+sdup.length+' mobile(s) used twice in the list: '+esc(sdup.join(', '))+'</span>':'')+
+      '</div>':'')+
+    "<textarea id=\"stfTbl\" rows=\"6\" placeholder=\"Paste the office staff list here\""+
+    " style=\"width:100%;padding:10px;border:1px solid var(--ln);border-radius:9px;background:var(--bg-2);"+
+    "        color:var(--tx);font:12.5px/1.6 var(--mono);resize:vertical\">"+esc(STF_TEXT)+"</textarea>"+
+    (sparsed&&sparsed.bad.length?'<div style=\"font-size:12px;color:var(--red);margin-top:7px\">Not understood, and left alone: '+
+      sparsed.bad.map(b=>esc(b)).join(' &nbsp;|&nbsp; ')+'</div>':'')+
+    "<div style=\"margin-top:11px;display:flex;gap:9px;flex-wrap:wrap\">"+
+    '<button class=\"tbtn\" id=\"stfRead\"'+((!sparsed||!sparsed.rows.length||ROLLBUSY)?' disabled':'')+'>Compare with the register</button>'+
+    (STF_PLANS?'<button class=\"tbtn pri\" id=\"stfApply\"'+(ROLLBUSY?' disabled':'')+'>Apply what is listed</button>':'')+
+    (STF_TEXT?'<button class=\"fchip\" id=\"stfClear\">Clear</button>':'')+
+    "</div>"+
+    (STF_DONE?'<div style=\"margin-top:12px;font-size:13px;color:var(--tx-2);line-height:1.7;border-left:3px solid var(--st-ok);padding-left:12px\">'+esc(STF_DONE)+'</div>':'')+
+    (STF_PLANS?'<div class=\"twrap\" style=\"margin-top:13px;max-height:460px\"><table>'+
+      '<thead><tr><th>Mandal</th><th>Name</th><th>Designation</th><th>Mobile</th><th>What it is</th><th>What would change</th></tr></thead><tbody>'+
+      STF_PLANS.map(p=>{ const V=STAFF_PILL[p.verdict]||['warn',p.verdict];
+        return '<tr><td>'+esc(p.mandal||'\u2014')+'</td><td>'+esc(p.name||'\u2014')+'</td>'+
+          '<td class=\"mut\">'+esc(p.desig||'\u2014')+'</td><td class=\"num mut\">'+esc(p.phone||'')+'</td>'+
+          '<td><span class=\"pill '+V[0]+'\">'+esc(V[1])+'</span></td>'+
+          '<td style=\"color:var(--tx-2)\">'+esc((p.changes&&p.changes.length)?p.changes.join('; '):(p.why||'\u2014'))+'</td></tr>';
+      }).join('')+'</tbody></table></div>'+
+      '<div class=\"expnote\" style=\"margin-top:9px\"><b>An officer of this register is never turned into office staff.</b> '+
+      'A Panchayat Secretary or an MPO who also appears on this list keeps his role — it carries his villages, his '+
+      'filings and his place in the notice ladder. Only his designation and employee id are noted. A mobile already '+
+      'held by a different man is refused and the holder named; the same man in a second mandal is additional charge '+
+      'and gets a row of his own, with no second PIN.</div>':''),'rl');
+
   /* ---- the roll ---- */
   const q=ROLLQ.trim().toLowerCase();
   const shown=q?rows.filter(r=>(r.name+' '+r.phone+' '+r.mandal+' '+r.gp+' '+r.role).toLowerCase().indexOf(q)>=0):rows;
@@ -3574,6 +3657,33 @@ function wireAdmin(){
         (made ? '' : ' Nothing new was written, which means every step already had its output for today.');
       ROLLBAD = false;
       HEALTH = null; pullHealth(true);
+    });
+  };
+
+  const stfT=$('#stfTbl');
+  if(stfT){ stfT.onchange=()=>{ STF_TEXT=stfT.value; STF_PLANS=null; STF_DONE=null; if(DATA) render(DATA); };
+    stfT.onblur=()=>{ if(stfT.value!==STF_TEXT){ STF_TEXT=stfT.value; STF_PLANS=null; STF_DONE=null; if(DATA) render(DATA); } }; }
+  const stfC=$('#stfClear');
+  if(stfC) stfC.onclick=()=>{ STF_TEXT=''; STF_PLANS=null; STF_DONE=null; if(DATA) render(DATA); };
+  const stfR=$('#stfRead');
+  if(stfR) stfR.onclick=()=>{
+    const p=parseStaff(STF_TEXT); if(!p.rows.length) return;
+    STF_DONE=null;
+    rollPost({kind:'staffUpdate',rows:p.rows,dry:true}, r=>{ STF_PLANS=r.plans||[]; });
+  };
+  const stfA=$('#stfApply');
+  if(stfA) stfA.onclick=()=>{
+    const p=parseStaff(STF_TEXT); if(!p.rows.length) return;
+    const n=k=>(STF_PLANS||[]).filter(x=>x.verdict===k).length;
+    if(!confirm('Write the MPDO office staff to '+((ROLL&&ROLL.tenantName)||'this register')+'?\n\n'+
+      n('register')+' added \u00b7 '+n('add')+' second office \u00b7 '+n('correct')+' corrected \u00b7 '+n('refused')+' refused.\n\n'+
+      'They are added for attendance and leave only: no notice, no debit, no lock, no plan.\n'+
+      'Nothing is deleted. Every change is written to the Audit tab.')) return;
+    rollPost({kind:'staffUpdate',rows:p.rows,dry:false}, r=>{
+      STF_PLANS=null;
+      STF_DONE=(r.added||0)+' added \u00b7 '+(r.corrected||0)+' corrected \u00b7 '+(r.offices||0)+' mandal office(s) written.'+
+        ((r.pins&&r.pins.length)?' PINs, shown once and written nowhere: '+
+          r.pins.map(x=>x.name+' ('+x.phone+') '+x.pin).join(', ')+'.':'');
     });
   };
 

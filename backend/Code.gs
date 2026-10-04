@@ -390,7 +390,11 @@ const TENANTS = {
   SJGP: {
     key:'SJGP', name:'Swachh Jangaon Gram Panchayat', short:'SJGP',
     /* seniority, for folding a number that sits on more than one row */
-    rank:{PS:1, MPO:2, MSO:3, MPDO:4, DLPO:5, DPO:6, COLLECTOR:7},
+    /* STAFF sits below everybody and is deliberately not a whole number: the
+       rank only decides which row wins when one mobile sits on two, and
+       renumbering the roles the register has run on since July to make room
+       would have shifted every one of them for no gain. */
+    rank:{STAFF:0.5, PS:1, MPO:2, MSO:3, MPDO:4, DLPO:5, DPO:6, COLLECTOR:7},
     district:['DPO','DLPO','COLLECTOR'],
     mandal:['MPDO','MSO','MPO'],
     /* the Secretary is the officer being evaluated, so he never writes */
@@ -398,10 +402,34 @@ const TENANTS = {
     /* not asked to mark in, so never counted as a gap: the Collector, and by
        the order of 19.08.2026 the MSOs, whose attendance is voluntary */
     attExempt:['COLLECTOR','MSO'],
-    leaveApply:['MPO','PS','MPDO'],
+    leaveApply:['MPO','PS','MPDO','STAFF'],
     /* the show-cause ladder, the village evaluation and the filing schedule
        are this register's and have always run */
     sanction:true, evaluation:true, schedule:true,
+    /* THE MPDO OFFICE STAFF MARK IN AND APPLY FOR LEAVE, AND NOTHING ELSE.
+       Ordered 04.10.2026: 192 men and women of the twelve MPDO offices were
+       added to this register for attendance and leave management, in those
+       words, and for nothing further. Two things would have swept them in by
+       themselves and each needs saying out loud:
+
+       THE LADDER IS BUILT AND SWITCHED OFF for them, exactly as it is for the
+       whole Gram Palana register. An office subordinate who misses three days
+       would otherwise be served a numbered notice reciting Rule 3 of the
+       Conduct Rules and have his app locked. They mark in, the district sees
+       who did and who did not, and nothing is proposed, debited or locked.
+       Taking STAFF off this list serves notices to 192 people and is the
+       Collector's written order, not a code edit — suite 32 holds it off.
+
+       AND THE DEVELOPMENT PLAN IS NOT ASKED OF THEM. gpdpDue_ answers yes to
+       every role but the Collector, so without this every one of them would
+       be called for a Gram Panchayat Development Plan — which is a thing the
+       Panchayat Secretary files about a village, and they hold no village. */
+    sanctionExempt:['STAFF'],
+    planExempt:['STAFF'],
+    /* the MPDO office, one point per mandal, comes with their own roll, so
+       for THEM there is a place of duty to measure from (rule 10: it measures
+       and accuses nobody) */
+    staffDuty:true,
     /* THE GPs TAB HAS NO COORDINATES (rule 10), so this register has nothing
        to measure a mark against and says so rather than guessing */
     placeOfDuty:false,
@@ -412,7 +440,7 @@ const TENANTS = {
     leaveOpening:{ '2026':{ CL:6 } },
     /* the Gram Panchayat Development Plan, called for from every officer */
     gpdp:true,
-    roles:['PS','MPO','MSO','MPDO','DLPO','DPO','COLLECTOR']
+    roles:['PS','MPO','MSO','MPDO','DLPO','DPO','COLLECTOR','STAFF']
   },
   GP: {
     key:'GP', name:'Gram Palana Register · Jangaon', short:'GP',
@@ -551,7 +579,17 @@ const GPS_HEAD = () => tenant_().placeOfDuty ? ['Mandal','GP','Lat','Lng'] : ['M
 const canApplyLeave_   = r => tenant_().leaveApply.indexOf(String(r || '').toUpperCase()) >= 0;
 const canApproveLeave_ = r => r === 'COLLECTOR';
 const attExempt_ = r => tenant_().attExempt.indexOf(String(r || '').toUpperCase()) >= 0;
-const U_HEAD = ['Phone','Name','Role','Mandal','GP','Email','InitPin','Hash','Active'];
+/* WHO THE LADDER DOES NOT REACH, and who is not called for a plan. Both lists
+   are empty on a register that has not named one, so nothing changes anywhere
+   by their existing. */
+const sanctionExempt_ = r => (tenant_().sanctionExempt || []).indexOf(String(r || '').toUpperCase()) >= 0;
+const planExempt_     = r => (tenant_().planExempt     || []).indexOf(String(r || '').toUpperCase()) >= 0;
+/* Designation and EmpId are the MPDO office staff's: the role the code reads
+   is STAFF for all 192 of them, and the designation — AEE (PR), APO, Data
+   Entry Operator, Office Subordinate — is what a person reading the roll needs
+   to see. ensureHeaders_ appends them; no migration is needed (the rule the
+   *_HEAD arrays have always carried). */
+const U_HEAD = ['Phone','Name','Role','Mandal','GP','Email','InitPin','Hash','Active','Designation','EmpId'];
 /* Kept as a name because thirty rules and both Admin files read it; the values
    now come from whichever register this is. */
 const LEAVE_APPLY = TENANTS.SJGP.leaveApply;
@@ -594,7 +632,7 @@ function uidx_(){
   const head = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0]
     .map(h => String(h).toLowerCase().replace(/[^a-z]/g, ''));
   const ix = {};
-  ['phone','name','role','mandal','gp','email','hash','active'].forEach(k => { ix[k] = head.indexOf(k); });
+  ['phone','name','role','mandal','gp','email','hash','active','designation','empid'].forEach(k => { ix[k] = head.indexOf(k); });
   ix.initpin = head.indexOf('initpin') >= 0 ? head.indexOf('initpin') : head.indexOf('initpassword');
   return { sh: sh, ix: ix };
 }
@@ -1343,7 +1381,12 @@ function noticeGaps_(dStr){
     const ph = phone10_(v[i][t.ix.phone]); if(!ph || seen[ph]) continue; seen[ph] = true;
     if(String(v[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
     const role = cell_(v[i], t.ix.role);
-    if(attExempt_(role) || marked[ph] || onLeave[ph]) continue;
+    /* AND THE LADDER DOES NOT REACH THE OFFICE STAFF. This is the single
+       place the whole ladder picks who it is about — the reminder, the
+       show-cause notice, the casual-leave debit and the lock on the app all
+       follow from this list — so one line here is the whole of switching it
+       off for them, and the switch is a list in TENANTS and not an edit. */
+    if(attExempt_(role) || sanctionExempt_(role) || marked[ph] || onLeave[ph]) continue;
     out.push({phone:ph, name:cell_(v[i], t.ix.name), role:role,
               mandal:cell_(v[i], t.ix.mandal), email:String(v[i][t.ix.email] || '').trim()});
   }
@@ -1415,7 +1458,16 @@ function issueAbsenceNotices(){
       const ph = phone10_(uv[i][t.ix.phone]); if(!ph || seen[ph]) continue; seen[ph] = true;
       if(String(uv[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
       const role = cell_(uv[i], t.ix.role);
-      if(attExempt_(role)) continue;
+      /* THIS IS THE LADDER'S OWN ROLL, and the one that matters. The engine
+         builds its list here — not through noticeGaps_ — and from this list
+         come the reminder, the show-cause proposal, the casual-leave debit
+         and the lock on the app. The first cut of the office-staff exemption
+         was put on noticeGaps_ alone and a reminder went out to a Data Entry
+         Operator the same afternoon, in the suite. Five places in this file
+         walk the roll by attExempt_; the other four are reports and a plain
+         email nudge, which the staff keep, because a nudge is not a sanction
+         and the Gram Palana register sends it too. */
+      if(attExempt_(role) || sanctionExempt_(role)) continue;
       roll.push({ phone:ph, name:cell_(uv[i], t.ix.name), role:role,
                   mandal:cell_(uv[i], t.ix.mandal), email:String(uv[i][t.ix.email] || '').trim() });
     }
@@ -4131,6 +4183,9 @@ function gpdpDue_(role){
   /* AND NOT AT ALL ON A REGISTER THAT WAS NEVER ASKED FOR ONE. */
   if(!tenant_().gpdp) return false;
   const r = String(role || '').toUpperCase();
+  /* nor of a role the register has excused it — the MPDO office staff hold
+     no village, and a development plan is a thing filed about one */
+  if(planExempt_(r)) return false;
   return !!r && r !== 'COLLECTOR';
 }
 

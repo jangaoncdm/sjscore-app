@@ -39,11 +39,17 @@ module.exports = {
     const rowsFor = ph => env.sheets['Users'].rows.slice(1).filter(r => String(r[uix('Phone')]) === ph);
 
     /* ---- the reading writes nothing ---- */
-    const before = env.sheets['Users'].rows.map(r => r.slice());
+    /* THE OFFICER ROWS, NOT THE HEADER. ensureHeaders_ appends a column the
+       moment a new field joins U_HEAD — that is the documented way this
+       register grows and needs no migration — and it happened here when the
+       MPDO office staff brought Designation and EmpId with them on 04.10.2026.
+       What a dry run must not touch is an officer's row, and that is what is
+       compared. */
+    const before = env.sheets['Users'].rows.slice(1).map(r => r.slice());
     const look = c.showPinReset('9949364872');
     t.contains(look, 'K. Ramesh', 'the reading names the officer');
     t.contains(look, 'read only', 'and says it wrote nothing');
-    t.eq(JSON.stringify(env.sheets['Users'].rows), JSON.stringify(before), 'and it did write nothing');
+    t.eq(JSON.stringify(env.sheets['Users'].rows.slice(1)), JSON.stringify(before), 'and it did write nothing');
     t.ok(!/NEW PIN/.test(look), 'the reading does not generate a PIN either');
 
     const unknown = c.showPinReset('9999999999');
