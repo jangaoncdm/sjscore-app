@@ -1357,7 +1357,7 @@ function initTheme(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '75b37ec - 04 Oct 19:10';
+const BUILD_STAMP = 'c5be13a - 04 Oct 19:17';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -3020,7 +3020,7 @@ let ROLL=null, ROLLQ='', ROLLBUSY=false, ROLLPIN=null, ROLLMSG='', ROLLBAD=false
    register over HTTPS and nowhere else, exactly as the Gram Palana roster did. */
 let TBL_TEXT='', TBL_ROLE='MPO', TBL_PLANS=null, TBL_DONE=null;
 let PST_TEXT='', PST_PLANS=null, PST_DONE=null;
-let STF_TEXT='', STF_PLANS=null, STF_DONE=null;
+let STF_TEXT='', STF_PLANS=null, STF_DONE=null, STF_PINS=null;
 /* THE REGISTER'S OWN PRE-FLIGHT. Read once when the Admin screen is opened,
    because it walks Drive and that is not something to do on every poll. */
 let HEALTH=null, HEALTHAT=0;
@@ -3521,6 +3521,15 @@ function vAdmin(j,A){
     (STF_TEXT?'<button class=\"fchip\" id=\"stfClear\">Clear</button>':'')+
     "</div>"+
     (STF_DONE?'<div style=\"margin-top:12px;font-size:13px;color:var(--tx-2);line-height:1.7;border-left:3px solid var(--st-ok);padding-left:12px\">'+esc(STF_DONE)+'</div>':'')+
+    /* A PIN IS SHOWN ONCE AND WRITTEN NOWHERE, so 192 of them cannot be a
+       sentence. They are held on this page until the file is taken, and the
+       page says plainly that leaving without it means resetting them one at
+       a time. */
+    (STF_PINS&&STF_PINS.length?'<div style=\"margin-top:12px;padding:12px;border:1px solid var(--amb);border-radius:9px\">'+
+      '<b>'+STF_PINS.length+' PIN(s) were set, and they are on this screen and nowhere else.</b>'+
+      '<div class=\"expnote\" style=\"margin:6px 0 9px\">The Audit tab records that a PIN was set, on which number and by whom — never the PIN. '+
+      'Take the file now: if you leave this page they can only be issued again one officer at a time.</div>'+
+      '<button class=\"tbtn pri\" id=\"stfPins\">Download the PINs (CSV)</button></div>':'')+
     (STF_PLANS?'<div class=\"twrap\" style=\"margin-top:13px;max-height:460px\"><table>'+
       '<thead><tr><th>Mandal</th><th>Name</th><th>Designation</th><th>Mobile</th><th>What it is</th><th>What would change</th></tr></thead><tbody>'+
       STF_PLANS.map(p=>{ const V=STAFF_PILL[p.verdict]||['warn',p.verdict];
@@ -3660,6 +3669,15 @@ function wireAdmin(){
     });
   };
 
+  const stfP=$('#stfPins');
+  if(stfP) stfP.onclick=()=>{
+    const rows=[['Name','Designation','Mandal','Mobile','PIN']];
+    (STF_PINS||[]).forEach(x=>rows.push([x.name||'',x.desig||'',x.mandal||'',x.phone||'',x.pin||'']));
+    rows.push([]);
+    rows.push(['Note','This file is the only copy. The register records that a PIN was set, never the PIN.']);
+    dlBlob('SJGP-office-staff-PINs.csv','text/csv;charset=utf-8',csvText(rows));
+  };
+
   const stfT=$('#stfTbl');
   if(stfT){ stfT.onchange=()=>{ STF_TEXT=stfT.value; STF_PLANS=null; STF_DONE=null; if(DATA) render(DATA); };
     stfT.onblur=()=>{ if(stfT.value!==STF_TEXT){ STF_TEXT=stfT.value; STF_PLANS=null; STF_DONE=null; if(DATA) render(DATA); } }; }
@@ -3681,9 +3699,9 @@ function wireAdmin(){
       'Nothing is deleted. Every change is written to the Audit tab.')) return;
     rollPost({kind:'staffUpdate',rows:p.rows,dry:false}, r=>{
       STF_PLANS=null;
+      STF_PINS=(r.pins||[]).slice();
       STF_DONE=(r.added||0)+' added \u00b7 '+(r.corrected||0)+' corrected \u00b7 '+(r.offices||0)+' mandal office(s) written.'+
-        ((r.pins&&r.pins.length)?' PINs, shown once and written nowhere: '+
-          r.pins.map(x=>x.name+' ('+x.phone+') '+x.pin).join(', ')+'.':'');
+        ((r.pins&&r.pins.length)?' '+r.pins.length+' PIN(s) set — take the file below.':'');
     });
   };
 
