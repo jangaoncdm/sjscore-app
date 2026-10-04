@@ -46,7 +46,23 @@ const CARDS = [
     url: 'https://jangaoncdm.github.io/sjscore-app/',
     accent: '#4A40CE',
     office: 'District Panchayat Office',
-    note: 'Attendance, the 100-mark village evaluation, leave and the filing schedule.' }
+    note: 'Attendance, the 100-mark village evaluation, leave and the filing schedule.' },
+  /* THE SAME APP AND THE SAME SQUARE, AND A DIFFERENT CARD. The MPDO office
+     staff sign in to the sanitation register — one address, one square — but
+     the card above promises them a 100-mark village evaluation and a filing
+     schedule, and they will never see either. A card that describes a screen
+     an officer does not have is how a district office spends a morning
+     looking for it. Ordered 04.10.2026: attendance and leave, and nothing
+     else, so that is what the card says. */
+  { file: 'install-staff.html',
+    tag: 'Swachh Jangaon · MPDO Office Staff',
+    who: 'AEE (PR) · APO · Superintendent · Senior and Junior Assistants · Data Entry Operators',
+    who2: 'Tech Assistants · Typists · EC · Office Subordinates · Drivers',
+    url: 'https://jangaoncdm.github.io/sjscore-app/',
+    accent: '#4A40CE',
+    /* the card reads "issued by the ...", so the office is named plainly */
+    office: 'MPDO Office of your own mandal',
+    note: 'Attendance and leave. No village evaluation, no development plan, and no show-cause notice — this register records your attendance and your leave, and nothing else.' }
 ];
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
@@ -88,7 +104,7 @@ function card(c){
 <body><div class="card">
   <p class="eyebrow">Government of Telangana · Collectorate, Jangaon</p>
   <h1>${esc(c.tag)}</h1>
-  <p class="who">${esc(c.who)}</p>
+  <p class="who">${esc(c.who)}${c.who2 ? "<br>" + esc(c.who2) : ""}</p>
   <div class="rule"></div>
 
   <div class="qrwrap">${qr}</div>
