@@ -1249,6 +1249,101 @@ op still gets the list, because an old handset asked that way.
 
 ---
 
+## Postings — which officer holds which place
+
+**Ordered 04.10.2026**, off the district’s own issue list of 02.10.2026. Of 48
+reports, **40 were one thing said forty ways**: the register had an officer
+against the wrong place. A Secretary deputed in August was still shown against
+the village he left; a Secretary given a second village in charge could not see
+it; six Mandal Panchayat Officers had moved mandal and the register did not
+know.
+
+**The unit is the posting: one officer, one place, one row of `Users`.** An
+officer holding three villages has three rows and `findByPhone_` reads the
+union. So there are three acts and the village and the mandal take the same
+three — **move** (he holds this instead), **add** (he holds this as well),
+**release** (he no longer holds it). `backend/FeaturePosting.gs` is the module;
+`Code.gs` gained nothing for it.
+
+**THE COLLECTOR’S GLOSSARY IS THE WHOLE OF HOW A REMARK IS READ.** *Deputed*
+means transferred — he no longer looks after the old place. *In-charge* and
+*FAC* mean he takes this **in addition** to what he already holds. Reading one
+as the other takes a village off a man who still holds it.
+
+**A release is never guessed at.** The remarks are free text from eleven
+offices — “deputed from valmidi to nasingapuram thanda”, “From Gp Manikyapuram
+deputed To Gp Nagaram”, “Kanneboinagudem to Edunuthula” — and no parser
+should be trusted to pull a place name out of that and then take it off a man.
+So the place is found **the other way round**: every place the officer ALREADY
+HOLDS on the register is looked for inside his remark, and only one found there
+is proposed. A remark naming nothing he holds releases nothing. The register is
+the authority; the remark only points at it.
+
+**And every release is the Collector’s own tick.** Eight of the forty-eight
+remarks speak of neither a deputation nor a charge: “App not showing for
+Marigadi (Showing Incharge village Peddathanda)” is a **complaint**, and the
+village it names is one the officer means to keep. The proposal therefore
+carries an id per release and the console sends back only the ones left ticked.
+`keep` can **narrow** what happens and can never widen it — the server re-plans
+from the sheet and honours only a release it proposed itself (rule 6). And
+**unticking a release turns a move into an addition**, because a move writes the
+new place over the row that held the old one and would otherwise take the
+village away by the back door.
+
+**A mandal-level officer holds no village, and that is not missing data.** The
+MPO, the MPDO and the MSO answer for a mandal; only the Secretary holds a Gram
+Panchayat. A village against one of them is refused. `rollPlan_` refuses a
+mandal move **on purpose** — *“moving a man between mandals is not a thing this
+does quietly, his notices and his filings are counted by mandal”* — which is a
+good rule that left the Collector with a sheet to edit by hand. This is where
+that move is made instead: deliberately, proposed first, and on `Audit`.
+
+**Nothing is invented and nothing is destroyed.** A village not on the `GPs`
+tab is refused rather than written; a village under another mandal is refused
+rather than quietly moved; one number carrying two names is **ambiguous** and
+left alone. Releasing marks the row inactive and leaves it where it is, with
+his attendance, his notices and his leave still pointing at it (rule 7) —
+unless it is his only row, when the place is cleared instead, because he is
+still an officer with no village rather than a man off the roll. A second paste
+changes nothing (rule 8).
+
+### The two faults underneath it
+
+Both lived in six lines of `findByPhone_`, and on two of the four reports they
+caused, **the roll was already right** — no amount of correcting it would have
+cured them.
+
+**A village taken away was still in the officer’s app.** The villages were read
+from EVERY row carrying the number, `Active` or not, so one released by marking
+its row `FALSE` stayed for ever. Reported as *“previously I had incharge Salvapur
+gp, still both villages reflect in my app”*.
+
+**And two villages in one cell gave him none.** `mergeDuplicateOfficers` folds
+an officer’s rows into one holding `"Mansanpally, Salvapur"`; the village roll,
+the console and the schedule all split that on commas and this did not, so the
+whole string was one name matching nothing. **The two fixes belong together**:
+on a merged row the first alone would have taken him to nought villages. Suite
+31 asserts all three shapes.
+
+### Two readers that were lying
+
+**An empty cell in an `.xlsx` is self-closing**, `<c r="C44" s="19"/>`, and a
+greedy `[^>]*` swallows the slash — the alternation then falls through to the
+`>` branch and captures the NEXT cell’s contents as this one’s. Every value
+after a blank reads one column to the left. The same regex was in
+`tests/gp-seed.js`, which reads the district’s Gram Palana roster: on a roster
+carrying coordinates that is a wrong latitude against a named man, silently.
+Both now match the attributes lazily.
+
+**And a function declared inside a render function is invisible to the handler
+that needs it.** The first cut of `parsePostings` sat inside the function that
+draws its panel: the panel could call it and `wireAdmin` could not, so the
+button was bound, enabled, and **did nothing whatever when pressed**. Nothing in
+the page said a word; driving the screen in a browser is what found it. Parsers
+live at the top level, beside `parseRoster`.
+
+---
+
 ## House style
 
 The prose in this project is plain, unhurried, and written for an officer

@@ -91,7 +91,15 @@ function readWorkbook(file){
     const x = fs.readFileSync(f, 'utf8');
     const rows = (x.match(/<row[^>]*>[\s\S]*?<\/row>/g) || []).map(r => {
       const cell = {};
-      for(const m of r.matchAll(/<c r="([A-Z]+)\d+"([^>]*)(?:\/>|>([\s\S]*?)<\/c>)/g)){
+      /* THE ATTRIBUTES ARE MATCHED LAZILY, and an empty cell is why. A blank
+         cell is written self-closing — <c r="C44" s="19"/> — and a greedy
+         [^>]* swallows the slash, so the alternation falls through to the
+         `>` branch and captures the NEXT cell's contents as this one's. Every
+         value after a blank then reads one column to the left. On a roster
+         carrying coordinates that is a wrong latitude against a named man,
+         and it is silent. Caught on 04.10.2026 reading the district's issue
+         list, where it reported an officer's NAME as his village. */
+      for(const m of r.matchAll(/<c r="([A-Z]+)\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)){
         const col = m[1], attr = m[2] || '', inner = m[3] || '';
         const v = (inner.match(/<v>([\s\S]*?)<\/v>/) || [])[1];
         const is = (inner.match(/<is>([\s\S]*?)<\/is>/) || [])[1];

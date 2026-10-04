@@ -726,10 +726,33 @@ function findByPhone_(phone){
     if(!(a === false || String(a).toUpperCase() === 'FALSE' || a === '')) active = true;
   });
 
+  /* THE VILLAGES AN OFFICER HOLDS, and two faults the district reported on
+     02.10.2026 lived in these six lines.
+
+     A VILLAGE TAKEN AWAY IS NOT HELD. This read EVERY row carrying the
+     number, Active or not, so a village released by marking its row FALSE
+     stayed in the officer’s app for ever. Two Secretaries of Bachannapet
+     reported it in those words — "previously I had incharge Salvapur gp,
+     still both villages reflect in my app" — and no amount of correcting the
+     roll could have cured it, because the roll was already right.
+
+     AND TWO VILLAGES IN ONE CELL ARE TWO VILLAGES. mergeDuplicateOfficers
+     folds an officer’s rows into one holding "Mansanpally, Salvapur"; the
+     village roll, the console and the schedule all split that on commas and
+     this did not, so the whole string was one name matching nothing and the
+     officer was shown NO villages at all. The two fixes belong together: on a
+     merged row the first alone would have taken him to nought.
+
+     Rule 9 all over again — count villages, not rows, and match them by
+     name. */
   const gps = [], mandals = [];
   rows.forEach(x => {
-    const g = cell_(x.v, t.ix.gp), m = cell_(x.v, t.ix.mandal);
-    if(g && gps.indexOf(g) < 0) gps.push(g);
+    const act = t.ix.active < 0 ? true : !(x.v[t.ix.active] === false ||
+      String(x.v[t.ix.active]).toUpperCase() === 'FALSE');
+    if(!act) return;                       /* a posting he no longer holds */
+    const m = cell_(x.v, t.ix.mandal);
+    String(cell_(x.v, t.ix.gp) || '').split(',').map(g => g.trim()).filter(String)
+      .forEach(g => { if(gps.indexOf(g) < 0) gps.push(g); });
     if(m && mandals.indexOf(m) < 0) mandals.push(m);
   });
 

@@ -123,6 +123,16 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
       if(b.kind==='userPin')    return reply({ok:true,phone:b.phone,name:'Burra Bhanuchander',pin:'7391',rows:2,unlocked:10,inactive:false});
       if(b.kind==='userActive') return reply({ok:true,phone:b.phone,name:'Gone Away',active:b.active,rows:1,written:1});
       if(b.kind==='installJobs') return reply({ok:true,installed:['dailyBackup','dailyCollectorReport','scheduleReminders','villageFilingReminders']});
+      /* the postings proposal, shaped as FeaturePosting.gs answers it: a move
+         with a release to tick, and an in-charge addition with none */
+      if(b.kind==='postingUpdate') return reply(b.dry ? {ok:true,dry:true,plans:[
+        {mandal:'Palakurthi',gp:'Narsingapuram Thanda',name:'kesoju Radhika',phone:'9133783902',
+         verdict:'move',changes:['now holds Narsingapuram Thanda, Palakurthi','released: Valmidi'],
+         releases:[{id:'9133783902|7|valmidi',row:7,place:'Valmidi',
+                    why:'the remark names it: "deputed from valmidi to nasingapuram thanda"'}]},
+        {mandal:'Bachannapet',gp:'Keshireddypally',name:'Sai kumar',phone:'8919632011',
+         verdict:'add',changes:['also holds Keshireddypally, Bachannapet'],releases:[]}
+      ]} : {ok:true,dry:false,moved:1,added:1,released:(b.keep||[]).length,registered:0,pins:[]});
       if(b.kind==='holidaysLoad'){ ROLL.holidays={year:2026,count:53};
         return reply({ok:true,tenant:'SJGP',before:0,after:53,added:53}); }
       return reply({ok:true});
@@ -229,6 +239,54 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
     ck(!!rb && !!rb.token,'under the Collector’s own token, which the server re-checks');
   }
 
+  console.log(pass+' passed, '+fail+' failed');
+  /* --- POSTINGS: WHO HOLDS WHICH PLACE ---
+     40 of the 48 reports on the district's list of 02.10.2026 were one thing:
+     the register had an officer against the wrong place, and there was nowhere
+     to press. This is the screen that presses. */
+  await page.evaluate(() => { const t = document.getElementById('pstTbl');
+    if(t) t.scrollIntoView(); });
+  const pst = await page.$('#pstTbl');
+  ck(!!pst, 'the postings panel is on the Admin screen');
+  if(pst){
+    /* the district's own shape, tabs and all, with a blank village for the
+       mandal officer — the line that defeated the first parser */
+    const TABLE = [
+      ['1','Palakurthi','Narsingapuram Thanda','kesoju Radhika','9133783902','Panchayat Secretary','deputed from valmidi to nasingapuram thanda'],
+      ['2','Bachannapet','Keshireddypally','Sai kumar','8919632011','Panchayat Secretary','Incharge Gp'],
+      ['3','Bachannapet','','A Krishnakumari','9704250523','Mandal Panchayat Officer','Deputed from Chilpur Mandal to Bachananpet Mandal']
+    ].map(r => r.join('\t')).join('\n');
+    await page.fill('#pstTbl', TABLE);
+    await page.evaluate(() => document.getElementById('pstTbl').blur());
+    await page.waitForTimeout(500);
+    const read = await page.evaluate(() => document.body.innerText);
+    ck(/3 line\(s\) read/.test(read), 'all three lines are read, blank village and all',
+       (read.match(/\d+ line\(s\) read[^\n]*/) || [''])[0]);
+    ck(!/not understood/.test(read), 'and none is reported as not understood');
+
+    await page.click('#pstRead'); await page.waitForTimeout(700);
+    const dry = posts.find(x => x.kind === 'postingUpdate' && x.dry);
+    ck(!!dry, 'Compare with the register reaches the district');
+    ck(!!dry && dry.rows.length === 3, 'carrying every line', dry ? dry.rows.length + ' row(s)' : '');
+    ck(!!dry && dry.rows[2].gp === '', 'AND THE MANDAL OFFICER CARRIES NO VILLAGE, which is not missing data');
+    ck(!!dry && dry.rows[0].remark.indexOf('valmidi') >= 0, 'with the remark, which is how a release is pointed at');
+
+    const boxes = await page.$$('.pstRel');
+    ck(boxes.length === 1, 'the proposal offers a tick for the ONE release it proposes', boxes.length + ' box(es)');
+    const seen = await page.evaluate(() => document.body.innerText);
+    ck(/read from:/.test(seen), 'and prints the sentence it read it from, so the Collector reads evidence');
+    ck(/Valmidi/.test(seen), 'naming the place it would take off him');
+
+    /* UNTICK IT, and the release must not travel */
+    await page.uncheck('.pstRel');
+    await page.click('#pstApply'); await page.waitForTimeout(800);
+    const applied = posts.filter(x => x.kind === 'postingUpdate' && !x.dry).pop();
+    ck(!!applied, 'Apply reaches the district');
+    ck(!!applied && Array.isArray(applied.keep), 'carrying the list of releases that were left ticked');
+    ck(!!applied && applied.keep.length === 0,
+       'AND AN UNTICKED RELEASE IS NOT SENT — a village is never taken off a man he was not asked about');
+  }
+
   /* --- THE TAB'S OWN ROWS ARE A RECORD, NOT THE CALENDAR ---
      01.10.2026 was a Thursday and the register called it a Second Saturday:
      2026-01-10 with the day and month transposed. The calendar is now the
@@ -309,7 +367,7 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   ck(await p2.$eval('#navAdmin',e=>e.hidden),'and the Admin rail item is hidden besides');
 
   console.log('\nscript errors: '+(errs.length?errs.join(' | '):'none'));
-  console.log(pass+' passed, '+fail+' failed');
+
   await br.close();srv.close();
   process.exit(fail?1:0);
 })();
