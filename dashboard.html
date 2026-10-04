@@ -1357,7 +1357,7 @@ function initTheme(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = 'fd00c4f - 04 Oct 11:22';
+const BUILD_STAMP = '006a07b - 04 Oct 11:45';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -3419,6 +3419,7 @@ function vAdmin(j,A){
     <div style="margin-top:11px;display:flex;gap:9px;flex-wrap:wrap">
       <button class="tbtn" id="pstRead"${(!pparsed||!pparsed.rows.length||ROLLBUSY)?' disabled':''}>Compare with the register</button>
       ${PST_PLANS?'<button class="tbtn pri" id="pstApply"'+(ROLLBUSY?' disabled':'')+'>Apply what is listed</button>':''}
+      ${PST_PLANS?'<button class="tbtn" id="pstCsv">Send back what could not be read</button>':''}
       ${PST_TEXT?'<button class="fchip" id="pstClear">Clear</button>':''}
     </div>
     ${PST_DONE?`<div style="margin-top:12px;font-size:13px;color:var(--tx-2);line-height:1.7;
@@ -3428,6 +3429,8 @@ function vAdmin(j,A){
       <tbody>${PST_PLANS.map(p=>{
         const V=POST_PILL[p.verdict]||['warn',p.verdict];
         const what=(p.changes&&p.changes.length)?p.changes.join('; '):(p.why||'\u2014');
+        const near=(p.near||[]).length?'<br><span class="mut" style="font-size:11px">the roll has: '+
+          esc(p.near.map(x=>x.gp+' ('+x.mandal+')').join(' / '))+'</span>':'';
         /* EVERY RELEASE IS TICKED SEPARATELY. Eight of the forty-eight remarks
            speak of neither a deputation nor a charge, and the village one of
            them names is one the officer means to KEEP. The Collector reads the
@@ -3440,7 +3443,7 @@ function vAdmin(j,A){
         return '<tr><td>'+esc(p.mandal||'\u2014')+'</td><td>'+esc(p.gp||'\u2014')+'</td>'+
           '<td>'+esc(p.name||'\u2014')+'<br><span class="mut num" style="font-size:11px">'+esc(p.phone||'')+'</span></td>'+
           '<td><span class="pill '+V[0]+'">'+esc(V[1])+'</span></td>'+
-          '<td style="color:var(--tx-2)">'+esc(what)+rel+'</td></tr>';
+          '<td style="color:var(--tx-2)">'+esc(what)+near+rel+'</td></tr>';
       }).join('')}</tbody></table></div>
       <div class="expnote" style="margin-top:9px"><b>A place is never taken off a man on the strength of a
       sentence alone.</b> The remarks are written by eleven offices in eleven ways, so the place to release is
@@ -3585,6 +3588,30 @@ function wireAdmin(){
     PST_DONE=null;
     rollPost({kind:'postingUpdate',rows:p.rows,dry:true}, r=>{ PST_PLANS=r.plans||[]; });
   };
+  /* WHAT GOES BACK TO THE MANDAL. A refusal the Collector can read is no use
+     to the office that has to correct it, and forwarding a screenshot of a
+     console is not a district communication. This is every line that could
+     not be taken, with the register’s OWN SPELLING beside it where there is
+     one, so the reply asks for exactly the thing that is missing rather than
+     sending an officer to look for a village he knows exists. CSV, because it
+     needs nothing from the network. */
+  const pstCsv=$('#pstCsv');
+  if(pstCsv) pstCsv.onclick=()=>{
+    const stuck=(PST_PLANS||[]).filter(p=>p.verdict==='refused'||p.verdict==='ambiguous');
+    const rows=[['Mandal (as sent)','Village (as sent)','Officer','Mobile','Designation',
+                 'What the register says','What the register already has','What is needed']];
+    stuck.forEach(p=>rows.push([p.mandal||'',p.gp||'',p.name||'',p.phone||'',p.role||'',
+      p.why||'', (p.near||[]).map(x=>x.gp+' ('+x.mandal+')').join(' / '),
+      (p.near||[]).length ? 'Confirm which spelling is correct'
+        : (p.verdict==='ambiguous' ? 'Two readings on the register — confirm which officer or which mandal'
+                                   : 'Put the village on the GPs roll, or send the name as the roll carries it')]));
+    rows.push([]);
+    rows.push(['Lines sent', String((PST_PLANS||[]).length)]);
+    rows.push(['Could not be taken', String(stuck.length)]);
+    rows.push(['Note','A village is never invented by the register. Where the roll spells a name differently, the roll’s spelling is given above — confirm it and the posting will be taken.']);
+    dlBlob('SJGP-postings-to-correct.csv','text/csv;charset=utf-8',csvText(rows));
+  };
+
   const pstA=$('#pstApply');
   if(pstA) pstA.onclick=()=>{
     const p=parsePostings(PST_TEXT); if(!p.rows.length) return;
