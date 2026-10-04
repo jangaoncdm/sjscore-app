@@ -1357,7 +1357,7 @@ function initTheme(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '28e473b - 04 Oct 19:42';
+const BUILD_STAMP = '5660b16 - 04 Oct 19:52';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -1537,6 +1537,49 @@ function skewPill(r){
   return ' <span class="pill warn" title="This phone\u2019s clock is '+m+' minute(s) '+(s>0?'fast':'slow')+
     '. The district\u2019s own clock has been used.">clock '+m+'m '+(s>0?'fast':'slow')+'</span>';
 }
+/* TWO POPULATIONS UNDER TWO DIFFERENT RULES MUST NOT SHARE A FIGURE.
+
+   192 MPDO office staff joined the register on 04.10.2026 for attendance and
+   leave, and the show-cause ladder does not reach them. The field officers'
+   ladder does. Adding the two together gives a 'not marked' count in which
+   one man is three days from a numbered notice and the next is not, and a
+   percentage that means nothing to either — while the field figure the
+   district has watched since July silently jumps from 284 to 476 and every
+   comparison with yesterday breaks.
+
+   So the attendance screen is cut three ways and the field officers are the
+   default, because that is the register the district has been reading. The
+   staff are one click away and the switch always says how many of each there
+   are, so nobody is hidden by a default.
+
+   The whole screen re-derives from the rows of the segment — the tiles, the
+   mandal chart, the location quality, the map and the officer table — so
+   nothing on it is a mixed figure. The one thing that cannot be cut here is
+   the fourteen-day trend, which the register works out itself over everybody,
+   and it says so on its face rather than pretending. */
+let ASEG = 'field';
+const isStaff = r => String((r && r.role) || '').toUpperCase() === 'STAFF';
+function segCounts(j){
+  const all = [].concat(j.today.present || [], j.today.onLeave || [], j.today.absent || []);
+  const st = all.filter(isStaff).length;
+  return { staff:st, field:all.length - st, all:all.length };
+}
+function segJ(j){
+  if(ASEG === 'all') return j;
+  const want = ASEG === 'staff' ? isStaff : (r => !isStaff(r));
+  const t = j.today || {};
+  const today = Object.assign({}, t, {
+    present:(t.present || []).filter(want),
+    onLeave:(t.onLeave || []).filter(want),
+    absent :(t.absent  || []).filter(want) });
+  /* THE SEGMENT'S OWN ROLL IS THE SUM OF ITS THREE STATES. j.totals.due is
+     the whole register's and would make every percentage on the screen a
+     fraction of the wrong denominator. */
+  const due = today.present.length + today.onLeave.length + today.absent.length;
+  return Object.assign({}, j, { today:today,
+    totals: Object.assign({}, j.totals || {}, { due:due, officers:due + 1 }) });
+}
+
 function analyse(j){
   /* THE DISTRICT DECIDES WHO IS DUE, NOT THIS SCREEN. officers-1 counted every
      active row bar the Collector — including the MSOs, whose attendance is
@@ -2766,10 +2809,26 @@ function vTables(j,A,short){
   return h;
 }
 
+function segSwitch(){
+  const c = segCounts(DATA || { today:{} });
+  const one = (k, label, n) => '<button class="fchip' + (ASEG === k ? ' on' : '') +
+    '" data-seg="' + k + '">' + label + ' <b>' + n + '</b></button>';
+  return '<div class="segbar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">' +
+    one('field', 'Field officers', c.field) + one('staff', 'MPDO office staff', c.staff) +
+    one('all', 'Everyone', c.all) +
+    '<span class="expnote" style="margin-left:4px">' +
+    (ASEG === 'staff'
+      ? 'The office staff mark in and apply for leave. No show-cause notice, no casual-leave debit and no lock on the app arises from this screen.'
+      : ASEG === 'field'
+        ? 'Panchayat Secretaries, MPOs, MSOs and MPDOs — the roll the notice ladder reads.'
+        : 'Both rolls together. They answer to different rules, so read the parts rather than the total.') +
+    '</span></div>';
+}
 function vAttendance(j,A){
   let h='';
   if(A.off) h+=panel('c12','Holiday — '+esc(A.off),'attendance is optional today',
     '<div style="font-size:13px;color:var(--tx-2);line-height:1.7">The day is not counted, no officer is listed as not marked, and no notice can arise. Marks below, if any, are voluntary.</div>');
+  h+=segSwitch();
   h+='<div class="kpirow">';
   h+=kpi('Present',IC.u,A.present,delta(A.accounted,A.attY,true),'vs yesterday (with leave)');
   h+=kpi('On sanctioned leave',IC.c,A.onLeave,'','today');
@@ -2829,7 +2888,11 @@ function vAttendance(j,A){
       <button class="tbtn" data-exp="matrix">CSV · 14-day comparative matrix</button>
       <span class="expnote" id="expNote">The workbook carries every sheet: today, the gaps, officer × day, mandal comparison, daily counts.</span>
     </div>`);
-  h+=panel('c7','Attendance rate · last 14 days','accounted of '+A.officersDue,
+  /* THE ONE FIGURE ON THIS SCREEN THAT IS NOT THE SEGMENT'S. att14 is worked
+     out by the register over everybody and cannot be re-cut here, so it says
+     whose it is rather than letting the switch above imply otherwise. */
+  h+=panel('c7','Attendance rate · last 14 days',
+    (ASEG==='all'?'accounted of '+A.officersDue:'everyone on the register · not the segment above'),
     '<div class="plot">'+areaChart(j.att14x,'present',metColor('present'))+'</div>');
   h+=panel('c5','Mark-in time today','by hour','<div class="plot">'+histMarkIn(j.today.present)+'</div>');
   h+=panel('c6','Attendance by mandal · worst first',
@@ -4734,7 +4797,7 @@ function render(j){
   const ai=$('#askIn'), aiVal=ai?ai.value:'', aiFoc=ai&&document.activeElement===ai;
   const keep={}; document.querySelectorAll('#g [data-k]').forEach(el=>keep[el.dataset.k]=el.scrollTop);
   $('#g').innerHTML = VIEW==='overview'?vOverview(j,A)
-    : VIEW==='attendance'?vAttendance(j,A)
+    : VIEW==='attendance'?(function(){const js=segJ(j);return vAttendance(js,ASEG==='all'?A:analyse(js));})()
     : VIEW==='villages'?vVillages(j,A)
     : VIEW==='schedule'?vSchedule(j,A)
     : VIEW==='leave'?vLeave(j,A)
@@ -4852,10 +4915,14 @@ document.addEventListener('click',e=>{
     document.querySelectorAll('.mtab').forEach(x=>x.setAttribute('aria-selected',x===mt));
     $('#area').innerHTML=areaChart(DATA.att14x,MET,metColor(MET));
     return; }
+  /* the segment the attendance screen is read in — field officers, office
+     staff, or both, which answer to different rules */
+  const sg=e.target.closest('[data-seg]');
+  if(sg){ ASEG=sg.dataset.seg; if(DATA) render(DATA); return; }
   const kp=e.target.closest('[data-act]');
   if(kp){ const [kind,arg]=kp.dataset.act.split(':');
     if(kind==='view'){ VIEW=arg; document.querySelectorAll('#nav [data-v]').forEach(x=>x.toggleAttribute('aria-current',x.dataset.v===arg)); if(DATA) render(DATA); }
-    else if(arg==='absent'){ const ab=DATA.today.absent;
+    else if(arg==='absent'){ const ab=(VIEW==='attendance'?segJ(DATA):DATA).today.absent;
       openDrawer('Not marked today', ab.length+' officer'+(ab.length===1?'':'s'),
         ab.length?'<ul>'+ab.map(o=>'<li>'+esc(o.name)+' · '+esc(o.role)+' · '+esc(o.mandal||'—')+'</li>').join('')+'</ul>':'<p style="font-size:13px">Everyone is accounted for.</p>'); }
     else if(kind==='gp'){
