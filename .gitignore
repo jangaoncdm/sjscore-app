@@ -22,3 +22,9 @@ node_modules/
 tests/fixture-dashboard.json
 tests/fixture-docs.json
 tests/fixture-schedule.json
+
+# The MPDO office staff list: 192 personal mobile numbers. THIS REPOSITORY IS
+# PUBLIC. It was committed on 04.10.2026 by a `git add -A` and had to be
+# purged from the history — the same fault this file already warns about for
+# Domain/, made again, in the same way, on the same day.
+Add/
