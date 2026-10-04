@@ -60,6 +60,9 @@ module.exports = {
       t.eq(u.mandal, 'Bachannapet', 'in his own mandal');
       t.eq(JSON.stringify(u.gps), '[]', 'holding no village, which is not missing data');
       t.eq(r.pins.length, 1, 'with a PIN shown once to the console that asked');
+      t.eq(r.pins[0].desig, 'AEE (PR)',
+        'and the PIN record names his designation, so the file handed to the office says who gets which');
+      t.eq(r.pins[0].mandal, 'Bachannapet', 'and his mandal');
       t.ok(JSON.stringify(e.sheets['Audit'].rows).indexOf(r.pins[0].pin) < 0,
         'and the Audit tab records that one was set, never the PIN');
       t.eq(e.post({ kind:'login', u:'7013299150', p:r.pins[0].pin }).ok, true, 'and it opens the app');

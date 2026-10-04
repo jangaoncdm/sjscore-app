@@ -223,7 +223,11 @@ function staffWrite_(t, plans, u){
       put(row, 'initpin', ''); put(row, 'active', 'TRUE');
       sh.appendRow(row);
       added++;
-      if(p.verdict === 'register') pins.push({ phone:p.phone, name:p.name, pin:pin });
+      /* THE FILE THE OFFICE IS HANDED has to say WHO each PIN belongs to, or
+        192 four-digit numbers are of no use to anybody — the designation and
+        the mandal travel with it. */
+      if(p.verdict === 'register') pins.push({ phone:p.phone, name:p.name, pin:pin,
+                                               desig:p.desig, mandal:p.mandal });
       admAudit_(p.verdict === 'register' ? 'STAFF REGISTERED' : 'STAFF SECOND OFFICE', p.phone,
         p.name + ' · ' + (p.desig || 'staff') + ' · ' + p.mandal + ' · by ' + u.name +
         (p.verdict === 'register' ? ' · PIN set, not recorded here' : ''));
