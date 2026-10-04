@@ -68,6 +68,9 @@ const PASSES = [
   { name: 'Marking out',
     what: 'The home-screen card and the screen it opens, driven in a real browser: the hour the district names, the button that is not offered before it, the mark itself with its photograph and coordinates, and the receipt the PHONE holds beating the district’s answer — the fault reported twice about the circular. Every state is read for words of sanction, because none arises.',
     cmd: ['tests/render-out.js'], needs: BROWSER ? null : 'playwright is not installed', shots: 'out-render' },
+  { name: 'Two rolls, two sets of rules',
+    what: 'The attendance screen cut three ways in a real browser — field officers, MPDO office staff, everyone. Asserts what a figure MEANS and not merely that one is printed: that every tile, the mandal chart and the officer table re-derive from the segment, that the denominators move with it, that the screen says no sanction arises for the staff, and that the fourteen-day trend admits it is everyone.',
+    cmd: ['tests/render-segment.js'], needs: BROWSER ? null : 'playwright is not installed', shots: null },
   { name: 'The roll against the district’s roster',
     what: 'The office’s own table pasted into the console in the shape a spreadsheet actually gives it, read, '+
           'compared against the register, and written only on Apply. Guards the difference between correcting an '+
