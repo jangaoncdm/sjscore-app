@@ -242,7 +242,20 @@ function postPlan_(t, v, roll, r){
     }
     /* the village named in more than one mandal is the Collector's to settle */
     if(on.length > 1){
-      const inM = on.filter(function(x){ return pkey_(x.mandal) === pkey_(mandal); });
+      /* TWO VILLAGES OF ONE NAME ARE TOLD APART BY THE MANDAL, and the mandal
+         must be read as tolerantly here as anywhere else: Theegaram is on the
+         roll in Palakurthi AND Zaffergadh, the list said Zafferghad, and an
+         exact match found neither and called it ambiguous. The spelling is
+         allowed the same small distance it is allowed everywhere; two
+         mandals that are genuinely different are still two. */
+      let inM = on.filter(function(x){ return pkey_(x.mandal) === pkey_(mandal); });
+      if(inM.length !== 1){
+        const mk = pkey_(mandal);
+        inM = on.filter(function(x){
+          const rk = pkey_(x.mandal);
+          return postDist_(mk, rk) <= Math.max(2, Math.floor(rk.length / 5));
+        });
+      }
       if(inM.length !== 1){
         out.verdict = 'ambiguous';
         out.why = '"' + gp + '" is on the roll in ' + on.map(function(x){ return x.mandal; }).join(' and ') +
@@ -291,6 +304,50 @@ function postPlan_(t, v, roll, r){
 
   /* NOT ON THE ROLL AT ALL — a new officer, registered with this posting. */
   if(!mine.length){
+    /* ONE NUMBER, ONE OFFICER — AND ONE OFFICER, ONE ROW OF HISTORY.
+       The district's list of 02.10.2026 carried Sai kumar on 8919632011 while
+       the register already held him as "Ch.Sai kumar" on another number.
+       Registering the new number would have given one man two identities: his
+       attendance, his notices and his leave on the old row and his villages on
+       the new one, and nothing afterwards able to put them back together. The
+       cure is to correct the NUMBER on the row he already has, which the roll
+       screen does; so this refuses and names him rather than quietly doubling
+       him. sameName_ is the same reading the roster paste uses: two names are
+       one officer when they share a word of real length, so an initial or a
+       designation in front of the name does not make him a different man. */
+    /* IN HIS OWN MANDAL, and only there. sameName_ asks whether two names
+       share a word of real length, which is the right question when the roll
+       has already been narrowed to one chair — as the roster paste narrows it
+       by mandal and role. Asked of a whole district it is far too generous:
+       half this roll is somebody Kumar, and "Sandeep Kumar Jha" came back as
+       "Sai kumar" on the first run of this check. A man deputed within his
+       mandal, which is what the list describes, is found by the mandal; a man
+       who has genuinely moved district office is not somebody this refusal
+       should be guessing at. */
+    const twin = [];
+    for(let i = 1; i < v.length; i++){
+      const n2 = cell_(v[i], t.ix.name);
+      if(!n2 || !postSameMan_(n2, name)) continue;
+      const m2 = pkey_(cell_(v[i], t.ix.mandal));
+      if(!m2 || postDist_(m2, pkey_(mandal)) > Math.max(2, Math.floor(m2.length / 5))) continue;
+      const act = t.ix.active < 0 ? true : !(v[i][t.ix.active] === false ||
+        String(v[i][t.ix.active]).toUpperCase() === 'FALSE');
+      if(!act) continue;
+      const ph2 = phone10_(v[i][t.ix.phone]);
+      if(ph2 === phone) continue;
+      if(twin.some(function(x){ return x.phone === ph2; })) continue;
+      twin.push({ name:n2, phone:ph2, mandal:cell_(v[i], t.ix.mandal) });
+    }
+    if(twin.length){
+      out.verdict = 'refused';
+      out.twin = twin;
+      out.why = 'that number is not on the roll, but ' +
+        twin.map(function(x){ return '"' + x.name + '" (' + (x.phone || 'no number') +
+          (x.mandal ? ', ' + x.mandal : '') + ')'; }).join(' and ') +
+        ' already is. One number is one officer: correct the number on that row rather than adding a second, ' +
+        'or say plainly that this is a different man.';
+      return out;
+    }
     out.verdict = 'register';
     out.why = 'that number is not on the roll';
     out.changes.push('registered as ' + role + ' of ' + (gp ? out.gp + ', ' + out.mandal : out.mandal));
@@ -352,8 +409,18 @@ function postPlan_(t, v, roll, r){
   if(!mandalOnly && out.gp){
     postHolder_(t, v, out.mandal, out.gp).forEach(function(h){
       if(h.phone === phone) return;
-      out.releases.push({ row:h.row + 1, place:out.gp, mandal:out.mandal, from:h.name, fromPhone:h.phone,
-                          why:h.name + ' holds ' + out.gp + ' on the register today' });
+      /* A HOLDER OF THE SAME NAME ON ANOTHER ROW IS HIS OWN EARLIER ROW, not a
+         rival. The register carried Donthi Praveen Kumar twice — once with his
+         number and once with none — and the proposal read "take Marigidi from
+         Donthi Praveen Kumar", which says nothing to the man reading it. It is
+         the same cure either way; it should say which it is. */
+      const own = postSameMan_(h.name, name);
+      out.releases.push({ row:h.row + 1, place:out.gp, mandal:out.mandal,
+                          from:h.name, fromPhone:h.phone, ownRow:own,
+                          why: own
+                            ? 'his own other row (' + (h.phone || 'no number on it') + ') holds ' +
+                              out.gp + ' — the two rows are one man'
+                            : h.name + ' holds ' + out.gp + ' on the register today' });
     });
   }
 
@@ -372,6 +439,30 @@ function postPlan_(t, v, roll, r){
     if(own) out.writeRow = own.row;
   }
   return out;
+}
+
+/* IS THIS THE SAME MAN? A HARDER QUESTION THAN sameName_ ASKS.
+
+   sameName_ asks whether two names share a word of real length, which is the
+   right question where the roll has already been narrowed to one chair — the
+   roster paste narrows it by mandal AND role before asking. Asked of a roll of
+   284 officers of whom half are somebody Kumar it answers yes far too often:
+   on the first run of this check "Sandeep Kumar Jha" came back as "Sai kumar",
+   and inside a single mandal two different officers called Kumar would have
+   collided just as readily.
+
+   So this compares the WHOLE name, squashed, at a small distance: Ch.Sai kumar
+   against Sai kumar is an initial and a full stop (2), while Sandeep Kumar
+   against Sai kumar is a different man (5). It is used only to ask whether a
+   number being registered belongs to somebody already on the roll, and whether
+   a row holding a village is the officer’s own earlier row — both of which
+   REPORT and never write. */
+function postSameMan_(a, b){
+  const x = pkey_(a), y = pkey_(b);
+  if(!x || !y) return false;
+  if(x === y) return true;
+  const lim = Math.max(2, Math.floor(Math.min(x.length, y.length) / 4));
+  return postDist_(x, y) <= lim;
 }
 
 /* IS THIS PLACE NAMED IN THE REMARK? Not quite the same question as whether

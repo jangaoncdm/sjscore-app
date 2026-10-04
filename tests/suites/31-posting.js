@@ -343,6 +343,88 @@ module.exports = {
       t.eq(gpsOf(e, '9000000042').length, 2, 'and the proposal wrote nothing');
     }
 
+    /* ---- 7e. TWO VILLAGES OF ONE NAME, TOLD APART BY THE MANDAL ----
+       Theegaram is on the roll in Palakurthi AND Zaffergadh. The list said
+       Zafferghad; an exact mandal match found neither and called it
+       ambiguous. The spelling gets the same tolerance here as everywhere. */
+    {
+      const e = start([
+        { Phone:'9000000050', Name:'M.Rajesh', Role:'PS', Mandal:'Palakurthi', GP:'Eravennu', Email:'m@x', Active:'TRUE' }
+      ], [
+        { Mandal:'Palakurthi', GP:'Theegaram' },
+        { Mandal:'Zaffergadh', GP:'Theegaram' },
+        { Mandal:'Palakurthi', GP:'Eravennu' }
+      ]);
+      const r = post(e, [{ mandal:'Zafferghad', gp:'Theegaram', name:'M.Rajesh', phone:'9000000050',
+        role:'Panchayat Secretary', remark:'Deputted From Gp Eravennu Mandal Palakurthy To Gp Theegaram' }], true);
+      t.eq(r.plans[0].verdict, 'move', 'ZAFFERGHAD IS ZAFFERGADH, so the right Theegaram is found');
+      t.eq(r.plans[0].mandal, 'Zaffergadh', 'and the roll’s own spelling is used');
+
+      /* but a mandal that names neither of them is still ambiguous */
+      const f = post(e, [{ mandal:'Devaruppula', gp:'Theegaram', name:'M.Rajesh', phone:'9000000050',
+        role:'Panchayat Secretary', remark:'Incharge Gp' }], true);
+      t.eq(f.plans[0].verdict, 'ambiguous', 'a mandal naming neither leaves it for the Collector');
+      t.contains(f.plans[0].why, 'Palakurthi and Zaffergadh', 'and both are named');
+    }
+
+    /* ---- 7f. ONE OFFICER, ONE ROW OF HISTORY ----
+       The list carried Sai kumar on 8919632011 while the register already
+       held him as "Ch.Sai kumar" on another number. Registering the new
+       number would have given one man two identities: his attendance, his
+       notices and his leave on the old row and his villages on the new one,
+       and nothing afterwards able to put them back together. */
+    {
+      const e = start([
+        { Phone:'9000000051', Name:'Ch.Sai kumar', Role:'PS', Mandal:'Bachannapeta', GP:'Bachannapeta', Email:'c@x', Active:'TRUE' }
+      ], [
+        { Mandal:'Bachannapeta', GP:'Bachannapeta' },
+        { Mandal:'Bachannapeta', GP:'Basireddypalle' }
+      ]);
+      const r = post(e, [{ mandal:'Bachannapet', gp:'Basireddypalle', name:'Sai kumar',
+        phone:'9000000052', role:'Panchayat Secretary', remark:'Deputed from Bachannapet GP to Basireddypalle' }], true);
+      t.eq(r.plans[0].verdict, 'refused',
+        'A MAN ALREADY ON THE ROLL IS NOT REGISTERED AGAIN ON A NEW NUMBER');
+      t.contains(r.plans[0].why, 'Ch.Sai kumar', 'the officer he already is, is NAMED');
+      t.contains(r.plans[0].why, 'correct the number on that row',
+        'and the cure is named too — the row he has, not a row he has not');
+      t.ok((r.plans[0].twin || []).length === 1, 'and the twin travels with the answer, for the table sent back');
+
+      /* a genuinely new officer of a name nobody carries is still registered */
+      const f = post(e, [{ mandal:'Bachannapet', gp:'Basireddypalle', name:'Somebody Entirely New',
+        phone:'9000000053', role:'Panchayat Secretary', remark:'Incharge Gp' }], true);
+      t.eq(f.plans[0].verdict, 'register', 'a name nobody on the roll carries is registered as usual');
+
+      /* AND IT IS ASKED IN HIS OWN MANDAL, NOT ACROSS THE DISTRICT. sameName_
+         asks whether two names share a word of real length — right when the
+         roll has been narrowed to one chair, far too generous across 284
+         officers of whom half are somebody Kumar. The first run of this check
+         matched the Collector, "Sandeep Kumar Jha", against "Sai kumar". */
+      const g = post(e, [{ mandal:'Bachannapet', gp:'Basireddypalle', name:'Sandeep Kumar',
+        phone:'9000000055', role:'Panchayat Secretary', remark:'Incharge Gp' }], true);
+      t.eq(g.plans[0].verdict, 'register',
+        'an officer of another mandal sharing a common name word is NOT read as the same man');
+    }
+
+    /* ---- 7g. HIS OWN OTHER ROW IS NOT A RIVAL ----
+       The register carried Donthi Praveen Kumar twice, once with his number
+       and once with none, and the proposal read "take Marigidi from Donthi
+       Praveen Kumar" — which says nothing at all to the man reading it. */
+    {
+      const e = start([
+        { Phone:'9000000054', Name:'Donthi Praveen Kumar', Role:'PS', Mandal:'Jangaon', GP:'Peddathanda', Email:'d@x', Active:'TRUE' },
+        { Phone:'',           Name:'Donthi Praveen Kumar', Role:'PS', Mandal:'Jangaon', GP:'Marigidi',    Email:'',    Active:'TRUE' }
+      ], [
+        { Mandal:'Jangaon', GP:'Marigidi' }, { Mandal:'Jangaon', GP:'Peddathanda' }
+      ]);
+      const r = post(e, [{ mandal:'Jangaon', gp:'Marigidi', name:'Donthi Praveen Kumar',
+        phone:'9000000054', role:'Panchayat Secretary',
+        remark:'App not showing for Marigidi (Showing Incharge village Peddathanda)' }], true);
+      t.eq(r.plans[0].releases.length, 1, 'the other row holding it is proposed for release');
+      t.eq(r.plans[0].releases[0].ownRow, true, 'AND IT IS MARKED AS HIS OWN ROW, not a rival officer');
+      t.contains(r.plans[0].releases[0].why, 'the two rows are one man',
+        'and the sentence says so, so the Collector is not asked to take a village off a man from himself');
+    }
+
     /* ---- 8. ONE NUMBER, ONE OFFICER ---- */
     {
       const e = start([
