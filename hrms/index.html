@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4A40CE">
+<title>District HRMS · Jangaon</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
+<style>
+/* THE HOUSE PALETTE, and no webfont — this opens on a handset with no signal
+   and a font fetched from a CDN is a blank screen on a village road. */
+:root{
+  --paper:#F3F4F9; --card:#FFFFFF; --ink:#13162B; --ink-2:#595F7E; --ink-3:#8D93AE;
+  --pri:#4A40CE; --pri-2:#EDECFB; --teal:#0F766E;
+  --ok:#157F4E; --ok-2:#E6F4EC; --warn:#A6681B; --warn-2:#FBF1E3;
+  --bad:#B3261E; --bad-2:#FBEAE9; --line:#E4E6F0;
+  --pad:18px; --r:14px;
+  --sys:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font:15px/1.55 var(--sys);
+  padding-bottom:env(safe-area-inset-bottom)}
+.wrap{max-width:560px;margin:0 auto;padding:0 var(--pad) 36px}
+h1,h2,h3{margin:0;font-weight:650;letter-spacing:-.01em}
+.eyebrow{font:600 11px/1.3 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--pri)}
+.muted{color:var(--ink-2)}
+.tiny{font-size:12.5px;line-height:1.6;color:var(--ink-2)}
+
+header{padding:26px var(--pad) 14px;max-width:560px;margin:0 auto}
+header h1{font-size:23px;margin-top:3px}
+header p{margin:4px 0 0;font-size:13.5px;color:var(--ink-2)}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:16px;margin-bottom:13px}
+.card h2{font-size:15.5px;margin-bottom:9px}
+
+.btn{display:block;width:100%;border:0;border-radius:12px;padding:14px 16px;
+  font:600 15px var(--sys);background:var(--pri);color:#fff;cursor:pointer;min-height:48px}
+.btn[disabled]{opacity:.55;cursor:default}
+.btn.quiet{background:var(--pri-2);color:var(--pri)}
+.btn.ghost{background:transparent;color:var(--ink-2);border:1px solid var(--line)}
+.btn + .btn{margin-top:9px}
+
+label{display:block;font-size:13px;font-weight:600;margin:12px 0 5px}
+input,select,textarea{width:100%;border:1px solid var(--line);border-radius:11px;
+  padding:12px 13px;font:15px var(--sys);background:#fff;color:var(--ink);min-height:46px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--pri);outline-offset:1px}
+textarea{min-height:84px;resize:vertical}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+.msg{margin-top:11px;font-size:13.5px;line-height:1.6;padding:10px 12px;border-radius:11px;display:none}
+.msg.on{display:block}
+.msg.bad{background:var(--bad-2);color:var(--bad)}
+.msg.ok{background:var(--ok-2);color:var(--ok)}
+.msg.info{background:var(--pri-2);color:var(--pri)}
+
+.pill{display:inline-block;font:600 11.5px var(--sys);padding:3px 9px;border-radius:999px}
+.pill.ok{background:var(--ok-2);color:var(--ok)}
+.pill.warn{background:var(--warn-2);color:var(--warn)}
+.pill.bad{background:var(--bad-2);color:var(--bad)}
+.pill.mut{background:#EEF0F6;color:var(--ink-2)}
+
+/* TWO BY TWO ON A PHONE. auto-fit with a floor of 0 put four tiles across a
+   390px screen and broke "Casual leave" over three lines; a 132px floor wraps
+   them instead. */
+.bal{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px}
+.bal div{background:var(--paper);border-radius:11px;padding:11px 12px;min-width:0}
+.bal b{display:block;font-size:21px;line-height:1.2}
+.bal span{font-size:11.5px;color:var(--ink-2)}
+
+.app{border-top:1px solid var(--line);padding:12px 0}
+.app:first-of-type{border-top:0}
+.app .t{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.app .t b{font-size:14.5px}
+.app .d{font-size:13px;color:var(--ink-2);margin-top:2px}
+
+.empty{text-align:center;color:var(--ink-3);font-size:13.5px;padding:18px 6px}
+.hide{display:none!important}
+.foot{margin-top:22px;font-size:12px;line-height:1.7;color:var(--ink-3);text-align:center}
+</style>
+</head>
+<body>
+
+<!-- ══ SIGN IN ══ -->
+<section id="vSignin">
+  <header>
+    <p class="eyebrow">Government of Telangana · Jangaon</p>
+    <h1>District HRMS</h1>
+    <p>Apply for leave, and see what you have left.</p>
+  </header>
+  <div class="wrap">
+    <div class="card">
+      <label for="iPhone">Mobile number</label>
+      <input id="iPhone" type="tel" inputmode="numeric" autocomplete="username" maxlength="13" placeholder="10 digits">
+      <label for="iPin">PIN</label>
+      <input id="iPin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="8" placeholder="Your PIN">
+      <div style="margin-top:14px"><button class="btn" id="bSignin">Sign in</button></div>
+      <div class="msg" id="mSignin" role="alert"></div>
+      <p class="tiny" style="margin-top:13px">Signing in for the first time? Enter your mobile number and
+        press <b>Sign in</b> — you will be asked to choose your own PIN.</p>
+    </div>
+    <p class="foot">Your office holds the establishment. If your number is not recognised,
+      ask it to check the number and the employee id it has against your name.</p>
+  </div>
+</section>
+
+<!-- ══ CLAIM: choose your own PIN ══ -->
+<section id="vClaim" class="hide">
+  <header>
+    <p class="eyebrow">First sign-in</p>
+    <h1 id="claimName">Choose your PIN</h1>
+    <p>Your number is on the district roll and has no PIN yet. Set one now — it is yours and the office never sees it.</p>
+  </header>
+  <div class="wrap">
+    <div class="card">
+      <label for="cEmp">Employee ID</label>
+      <input id="cEmp" autocomplete="off" placeholder="As it appears in your service record">
+      <p class="tiny" style="margin-top:5px">This is how the register knows the number is yours.
+        Your own office holds it.</p>
+      <div class="row2" style="margin-top:4px">
+        <div><label for="cPin">Choose a PIN</label>
+          <input id="cPin" type="password" inputmode="numeric" maxlength="8" placeholder="4 to 8 digits"></div>
+        <div><label for="cPin2">Type it again</label>
+          <input id="cPin2" type="password" inputmode="numeric" maxlength="8" placeholder="Once more"></div>
+      </div>
+      <div style="margin-top:14px"><button class="btn" id="bClaim">Set my PIN and sign in</button></div>
+      <button class="btn ghost" id="bClaimBack" style="margin-top:9px">Back</button>
+      <div class="msg" id="mClaim" role="alert"></div>
+    </div>
+    <p class="foot">A row is claimed once. If a PIN has already been set on your number and it was not you,
+      your office can have it reset.</p>
+  </div>
+</section>
+
+<!-- ══ HOME ══ -->
+<section id="vHome" class="hide">
+  <header>
+    <p class="eyebrow" id="hEyebrow">District HRMS</p>
+    <h1 id="hName">—</h1>
+    <p id="hWho">—</p>
+  </header>
+  <div class="wrap">
+    <div class="card">
+      <h2>This year</h2>
+      <div class="bal" id="hBal"></div>
+      <p class="tiny" style="margin-top:10px">What an application would leave you is worked out against the
+        dates you pick, on the form. Medical leave answers to no yearly figure; a spell of it is capped.</p>
+    </div>
+
+    <button class="btn" id="bApply">Apply for leave</button>
+
+    <div class="card" style="margin-top:13px">
+      <h2>Your applications</h2>
+      <div id="hList"><div class="empty">Nothing yet.</div></div>
+    </div>
+
+    <button class="btn ghost" id="bRefresh">Refresh from the district</button>
+    <button class="btn ghost" id="bOut" style="margin-top:9px">Sign out</button>
+    <p class="foot" id="hFoot">This register records your leave and nothing else.
+      It takes no attendance and raises no notice.</p>
+  </div>
+</section>
+
+<!-- ══ APPLY ══ -->
+<section id="vApply" class="hide">
+  <header>
+    <p class="eyebrow">Apply</p>
+    <h1>Leave application</h1>
+    <p>It goes to the Collector for orders. Nothing is taken from you until it is sanctioned.</p>
+  </header>
+  <div class="wrap">
+    <div class="card">
+      <label for="aType">Kind of leave</label>
+      <select id="aType"></select>
+      <div class="row2">
+        <div><label for="aFrom">From</label><input id="aFrom" type="date"></div>
+        <div><label for="aTo">To</label><input id="aTo" type="date"></div>
+      </div>
+      <div class="msg info on" id="aNote" style="margin-top:12px"></div>
+      <label for="aReason">Reason</label>
+      <textarea id="aReason" placeholder="Briefly, in your own words"></textarea>
+      <label for="aAddr">Address while on leave</label>
+      <input id="aAddr" placeholder="Where you may be reached">
+      <div style="margin-top:14px"><button class="btn" id="bSend">Send for orders</button></div>
+      <button class="btn ghost" id="bCancel" style="margin-top:9px">Not now</button>
+      <div class="msg" id="mApply" role="alert"></div>
+    </div>
+  </div>
+</section>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

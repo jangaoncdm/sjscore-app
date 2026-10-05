@@ -863,11 +863,18 @@ function findByPhone_(phone){
     gp: gps[0] || '',
     gps: gps,
     email: cell_(best.v, t.ix.email),
+    desig: t.ix.designation >= 0 ? cell_(best.v, t.ix.designation) : '',
     hash: hash,
     active: active
   };
 }
-const pub_ = u => ({ name:u.name, role:u.role, phone:u.phone, mandal:u.mandal, mandals:u.mandals, gp:u.gp, gps:u.gps });
+/* THE DESIGNATION TRAVELS WITH HIM. The role is what the code reads — STAFF,
+   EMP, PS — and the designation is what a person is called: "Senior Assistant",
+   "AEE (PR)". Without it on the session the HRMS app greeted a Senior
+   Assistant as "Employee", which is true and useless. It is blank on the two
+   registers that do not carry one, and nothing reads it that did not ask. */
+const pub_ = u => ({ name:u.name, role:u.role, phone:u.phone, mandal:u.mandal, mandals:u.mandals,
+                     gp:u.gp, gps:u.gps, desig:u.desig || '' });
 /* WHAT A ROLE MAY DO IS THE REGISTER'S TO SAY, not this file's. In SJGP the
    district is the DPO, the DLPO and the Collector and the Secretary is a
    viewer; in GP the Revenue Inspectors hold the mandal and nobody is a viewer,

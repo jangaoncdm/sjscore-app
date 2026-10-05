@@ -105,6 +105,19 @@ jobs:
           cp app/manifest-gp.webmanifest gp/manifest.webmanifest && echo "published gp/manifest.webmanifest"
           cp app/privacy-gp.html         gp/privacy.html        && echo "published gp/privacy.html"
           [ -d app/icons ] && cp -r app/icons gp/ || true
+      - name: Publish the District HRMS app to hrms/, leaving its config.js alone
+        # The HRMS app is its OWN page and not a copy of the field app, so
+        # there is nothing to copy from app/ — only the icons, which all three
+        # registers share. It publishes only once hrms/config.js exists, for
+        # the same reason /gp/ does: a folder of app that answers to no server
+        # is worse than no folder.
+        run: |
+          if [ ! -f hrms/config.js ]; then
+            echo "hrms/config.js does not exist yet - the District HRMS app is not published. See DEPLOY-HRMS.md."
+            exit 0
+          fi
+          [ -d app/icons ] && cp -r app/icons hrms/ || true
+          echo "hrms/ is published from its own sources"
       - name: Commit whatever changed
         # The commit message travels as an environment variable, never pasted
         # into the script: a ${{ }} substitution is raw text, and a message
