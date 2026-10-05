@@ -92,12 +92,14 @@ const ck = (ok, what, d) => { if(ok){ pass++; console.log('  PASS  ' + what + (d
   }, n);
 
   /* --- 1. THE FIELD OFFICERS ARE THE DEFAULT --- */
-  ck(!!(await page.$('[data-seg="field"]')), 'the screen carries a segment switch');
-  const chips = await page.$$eval('[data-seg]', els => els.map(e => e.textContent.replace(/\s+/g,' ').trim()));
+  /* THE SWITCH IS A DROPDOWN, by the district's direction of 05.10.2026 — three
+     chips became one picker, which is what a console with ten screens wants. */
+  ck(!!(await page.$('#segSel')), 'the screen carries a segment picker');
+  const chips = await page.$$eval('#segSel option', els => els.map(e => e.textContent.replace(/\s+/g,' ').trim()));
   ck(chips.length === 3, 'with three segments', chips.join(' | '));
-  ck(/Field officers 2?\d\d/.test(chips[0]) && /MPDO office staff 60/.test(chips[1]),
+  ck(/Field officers . \d+/.test(chips[0]) && /MPDO office staff . 60/.test(chips[1]),
      'EACH SAYING HOW MANY, so nobody is hidden by a default', chips.join(' | '));
-  const onNow = await page.$eval('[data-seg].on', e => e.dataset.seg).catch(() => null);
+  const onNow = await page.$eval('#segSel', e => e.value).catch(() => null);
   ck(onNow === 'field', 'and the field officers are the one shown first', String(onNow));
 
   const fPresent = await tile('Present');
@@ -109,7 +111,7 @@ const ck = (ok, what, d) => { if(ok){ pass++; console.log('  PASS  ' + what + (d
      'and the screen says which roll it is showing');
 
   /* --- 2. THE OFFICE STAFF, ON THEIR OWN --- */
-  await page.click('[data-seg="staff"]'); await page.waitForTimeout(600);
+  await page.selectOption('#segSel', 'staff'); await page.waitForTimeout(700);
   ck(Number(await tile('Present')) === 40, 'the staff segment shows the staff present', await tile('Present'));
   ck(Number(await tile('On sanctioned leave')) === 5, 'their own leave');
   /* COUNTED OFF THE TABLE AND NOT OFF THE TILE, because the tile is honestly
@@ -145,7 +147,7 @@ const ck = (ok, what, d) => { if(ok){ pass++; console.log('  PASS  ' + what + (d
      'the fourteen-day trend admits it is everyone, rather than letting the switch imply otherwise');
 
   /* --- 4. EVERYONE --- */
-  await page.click('[data-seg="all"]'); await page.waitForTimeout(600);
+  await page.selectOption('#segSel', 'all'); await page.waitForTimeout(700);
   ck(Number(await tile('Present')) === FIELD.present + 40, 'Everyone adds the two',
      await tile('Present'));
   const txtAll = await page.evaluate(() => document.body.innerText);
@@ -155,7 +157,7 @@ const ck = (ok, what, d) => { if(ok){ pass++; console.log('  PASS  ' + what + (d
   /* --- 5. it survives a re-render, and nothing throws --- */
   await page.click('#nav [data-v="overview"]'); await page.waitForTimeout(400);
   await page.click('#nav [data-v="attendance"]'); await page.waitForTimeout(600);
-  ck(await page.$eval('[data-seg].on', e => e.dataset.seg) === 'all',
+  ck(await page.$eval('#segSel', e => e.value) === 'all',
      'the segment survives leaving the screen and coming back');
   const wide = await page.evaluate(() =>
     document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
