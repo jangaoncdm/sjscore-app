@@ -482,6 +482,65 @@ const TENANTS = {
        what it asks for. */
     gpdp:false,
     roles:['GPO','ARI','MRI','COLLECTOR']
+  },
+
+  /* ======================================================================
+   * HRMS — the district's leave register, and nothing else.
+   *
+   * Ordered 05.10.2026. The whole district applies for leave, tracks it and
+   * sees what it has left; between two and five thousand employees across
+   * every office. It is a THIRD SHEET behind a THIRD /exec, for the reason
+   * the second one is: a logical filter is the wrong boundary for a register
+   * that sanctions leave, and two spreadsheets cannot leak into one another
+   * because there is nothing between them to leak through.
+   *
+   * EVERYTHING BUT LEAVE IS OFF, and off by name rather than by omission, so
+   * that nothing can reach an employee by accident:
+   *
+   *   · NO ATTENDANCE. Nobody marks in here, so every role is attExempt and
+   *     the whole morning machinery — the reminder, the gap report, the seen
+   *     ping — has nobody to walk. A leave register that started chasing five
+   *     thousand people for a mark they were never asked to make would be
+   *     the worst thing this project has ever done;
+   *   · NO SHOW-CAUSE LADDER. There is no attendance to be absent from.
+   *     sanction:false, as the Gram Palana register is;
+   *   · no evaluation, no filing schedule, no development plan, no place of
+   *     duty. None of those is a thing a leave register knows about.
+   *
+   * THE ROLL IS THE DISTRICT'S AND THE PIN IS THE EMPLOYEE'S. The office
+   * seeds the establishment — it is the only body that knows who its
+   * employees are — and the employee claims his own row by choosing a PIN the
+   * first time he signs in, on a number ALREADY on the roll. Self-setup, not
+   * self-registration: on a register that sanctions leave, anybody who could
+   * enrol himself could take leave the district never granted a person it
+   * never employed.
+   *
+   * THE COLLECTOR SANCTIONS, as on both other registers. Delegating to heads
+   * of office is the obvious next order and the seam is left for it
+   * (canApproveLeave_), but a hierarchy nobody has written down is not a
+   * thing to guess at in a register that debits a man's casual leave.
+   * ==================================================================== */
+  HRMS: {
+    key:'HRMS', name:'District HRMS · Jangaon', short:'HRMS',
+    /* an employee, the head of his office, and the sanctioning authority */
+    rank:{EMP:1, HOD:5, COLLECTOR:7},
+    district:['COLLECTOR'],
+    mandal:['HOD'],
+    viewer:[],
+    /* NOBODY MARKS IN. Every role is exempt, so noticeGaps_, the daily
+       report's roll and the attendance reminder all walk an empty list
+       whatever else is switched on. */
+    attExempt:['EMP','HOD','COLLECTOR'],
+    leaveApply:['EMP','HOD'],
+    sanction:false, evaluation:false, schedule:false,
+    placeOfDuty:false,
+    entitlement:{CL:15, EL:30, HQ:0, ML:0, OH:5},
+    gpdp:false,
+    /* THE EMPLOYEE SETS HIS OWN PIN, on a number the district has already put
+       on the roll. The other two registers issue a PIN and print it once;
+       here the office would be printing five thousand of them. */
+    selfPin:true,
+    roles:['EMP','HOD','COLLECTOR']
   }
 };
 let TENANT_CACHE = null;
@@ -5793,9 +5852,22 @@ function doPost(e){
     return holidayLoad_('bootstrap key');
   }
 
+  /* CLAIMING A ROW HAPPENS BEFORE SIGN-IN, because the employee has no token
+     yet — that is the whole point of it. It sits beside login for the same
+     reason login does, and it is the ONLY unauthenticated write on any of
+     these registers; every guard it has is in hrmsClaim_. */
+  if(b.kind === 'claimPin') return hrmsClaim_(b);
+
   if(b.kind === 'login'){
     const u = findByPhone_(b.u || '');
     if(!u || !u.active) return json_({ ok:false, error:'This number is not registered. Contact the District Panchayat Office.' });
+    /* ON A REGISTER WHERE THE EMPLOYEE SETS HIS OWN PIN, a row with none is
+       not a fault to telephone about — it is his to claim. The district seeds
+       five thousand rows and issues no PINs at all, so "contact the office"
+       would be the whole establishment telephoning on the first morning. */
+    if(!u.hash && tenant_().selfPin)
+      return json_({ ok:false, needPin:true, name:u.name,
+        error:'This number is on the roll and has no PIN yet. Choose one now.' });
     if(!u.hash) return json_({ ok:false, error:'No PIN set for this number yet. Contact the District Panchayat Office.' });
     const rk = 'pl_' + u.phone, n = Number(cache_().get(rk) || 0);
     if(n >= MAX_PIN_TRIES) return json_({ ok:false, error:'Too many wrong attempts. Try again after an hour.' });
