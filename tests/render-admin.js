@@ -94,7 +94,7 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
     localStorage.setItem('sjgp-console-seen','{}');
   });
   const page=await ctx.newPage();
-  const errs=[];page.on('pageerror',e=>errs.push(String(e)));
+  const errs=[];page.on('pageerror',e=>errs.push(String(e&&e.stack||e)));
   page.on('dialog',d=>d.accept());
   await page.route('**tile.openstreetmap.org**',r=>r.abort());
   /* THE GRAM PALANA REGISTER, ON ITS OWN ADDRESS. Everything it answers is

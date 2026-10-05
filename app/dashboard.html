@@ -1319,6 +1319,23 @@ function useTenant(k){
   try{ localStorage.setItem('sjgp-console-tenant',k); }catch(e){}
   DATA=null; SCHED=null; ROLL=null; GPDP=null; ADV=null; WX=null;
   SCHEDMSG=''; ROLLMSG=''; ADV_OPEN='';
+  /* EVERYTHING A REGISTER OWNS GOES WITH IT. The list above was written when
+     the console had six caches; five more arrived with the pre-flight, the
+     marking out, the postings, the office staff and the analytics, and not one
+     of them was cleared here. Switching to Gram Palana went on showing Swachh
+     Jangaon’s month, its health and its marking out — reported from the district
+     in those words — and, far worse, a PASTED PROPOSAL survived the switch, so
+     Apply could have written one register’s postings into the other’s roll.
+
+     Every cache is cleared here AND carries the register it came from (see
+     anaPull and loadOutday), because a clear that is forgotten once is a clear
+     that is forgotten, and a stale answer should not be believed even then. */
+  HEALTH=null; HEALTHAT=0; OUTDAY=null;
+  ANA=null; ANA_YM=''; ANA_SEG='field'; ANA_MANDAL=''; ANA_BUSY=false; ANA_ERR='';
+  PST_TEXT=''; PST_PLANS=null; PST_DONE=null;
+  STF_TEXT=''; STF_PLANS=null; STF_DONE=null; STF_PINS=null;
+  TBL_TEXT=''; TBL_PLANS=null; TBL_DONE=null;
+  ASEG='field';
   paintTenant();
   $('#g').setAttribute('aria-busy','true');
   $('#g').innerHTML='';
@@ -1587,7 +1604,10 @@ let ASEG = 'field';
 let ANA = null, ANA_YM = '', ANA_SEG = 'field', ANA_MANDAL = '', ANA_BUSY = false, ANA_ERR = '';
 function anaPull(force){
   const ym = ANA_YM || (DATA && DATA.ym) || new Date().toISOString().slice(0,7);
-  const key = ym + '|' + ANA_SEG + '|' + ANA_MANDAL;
+  /* THE KEY CARRIES THE REGISTER. Without it the answer for Swachh Jangaon was
+     handed straight back for Gram Palana, because the month, the roll and the
+     mandal were the same words. */
+  const key = TVIEW + '|' + ym + '|' + ANA_SEG + '|' + ANA_MANDAL;
   if(!force && ANA && ANA._key === key) return;
   ANA_BUSY = true; ANA_ERR = '';
   fetch(ST.url + '?op=analytics&token=' + encodeURIComponent(ST.token) +
@@ -2855,6 +2875,11 @@ function vTables(j,A,short){
 }
 
 function segSwitch(){
+  /* THE SEGMENT IS SWACHH JANGAON’S. The MPDO office staff are on that roll
+     and no other; on the Gram Palana register the picker would offer a roll
+     of nought, which reads as a register with nobody in it rather than as a
+     question that does not arise there. */
+  if(TVIEW === 'GP') return '';
   const c = segCounts(DATA || { today:{} });
   const opt = (k, label, n) => '<option value="' + k + '"' + (ASEG === k ? ' selected' : '') +
     '>' + label + ' ' + String.fromCharCode(183) + ' ' + n + '</option>';
@@ -2901,10 +2926,11 @@ function vAnalytics(j, A){
     '<label style="font-size:12px;color:var(--tx-2)">Month<select class="rsel" id="anaYm" style="margin-left:7px">' +
       months.map(m => '<option value="' + m + '"' + (m === ym ? ' selected' : '') + '>' + monName(m) + '</option>').join('') +
     '</select></label>' +
-    '<label style="font-size:12px;color:var(--tx-2)">Showing<select class="rsel" id="anaSeg" style="margin-left:7px">' +
+    (TVIEW === 'GP' ? '' :
+      '<label style="font-size:12px;color:var(--tx-2)">Showing<select class="rsel" id="anaSeg" style="margin-left:7px">' +
       ['field','staff','all'].map(k => '<option value="' + k + '"' + (k === ANA_SEG ? ' selected' : '') + '>' +
         (k === 'field' ? 'Field officers' : k === 'staff' ? 'MPDO office staff' : 'Everyone') + '</option>').join('') +
-    '</select></label>' +
+      '</select></label>') +
     '<label style="font-size:12px;color:var(--tx-2)">Mandal<select class="rsel" id="anaMandal" style="margin-left:7px">' +
       '<option value="">Every mandal</option>' +
       mandals.map(m => '<option value="' + esc(m) + '"' + (m === ANA_MANDAL ? ' selected' : '') + '>' + esc(m) + '</option>').join('') +
@@ -3114,7 +3140,10 @@ function dutyCell(r){
 let OUTDAY = null;
 function outCell(r){
   if(r._s !== 'P') return '<td class="mut">—</td>';
-  if(!OUTDAY) return '<td class="mut">···</td>';
+  /* and never another register’s. Gram Palana does not carry marking out at
+     all, so its op=outday is refused and a stale answer would otherwise have
+     sat in this column printing Swachh Jangaon’s times. */
+  if(!OUTDAY || OUTDAY._t !== TVIEW) return '<td class="mut">···</td>';
   const o = (OUTDAY.by || {})[String(r.phone || '').slice(-10)];
   if(!o) return '<td class="mut">—</td>';
   if(o.outAt) return '<td class="num">' + esc(hm(o.outAt)) +
@@ -3139,6 +3168,7 @@ async function loadOutday(){
     if(!r || !r.ok || typeof r.marked !== 'number') return;
     r.by = {};
     (r.rows || []).forEach(x => { r.by[String(x.phone).slice(-10)] = x; });
+    r._t = TVIEW;                      /* whose answer this is */
     OUTDAY = r;
     const b = document.getElementById('attBody');
     if(b && window.__ROWS && window.__ROWS.att)
@@ -3493,8 +3523,13 @@ function vAdmin(j,A){
     : o.error ? '<span class="pill bad">could not be read</span>'
     : (o.ok ? '<span class="pill ok">'+esc(good)+'</span>' : '<span class="pill bad">'+esc(bad2)+'</span>');
   h+=panel('c12','Is the register fit to be changed?',
+    /* (HL.concerns||[]) — a register that answers without the list, because one
+       step of the pre-flight threw and the rest came back, must not take the
+       whole Admin screen down with it. The caches are cleared on a tenant
+       switch now, so the second register's answer is read fresh and this
+       stopped being hypothetical. */
     HL ? (HL.allWell ? '<span class="pill ok">all clear</span>'
-                     : '<span class="pill bad">'+HL.concerns.length+' to see to</span>') : 'reading…',
+                     : '<span class="pill bad">'+(HL.concerns||[]).length+' to see to</span>') : 'reading…',
     HL ? `<div class="twrap"><table>
       <thead><tr><th>Check</th><th>State</th><th>What it says</th></tr></thead><tbody>
         <tr><td>The daily jobs</td><td>${hbit(HL.triggers,'installed','not installed')}</td>
