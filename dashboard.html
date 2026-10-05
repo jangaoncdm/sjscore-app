@@ -841,13 +841,26 @@ body[data-tenant="gp"] .rail .brand b::after{content:" · GP";color:var(--teal);
 .live i{width:8px;height:8px;border-radius:50%;background:var(--green)}
 .live.stale i{background:var(--amber)} .live.down i{background:var(--red)}
 .rsel,.tbtn{background:var(--panel);border:0;border-radius:12px;min-height:44px;padding:0 var(--s2);font-size:13px;color:var(--tx-2);box-shadow:var(--nm-out-sm)}
+/* THE PICKER BAR. A <label> is block-level, so three of them in a flex row
+   still stacked — the labels took the full width and the dropdowns went one
+   under another down the left of the screen. Making them inline-flex fixed
+   that and broke the phone: a label that will not wrap, holding a select
+   whose longest option is "MPDO office staff · 192", pushed 390px sideways
+   by 126. The bar wraps, the label does not, and the select is capped. */
+.segbar label{display:inline-flex;align-items:center;gap:6px;max-width:100%}
+.segbar .rsel{max-width:min(200px,46vw);min-width:0}
+.segbar .expnote{flex:1 1 220px;min-width:0}
+/* the observations: the only prose on the analytics screen, set apart so a
+   reader knows where the figures stop and the sentences begin */
+.obs{margin:2px 0 4px 18px;padding:0}
+.obs li{margin:6px 0;font-size:13.5px;line-height:1.6;color:var(--tx-2)}
 .rsel:active,.tbtn:active{box-shadow:var(--nm-in-sm)}
 /* the one indigo→teal gradient this screen is allowed */
 .tbtn.pri{background:linear-gradient(135deg,var(--grad-a),var(--grad-b));color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(74,64,206,.3)}
 .rsel:hover,.tbtn:hover{color:var(--tx)} .tbtn.pri:hover{color:#fff;filter:brightness(1.06)}
 
 /* ---------- grid & panels ---------- */
-.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:var(--s3)}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--s3)}
 .panel{background:var(--panel);border:0;border-top:3px solid var(--acc,var(--pri));border-radius:var(--r);box-shadow:var(--nm-out);min-width:0}
 #g[data-view="attendance"] .panel{--acc:var(--teal)}
 #g[data-view="villages"] .panel{--acc:var(--violet)}
@@ -1015,9 +1028,17 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
 
 .c3{grid-column:span 3}.c4{grid-column:span 4}.c5{grid-column:span 5}.c6{grid-column:span 6}
 .c7{grid-column:span 7}.c8{grid-column:span 8}.c9{grid-column:span 9}.c12{grid-column:span 12}
-.kpirow{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;grid-column:span 12}
-@media(max-width:1180px){.kpirow{grid-template-columns:repeat(3,1fr)}.c3,.c4,.c5{grid-column:span 6}.c6,.c7,.c8,.c9{grid-column:span 12}}
-@media(max-width:760px){.shell{grid-template-columns:1fr}.rail{position:static;height:auto}.kpirow{grid-template-columns:repeat(2,1fr)}.c3,.c4,.c5,.c6{grid-column:span 12}
+.kpirow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;grid-column:span 12}
+/* `1fr` IS `minmax(auto,1fr)`, AND auto IS THE CONTENT'S WIDTH. The
+   tiles gained longer foot lines — "of 87 who marked in · 23 still open · 3
+   could not serve the hours" — and min-width:auto let one push the whole row
+   132px past the edge of a 390px phone. The row is the grid's to size; the
+   words wrap. */
+.kpirow{min-width:0}
+.kpirow .kpi{min-width:0}
+.kpi .foot,.kpi .hd{overflow-wrap:anywhere}
+@media(max-width:1180px){.kpirow{grid-template-columns:repeat(3,minmax(0,1fr))}.c3,.c4,.c5{grid-column:span 6}.c6,.c7,.c8,.c9{grid-column:span 12}}
+@media(max-width:760px){.shell{grid-template-columns:1fr}.rail{position:static;height:auto}.kpirow{grid-template-columns:repeat(2,minmax(0,1fr))}.c3,.c4,.c5,.c6{grid-column:span 12}
   /* the rail no longer scrolls with the page here, so its footer must live
      in the flow — absolutely positioned, it was landing on the KPI cards */
   .railfoot{position:static;margin-top:10px}}
@@ -1154,6 +1175,7 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
     <nav class="nav" id="nav">
       <button data-v="overview" aria-current="page"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Overview</button>
       <button data-v="attendance"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M4.5 20c1.2-3.6 4-5.4 7.5-5.4s6.3 1.8 7.5 5.4"/></svg>Attendance</button>
+      <button data-v="analytics"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Analytics</button>
       <button data-v="villages"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V9l7-5 7 5v12M9.5 21v-6h5v6"/></svg>Villages</button>
       <button data-v="schedule"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4"/><path d="M8.2 14.2l2.2 2.2 4.4-4.4"/></svg>Schedule</button>
       <button data-v="leave"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>Leave</button>
@@ -1357,7 +1379,7 @@ function initTheme(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '5660b16 - 04 Oct 19:52';
+const BUILD_STAMP = '443df88 - 05 Oct 18:02';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -1558,6 +1580,29 @@ function skewPill(r){
    the fourteen-day trend, which the register works out itself over everybody,
    and it says so on its face rather than pretending. */
 let ASEG = 'field';
+/* THE MONTH'S OWN READING. The register works it out — a dozen thousand rows
+   of Attendance and Leave — and the console only draws it, so the arithmetic
+   exists in one place and the figures here can never drift from the ones the
+   ladder and the daily report read. */
+let ANA = null, ANA_YM = '', ANA_SEG = 'field', ANA_MANDAL = '', ANA_BUSY = false, ANA_ERR = '';
+function anaPull(force){
+  const ym = ANA_YM || (DATA && DATA.ym) || new Date().toISOString().slice(0,7);
+  const key = ym + '|' + ANA_SEG + '|' + ANA_MANDAL;
+  if(!force && ANA && ANA._key === key) return;
+  ANA_BUSY = true; ANA_ERR = '';
+  fetch(ST.url + '?op=analytics&token=' + encodeURIComponent(ST.token) +
+        '&ym=' + encodeURIComponent(ym) + '&seg=' + encodeURIComponent(ANA_SEG) +
+        (ANA_MANDAL ? '&mandal=' + encodeURIComponent(ANA_MANDAL) : '') +
+        '&t=' + Date.now(), { cache:'no-store' })
+    .then(r => r.json())
+    .then(j => {
+      ANA_BUSY = false;
+      if(!j || !j.ok){ ANA_ERR = (j && j.error) || 'The register did not answer.'; ANA = null; }
+      else { j._key = key; ANA = j; }
+      if(VIEW === 'analytics' && DATA) render(DATA);
+    })
+    .catch(e => { ANA_BUSY = false; ANA_ERR = String(e); if(VIEW === 'analytics' && DATA) render(DATA); });
+}
 const isStaff = r => String((r && r.role) || '').toUpperCase() === 'STAFF';
 function segCounts(j){
   const all = [].concat(j.today.present || [], j.today.onLeave || [], j.today.absent || []);
@@ -2811,12 +2856,14 @@ function vTables(j,A,short){
 
 function segSwitch(){
   const c = segCounts(DATA || { today:{} });
-  const one = (k, label, n) => '<button class="fchip' + (ASEG === k ? ' on' : '') +
-    '" data-seg="' + k + '">' + label + ' <b>' + n + '</b></button>';
-  return '<div class="segbar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">' +
-    one('field', 'Field officers', c.field) + one('staff', 'MPDO office staff', c.staff) +
-    one('all', 'Everyone', c.all) +
-    '<span class="expnote" style="margin-left:4px">' +
+  const opt = (k, label, n) => '<option value="' + k + '"' + (ASEG === k ? ' selected' : '') +
+    '>' + label + ' ' + String.fromCharCode(183) + ' ' + n + '</option>';
+  return '<div class="segbar" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">' +
+    '<label style="font-size:12px;color:var(--tx-2)">Showing' +
+    '<select class="rsel" id="segSel" style="margin-left:7px">' +
+    opt('field', 'Field officers', c.field) + opt('staff', 'MPDO office staff', c.staff) +
+    opt('all', 'Everyone', c.all) + '</select></label>' +
+    '<span class="expnote">' +
     (ASEG === 'staff'
       ? 'The office staff mark in and apply for leave. No show-cause notice, no casual-leave debit and no lock on the app arises from this screen.'
       : ASEG === 'field'
@@ -2824,6 +2871,129 @@ function segSwitch(){
         : 'Both rolls together. They answer to different rules, so read the parts rather than the total.') +
     '</span></div>';
 }
+/* ANALYTICS — a month, read every way at once.
+
+   A grid of cards, each answering one question, in the console's own panels
+   and its own validated series: the day by day, the weekday, the hour of the
+   mark, the mandals ranked, what the location readings were worth, and the
+   officers who were absent most. The observations sit at the foot in their own
+   block because they are the only prose on the screen and a reader should know
+   where the figures stop and the sentences begin.
+
+   IT ACCUSES NOBODY and says so on its face. The officer table names who was
+   absent most often because that is a fact a review asks for; what it MEANS is
+   the Collector's to read on the facts, which is the same restraint as rule
+   10 and as the filing schedule's. */
+function vAnalytics(j, A){
+  let h = '';
+  const ym = ANA_YM || (DATA && DATA.ym) || new Date().toISOString().slice(0,7);
+  /* the mandal list is taken from today's own rows, which the payload always
+     carries — the advisory roll is only loaded on its own screen */
+  const mandals = (function(){ const t2 = (DATA && DATA.today) || {}; const set = {};
+    [].concat(t2.present||[], t2.onLeave||[], t2.absent||[]).forEach(r => { if(r.mandal) set[r.mandal] = 1; });
+    return Object.keys(set).sort(); })();
+  const months = [];
+  { let y = Number(ym.slice(0,4)), m = Number(ym.slice(5,7));
+    for(let i = 0; i < 12; i++){ months.push(y + '-' + String(m).padStart(2,'0'));
+      m--; if(m === 0){ m = 12; y--; } } }
+
+  h += '<div class="segbar" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">' +
+    '<label style="font-size:12px;color:var(--tx-2)">Month<select class="rsel" id="anaYm" style="margin-left:7px">' +
+      months.map(m => '<option value="' + m + '"' + (m === ym ? ' selected' : '') + '>' + monName(m) + '</option>').join('') +
+    '</select></label>' +
+    '<label style="font-size:12px;color:var(--tx-2)">Showing<select class="rsel" id="anaSeg" style="margin-left:7px">' +
+      ['field','staff','all'].map(k => '<option value="' + k + '"' + (k === ANA_SEG ? ' selected' : '') + '>' +
+        (k === 'field' ? 'Field officers' : k === 'staff' ? 'MPDO office staff' : 'Everyone') + '</option>').join('') +
+    '</select></label>' +
+    '<label style="font-size:12px;color:var(--tx-2)">Mandal<select class="rsel" id="anaMandal" style="margin-left:7px">' +
+      '<option value="">Every mandal</option>' +
+      mandals.map(m => '<option value="' + esc(m) + '"' + (m === ANA_MANDAL ? ' selected' : '') + '>' + esc(m) + '</option>').join('') +
+    '</select></label>' +
+    (ANA_BUSY ? '<span class="expnote">reading the month…</span>' : '') +
+    '</div>';
+
+  if(ANA_ERR) return h + panel('c12','The month could not be read', '', "<div class=\"empty\">" + esc(ANA_ERR) + '</div>');
+  if(!ANA) return h + panel('c12','Reading the month', '', '<div class="empty">The register is working it out…</div>');
+  const a = ANA;
+
+  /* ---- the figures of the month ---- */
+  h += '<div class="kpirow">';
+  h += kpi('Working days', IC.cal || IC.u, a.workingDays, '', monName(a.ym));
+  h += kpi('On the roll', IC.u, a.roll.officers, '',
+    Object.keys(a.roll.byRole || {}).map(r => r + ' ' + a.roll.byRole[r]).join(' · ') || '—');
+  const avg = a.days.length ? Math.round(a.days.reduce((s2,d) => s2 + d.pct, 0) / a.days.length) : 0;
+  h += kpi('Average attendance', IC.u, avg + '%', '', 'of the roll, day by day');
+  h += kpi('Marks in the month', IC.u, a.marks, '', a.late + ' at or after 11:00');
+  const loc = a.location.recorded + a.location.nofix + a.location.untrusted;
+  h += kpi('Location recorded', IC.u, loc ? Math.round(a.location.recorded * 100 / loc) + '%' : '—',
+    '', a.location.untrusted + ' not trustworthy');
+  h += '</div>';
+
+  /* ---- day by day ---- */
+  h += panel('c12','Attendance day by day · ' + monName(a.ym),
+    a.roll.officers + ' on the roll',
+    '<div class="plot">' + Charts.bar(a.days.map(d => ({ label:d.date.slice(8), value:d.pct })),
+      { max:100, suffix:'%', color:'var(--cs1)', emptyMsg:'No working day in this month.' }) + '</div>');
+
+  /* ---- the composition of the month ---- */
+  const tot = a.days.reduce((s2,d) => ({ p:s2.p + d.present, l:s2.l + d.leave, u:s2.u + d.unmarked }), { p:0,l:0,u:0 });
+  h += panel('c6','What the month was made of','person-days',
+    '<div class="plot">' + Charts.stack([
+      { label:'Marked', value:tot.p, color:Charts.ST.ok },
+      { label:'Sanctioned leave', value:tot.l, color:Charts.ST.warn },
+      { label:'Not marked', value:tot.u, color:Charts.ST.bad }],
+      { center:tot.p + tot.l + tot.u, centerLabel:'person-days', emptyMsg:'Nothing in this month.' }) + '</div>');
+
+  h += panel('c6','What the location readings were worth','of ' + a.marks + ' marks',
+    '<div class="plot">' + Charts.stack([
+      { label:'Good to 250 m', value:a.location.recorded, color:Charts.ST.ok },
+      { label:'No usable fix', value:a.location.nofix, color:Charts.ST.warn },
+      { label:'Not trustworthy', value:a.location.untrusted, color:Charts.ST.bad }],
+      { center:a.marks, centerLabel:'marks', emptyMsg:'No mark in this month.' }) + '</div>' +
+    '<div class="expnote" style="margin-top:8px">A reading says how precise it was, never where he ought to have been.</div>');
+
+  /* ---- weekday and hour ---- */
+  h += panel('c6','Attendance by weekday','which day of the week runs thin',
+    '<div class="plot">' + Charts.bar(a.weekday.map(w => ({ label:w.day.slice(0,3), value:w.pct })),
+      { max:100, suffix:'%', color:'var(--cs2)', emptyMsg:'No day to compare.' }) + '</div>');
+
+  h += panel('c6','The hour the mark was made','every mark in the month',
+    '<div class="plot">' + Charts.bar(a.hours.map(x => ({ label:String(x.hour), value:x.n })),
+      { color:'var(--co3)', emptyMsg:'No mark in this month.' }) + '</div>' +
+    '<div class="expnote" style="margin-top:8px">Read on the district’s clock, the earlier of his claim and our receipt — a handset that is fast cannot move it.</div>');
+
+  /* ---- the mandals ---- */
+  h += panel('c12','The mandals, ranked','marks against working days · best first',
+    a.mandals.length
+      ? '<div class="twrap" style="max-height:420px"><table><thead><tr><th>Mandal</th><th>Officers</th>' +
+        '<th>Marks</th><th>Rate</th><th></th></tr></thead><tbody>' +
+        a.mandals.map(m => '<tr><td>' + esc(m.mandal) + '</td><td class="num mut">' + m.officers + '</td>' +
+          '<td class="num mut">' + m.marks + '</td><td class="num">' + m.pct + '%</td>' +
+          '<td style="width:38%"><div class="bar"><i style="width:' + m.pct + '%;background:var(--cs1)"></i></div></td></tr>').join('') +
+        '</tbody></table></div>'
+      : '<div class="empty">No mandal to rank.</div>');
+
+  /* ---- officer by officer ---- */
+  h += panel('c12','Officer by officer','absent most often first · ' + a.officers.length + ' on the roll',
+    '<input class="find" id="anaFind" placeholder="Search name, role or mandal" style="margin-bottom:9px">' +
+    '<div class="twrap" style="max-height:460px"><table><thead><tr><th>Officer</th><th>Role</th>' +
+    '<th>Mandal</th><th>Marked</th><th>Not marked</th><th>Longest run</th><th>Late</th><th>Rate</th>' +
+    '</tr></thead><tbody id="anaBody">' + a.officers.map(o =>
+      '<tr data-f="' + esc((o.name + ' ' + o.role + ' ' + (o.desig||'') + ' ' + (o.mandal||'')).toLowerCase()) + '">' +
+      '<td>' + esc(o.name) + (o.desig ? '<br><span class="mut" style="font-size:11px">' + esc(o.desig) + '</span>' : '') + '</td>' +
+      '<td class="mut">' + esc(o.role) + '</td><td class="mut">' + esc(o.mandal || '—') + '</td>' +
+      '<td class="num">' + o.present + '</td><td class="num">' + o.unmarked + '</td>' +
+      '<td class="num mut">' + (o.longest || '—') + '</td><td class="num mut">' + (o.late || '—') + '</td>' +
+      '<td class="num">' + o.pct + '%</td></tr>').join('') + '</tbody></table></div>' +
+    '<div class="expnote" style="margin-top:9px"><b>It accuses nobody.</b> A run of unmarked days is a fact to read and not a finding: sanctioned leave is already taken out of it, but a mandal meeting, a day at the Collectorate, a tour and a handset with no signal all look the same from here. What it means is yours to read on the facts.</div>');
+
+  /* ---- and the observations, which are arithmetic ---- */
+  h += panel('c12','What the month says','every line carries its own figure',
+    '<ul class="obs">' + (a.observations || []).map(o => '<li>' + esc(o) + '</li>').join('') + '</ul>' +
+    '<div class="expnote" style="margin-top:6px">Worked out from the register, not generated: each sentence names the number it came from, so it can be checked against the figures above.</div>');
+  return h;
+}
+
 function vAttendance(j,A){
   let h='';
   if(A.off) h+=panel('c12','Holiday — '+esc(A.off),'attendance is optional today',
@@ -4796,8 +4966,12 @@ function render(j){
   /* the poll must not eat a half-typed question */
   const ai=$('#askIn'), aiVal=ai?ai.value:'', aiFoc=ai&&document.activeElement===ai;
   const keep={}; document.querySelectorAll('#g [data-k]').forEach(el=>keep[el.dataset.k]=el.scrollTop);
+  /* THE MONTH IS ASKED FOR WHEN THE SCREEN IS OPENED, not on every poll: it
+     is a dozen thousand rows and the register caches it for ten minutes. */
+  if(VIEW==='analytics') anaPull(false);
   $('#g').innerHTML = VIEW==='overview'?vOverview(j,A)
     : VIEW==='attendance'?(function(){const js=segJ(j);return vAttendance(js,ASEG==='all'?A:analyse(js));})()
+    : VIEW==='analytics'?vAnalytics(j,A)
     : VIEW==='villages'?vVillages(j,A)
     : VIEW==='schedule'?vSchedule(j,A)
     : VIEW==='leave'?vLeave(j,A)
@@ -4908,6 +5082,21 @@ function publishAdvisory(){
 }
 
 /* ---------------- interactions ---------------- */
+/* THE SCREEN'S OWN DROPDOWNS. A <select> fires `change` and not `click`, and
+   these are re-created by every render, so they are read here rather than
+   bound one by one after each draw — the same reason the click handler
+   below is one listener and not forty. */
+document.addEventListener('change', e => {
+  const id = e.target && e.target.id;
+  if(id === 'segSel'){ ASEG = e.target.value; if(DATA) render(DATA); return; }
+  if(id === 'anaYm' || id === 'anaSeg' || id === 'anaMandal'){
+    if(id === 'anaYm') ANA_YM = e.target.value;
+    if(id === 'anaSeg') ANA_SEG = e.target.value;
+    if(id === 'anaMandal') ANA_MANDAL = e.target.value;
+    anaPull(false); if(DATA) render(DATA); return;
+  }
+});
+
 document.addEventListener('click',e=>{
   if(e.target.closest('[data-close]')){ $('#drawer').hidden=true; return; }
   const mt=e.target.closest('.mtab');
