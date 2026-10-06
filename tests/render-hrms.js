@@ -97,6 +97,7 @@ function serve(){
 
   /* ---- 1. the first sign-in ---- */
   ck(await page.isVisible('#vSignin'), 'the app opens on sign in');
+  await page.screenshot({ path: path.join(OUT, '0-sign-in.png') });
   await page.fill('#iPhone', '9444400001');
   await page.fill('#iPin', '1234');
   await page.click('#bSignin'); await page.waitForTimeout(700);
@@ -135,7 +136,7 @@ function serve(){
   ck(/no yearly limit/.test(bal),
      'AND MEDICAL LEAVE IS NOT DRAWN AS A BALANCE OF NOUGHT — which reads as "none left", the opposite of the rule');
   ck(!/Permission to leave headquarters/.test(bal), 'the headquarters permission is not a balance either');
-  await page.screenshot({ path: path.join(OUT, '2-home.png') });
+  await page.screenshot({ path: path.join(OUT, '2-home-empty.png') });
 
   /* ---- 3. he applies ---- */
   await page.click('#bApply'); await page.waitForTimeout(400);
@@ -146,6 +147,7 @@ function serve(){
   const n1 = await page.textContent('#aNote');
   ck(/2 day\(s\)/.test(n1), 'the days are counted as he picks them', n1);
   ck(/this would leave you/.test(n1), 'and what it would leave him is worked out live', n1);
+  await page.screenshot({ path: path.join(OUT, '3-apply.png') });
 
   await page.click('#bSend'); await page.waitForTimeout(500);
   ck(/reason is needed/.test(await page.textContent('#mApply')), 'a reason is required — the orders are passed on it');
@@ -157,6 +159,7 @@ function serve(){
   const list = await page.textContent('#hList');
   ck(/Casual leave/.test(list), 'the application is on it', list.replace(/\s+/g,' ').slice(0, 70));
   ck(/awaiting orders/.test(list), 'AWAITING ORDERS — nothing is taken from him until it is sanctioned');
+  await page.screenshot({ path: path.join(OUT, '4-home-applied.png') });
   ck(E.sheets['Leave'].rows.length === 2, 'and the register holds exactly one row for it',
      (E.sheets['Leave'].rows.length - 1) + ' row(s)');
 
@@ -169,6 +172,7 @@ function serve(){
   ck(await page.isVisible('#vApply'), 'an overlapping spell leaves him on the form');
   const om = await page.textContent('#mApply');
   ck(/already|overlap/i.test(om), 'AND THE REFUSAL IS THE REGISTER’S OWN, through saveLeave_', om.slice(0, 70));
+  await page.screenshot({ path: path.join(OUT, '5-refused-overlap.png') });
   ck(E.sheets['Leave'].rows.length === 2, 'nothing was written for it');
 
   /* ---- 5. NOTHING IS SHOWN AS SENT THAT WAS NOT ---- */
@@ -180,6 +184,7 @@ function serve(){
   ck(/nothing has been applied for/.test(dm),
      'A LINE THAT DROPPED SAYS NOTHING HAS BEEN APPLIED FOR — an application is a request for orders, not a fact the handset can hold', dm.slice(0, 80));
   ck(await page.isVisible('#vApply'), 'and he is left on the form, not told it went');
+  await page.screenshot({ path: path.join(OUT, '6-no-line.png') });
   dead = false;
 
   /* ---- 6. he signs out and back in with his own PIN ---- */
@@ -190,6 +195,24 @@ function serve(){
   await page.click('#bSignin'); await page.waitForTimeout(900);
   ck(await page.isVisible('#vHome'), 'and back in with the PIN HE chose');
   ck(/Casual leave/.test(await page.textContent('#hList')), 'his application is still there');
+
+  /* ---- 6b. and the same screen once the Collector has passed orders ---- */
+  {
+    const cdm = E.ctx.issueToken_(E.ctx.findByPhone_('9000000001'));
+    /* the kind is `leaveDecision` and the field is `status` — passing
+       `decideLeave`/`decision` falls through doPost to the last guard and
+       comes back as "this register does not take village evaluations", which
+       is the fall-through this project has a rule about and which doGet's
+       tail was closed for. */
+    const mine = E.get('leave', { token:cdm }).rows || [];
+    const id = (mine.filter(function(x){ return String(x.phone).indexOf('9444400001') >= 0; })[0] || {}).id;
+    if(id) E.post({ kind:'leaveDecision', token:cdm, id:id, status:'APPROVED', remarks:'' });
+    await page.click('#bRefresh'); await page.waitForTimeout(900);
+    const after = await page.textContent('#hList');
+    ck(/approved/i.test(after), 'a sanctioned application shows as approved on his own page',
+       (after.replace(/\s+/g,' ').match(/[^·]{0,40}approved/i) || [''])[0]);
+    await page.screenshot({ path: path.join(OUT, '7-approved.png') });
+  }
 
   /* ---- 7. it is a leave register and says so ---- */
   const foot = await page.textContent('#hFoot');
