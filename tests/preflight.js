@@ -51,9 +51,12 @@ const LEARN = { 'District HRMS': '/hrms/config.js' };
 
 let stop = 0, warn = 0;
 const PAD = 34;
-const ok   = (what, detail) => console.log('  ✓  ' + what.padEnd(PAD) + (detail || ''));
-const note = (what, detail) => { warn++; console.log('  !  ' + what.padEnd(PAD) + (detail || '')); };
-const bad  = (what, detail) => { stop++; console.log('  ✗  ' + what.padEnd(PAD) + (detail || '')); };
+/* padEnd does nothing to a label already past the column, so a long one ran
+   straight into its own detail — 'answered on the second askHTTP 404'. */
+const col  = what => what.length < PAD ? what.padEnd(PAD) : what + '  ';
+const ok   = (what, detail) => console.log('  ✓  ' + col(what) + (detail || ''));
+const note = (what, detail) => { warn++; console.log('  !  ' + col(what) + (detail || '')); };
+const bad  = (what, detail) => { stop++; console.log('  ✗  ' + col(what) + (detail || '')); };
 const sh = c => execSync(c, { cwd: ROOT, stdio:['ignore','pipe','ignore'] }).toString().trim();
 
 function fetch(url, ms){
