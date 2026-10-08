@@ -126,6 +126,25 @@ Console ▸ Admin ▸ **Has the register reached them?** shows how many have
 claimed, names those who have not, and gives the standing code against each —
 with a CSV, so an office can be sent only its own.
 
+## 7 — Passing orders
+
+**In the app, as on both other registers.** Sign in to `/hrms/` with your own
+number and PIN; **Applications awaiting your orders** is on the home screen and
+nobody else is offered it (the server re-checks that anyway). Sanction one,
+refuse one with your own words — which travel back to the employee and stand on
+the register — or sanction the lot. Each still answers its own checks in turn,
+so one that cannot be sanctioned is refused **by name** and stays waiting for
+your own look. Refusals are never passed over a list.
+
+The console's **Leave** view shows the same waiting list and the recent orders,
+and is where to read the register; the orders themselves are passed in the app.
+
+**Only the Collector orders.** The head of an office cannot sanction his own
+staff's leave. Delegating is the obvious next order and the seam is left for it
+in `canApproveLeave_` — but a hierarchy nobody has written down is not a thing
+to guess at on a register that debits a man's casual leave, so suite 34 is
+changed first, deliberately.
+
 ## What to watch
 
 - **One mail allowance.** All three registers run as the same deploying user

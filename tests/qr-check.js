@@ -68,11 +68,28 @@ function turn(img){
 const CASES = [
   { what: 'the Gram Palana app', text: 'https://jangaoncdm.github.io/sjscore-app/gp/' },
   { what: 'the sanitation app',     text: 'https://jangaoncdm.github.io/sjscore-app/' },
+  /* THE DISTRICT HRMS. It is a longer address and comes out a version larger
+     — 33×33 rather than 29×29 — so it is genuinely different bytes through a
+     different code path, and a square nobody has decoded is exactly what this
+     file exists for. */
+  { what: 'the District HRMS app',  text: 'https://jangaoncdm.github.io/sjscore-app/hrms/' },
   { what: 'a short address',        text: 'https://x.in/' },
   { what: 'a long address',         text: 'https://jangaoncdm.github.io/sjscore-app/gp/index.html?from=collectorate&v=2' },
   { what: 'punctuation and case',   text: 'HTTPS://Jangaon.TG.GOV.IN/a_b-c~d/?q=1&r=2#top' }
 ];
 const SIZES = [4, 8, 14];        /* module size in pixels: small print to a poster */
+
+/* AND NO CARD MAY BE PRINTED THAT IS NOT DECODED HERE. The cases above are
+   typed out, and a fourth card was added to install-cards.js without one —
+   which is a square going to several thousand people that no decoder had ever
+   read. The card list is READ off that file rather than required from it,
+   because requiring it writes the cards. */
+const CARD_URLS = (function(){
+  const src = require('fs').readFileSync(require('path').join(__dirname, 'install-cards.js'), 'utf8');
+  const out = [];
+  for(const m of src.matchAll(/^\s*url:\s*'([^']+)'/gm)) out.push(m[1]);
+  return out;
+})();
 
 const results = [];
 const check = (name, pass, detail) => {
@@ -135,6 +152,16 @@ const check = (name, pass, detail) => {
   let refused = false;
   try{ QR.svg('x'.repeat(400)); }catch(e){ refused = /longer than this encoder goes/.test(String(e.message)); }
   check('an address beyond the encoder is REFUSED, not printed wrong', refused);
+
+  /* EVERY CARD THE PROJECT PRINTS HAS BEEN DECODED ABOVE. A card added without
+     a case here is a square going out to several thousand people that no
+     decoder has ever read — and nobody finds out by looking, because a QR is
+     unreadable to a person by design and the failure lands on all of them at
+     once. */
+  const uncovered = CARD_URLS.filter(u => !CASES.some(c => c.text === u));
+  check('every printed card’s square is decoded here', uncovered.length === 0,
+    uncovered.length ? 'not decoded: ' + uncovered.join(', ')
+                     : CARD_URLS.length + ' card address(es), all covered');
 
   const pass = results.filter(r => r.pass).length;
   console.log('\n' + pass + '/' + results.length + ' checks passed');

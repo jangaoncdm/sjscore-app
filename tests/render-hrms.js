@@ -214,7 +214,84 @@ function serve(){
     await page.screenshot({ path: path.join(OUT, '7-approved.png') });
   }
 
+  /* ---- 6c. THE EMPLOYEE IS NOT OFFERED ORDERS ---- */
+  ck(await page.isHidden('#bOrders'),
+     'an employee is never offered the orders screen — it is not his');
+
+  /* ---- 6d. AND THE COLLECTOR PASSES THEM, IN THE APP ----
+
+     Every order on every one of these registers is passed in the field app;
+     the console only shows the waiting list. This app had no such screen at
+     all, so there was no way on earth to sanction a single application on the
+     register whose whole purpose is leave. */
+  {
+    /* a second employee, so there is something still waiting */
+    E.post({ kind:'hrmsSeed', token:E.ctx.issueToken_(E.ctx.findByPhone_('9000000001')),
+      rows:[{ name:'B. Waiting', office:'DPO', desig:'Typist', emp:'JN/7', phone:'9444400003' }] });
+    E.post({ kind:'claimPin', u:'9444400003', emp:'JN/7', pin:'3333' });
+    const tok2 = E.post({ kind:'login', u:'9444400003', p:'3333' }).token;
+    E.post({ kind:'leave', token:tok2, leave:{ id:'HR-W1', type:'CL',
+      from:'2026-11-10', to:'2026-11-10', days:1, reason:'Village work.' } });
+    E.post({ kind:'leave', token:tok2, leave:{ id:'HR-W2', type:'EL',
+      from:'2026-12-01', to:'2026-12-03', days:3, reason:'Marriage at home.' } });
+
+    await page.click('#bOut'); await page.waitForTimeout(400);
+    /* the Collector signs in with a PIN of his own, set the same way */
+    E.post({ kind:'claimPin', u:'9000000001', emp:'', pin:'9090' });
+    const code = (E.get('hrmsClaims', { token:E.ctx.issueToken_(E.ctx.findByPhone_('9000000001')) }).open || [])
+      .filter(function(o){ return o.phone === '9000000001'; })[0];
+    /* the Collector's row is not on the rollout list — he is seeded with the
+       register, so his PIN is issued the way every other Collector PIN is */
+    E.sheets['Users'].rows.forEach(function(r){
+      if(String(r[0]).replace(/\D/g, '').slice(-10) === '9000000001') r[7] = E.ctx.hash_('9000000001', '9090'); });
+
+    await page.fill('#iPhone', '9000000001'); await page.fill('#iPin', '9090');
+    await page.click('#bSignin'); await page.waitForTimeout(1200);
+    ck(await page.isVisible('#vHome'), 'the Collector signs in');
+    ck(await page.isVisible('#bOrders'), 'AND HE IS OFFERED THE ORDERS SCREEN');
+    ck(/2/.test(await page.textContent('#bOrdersN')), 'with what is waiting counted on the button',
+       (await page.textContent('#bOrdersN')).trim());
+
+    await page.click('#bOrders'); await page.waitForTimeout(900);
+    ck(await page.isVisible('#vOrders'), 'it opens');
+    const ol = await page.textContent('#oList');
+    ck(/B\. Waiting/.test(ol), 'naming the employee');
+    ck(/Typist/.test(ol) && /DPO/.test(ol), 'with his designation and office, so an order is passed on a person');
+    ck(/Marriage at home/.test(ol), 'and the reason the orders are passed on');
+    await page.screenshot({ path: path.join(OUT, '8-orders.png') });
+
+    /* SANCTION ONE */
+    await page.click('[data-ok="HR-W1"]'); await page.waitForTimeout(1000);
+    ck(/Sanctioned/.test(await page.textContent('#mOrders')), 'one is sanctioned');
+    const row = E.sheets['Leave'].rows.filter(function(r){ return r[0] === 'HR-W1'; })[0];
+    ck(String(row[14]).toUpperCase() === 'APPROVED', 'AND THE REGISTER SAYS SO', String(row[14]));
+    ck(!/B\. Waiting[\s\S]*Village work/.test(await page.textContent('#oList')) ||
+       !/Village work/.test(await page.textContent('#oList')),
+       'and it leaves the waiting list by itself');
+
+    /* A REFUSAL CARRIES ITS OWN WORDS */
+    page.once('dialog', d => d.accept('   '));
+    await page.click('[data-no="HR-W2"]'); await page.waitForTimeout(700);
+    ck(/needs its reason/.test(await page.textContent('#mOrders')),
+       'A REFUSAL WITH NO WORDS IS REFUSED — they are what the employee is told');
+    const still = E.sheets['Leave'].rows.filter(function(r){ return r[0] === 'HR-W2'; })[0];
+    ck(String(still[14] || 'PENDING').toUpperCase() === 'PENDING', 'and nothing was written by it');
+
+    page.once('dialog', d => d.accept('The office cannot spare you that week.'));
+    await page.click('[data-no="HR-W2"]'); await page.waitForTimeout(1000);
+    ck(/Refused, and the employee is told why/.test(await page.textContent('#mOrders')), 'with words, it is refused');
+    const gone = E.sheets['Leave'].rows.filter(function(r){ return r[0] === 'HR-W2'; })[0];
+    ck(String(gone[14]).toUpperCase() === 'REJECTED', 'the register records the refusal');
+    ck(String(gone[17] || '').indexOf('cannot spare') >= 0,
+       'AND KEEPS THE WORDS — nothing is destroyed (rule 7)', String(gone[17] || ''));
+    await page.screenshot({ path: path.join(OUT, '9-orders-passed.png') });
+
+    const ow = await page.evaluate(() => document.body.innerText);
+    ck(!/show.?cause|debit/i.test(ow), 'and the orders screen names no sanction either');
+  }
+
   /* ---- 7. it is a leave register and says so ---- */
+  await page.click('#bOrdersBack').catch(() => {}); await page.waitForTimeout(400);
   const foot = await page.textContent('#hFoot');
   ck(/takes no attendance and raises no notice/.test(foot),
      'the page says plainly that it takes no attendance and raises no notice', foot.trim().slice(0, 60));

@@ -62,7 +62,29 @@ const CARDS = [
     accent: '#4A40CE',
     /* the card reads "issued by the ...", so the office is named plainly */
     office: 'MPDO Office of your own mandal',
-    note: 'Attendance and leave. No village evaluation, no development plan, and no show-cause notice — this register records your attendance and your leave, and nothing else.' }
+    note: 'Attendance and leave. No village evaluation, no development plan, and no show-cause notice — this register records your attendance and your leave, and nothing else.' },
+  /* THE THIRD REGISTER, AND THE ONE CARD THAT CANNOT SAY "COLLECT YOUR PIN".
+     On the other two the district issues a PIN and prints it once. Here the
+     EMPLOYEE chooses his own, because an office printing five thousand of
+     them is five thousand chances to hand one to the wrong man — and what it
+     gives him instead is a six-character enrolment code, used once and
+     finished with. A card that sent him to an office for a PIN would send
+     several thousand people to ask for a thing that does not exist. */
+  { file: 'install-hrms.html',
+    tag: 'District HRMS · Leave',
+    who: 'Every employee of the district · Collectorate and all offices',
+    url: 'https://jangaoncdm.github.io/sjscore-app/hrms/',
+    accent: '#4A40CE',
+    office: 'office you work in',
+    signin: 'Sign in with <b>your own mobile number</b>. The first time, the app will ask for '
+          + 'your <b>employee id or the six-character enrolment code</b> your office was given '
+          + 'for you — and then you <b>choose your own PIN</b>. Nobody else ever learns it.',
+    pinnote: 'If the number is not accepted, your own office holds the establishment: ask it to check '
+           + 'the number against your name, and for the employee id or enrolment code it has for you. '
+           + 'The code is used once. No PIN is ever issued, printed or sent by message — it is yours '
+           + 'and the register stores no copy of it.',
+    note: 'Apply for leave, see where an application stands, and see what the year has left you. '
+        + 'It takes no attendance: there is no marking in, no reminder and no show-cause notice on this register.' }
 ];
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
@@ -115,8 +137,8 @@ function card(c){
     <li>Point the phone camera at the square, or type the address above into Chrome.</li>
     <li>Chrome will offer <b>Add to Home screen</b> — accept it. The app then opens
         like any other app and works with no signal.</li>
-    <li>Sign in with <b>your own mobile number</b> and the PIN issued by the
-        ${esc(c.office)}.</li>
+    <li>${c.signin || ('Sign in with <b>your own mobile number</b> and the PIN issued by the '
+        + esc(c.office) + '.')}</li>
   </ol>
 
   <h2>What it is for</h2>
@@ -126,8 +148,9 @@ function card(c){
     <b>This square is not a password.</b> It is only the address of the app. Anyone who
     photographs it reaches the sign-in page and no further: the register opens only to a
     mobile number on the roll, with its PIN. It may be put on a notice board.<br><br>
-    If the camera will not read it, type the address. If the number is not accepted,
-    the ${esc(c.office)} issues and resets PINs — no PIN is ever sent by message.
+    If the camera will not read it, type the address.
+    ${c.pinnote || ('If the number is not accepted, the ' + esc(c.office)
+      + ' issues and resets PINs — no PIN is ever sent by message.')}
   </p>
   <p class="foot">QR version ${meta.version} · ${meta.size}×${meta.size} modules · error correction M
     · decoded and verified before printing</p>

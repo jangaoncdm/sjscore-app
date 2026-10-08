@@ -284,6 +284,59 @@ module.exports = {
       t.eq(mine.me.office, 'Collectorate', 'with his own office against his name');
     }
 
+    /* ---- 6a. AND AN ORDER IS PASSED ON IT ----
+
+       The whole purpose of the register, and nothing here tested it. Leave is
+       Code.gs's, but WHO MAY ORDER is this tenant's, and the seam left for
+       delegating to heads of office must stay shut until the Collector writes
+       that order — a hierarchy nobody has written down is not a thing to guess
+       at on a register that debits a man's casual leave. */
+    {
+      const e = start();
+      seed(e, [EMP, { name:'B. Head', office:'Collectorate', desig:'Administration Officer',
+                      emp:'JN/7', phone:'9444400003', role:'HOD' }]);
+      e.post({ kind:'claimPin', u:'9444400001', emp:'JN/2291', pin:'8421' });
+      e.post({ kind:'claimPin', u:'9444400003', emp:'JN/7', pin:'7777' });
+      const emp = e.post({ kind:'login', u:'9444400001', p:'8421' }).token;
+      const hod = e.post({ kind:'login', u:'9444400003', p:'7777' }).token;
+
+      t.eq(e.post({ kind:'leave', token:emp, leave:{ id:'LV9', type:'CL',
+        from:'2026-10-20', to:'2026-10-21', days:2, reason:'personal' } }).ok, true,
+        'the employee applies');
+
+      const byHod = e.post({ kind:'leaveDecision', token:hod, id:'LV9', status:'APPROVED' });
+      t.eq(byHod.ok, false, 'THE HEAD OF HIS OFFICE MAY NOT ORDER IT — the seam is left, deliberately shut');
+      t.contains(byHod.error, 'Collector alone', 'and says who may');
+      t.eq(e.post({ kind:'leaveDecision', token:emp, id:'LV9', status:'APPROVED' }).ok, false,
+        'nor can he sanction his own');
+
+      /* AND HE READS THE WAITING LIST WITHOUT WALKING THE WHOLE REGISTER.
+         The console's own payload reads the Leave tab whole, which is right
+         at 284 officers and is not at five thousand. */
+      const wait = e.get('hrmsPending', { token:cdm(e) });
+      t.eq(wait.ok, true, 'the Collector reads what is awaiting his orders');
+      t.eq(wait.rows.length, 1, 'one application is waiting');
+      t.eq(wait.rows[0].office, 'Collectorate',
+        'with the office against his name, so an order is passed on a person and not on a number');
+      t.eq(e.get('hrmsPending', { token:emp }).ok, false, 'an employee cannot read it');
+      t.eq(e.get('hrmsPending', { token:hod }).ok, false, 'nor the head of his office');
+
+      const r = e.post({ kind:'leaveDecision', token:cdm(e), id:'LV9', status:'APPROVED' });
+      t.eq(r.ok, true, 'the Collector orders it');
+      t.eq(e.get('hrms', { token:emp }).rows[0].status, 'APPROVED', 'and the employee sees it on his own screen');
+
+      /* and the console moves it out of the waiting list by itself */
+      const d = e.get('dashboard', { token:cdm(e) });
+      t.eq(d.leave.pending.length, 0, 'it is no longer awaiting orders');
+      t.eq(d.leave.recent.length, 1, 'and is on the recent list');
+      /* RULE 4 — what the console holds is the whole district's, so anything
+         per-employee filters by phone */
+      t.eq(d.leave.recent[0].phone === '9444400001' || d.leave.recent[0].name === 'K. Ramesh', true,
+        'against the employee who applied');
+      t.eq(e.get('hrmsPending', { token:cdm(e) }).rows.length, 0,
+        'and it has left the waiting list by itself — nothing stores whether it was decided');
+    }
+
     /* ---- 7. THE DISTRICT SEES WHO HAS NOT CLAIMED YET ---- */
     {
       const e = start();

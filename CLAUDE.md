@@ -1446,6 +1446,31 @@ saying a word. `tests/render-hrms-console.js` drives the screen and asserts
 **what went on the wire**, that none of it reached the other two registers, and
 that not one enrolment code survives a switch of register.
 
+**AND THE ORDERS ARE PASSED IN THE APP, which is where every order on every
+one of these registers is passed.** `leaveDecision` has always been the field
+app's; the console only ever *showed* the waiting list. This register's app had
+no such screen at all, so there was **no way on earth to sanction a single
+application** on the register whose whole purpose is leave — found by looking
+for the button and not finding one. `op=hrmsPending` is the Collector's own
+bounded read of what is waiting (the console's payload reads the Leave tab
+whole, which is right at 284 officers and is not at five thousand), and the
+screen sanctions one, refuses one **with its own words**, or sanctions the lot.
+A refusal with no words is refused: they travel back to the employee and stand
+on the register. Sanction alone is passed in bulk — each application still
+answers its own checks in turn, so one that cannot be sanctioned is refused by
+name and stays waiting for his own look.
+
+**`show()` lists every screen, or the one left out never opens.** `vOrders` was
+added and not listed: its contents rendered, its buttons were in the DOM and
+bound, and the section stayed hidden — the same shape of silence as a parser
+declared inside the function that draws its panel.
+
+**Who may order is the tenant's, and the seam stays shut.** The head of an
+office cannot sanction his own staff's leave, deliberately: delegating is the
+obvious next order and `canApproveLeave_` is where it would go, but a hierarchy
+nobody has written down is not a thing to guess at on a register that debits a
+man's casual leave. Suite 34 asserts the HOD is refused.
+
 **The rosters never enter this repository.** `hms/` is gitignored, as `Add/`
 and `Domain/` are, and it was ignored **before the workbook was opened** —
 because `Add/` was not, and a `git add -A` published 192 personal mobile

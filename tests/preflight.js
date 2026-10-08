@@ -38,6 +38,17 @@ const REG = {
   'Gram Palana':    'https://script.google.com/macros/s/AKfycbxM98E242Mel_LuTaL0ZfD3VNRPQqat2HZujGS6ghVPeJhdUlLVpwSd9pToqVn6sNlp/exec'
 };
 
+/* A REGISTER NOT YET STOOD UP IS SKIPPED WITH ITS REASON, NOT FAILED.
+   The District HRMS has its own Sheet, its own project and its own /exec, and
+   until the Collector has made them there is no address to ask. Its address is
+   read off the published hrms/config.js rather than typed here, so the
+   pre-flight learns it on the day it exists and nothing has to be edited —
+   the same rule the console follows: the address the district PUBLISHES beats
+   any address a page remembered. A pass that cannot be run is reported as
+   skipped, with the reason; a report that quietly omits what it could not run
+   is worse than no report. */
+const LEARN = { 'District HRMS': '/hrms/config.js' };
+
 let stop = 0, warn = 0;
 const PAD = 34;
 const ok   = (what, detail) => console.log('  ✓  ' + what.padEnd(PAD) + (detail || ''));
@@ -144,6 +155,14 @@ function fetch(url, ms){
   /* ---------------- what is actually live ---------------- */
   if(!QUICK){
     console.log('\nWhat is live');
+    /* a register's address is learnt off the config the district publishes
+       beside its app, so a third one needs no edit here on the day it exists */
+    for(const name of Object.keys(LEARN)){
+      const c = await fetch(SITE + LEARN[name] + '?t=' + Date.now(), 15000);
+      const m = c && c.code === 200 && c.body.match(/SJGP_SERVER\s*=\s*['"]([^'"]+)['"]/);
+      if(m && !/PUT-THE/.test(m[1])) REG[name] = m[1];
+      else note(name, 'not stood up yet — no ' + LEARN[name] + ' published. See DEPLOY-HRMS.md.');
+    }
     const days = {};
     for(const name of Object.keys(REG)){
       const t0 = Date.now();
@@ -161,13 +180,23 @@ function fetch(url, ms){
        a timezone set wrong on one of them would count a different working day
        from the other, and nothing would say so. */
     const ds = Object.keys(days).map(k => days[k]);
-    if(ds.length === 2 && ds[0] !== ds[1]) bad('both registers agree on the day', ds.join(' vs '));
-    else if(ds.length === 2) ok('both registers agree on the day', ds[0]);
+    const one = ds.filter((d, i) => ds.indexOf(d) === i);
+    if(ds.length > 1 && one.length > 1)
+      bad('every register agrees on the day', Object.keys(days).map(k => k + ' ' + days[k]).join(' vs '));
+    else if(ds.length > 1) ok('every register agrees on the day', ds[0] + ' \u00b7 ' + ds.length + ' registers');
 
     for(const p of ['/', '/gp/', '/dashboard.html', '/config.js', '/gp/config.js', '/install.html', '/release.html']){
       const r = await fetch(SITE + p + '?t=' + Date.now(), 15000);
       if(r && r.code === 200) ok('site ' + p, r.body.length + ' bytes');
       else bad('site ' + p, r ? ('HTTP ' + r.code) : 'no answer');
+    }
+    /* THE HRMS APP IS PUBLISHED ONLY ONCE ITS CONFIG EXISTS, by the deploy
+       Action's own rule, so its absence is a register not yet stood up and not
+       a broken site. */
+    {
+      const r = await fetch(SITE + '/hrms/?t=' + Date.now(), 15000);
+      if(r && r.code === 200) ok('site /hrms/', r.body.length + ' bytes');
+      else note('site /hrms/', 'not published yet \u2014 the register is not stood up');
     }
     /* the console says which build it is; a stale one has cost a day twice */
     const d = await fetch(SITE + '/dashboard.html?t=' + Date.now(), 15000);

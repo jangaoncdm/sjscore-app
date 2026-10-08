@@ -157,6 +157,14 @@ textarea{min-height:84px;resize:vertical}
         dates you pick, on the form. Medical leave answers to no yearly figure; a spell of it is capped.</p>
     </div>
 
+    <!-- ORDERS ARE PASSED IN THE APP, as they are on both other registers:
+         leaveDecision has always been the field app's, and the console only
+         shows the waiting list. This app had no such screen, so there was no
+         way to sanction a single application on the register whose whole
+         purpose is leave. Shown to the Collector alone, and the server
+         re-checks that anyway (rule 6). -->
+    <button class="btn hide" id="bOrders">Applications awaiting your orders<span id="bOrdersN"></span></button>
+
     <button class="btn" id="bApply">Apply for leave</button>
 
     <div class="card" style="margin-top:13px">
@@ -168,6 +176,29 @@ textarea{min-height:84px;resize:vertical}
     <button class="btn ghost" id="bOut" style="margin-top:9px">Sign out</button>
     <p class="foot" id="hFoot">This register records your leave and nothing else.
       It takes no attendance and raises no notice.</p>
+  </div>
+</section>
+
+<!-- ══ ORDERS · the Collector's own ══ -->
+<section id="vOrders" class="hide">
+  <header>
+    <p class="eyebrow">For orders</p>
+    <h1>Awaiting your orders</h1>
+    <p id="oCount">—</p>
+  </header>
+  <div class="wrap">
+    <div class="card">
+      <div id="oList"><div class="empty">Nothing waiting.</div></div>
+      <div class="msg" id="mOrders" role="alert"></div>
+    </div>
+    <!-- SANCTION ALONE IS PASSED IN BULK. A refusal carries its own words per
+         case and is never passed over a list — and every application still
+         answers its own checks in turn, so the fifth casual leave of a batch
+         is counted against the four sanctioned just before it. -->
+    <button class="btn hide" id="bAll">Sanction all of them</button>
+    <button class="btn ghost" id="bOrdersBack" style="margin-top:9px">Back</button>
+    <p class="foot">An order is passed on the <b>application</b>, not on a row. Nothing is
+      destroyed: a refusal keeps the application and its words on the register.</p>
   </div>
 </section>
 

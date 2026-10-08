@@ -25,7 +25,7 @@ var STORE = 'sjgp-hrms1';          /* browser storage is per DOMAIN, not per
                                       three keys or they sign each other out */
 
 var $ = function(id){ return document.getElementById(id); };
-var DB = { url:SERVER, session:null, me:null, rows:[], ent:null, at:'' };
+var DB = { url:SERVER, session:null, me:null, rows:[], ent:null, at:'', pend:[] };
 
 /* ------------------------------------------------------------------ store */
 function load(){
@@ -63,7 +63,11 @@ function busy(b, on, word){
 }
 
 function show(v){
-  ['vSignin','vClaim','vHome','vApply'].forEach(function(x){
+  /* EVERY SCREEN, OR THE ONE LEFT OUT NEVER OPENS. vOrders was added and not
+     listed here: its contents rendered, its buttons were in the DOM and
+     bound, and the section stayed hidden — the same shape of silence as a
+     parser declared inside the function that draws its panel. */
+  ['vSignin','vClaim','vHome','vOrders','vApply'].forEach(function(x){
     $(x).classList.toggle('hide', x !== v); });
   window.scrollTo(0, 0);
 }
@@ -123,9 +127,16 @@ function home(pull){
   var u = DB.session.user || {};
   $('hName').textContent = String(u.name || '').replace(/,.*$/, '');
   $('hWho').textContent = [u.desig || roleName(u.role), u.mandal].filter(Boolean).join(' · ');
+  /* THE ORDERS ARE THE COLLECTOR'S. The button is hidden from everyone else
+     as a courtesy; op=hrmsPending and leaveDecision both re-check the role on
+     the server, because hiding a button is not a rule (rule 6). */
+  $('bOrders').className = canOrder() ? 'btn' : 'btn hide';
   show('vHome');
   draw();
   if(pull !== false) refresh();
+}
+function canOrder(){
+  return String(((DB.session || {}).user || {}).role || '').toUpperCase() === 'COLLECTOR';
 }
 function roleName(r){
   return r === 'HOD' ? 'Head of office' : r === 'COLLECTOR' ? 'Collector' : 'Employee';
@@ -140,6 +151,92 @@ function refresh(){
       save(); draw();
     })
     .catch(function(){});
+  if(canOrder()) pending();
+}
+
+/* ---------------------------------------------------- the Collector's orders
+   Every order on every one of these registers is passed in the app —
+   leaveDecision has always been the field app's, and the console only shows
+   the waiting list. This app had none, so there was no way on earth to
+   sanction a single application on the register whose whole purpose is leave.
+
+   THE LIST IS BOUNDED (op=hrmsPending walks the tail), because the console's
+   own payload reads the Leave tab whole, which is right at 284 officers and is
+   not at five thousand. */
+function pending(){
+  if(!DB.session || !canOrder()) return;
+  get({ op:'hrmsPending', token:DB.session.token })
+    .then(function(r){
+      if(!r || !r.ok) return;
+      DB.pend = r.rows || []; save(); drawOrders();
+    })
+    .catch(function(){});
+}
+function drawOrders(){
+  var n = (DB.pend || []).length;
+  var b = $('bOrdersN'); if(b) b.textContent = n ? '  ·  ' + n : '';
+  var c = $('oCount');
+  if(c) c.textContent = n ? n + ' application' + (n === 1 ? '' : 's') + ' on your desk'
+                          : 'Nothing is waiting.';
+  var all = $('bAll'); if(all) all.className = n > 1 ? 'btn' : 'btn hide';
+  var list = $('oList'); if(!list) return;
+  list.innerHTML = n ? DB.pend.map(function(r){
+    var waited = Math.round((Date.now() - new Date(r.appliedAt).getTime()) / 36e5);
+    return '<div class="app"><div class="t"><b>' + esc(r.name || r.phone) + '</b>' +
+      '<span class="pill warn">' + (isFinite(waited) ? waited + 'h' : 'waiting') + '</span></div>' +
+      '<div class="d">' + esc([r.desig, r.office].filter(Boolean).join(' · ')) +
+      (r.desig || r.office ? '<br>' : '') +
+      esc(LEAVE_NAME[String(r.type).toUpperCase()] || r.type) + ' · ' +
+      esc(dmy(r.fromDate)) + ' to ' + esc(dmy(r.toDate)) + ' · ' + (Number(r.days) || 0) + ' day(s)' +
+      (r.reason ? '<br>' + esc(r.reason) : '') + '</div>' +
+      '<div class="row2" style="margin-top:9px">' +
+      '<button class="btn" data-ok="' + esc(r.id) + '">Sanction</button>' +
+      '<button class="btn ghost" data-no="' + esc(r.id) + '">Refuse</button>' +
+      '</div></div>';
+  }).join('') : '<div class="empty">Nothing waiting.</div>';
+
+  list.querySelectorAll('[data-ok]').forEach(function(el){
+    el.addEventListener('click', function(){ order(el.getAttribute('data-ok'), 'APPROVED', ''); }); });
+  list.querySelectorAll('[data-no]').forEach(function(el){
+    el.addEventListener('click', function(){
+      /* A REFUSAL CARRIES ITS OWN WORDS. They travel back to the employee and
+         stand on the register, so they cannot be empty. */
+      var why = window.prompt('Why is it refused? These words go to the employee and onto the register.');
+      if(why == null) return;
+      if(!String(why).trim()) return say('mOrders', 'bad', 'A refusal needs its reason — it is what the employee is told.');
+      order(el.getAttribute('data-no'), 'REJECTED', String(why).trim());
+    }); });
+}
+function order(id, status, remarks){
+  clear('mOrders');
+  post({ kind:'leaveDecision', token:DB.session.token, id:id, status:status, remarks:remarks })
+    .then(function(r){
+      if(!r || !r.ok) return say('mOrders', 'bad', (r && r.error) || 'The district did not answer.');
+      say('mOrders', 'ok', status === 'APPROVED' ? 'Sanctioned.' : 'Refused, and the employee is told why.');
+      pending();
+    })
+    .catch(function(){ say('mOrders', 'bad', 'It did not reach the district, so NO ORDER HAS BEEN PASSED.'); });
+}
+function orderAll(){
+  var ids = (DB.pend || []).map(function(r){ return r.id; });
+  if(!ids.length) return;
+  if(!window.confirm('Sanction all ' + ids.length + ' of them?\n\n' +
+    'Each still answers its own checks in turn, so one that cannot be sanctioned is refused BY NAME ' +
+    'and stays waiting for your own look. Refusals are never passed this way.')) return;
+  clear('mOrders');
+  var b = $('bAll'); busy(b, true, 'Passing\u2026');
+  post({ kind:'leaveDecision', token:DB.session.token, ids:ids, status:'APPROVED' })
+    .then(function(r){
+      busy(b, false);
+      if(!r || !r.ok) return say('mOrders', 'bad', (r && r.error) || 'The district did not answer.');
+      var bad = (r.refused || []).length;
+      say('mOrders', bad ? 'info' : 'ok', (r.done || 0) + ' sanctioned' +
+        (bad ? ' · ' + bad + ' could not be, and are still waiting: ' +
+               r.refused.map(function(x){ return x.error; }).join('; ') : '.'));
+      pending();
+    })
+    .catch(function(){ busy(b, false);
+      say('mOrders', 'bad', 'It did not reach the district, so NO ORDER HAS BEEN PASSED.'); });
 }
 
 var LEAVE_NAME = { CL:'Casual leave', EL:'Earned leave', ML:'Medical leave',
@@ -273,12 +370,15 @@ $('iPin').addEventListener('keydown', function(e){ if(e.key === 'Enter') signIn(
 $('bClaim').addEventListener('click', claim);
 $('bClaimBack').addEventListener('click', function(){ show('vSignin'); });
 $('bApply').addEventListener('click', openApply);
+$('bOrders').addEventListener('click', function(){ show('vOrders'); drawOrders(); pending(); });
+$('bOrdersBack').addEventListener('click', function(){ home(false); });
+$('bAll').addEventListener('click', orderAll);
 $('bCancel').addEventListener('click', function(){ home(false); });
 $('bSend').addEventListener('click', send);
 $('bRefresh').addEventListener('click', refresh);
 ['aType','aFrom','aTo'].forEach(function(id){ $(id).addEventListener('change', note); });
 $('bOut').addEventListener('click', function(){
-  DB.session = null; DB.rows = []; DB.me = null; save();
+  DB.session = null; DB.rows = []; DB.me = null; DB.pend = []; save();
   $('iPhone').value = ''; $('iPin').value = '';
   show('vSignin');
 });

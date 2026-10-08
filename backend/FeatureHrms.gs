@@ -206,6 +206,46 @@ function feature_hrms(){
             emp:f.emp, code:f.code });
         }
         return json_({ ok:true, claimed:claimed, waiting:waiting, open:open });
+      },
+
+      /* WHAT IS AWAITING HIS ORDERS — and THE ORDERS ARE PASSED IN THE APP,
+         which is where every order on every one of these registers is passed.
+         The console only shows the waiting list; `leaveDecision` has always
+         been the field app's. This register's app had no such screen at all,
+         so there was no way on earth to sanction a single application on it.
+
+         BOUNDED, like everything else here. The console's own payload reads
+         the Leave tab whole, which is right at 284 officers and is not at five
+         thousand — eight applications a year apiece is forty thousand rows,
+         and the Collector opening his orders must not pay for the district's
+         whole history to be loaded. */
+      hrmsPending: function(p, u){
+        if(!canApproveLeave_(u.role))
+          return json_({ ok:false, error:'Leave is sanctioned by the Collector alone.' });
+        const sh = sheet_('Leave', L_HEAD), m = headMap_(sh, L_HEAD);
+        const lastRow = sh.getLastRow();
+        if(lastRow < 2) return json_({ ok:true, rows:[], total:0 });
+        const start = Math.max(2, lastRow - HRMS_TAIL_ROWS);
+        const v = sh.getRange(start, 1, lastRow - start + 1, sh.getLastColumn()).getValues();
+        const out = [];
+        for(let i = 0; i < v.length; i++){
+          const st = String(v[i][m.ix.status] || 'PENDING').toUpperCase();
+          if(st !== 'PENDING') continue;
+          const o = {};
+          L_HEAD.forEach(function(k){ if(m.ix[k] >= 0) o[k] = v[i][m.ix[k]]; });
+          o.fromDate = dateText_(o.fromDate); o.toDate = dateText_(o.toDate);
+          /* the office against his name, so an order is passed on a person and
+             not on a mobile number */
+          const who = findByPhone_(o.phone);
+          o.office = who ? (who.mandal || '') : '';
+          o.desig  = who ? (who.desig || '') : '';
+          out.push(o);
+        }
+        /* AN ORDER IS PASSED ON THE APPLICATION, NOT ON A ROW (25.08.2026):
+           twins are folded on the way out so one application is one line. */
+        const rows = leaveFold_ ? leaveFold_(out) : out;
+        rows.sort(function(a, b){ return String(a.appliedAt).localeCompare(String(b.appliedAt)); });
+        return json_({ ok:true, rows:rows.slice(0, 300), total:rows.length });
       }
     }
   };
