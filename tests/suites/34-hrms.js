@@ -354,6 +354,55 @@ module.exports = {
         'nor seed the establishment');
     }
 
+    /* ---- 7a. THE FIRST COLLECTOR, ON A REGISTER NOBODY CAN SIGN IN TO ----
+
+       A chicken and an egg that DEPLOY-HRMS.md walked straight into: steps 1
+       to 4 leave a register whose Users tab is empty, and step 5 says to
+       switch the console to it and paste the establishment — but the console
+       is Collector-only at the door, and the one action that puts an officer
+       on the roll is itself behind a sign-in. Followed as written, the
+       document stops dead.
+
+       The way through is the register's own: ONE ROW TYPED BY HAND into the
+       Users tab, carrying an employee id and no PIN, and then the Collector
+       claims it from the app exactly as every employee will. No bootstrap key
+       has to be planted in a live project and no Admin.gs job is automated —
+       he does both halves himself, which is the rule and not a way round it. */
+    {
+      const e = mock.load({ now:NOW });
+      e.props.TENANT = 'HRMS';
+      e.mkSheet('Users', U, [
+        { Phone:'9625701988', Name:'Sandeep Kumar Jha', Role:'COLLECTOR',
+          Mandal:'', GP:'', Email:'', Active:'TRUE', EmpId:'ADMIN1' }
+      ]);
+      e.mkSheet('Leave', L, []);
+      e.mkSheet('Audit', ['At','Action','Subject','Detail','By'], []);
+
+      t.eq(e.post({ kind:'login', u:'9625701988', p:'0000' }).needPin, true,
+        'a hand-written row with no PIN is offered the claim');
+      t.eq(e.post({ kind:'claimPin', u:'9625701988', emp:'NOPE', pin:'2468' }).ok, false,
+        'and a wrong employee id is refused, as it is for anybody else');
+
+      const got = e.post({ kind:'claimPin', u:'9625701988', emp:'ADMIN1', pin:'2468' });
+      t.eq(got.ok, true, 'the right one lets him choose his own PIN');
+      t.eq(String((got.user || {}).role).toUpperCase(), 'COLLECTOR',
+        'AND HE COMES BACK AS COLLECTOR');
+
+      const back = e.post({ kind:'login', u:'9625701988', p:'2468' });
+      t.eq(back.ok, true, 'the PIN he chose signs him in afterwards');
+
+      /* and he can now do the two things step 5 actually needs */
+      t.eq(e.get('hrmsPending', { token:back.token }).ok, true,
+        'he can read what is awaiting his orders');
+      t.eq(e.post({ kind:'hrmsSeed', token:back.token, dry:true, rows:[EMP] }).ok, true,
+        'AND HE CAN PASTE THE ESTABLISHMENT, which is the step that was unreachable');
+
+      t.ok(JSON.stringify(e.sheets['Audit'].rows).indexOf('2468') < 0,
+        'the PIN he chose is written nowhere on Audit, as no PIN ever is');
+      t.eq(e.post({ kind:'claimPin', u:'9625701988', emp:'ADMIN1', pin:'9999' }).ok, false,
+        'and the row cannot be claimed a second time');
+    }
+
     /* ---- 8. IT IS THE HRMS REGISTER'S ALONE ---- */
     {
       const sj = mock.load({ now:NOW });

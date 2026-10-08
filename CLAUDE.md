@@ -1523,6 +1523,27 @@ one, so three faults in it stopped being hypothetical:
   is certain, say plainly what is not, and re-read the register, which is the
   only thing that knows. Section 7b holds it.
 
+**A NEW REGISTER IS ONE NOBODY CAN SIGN IN TO, INCLUDING THE COLLECTOR.**
+`DEPLOY-HRMS.md` walked straight into it: steps 1 to 4 stand the register up
+and the next step said to switch the console to it and paste the
+establishment — but the Users tab is empty, the console is Collector-only at
+its door, and `userCreate`, the one action that puts an officer on the roll,
+is itself behind a sign-in. Followed as written the document stopped dead, and
+nothing in it said so. Found on 08.10.2026 by being asked for a test
+administrator and discovering there was no way to make the first one.
+
+The way through is the register's own and needs nothing new: **one row typed
+by hand into the `Users` tab** — number, name, `COLLECTOR`, `Active TRUE`, an
+`EmpId`, and `Hash` left empty — and then the Collector claims it from the app
+exactly as every employee will, choosing his own PIN. No bootstrap key is
+planted in a live project and no `Admin.gs` job is automated: he writes the
+row and he claims it, both halves himself, which is the rule rather than a way
+round it. It is step 5 now, and section 7a of suite 34 drives that exact row
+through the real backend — the claim is offered, a wrong id is refused, the
+right one returns him as `COLLECTOR`, the PIN he chose signs him in, the
+establishment paste he was blocked on now answers, and the row cannot be
+claimed twice.
+
 **AN APP WITH NO ADDRESS MUST NOT BLAME THE OFFICER'S SIGNAL.** The deploy
 Action publishes `/hrms/` whether or not the register has been stood up, so
 from 08.10.2026 the address on the printed install card served a working app

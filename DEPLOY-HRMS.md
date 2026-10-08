@@ -58,7 +58,41 @@ Write `hrms/config.js` (copy `hrms/config.example.js`) with the new `/exec`
 address, and commit it. The deploy Action publishes `hrms/` only once that
 file exists, and never overwrites it.
 
-## 5 — The establishment
+## 5 — Your own row, by hand
+
+**A new register is one nobody can sign in to, including you.** The Users tab
+is empty, the console is Collector-only at its door, and the one action that
+puts an officer on the roll is itself behind a sign-in. Step 6 cannot be
+reached until this is done, and nothing else can do it.
+
+So open the new spreadsheet, go to the **`Users`** tab, and type **one row**:
+
+| Phone | Name | Role | Active | EmpId |
+|---|---|---|---|---|
+| `9625701988` | Sandeep Kumar Jha | `COLLECTOR` | `TRUE` | `ADMIN1` |
+
+Leave `Hash` and `InitPin` **empty** — a row with no PIN is precisely what the
+app offers the claim to. `EmpId` is the second factor and it is yours to
+choose; it is used once and never again. Type the number with a leading
+apostrophe (`'9625701988`) so the sheet keeps it as text, as every other
+mobile number on these registers is kept.
+
+Then open **`/hrms/`** on your own phone, sign in with that number, and the app
+will ask for the employee id and let you **choose your own PIN**. Nobody issues
+it to you and the register stores no copy of it; `Audit` records that a PIN was
+set and never the PIN.
+
+There is no bootstrap key to plant and no `Admin.gs` job to run. You write the
+row and you claim it — both halves yourself, which is the rule rather than a
+way around it. Section 7a of suite 34 drives this exact row through the real
+backend: the claim is offered, a wrong id is refused, the right one returns you
+as `COLLECTOR`, the PIN you chose signs you in, and the row cannot be claimed
+twice.
+
+Add a second row the same way for anyone else who must have the register before
+the establishment is pasted. Everybody else arrives in step 6.
+
+## 6 — The establishment
 
 Switch the console to **District HRMS** (the register picker, top left), then
 Admin ▸ **The district establishment**, and paste the office's own list in
@@ -115,7 +149,7 @@ given out. A second paste mints nothing (rule 8).
 `Audit` records that codes were issued and to how many — **never a code**,
 exactly as it records that a PIN was set and never the PIN.
 
-## 6 — The employees
+## 7 — The employees
 
 Send them the address and the code their office holds for them. Each signs in
 with his own mobile number, is shown the claim screen, enters his **employee
@@ -126,7 +160,7 @@ Console ▸ Admin ▸ **Has the register reached them?** shows how many have
 claimed, names those who have not, and gives the standing code against each —
 with a CSV, so an office can be sent only its own.
 
-## 7 — Passing orders
+## 8 — Passing orders
 
 **In the app, as on both other registers.** Sign in to `/hrms/` with your own
 number and PIN; **Applications awaiting your orders** is on the home screen and
