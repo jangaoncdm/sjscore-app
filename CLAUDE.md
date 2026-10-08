@@ -1561,6 +1561,55 @@ true thing without one of them being touched. Found by rendering the live
 `/hrms/` the day it was published, not by reading the code; section 8 of
 `tests/render-hrms.js` withholds `config.js` on purpose and holds it.
 
+**AND A REGISTER THAT MUST BE STOOD UP BY HAND IS A REGISTER THAT IS NOT STOOD
+UP.** Four days after it was ordered, `/hrms/config.js` was still a 404 and
+every step above was waiting on an evening in the browser that had not come.
+`.github/workflows/provision-hrms.yml` is the button instead, as
+`provision-gp.yml` was for the second register: it creates the Sheet and the
+bound project under the account `CLASPRC_JSON` belongs to, writes the one
+`TENANT_OVERLAY` line, pushes, deploys, asks the new address what register it
+is, and only then commits `hrms/config.js`.
+
+Four things it does differently from the Gram Palana one, each because of
+something that register taught:
+
+**It copies every `backend/*.gs`, never a list of names.** The GP pipeline
+named three files and got away with it only because the first routine deploy
+copies `backend/*.gs` and quietly repaired it. This register cannot: a
+provisioning without `FeatureHrms.gs` stands up a register that answers,
+reports itself as HRMS, and cannot enrol one employee or sanction one day of
+leave.
+
+**The record of the project is committed in the same step that creates it.**
+The GP pipeline guarded against a second register with a repository variable a
+person had to set afterwards — so a run that stopped at Google's consent
+screen, which is the usual way a first run stops, could be re-run and make a
+second Sheet. `hrms/project.json` is written and pushed before anything that
+can fail, so a half-finished run is **completed** by the next one (rule 8).
+It is a file and not a variable because `GITHUB_TOKEN` cannot manage
+variables, and a personal token planted here to save one click is the worse
+trade.
+
+**No bootstrap key and no salt.** The GP pipeline planted a key so 134 mobile
+numbers could reach an empty register without passing through this public
+repository; the establishment comes through the console under the Collector's
+own token, so there is nothing for a key to carry, and a key never planted
+cannot be left behind in a live project. The salt is not set either — the
+register mints its own on first use.
+
+**And the third register was published and never deployed again.** `deploy.yml`
+had copied `hrms/` to the site from the moment `config.js` existed and there
+was **no job anywhere that pushed `backend/` into the HRMS project** — so the
+app would have been republished for ever against a server frozen on the day it
+was provisioned, every fix to leave reaching the other two registers and not
+the one whose whole purpose is leave. `backend-hrms` closes it, gated on
+`hrms/project.json` in its first step rather than in its `if:`, because a job
+condition cannot look at the working tree. It re-assembles the overlay on every
+deploy, for the reason the GP register lost its identity once: `clasp push
+--force` deletes remote files that are not present locally. And it reads the
+tenant back **by name** — on this register an address that answered as SJGP
+would be filing the district's leave into the sanitation register.
+
 **The rosters never enter this repository.** `hms/` is gitignored, as `Add/`
 and `Domain/` are, and it was ignored **before the workbook was opened** —
 because `Add/` was not, and a `git add -A` published 192 personal mobile

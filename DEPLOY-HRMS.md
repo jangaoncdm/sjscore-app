@@ -15,12 +15,65 @@ can reach an employee. The 100-mark evaluation, the filing schedule and the
 development plan are all off. `TENANTS.HRMS` in `backend/Code.gs` carries it
 and suite 34 holds it there.
 
-## 1 — The spreadsheet
+## 1 — Press the button
 
-Make a new Google Sheet. Name it so nobody confuses it with the other two:
-**`District HRMS · Jangaon`**.
+Everything up to the app's address is done by the pipeline. In GitHub, open
+**Actions ▸ Provision the District HRMS register ▸ Run workflow**, leave the
+name of the sheet as it is, type `CREATE` in the confirm box, and run it.
 
-Add a tab called `Config` with two columns and one row:
+It creates the spreadsheet and the Apps Script project bound to it, under the
+same account that owns the other two registers; tells that project it is the
+HRMS register; pushes **every** `backend/*.gs` into it — `FeatureHrms.gs` is
+the whole of this register, so a list of names here would stand up a register
+that answers and cannot enrol one employee — and deploys it as a web app; asks
+the new address what register it is and will not go on unless it answers
+`"tenant":"HRMS"`; and then writes `hrms/config.js`, which is what makes the
+app appear at `/hrms/`.
+
+**It cannot make a second register.** The project is recorded in
+`hrms/project.json` and committed in the same step that creates it, before
+anything that can fail — so a run that stops is **continued** by the next one
+rather than started again. That matters because creation is the one act here
+that repeating does not undo: a second spreadsheet would orphan the first with
+the establishment in it.
+
+**A first run usually stops once, at Google's consent screen.** A newly created
+web app answers 403 until its OAuth scopes are approved by a person in a
+browser, and there is no API for granting consent — that is a security
+boundary, not a gap. The run says so in a warning and prints the link: open the
+script, Run any function, accept. Then run the workflow again.
+
+**Nothing is published at `/hrms/` until the address answers as HRMS.** All
+three projects run identical files, so `ok:true` proves only that *something*
+answered; an app pointed at a server reporting itself as SJGP would file the
+district's leave into the sanitation register, which is the one mistake the
+whole isolation exists to prevent.
+
+### What it does not do, deliberately
+
+- **It puts nobody on the roll.** The establishment goes from your screen to
+  your register over HTTPS in step 6 and through nothing else: those are
+  personal mobile numbers and this repository is public.
+- **It plants no bootstrap key.** The Gram Palana pipeline had to, so that 134
+  mobile numbers could reach an empty register without passing through here.
+  This one has the console and your own token, so there is nothing for a key to
+  carry — and a key never planted cannot be left behind in a live project.
+- **It sets no salt.** The register mints its own on the first request that
+  needs one, under a lock, into Script Properties and nowhere else. Inventing
+  one by hand is the step most likely to be skipped, mistyped, or — worst —
+  copied from another register, which would make the same PIN hash identically
+  on both.
+- **It runs no `Admin.gs` job.** Those change the district's records, and you
+  press that button, not a robot.
+
+## 2 — By hand, if the pipeline cannot be used
+
+The credential the pipeline deploys with can expire, and then this is the way
+through. It is the same four acts the button performs.
+
+Make a new Google Sheet, named so nobody confuses it with the other two:
+**`District HRMS · Jangaon`**. Add a tab called `Config` with two columns and
+one row:
 
 | Key | Value |
 |---|---|
@@ -31,14 +84,10 @@ That tab is what tells the register what it is. A Script Property named
 because it travels with the data it describes and cannot be pushed away by a
 deploy.
 
-## 2 — The project
-
 Create an Apps Script project **bound to that sheet** (Extensions ▸ Apps
 Script). Copy in every file from `backend/` — `Code.gs`, `Admin.gs` and every
 `Feature*.gs`. Deploy it as a **web app**, executing as you, accessible to
-anyone with the link.
-
-Confirm it knows what it is before going further:
+anyone with the link. Then confirm it knows what it is before going further:
 
     <the new /exec>?op=diag
 
@@ -46,17 +95,46 @@ It must answer `"tenant":"HRMS"`. If it says `SJGP`, the Config tab was not
 read — a register that fails to identify itself lands on the one that already
 exists, deliberately, and that is the wrong register for this data.
 
-## 3 — The salt
+Finally write `hrms/config.js` (copy `hrms/config.example.js`) with the new
+`/exec` address, and commit it. The deploy Action publishes `hrms/` only once
+that file exists, and never overwrites it.
 
-Set the script property `SALT` to a long random string, **different from the
-other two registers'**. It is what PINs are hashed with. It is never in this
-repository and never in a backup; lose it and every employee needs a reset.
+**Then write `hrms/project.json` too**, or the register will never receive
+another line of code:
+
+```json
+{ "scriptId": "…", "deploymentId": "AKfyc…", "execUrl": "https://script.google.com/macros/s/AKfyc…/exec" }
+```
+
+## 3 — What keeps it up to date, and why that file matters
+
+Nothing to do here; this is so you know it happens. Once `hrms/project.json`
+exists, **every ordinary deploy pushes `backend/` into the HRMS project as
+well** and re-checks that the address still answers as HRMS.
+
+That file is both the record and the switch, and it is a file rather than a
+repository variable because `GITHUB_TOKEN` cannot manage variables — that needs
+a personal token with repository scope, and putting one here to save a step is
+a worse trade than the step. No file means no register and the job stands down
+in one second.
+
+Before any of this existed, `hrms/` was being published from its own sources
+the moment `config.js` appeared and **no job anywhere pushed the backend into
+the HRMS project**. The app would have gone on being republished against a
+server frozen on the day it was provisioned: every fix to leave, to the claim,
+to the Collector's orders reaching the other two registers and not the one
+whose whole purpose is leave.
 
 ## 4 — The app
 
-Write `hrms/config.js` (copy `hrms/config.example.js`) with the new `/exec`
-address, and commit it. The deploy Action publishes `hrms/` only once that
-file exists, and never overwrites it.
+Check it with your own eyes before telling anybody the address:
+
+    https://jangaoncdm.github.io/sjscore-app/hrms/
+
+Until the register is stood up that address serves the app and says, plainly,
+that it has no district address yet and that this is not the employee's signal.
+It used to blame his network instead, and he would have gone looking for a
+better one for ever.
 
 ## 5 — Your own row, by hand
 
