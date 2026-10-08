@@ -50,11 +50,16 @@ let pass = 0, fail = 0;
 const ck = (ok, what, d) => { if(ok){ pass++; console.log('  PASS  ' + what + (d ? '   — ' + d : '')); }
                               else { fail++; console.log('  FAIL  ' + what + (d ? '   — ' + d : '')); } };
 
-function serve(){
+function serve(noConfig){
   return new Promise(res => {
     const srv = http.createServer((q, s) => {
       const u = decodeURIComponent(q.url.split('?')[0]);
-      if(/\/config\.js$/.test(u)){ s.writeHead(200,{'Content-Type':'text/javascript'});
+      if(/\/config\.js$/.test(u)){
+        /* WITHHELD ON PURPOSE in the last section: the deploy Action publishes
+           /hrms/ whether or not the register has been stood up, so this is
+           the exact state the printed install card sends an employee to. */
+        if(noConfig){ s.writeHead(404); return s.end('not stood up'); }
+        s.writeHead(200,{'Content-Type':'text/javascript'});
         return s.end("window.SJGP_SERVER='https://hrms.district/exec';"); }
       const f = path.join(APP, u === '/' ? 'index.html' : u.replace(/^\//, ''));
       if(!fs.existsSync(f) || fs.statSync(f).isDirectory()){ s.writeHead(404); return s.end('no'); }
@@ -302,6 +307,46 @@ function serve(){
     document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
   ck(!wide, 'no sideways scroll at 390px');
   ck(errs.length === 0, 'no script error', errs[0] || '');
+
+  /* ---- 8. AN APP WITH NO ADDRESS DOES NOT BLAME THE OFFICER'S SIGNAL ----
+
+     The boot guard said plainly that config.js had not been written — and
+     then the employee pressed the only button on the screen, the POST went to
+     the page itself, the browser answered 405, and the catch replaced that
+     honest sentence with 'Try again where there is a line.' He was being told
+     the fault was his network on a register that had never been stood up, and
+     he would try again at a better signal for ever. Found by rendering the
+     live /hrms/ the day it was published, which is where the install card
+     points today. */
+  {
+    const srv2 = await serve(true);
+    const p2 = await br.newPage({ viewport:{ width:390, height:844 } });
+    const e2 = []; p2.on('pageerror', x => e2.push(String(x.message)));
+    await p2.goto('http://127.0.0.1:' + srv2.address().port + '/?t=' + Date.now(),
+                  { waitUntil:'networkidle' });
+    await p2.waitForTimeout(500);
+
+    const arrival = (await p2.textContent('#mSignin')).trim();
+    ck(/no district address/i.test(arrival),
+       'with no config.js it says on arrival that the app has no district address',
+       arrival.slice(0, 50));
+
+    await p2.fill('#iPhone', '9876543210');
+    await p2.fill('#iPin', '1234');
+    await p2.click('#bSignin');
+    await p2.waitForTimeout(800);
+    const after = (await p2.textContent('#mSignin')).trim();
+    ck(!/where there is a line|could not be reached/i.test(after),
+       'AND PRESSING SIGN IN DOES NOT BLAME HIS SIGNAL', after.slice(0, 60));
+    ck(/not been stood up/i.test(after),
+       'it says the register has not been stood up', after.slice(0, 60));
+    ck(/not your signal/i.test(after),
+       'and says in as many words that it is not his signal');
+    ck(await p2.isVisible('#vSignin'), 'he is left on the sign-in screen, not a blank one');
+    ck(e2.length === 0, 'no script error with no config', e2[0] || '');
+    await p2.screenshot({ path: path.join(OUT, '10-no-address.png'), fullPage:true });
+    await p2.close(); srv2.close();
+  }
 
   await br.close(); srv.close();
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed   ·   screenshots in Info/hrms-render/\n');

@@ -1145,6 +1145,31 @@ published surface serves, and that the console names its build. The register’s
 own half — triggers, backup, mail — is behind the Collector’s token and is read
 from the Admin screen.
 
+**A PRE-FLIGHT THAT CRIES WOLF IS THE ONE CHECK A DISTRICT STOPS READING.**
+On 08.10.2026 it returned NO-GO twice in ten minutes for two different
+transient things and neither was real. The suite was reported as *"failed to
+run or failed outright"* — a sentence true of a thousand faults, the same
+uselessness as a decoder that says only *no code found* — when a backend file
+was still locked by Windows moments after a rebase rewrote it, and the suite
+itself was green on the next run and in the Action. It now names the exit
+status and quotes **the telling line** rather than the last: a failing suite
+says so at the end, but a runner that crashes says so at the top of a stack
+whose last lines are a blank and the node version, and quoting those put
+`Node.js v24.19.0` where `Cannot find module` belonged. The line is chosen by
+a test that is deliberately **not** case-blind, because under `/i` the
+error-code pattern `E[A-Z]{3,}` is *e* and three more letters and matches
+`ernal` inside `node:internal/modules/cjs/loader`.
+
+And a register is **asked twice** before it is called dead. An Apps Script web
+app cold starts: the sanitation register answered `op=diag` in 4s, and the same
+hour at 22s and 35s, and twice handed back Google's own 302 and 404 pages while
+an execution was still running behind it — which is what repeated probing of a
+live register does, and it recovered by itself once left alone. One slow answer
+reported as a blocking NO-GO stops a deploy for nothing, so what the first
+attempt actually said is carried into the answer and a register answering only
+on the second ask is reported as **slow rather than down**: the two need
+different acts from the reader.
+
 **Coming back** is `git checkout <tag> -- app/ backend/`, a commit and a push;
 the Action republishes and redeploys from that, and rolling forward again is the
 same move in reverse. Restore points so far: `pre-desktop-2026-09-18`,
@@ -1470,6 +1495,23 @@ office cannot sanction his own staff's leave, deliberately: delegating is the
 obvious next order and `canApproveLeave_` is where it would go, but a hierarchy
 nobody has written down is not a thing to guess at on a register that debits a
 man's casual leave. Suite 34 asserts the HOD is refused.
+
+**AN APP WITH NO ADDRESS MUST NOT BLAME THE OFFICER'S SIGNAL.** The deploy
+Action publishes `/hrms/` whether or not the register has been stood up, so
+from 08.10.2026 the address on the printed install card served a working app
+with no `config.js` beside it. The boot guard said plainly that `config.js`
+had not been written — and then the employee pressed the only button on the
+screen, the POST went to the page itself, the browser answered **405**, and
+the catch replaced that honest sentence with *"The district could not be
+reached. Try again where there is a line."* He was being told the fault was
+his network, on a register that had never been stood up, and he would try
+again at a better signal for ever. `post` and `get` now refuse early when
+there is no address, **resolving** rather than rejecting with the shape every
+caller here already reads — `if(!r || !r.ok) … r.error` — so the sign-in, the
+claim, the refresh, the application and the Collector's orders all say the
+true thing without one of them being touched. Found by rendering the live
+`/hrms/` the day it was published, not by reading the code; section 8 of
+`tests/render-hrms.js` withholds `config.js` on purpose and holds it.
 
 **The rosters never enter this repository.** `hms/` is gitignored, as `Add/`
 and `Domain/` are, and it was ignored **before the workbook was opened** —

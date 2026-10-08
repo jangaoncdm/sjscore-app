@@ -39,12 +39,30 @@ function load(){
 function save(){ try{ localStorage.setItem(STORE, JSON.stringify(DB)); }catch(e){} }
 
 /* ------------------------------------------------------------------- wire */
+/* AN APP WITH NO ADDRESS MUST NOT BLAME THE OFFICER'S SIGNAL.
+   The boot guard says plainly that config.js has not been written — and then
+   the employee presses the only button on the screen, the POST goes to the
+   page itself, the browser answers 405, and the catch replaces that honest
+   sentence with 'Try again where there is a line.' He is then told the fault
+   is his network, on a register that was never stood up, and he will try
+   again at a better signal for ever. Rendered against the live /hrms/ with
+   no config published, which is exactly the state the printed install card
+   sends him to today.
+
+   It RESOLVES rather than rejects, with the shape every caller here already
+   reads — `if(!r || !r.ok) … r.error` — so sign-in, the claim, the refresh,
+   the application and the Collector's orders all say the true thing without
+   one of them being touched. */
+var NO_ADDR = 'This app has no district address yet, so there is nothing to sign in to. ' +
+              'It is not your signal — the register has not been stood up.';
 function post(body){
+  if(!DB.url) return Promise.resolve({ ok:false, error:NO_ADDR });
   return fetch(DB.url, { method:'POST',
     headers:{ 'Content-Type':'text/plain;charset=utf-8' },
     body:JSON.stringify(body) }).then(function(r){ return r.json(); });
 }
 function get(params){
+  if(!DB.url) return Promise.resolve({ ok:false, error:NO_ADDR });
   var q = Object.keys(params).map(function(k){
     return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
   return fetch(DB.url + '?' + q + '&t=' + Date.now(), { cache:'no-store' })

@@ -109,7 +109,30 @@ function fetch(url, ms){
       const m = out.match(/(\d+)\s+suite\(s\),\s+([\d,]+)\s+assertion\(s\),\s+(\d+)\s+failure/);
       if(m && m[3] === '0') ok('the whole suite', m[1] + ' suites, ' + m[2] + ' assertions');
       else bad('the whole suite', m ? (m[3] + ' failure(s)') : 'did not report');
-    }catch(e){ bad('the whole suite', 'failed to run or failed outright'); }
+    }catch(e){
+      /* 'FAILED TO RUN OR FAILED OUTRIGHT' IS TRUE OF A THOUSAND FAULTS —
+         the same uselessness as a decoder that says only 'no code found'.
+         It read that way once for a file still locked by Windows moments
+         after a rebase rewrote it, and the suite itself was green; with the
+         exit status and the tail of what the run actually said, the next one
+         is evidence instead of a puzzle. */
+      /* AND THE LINE IT QUOTES IS THE TELLING ONE, not simply the last.
+         A suite that fails says so at the end; a runner that crashes says so
+         at the TOP of a stack whose last two lines are a blank and the node
+         version — quoting those put 'Node.js v24.19.0' in place of 'Cannot
+         find module', which is the useless message over again. */
+      const lines = (String(e.stderr || '') + '\n' + String(e.stdout || ''))
+        .split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+      /* The code test is deliberately NOT case-blind: under /i, E[A-Z]{3,}
+         is 'e' and three more letters, which matches 'ernal' inside
+         node:internal/modules/cjs/loader and quoted a stack frame in place
+         of the 'Cannot find module' two lines below it. */
+      const said = lines.filter(x => /error|cannot|unexpected|failure|✗/i.test(x) ||
+                                     /\bE[A-Z]{3,}\b/.test(x))[0] ||
+                   lines[lines.length - 1] || String(e.message).split(/\r?\n/)[0];
+      bad('the whole suite', 'did not complete · exit ' + (e.status === undefined ? '?' : e.status) +
+        (e.signal ? ' · ' + e.signal : '') + ' · ' + String(said).slice(0, 110));
+    }
   } else note('the whole suite', 'skipped (--quick)');
 
   /* ---------------- the repository ---------------- */
@@ -165,10 +188,27 @@ function fetch(url, ms){
     }
     const days = {};
     for(const name of Object.keys(REG)){
-      const t0 = Date.now();
-      const r = await fetch(REG[name] + '?op=diag&t=' + Date.now(), 45000);
-      let j = null; try{ j = JSON.parse(r && r.body); }catch(e){}
-      if(!j || !j.ok){ bad(name, 'not answering'); continue; }
+      /* ONE SLOW ANSWER IS NOT A DEAD REGISTER, AND IT MUST SAY WHICH IT WAS.
+         An Apps Script web app cold starts, and a register that answered in
+         4s was measured the same hour at 22s and 35s, and twice handed back
+         Google's own 302 and 404 pages while an execution was still running
+         behind it. Called dead on the first miss, that is a blocking NO-GO
+         for nothing — and a pre-flight that cries wolf is the one check a
+         district stops reading. So it is asked twice, what the first attempt
+         actually said is carried into the answer rather than thrown away,
+         and a register answering only on the second ask is reported as slow
+         rather than as down: the two need different acts from the reader. */
+      let r = null, j = null, t0 = Date.now(), says = '', tries = 0;
+      while(tries < 2 && !j){
+        tries++;
+        t0 = Date.now();
+        r = await fetch(REG[name] + '?op=diag&t=' + Date.now(), 45000);
+        try{ j = JSON.parse(r && r.body); }catch(e){ j = null; }
+        if(j && !j.ok) j = null;
+        if(!j) says = (r ? 'HTTP ' + r.code : 'no answer in 45s') + ' after ' + (Date.now() - t0) + 'ms';
+      }
+      if(!j){ bad(name, 'not answering, asked twice · ' + says); continue; }
+      if(tries > 1) note(name + ' answered on the second ask', says + ' the first time — slow, not down');
       days[name] = j.today;
       const feat = (j.features && j.features.live || []).map(f => f.name).join(', ') || 'none';
       ok(name, (Date.now() - t0) + 'ms · ' + j.today +
