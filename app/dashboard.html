@@ -1357,14 +1357,26 @@ function useTenant(k){
 function paintTenant(){
   const sel=$('#tenPick'); if(!sel) return;
   const have=Object.keys(TENANCY).filter(k=>!!tenantSession(k));
+  /* A REGISTER MISSING FROM THIS LIST IS NOT A FAULT, AND MUST NOT BE SILENT.
+     The console reads each register's own app store, so a register shows here
+     only once the Collector has signed in to ITS app, as Collector, on THIS
+     device — and a register not yet stood up cannot be signed in to at all.
+     Asked from the district on 08.10.2026 in those words: in console drop down
+     i dont see the hrms. Nothing on the page said why, and there was nothing
+     to read: it was simply absent. It is named now and told what it wants,
+     disabled so it cannot be chosen. */
+  const absent=Object.keys(TENANCY).filter(k=>!tenantSession(k));
   /* one register is not a choice */
   sel.hidden = have.length < 2;
   if(!sel.hidden){
-    const want=have.map(k=>k+'|'+TVIEW).join(',');
+    const want=have.map(k=>k+'|'+TVIEW).join(',')+'/'+absent.join(',');
     if(sel.dataset.k!==want){
       sel.dataset.k=want;
       sel.innerHTML=have.map(k=>'<option value="'+k+'"'+(k===TVIEW?' selected':'')+'>'+
-        esc(TENANCY[k].name)+'</option>').join('');
+        esc(TENANCY[k].name)+'</option>').join('')
+        +absent.map(k=>'<option disabled>'+esc(TENANCY[k].name)+
+          ' — sign in at /'+esc(String(TENANCY[k].cfg||'').replace(/config\.js$/,''))+
+          ' on this device</option>').join('');
     }
     sel.onchange=()=>{ if(!useTenant(sel.value)) sel.value=TVIEW; };
   }

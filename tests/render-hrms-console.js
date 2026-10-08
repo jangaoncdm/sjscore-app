@@ -304,6 +304,51 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
 
   ck(errs.length===0,'no script error anywhere in the pass',errs.slice(0,2).join(' || '));
 
+  /* ---- A REGISTER NOT SIGNED IN TO IS NAMED, NOT SILENTLY ABSENT ----
+
+     The console reads each register's own app store, so a register appears in
+     the picker only once the Collector has signed in to ITS app, as Collector,
+     on THIS device — and one not yet stood up cannot be signed in to at all.
+     Asked from the district on 08.10.2026: in console drop down i dont see the
+     hrms. The behaviour was right and the silence was not: the register was
+     simply missing, with nothing anywhere saying why. */
+  {
+    const c2=await br.newContext({viewport:{width:1500,height:1000}});
+    await c2.addInitScript(()=>{
+      const who={name:'Sandeep Kumar Jha',role:'COLLECTOR',phone:'9000000001'};
+      /* signed in to the two live registers and NEVER to HRMS, which is the
+         Collector's own console while the third register is being stood up */
+      localStorage.setItem('sjf5',JSON.stringify({url:'https://mock.district/exec',
+        session:{token:'T',user:who}}));
+      localStorage.setItem('sjgp-gp1',JSON.stringify({url:'https://mock.gpalana/exec',
+        session:{token:'TG',user:who}}));
+      localStorage.setItem('sjgp-theme','light');
+      localStorage.setItem('sjgp-console-seen','{}');
+    });
+    const p2=await c2.newPage();
+    const e2=[];p2.on('pageerror',e=>e2.push(String(e&&e.stack||e)));
+    await p2.route('**/mock.*/**',r=>r.fulfill({status:200,contentType:'application/json',
+      body:JSON.stringify({ok:true,rows:[],today:'2026-10-08'})}));
+    await p2.goto(base+'/dashboard.html',{waitUntil:'domcontentloaded'});
+    await p2.waitForTimeout(2200);
+
+    const pick=await p2.evaluate(()=>{
+      const s=document.querySelector('#tenPick');
+      return s?{hidden:s.hidden,items:[...s.options].map(o=>({t:o.textContent,d:o.disabled}))}:null;
+    });
+    const hr=pick&&pick.items.filter(o=>/District HRMS/.test(o.t))[0];
+    ck(!!pick&&!pick.hidden,'the register picker is shown');
+    ck(!!hr,'DISTRICT HRMS IS NAMED IN THE PICKER, not silently absent');
+    ck(!!hr&&hr.d,'and it is disabled, so it cannot be chosen');
+    ck(!!hr&&/\/hrms\//.test(hr.t),'it says where to sign in to get it',hr&&hr.t);
+    ck(!!pick&&pick.items.filter(o=>!o.d).length===2,
+       'the two he IS signed in to are still choosable',
+       pick&&String(pick.items.filter(o=>!o.d).length));
+    ck(e2.length===0,'no script error on that console',e2[0]);
+    await p2.screenshot({path:path.join(OUT,'picker-hrms-absent.png')});
+    await c2.close();
+  }
+
   await br.close(); srv.close();
   console.log('\n'+pass+' passed, '+fail+' failed.  Screenshots in '+OUT);
   process.exit(fail?1:0);
