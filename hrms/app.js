@@ -101,7 +101,7 @@ function claim(){
   var ph = $('iPhone').value.replace(/\D/g, '').slice(-10);
   var emp = $('cEmp').value.trim(), p1 = $('cPin').value.trim(), p2 = $('cPin2').value.trim();
   clear('mClaim');
-  if(!emp) return say('mClaim', 'bad', 'Your employee id is needed — it is how the register knows the number is yours.');
+  if(!emp) return say('mClaim', 'bad', 'Your employee id, or the enrolment code your office was given for you, is needed — it is how the register knows the number is yours.');
   if(!/^\d{4,8}$/.test(p1)) return say('mClaim', 'bad', 'A PIN is four to eight digits.');
   if(p1 !== p2) return say('mClaim', 'bad', 'The two PINs are not the same.');
   busy(b, true, 'Setting…');

@@ -1268,7 +1268,18 @@ const TENANCY = {
     aud:[['PS','Panchayat Secretaries'],['MPDO','MPDOs'],['MPO','MPOs'],['MSO','MSOs']] },
   GP:  { key:'GP',   name:'Gram Palana',    full:'Gram Palana Register',       store:'sjgp-gp1',
     cfg:'gp/config.js',
-    aud:[['GPO','Gram Palana Officers'],['ARI','Assistant Revenue Inspectors'],['MRI','Mandal Revenue Inspectors']] }
+    off:['villages','schedule','gpdp'],
+    aud:[['GPO','Gram Palana Officers'],['ARI','Assistant Revenue Inspectors'],['MRI','Mandal Revenue Inspectors']] },
+  /* THE THIRD REGISTER TAKES LEAVE AND NOTHING ELSE, and the rail says so.
+     Nobody marks in on it, no village is evaluated, no notice is served and no
+     plan is called for — so Overview, which is an attendance overview, would
+     be a wall of noughts, and a row of noughts reads as a district doing
+     nothing rather than as a register that was never asked. It opens on
+     Leave. */
+  HRMS:{ key:'HRMS', name:'District HRMS',  full:'District HRMS · leave',      store:'sjgp-hrms1',
+    cfg:'hrms/config.js', home:'leave',
+    off:['overview','attendance','analytics','villages','schedule','notices','map','gpdp','advisory'],
+    aud:[['EMP','Employees'],['HOD','Heads of office']] }
 };
 let TVIEW='SJGP';
 
@@ -1334,6 +1345,7 @@ function useTenant(k){
   ANA=null; ANA_YM=''; ANA_SEG='field'; ANA_MANDAL=''; ANA_BUSY=false; ANA_ERR='';
   PST_TEXT=''; PST_PLANS=null; PST_DONE=null;
   STF_TEXT=''; STF_PLANS=null; STF_DONE=null; STF_PINS=null;
+  HRM_TEXT=''; HRM_PLANS=null; HRM_DONE=null; HRM_CODES=null; HRM_CLAIMS=null;
   TBL_TEXT=''; TBL_PLANS=null; TBL_DONE=null;
   ASEG='field';
   paintTenant();
@@ -1360,13 +1372,15 @@ function paintTenant(){
   /* THE RAIL SHOWS WHAT THE REGISTER HAS. The Gram Palana register takes no
      village evaluation and carries no filing schedule; its server refuses both
      at the door, so a rail item for either could only lead to an empty screen. */
-  const off = TVIEW==='GP' ? ['villages','schedule','gpdp'] : [];
+  const off = (TENANCY[TVIEW]||{}).off || [];
   document.querySelectorAll('#nav [data-v]').forEach(b=>{
     b.hidden = off.indexOf(b.dataset.v)>=0;
   });
   if(off.indexOf(VIEW)>=0){
-    VIEW='overview';
-    document.querySelectorAll('#nav [data-v]').forEach(x=>x.toggleAttribute('aria-current',x.dataset.v==='overview'));
+    /* AND IT FALLS BACK TO A VIEW THIS REGISTER HAS. Overview is off on the
+       HRMS register, so falling back to it would land on a hidden screen. */
+    VIEW=(TENANCY[TVIEW]||{}).home||'overview';
+    document.querySelectorAll('#nav [data-v]').forEach(x=>x.toggleAttribute('aria-current',x.dataset.v===VIEW));
   }
 }
 let ST=null,TIMER=null,LASTOK=0,EVERY=60000,NEXT=0,INFLIGHT=false,DOWN=false,DATA=null,VIEW='overview',MET='present',MONTH='',SORTD=true;
@@ -3284,6 +3298,7 @@ let ROLL=null, ROLLQ='', ROLLBUSY=false, ROLLPIN=null, ROLLMSG='', ROLLBAD=false
 let TBL_TEXT='', TBL_ROLE='MPO', TBL_PLANS=null, TBL_DONE=null;
 let PST_TEXT='', PST_PLANS=null, PST_DONE=null;
 let STF_TEXT='', STF_PLANS=null, STF_DONE=null, STF_PINS=null;
+let HRM_TEXT='', HRM_ROLE='HOD', HRM_PLANS=null, HRM_DONE=null, HRM_CODES=null, HRM_CLAIMS=null;
 /* THE REGISTER'S OWN PRE-FLIGHT. Read once when the Admin screen is opened,
    because it walks Drive and that is not something to do on every poll. */
 let HEALTH=null, HEALTHAT=0;
@@ -3350,6 +3365,82 @@ function parseStaff(text){
     rows.push({ mandal, name, desig, emp, phone, lat, lng });
   });
   return { rows, bad };
+}
+
+/* ---------------------------------------------- THE DISTRICT ESTABLISHMENT
+   The district's own list of officers, as it arrived on 08.10.2026:
+
+     Sl.No · Section · Designation · Name of the Officer · Mobile No
+
+   Read like the roster and the staff list — take first what can be recognised
+   on sight (a ten-digit mobile), drop a leading serial, and only then split
+   what is left into columns. THE OFFICE IS THE SECTION, not a department
+   guessed out of the designation: "District Forest Officer" is a designation
+   and "Forest Department" is a fact this page does not have. Leave is
+   sanctioned through an office, and an invented one is worse than the one the
+   district actually wrote down.
+
+   TWO POSTS, ONE MAN, ONE LEAVE ACCOUNT. Four of the seventy-three numbers
+   appear on two rows — one officer holding a second charge. Sent as two rows
+   they would be one row written twice, the designation flipping between the
+   two on every paste. So rows sharing a number are FOLDED, and the
+   designations joined. Where the two names do NOT agree the rows are sent
+   separately and unfolded on purpose: one number against two different people
+   is the register's own ambiguity to refuse and name, and a parser must not
+   settle it by picking one.
+
+   This is a TOP-LEVEL function, beside parseRoster and parseStaff, because
+   the first cut of parsePostings sat inside the function that drew its panel
+   and the button was bound, enabled and did nothing whatever when pressed. */
+function parseOfficers(text, role){
+  const read = [], bad = [], notes = [];
+  String(text || '').split(/\r?\n/).forEach(line => {
+    if(!line.trim()) return;
+    let cells = line.indexOf('\t') >= 0 ? line.split('\t') : line.split(/\s{2,}/);
+    cells = cells.map(c => String(c).trim());
+    /* the headings of the district's own sheet, and its title row */
+    if(/^sl\.?\s*no/i.test(cells[0] || '') || /name of the officer/i.test(line)) return;
+    if(/district officers\s*:/i.test(line)) return;
+
+    const runs = (line.match(/\d{10}/g) || []);
+    if(!runs.length){ bad.push({ line:line.trim().slice(0, 70), why:'no ten-digit mobile number on the line' }); return; }
+    const phone = runs[0];
+    if(runs.length > 1)
+      notes.push(runs.length + ' numbers on one line — the first (' + phone + ') was taken: ' + line.trim().slice(0, 60));
+
+    let head = cells.filter(c => !/\d{10}/.test(c));
+    if(head.length && /^\d{1,3}$/.test(head[0])) head = head.slice(1);
+    while(head.length && !head[head.length - 1]) head.pop();
+    head = head.filter(String);
+    if(head.length < 3){
+      bad.push({ line:line.trim().slice(0, 70),
+                 why: head.length === 2 ? 'no Section column — the office is read from it'
+                                        : 'a Section, a Designation and a Name are all needed' });
+      return;
+    }
+    const office = head[0], name = head[head.length - 1];
+    const desig = head.slice(1, head.length - 1).join(' ');
+    if(/\bsir\b/i.test(name) || /^(ac|rdo|dro)\b/i.test(name))
+      notes.push('"' + name + '" is a post and not a person — the register needs the officer\u2019s own name: ' + desig);
+    read.push({ name, office, desig, emp:'', phone, role:role || 'HOD' });
+  });
+
+  /* fold the second charge into the first, where it is plainly the same man */
+  const key = n => String(n).toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-z]/g, '');
+  const by = {}, rows = [];
+  read.forEach(r => {
+    const seen = by[r.phone];
+    if(seen && (key(seen.name) === key(r.name) || key(seen.name).indexOf(key(r.name)) >= 0
+                || key(r.name).indexOf(key(seen.name)) >= 0)){
+      if(seen.desig.indexOf(r.desig) < 0) seen.desig += ' / ' + r.desig;
+      seen.folded = (seen.folded || 1) + 1;
+      return;
+    }
+    if(seen) notes.push(r.phone + ' is on two rows against two different names — "' + seen.name +
+      '" and "' + r.name + '". Both are sent; one number is one employee, so the register will refuse the second and name the holder.');
+    by[r.phone] = r; rows.push(r);
+  });
+  return { rows, bad, notes };
 }
 
 /* THE POSTING LIST AND THE ROSTER ARE BOTH READ AT THE TOP LEVEL, beside each
@@ -3458,6 +3549,168 @@ function rollPost(body,after){
       pullRoll().then(()=>{ if(DATA) render(DATA); });
     })
     .catch(err=>{ ROLLBUSY=false; rollSay('It did not get through: '+err,true); });
+}
+
+/* ============================== THE DISTRICT HRMS ==========================
+   Two panels, and they are the whole of standing this register up: the
+   establishment goes in, and the rollout says who has taken it up.
+
+   THE EMPLOYEE ID WAS NOT THERE. The claim asks for something only the
+   employee knows, because a mobile number is written in every office register
+   in the district — and the district's own list of officers, when it arrived
+   on 08.10.2026, carried Section, Designation, Name and Mobile and no id of
+   any kind. So where there is none the register mints a six-character
+   enrolment code per row, printed once here for the office to hand over, and
+   spent the moment it is used. The office never learns his PIN; he chooses it
+   himself and the code is how the register knows the row is his.
+   ========================================================================= */
+const HRMS_PILL={register:['ok','to be added'],correct:['warn','to be corrected'],
+  unchanged:['mut','already right'],refused:['bad','refused']};
+
+function hrmsPanels(){
+  const p = HRM_TEXT.trim() ? parseOfficers(HRM_TEXT, HRM_ROLE) : null;
+  let h='';
+  h+=panel('c12','The district establishment',
+    'paste the office list · nothing is written until you say so',
+    '<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">'+
+    'Paste the district\u2019s own list — <b>serial, section, designation, name, mobile</b>. '+
+    'The <b>section is the office</b>, because leave is sanctioned through one and a department '+
+    'guessed out of a designation would be a fact this page does not have. '+
+    'An officer on two rows with the same name is <b>one employee holding two posts</b> and is folded '+
+    'into one line with both designations — one man, one leave account. '+
+    '<b>Nothing is written until you press Apply.</b></div>'+
+    '<div style="margin-bottom:10px;display:flex;gap:9px;align-items:center;flex-wrap:wrap">'+
+    '<label style="font-size:12px;color:var(--tx-3)">They go on as</label>'+
+    '<select id="hrmRole" style="min-height:34px;padding:0 9px;border:1px solid var(--ln);border-radius:8px;'+
+    'background:var(--bg-2);color:var(--tx);font:inherit;font-size:13px">'+
+    ['HOD','EMP'].map(r=>'<option value="'+r+'"'+(HRM_ROLE===r?' selected':'')+'>'+
+      (r==='HOD'?'Heads of office':'Employees')+'</option>').join('')+'</select></div>'+
+    (p?'<div style="margin-bottom:9px;font-size:12px;color:var(--tx-3)">'+p.rows.length+' line(s) read'+
+      (p.bad.length?' · <span style="color:var(--red)">'+p.bad.length+' not understood</span>':'')+
+      '</div>':'')+
+    '<textarea id="hrmTbl" rows="6" placeholder="Paste the district officers list here"'+
+    ' style="width:100%;padding:10px;border:1px solid var(--ln);border-radius:9px;background:var(--bg-2);'+
+    '        color:var(--tx);font:12.5px/1.6 var(--mono);resize:vertical">'+esc(HRM_TEXT)+'</textarea>'+
+    (p&&p.bad.length?'<div style="font-size:12px;color:var(--red);margin-top:7px">Not read, and left alone:<br>'+
+      p.bad.map(b=>'· '+esc(b.why)+' — <span class="mut">'+esc(b.line)+'</span>').join('<br>')+'</div>':'')+
+    (p&&p.notes.length?'<div style="font-size:12px;color:var(--amb);margin-top:7px">'+
+      p.notes.map(n=>'· '+esc(n)).join('<br>')+'</div>':'')+
+    '<div style="margin-top:11px;display:flex;gap:9px;flex-wrap:wrap">'+
+    '<button class="tbtn" id="hrmRead"'+((!p||!p.rows.length||ROLLBUSY)?' disabled':'')+'>Compare with the register</button>'+
+    (HRM_PLANS?'<button class="tbtn pri" id="hrmApply"'+(ROLLBUSY?' disabled':'')+'>Apply what is listed</button>':'')+
+    (HRM_TEXT?'<button class="fchip" id="hrmClear">Clear</button>':'')+
+    '</div>'+
+    (HRM_DONE?'<div style="margin-top:12px;font-size:13px;color:var(--tx-2);line-height:1.7;'+
+      'border-left:3px solid var(--st-ok);padding-left:12px">'+esc(HRM_DONE)+'</div>':'')+
+    /* A CODE IS SHOWN ONCE HERE AND IS ALSO READABLE FROM THE ROLLOUT PANEL
+       while the row is unclaimed, because an office loses the sheet it was
+       printed on and re-minting would invalidate the one already given out. */
+    (HRM_CODES&&HRM_CODES.length?'<div style="margin-top:12px;padding:12px;border:1px solid var(--amb);border-radius:9px">'+
+      '<b>'+HRM_CODES.length+' enrolment code(s) were issued.</b>'+
+      '<div class="expnote" style="margin:6px 0 9px">Each is a <b>one-time</b> token: the employee types it once, '+
+      'with his own number, and chooses his own PIN — and the code is spent. The Audit tab records that codes were '+
+      'issued and to how many, never a code. They can be read again below for as long as a row is unclaimed.</div>'+
+      '<button class="tbtn pri" id="hrmCodes">Download the enrolment codes (CSV)</button></div>':'')+
+    (HRM_PLANS?'<div class="twrap" style="margin-top:13px;max-height:460px"><table>'+
+      '<thead><tr><th>Office</th><th>Name</th><th>Designation</th><th>Mobile</th><th>What it is</th><th>What would change</th></tr></thead><tbody>'+
+      HRM_PLANS.map(x=>{ const V=HRMS_PILL[x.verdict]||['warn',x.verdict];
+        return '<tr><td>'+esc(x.office||'—')+'</td><td>'+esc(x.name||'—')+'</td>'+
+          '<td class="mut">'+esc(x.desig||'—')+'</td><td class="num mut">'+esc(x.phone||'')+'</td>'+
+          '<td><span class="pill '+V[0]+'">'+esc(V[1])+'</span></td>'+
+          '<td style="color:var(--tx-2)">'+esc((x.changes&&x.changes.length)?x.changes.join('; '):(x.why||'—'))+'</td></tr>';
+      }).join('')+'</tbody></table></div>'+
+      '<div class="expnote" style="margin-top:9px"><b>This register takes leave and nothing else.</b> '+
+      'Nobody on it is asked to mark attendance, so no reminder, no show-cause notice, no casual-leave debit and '+
+      'no lock on the app can reach anybody here. <b>One number is one employee</b> — a number already held by a '+
+      'different man is refused and the holder named, and a number pasted twice against two names is refused rather '+
+      'than written twice. Nothing is deleted; every change is on the Audit tab.</div>':''),'rl');
+
+  /* ---- who has taken it up ---- */
+  const C=HRM_CLAIMS;
+  h+=panel('c12','Has the register reached them?',
+    C?(C.claimed+' of '+(C.claimed+C.waiting)+' have set a PIN'):'',
+    '<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">'+
+    'An employee sets <b>his own PIN</b>, once, with his number and the enrolment code his office gave him. '+
+    'The office never learns the PIN and the register never stores one. This is who is still waiting.</div>'+
+    '<div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:11px">'+
+    '<button class="tbtn" id="hrmPull"'+(ROLLBUSY?' disabled':'')+'>Read it again</button>'+
+    (C&&C.open&&C.open.length?'<button class="tbtn" id="hrmOpenCsv">Download who is waiting, with their codes (CSV)</button>':'')+
+    '</div>'+
+    (!C?'<div class="mut" style="font-size:13px">Not read yet.</div>':
+      (!C.open||!C.open.length?'<div style="font-size:13px;color:var(--st-ok)">Every row on the roll has been claimed.</div>':
+      '<div class="twrap" style="max-height:420px"><table>'+
+      '<thead><tr><th>Name</th><th>Office</th><th>Designation</th><th>Mobile</th><th>Claims it with</th></tr></thead><tbody>'+
+      C.open.map(o=>'<tr><td>'+esc(o.name||'—')+'</td><td class="mut">'+esc(o.office||'—')+'</td>'+
+        '<td class="mut">'+esc(o.desig||'—')+'</td><td class="num mut">'+esc(o.phone||'')+'</td>'+
+        '<td class="num">'+esc(o.code||o.emp||'—')+'</td></tr>').join('')+
+      '</tbody></table></div>')),'rl');
+  return h;
+}
+
+function hrmsWire(){
+  const $=x=>document.querySelector(x);
+  const hT=$('#hrmTbl');
+  if(hT){ hT.onchange=()=>{ HRM_TEXT=hT.value; HRM_PLANS=null; HRM_DONE=null; if(DATA) render(DATA); };
+    hT.onblur=()=>{ if(hT.value!==HRM_TEXT){ HRM_TEXT=hT.value; HRM_PLANS=null; HRM_DONE=null; if(DATA) render(DATA); } }; }
+  /* A SELECT FIRES change, NOT click — the analytics and segment pickers were
+     both bound to click once and did nothing whatever when used. */
+  const hR=$('#hrmRole');
+  if(hR) hR.onchange=()=>{ HRM_ROLE=hR.value; HRM_PLANS=null; if(DATA) render(DATA); };
+  const hC=$('#hrmClear');
+  if(hC) hC.onclick=()=>{ HRM_TEXT=''; HRM_PLANS=null; HRM_DONE=null; if(DATA) render(DATA); };
+  const hRead=$('#hrmRead');
+  if(hRead) hRead.onclick=()=>{
+    const p=parseOfficers(HRM_TEXT,HRM_ROLE); if(!p.rows.length) return;
+    HRM_DONE=null;
+    rollPost({kind:'hrmsSeed',rows:p.rows,dry:true}, r=>{ HRM_PLANS=r.plans||[]; });
+  };
+  const hA=$('#hrmApply');
+  if(hA) hA.onclick=()=>{
+    const p=parseOfficers(HRM_TEXT,HRM_ROLE); if(!p.rows.length) return;
+    const n=k=>(HRM_PLANS||[]).filter(x=>x.verdict===k).length;
+    if(!confirm('Write the establishment to the District HRMS?\n\n'+
+      n('register')+' added · '+n('correct')+' corrected · '+n('unchanged')+' already right · '+
+      n('refused')+' refused.\n\n'+
+      'They are added for LEAVE ONLY: no attendance is asked of anybody, and no notice, debit or lock can reach them.\n'+
+      'Each gets a one-time enrolment code — take the file before leaving this page.\n'+
+      'Nothing is deleted. Every change is written to the Audit tab.')) return;
+    rollPost({kind:'hrmsSeed',rows:p.rows,dry:false}, r=>{
+      HRM_PLANS=null;
+      HRM_CODES=(r.issued||[]).slice();
+      HRM_DONE=(r.added||0)+' added · '+(r.corrected||0)+' corrected · '+
+        ((r.issued||[]).length)+' enrolment code(s) issued.';
+      hrmsPull();
+    });
+  };
+  const hCo=$('#hrmCodes');
+  if(hCo) hCo.onclick=()=>{
+    const rows=[['Name','Office','Designation','Mobile','Enrolment code']];
+    (HRM_CODES||[]).forEach(x=>rows.push([x.name||'',x.office||'',x.desig||'',x.phone||'',x.code||'']));
+    rows.push([]);
+    rows.push(['How it is used','The employee opens the HRMS app, enters his own mobile number, presses Sign in, '+
+      'then types this code and chooses his own PIN. The code is spent at once.']);
+    rows.push(['Note','The register records that a code was issued and that a PIN was set — never the code and never the PIN.']);
+    dlBlob('District-HRMS-enrolment-codes.csv','text/csv;charset=utf-8',csvText(rows));
+  };
+  const hOc=$('#hrmOpenCsv');
+  if(hOc) hOc.onclick=()=>{
+    const rows=[['Name','Office','Designation','Mobile','Claims it with']];
+    ((HRM_CLAIMS&&HRM_CLAIMS.open)||[]).forEach(o=>rows.push([o.name||'',o.office||'',o.desig||'',o.phone||'',o.code||o.emp||'']));
+    rows.push([]);
+    rows.push(['Still waiting',String(((HRM_CLAIMS&&HRM_CLAIMS.open)||[]).length)]);
+    dlBlob('District-HRMS-still-waiting.csv','text/csv;charset=utf-8',csvText(rows));
+  };
+  const hP=$('#hrmPull');
+  if(hP) hP.onclick=()=>hrmsPull();
+}
+
+/* the rollout list. Read on opening the Admin view, and again after a seed. */
+function hrmsPull(){
+  if(!ST||!ST.url) return;
+  fetch(ST.url+'?op=hrmsClaims&token='+encodeURIComponent(ST.token))
+    .then(r=>r.json())
+    .then(j=>{ if(j&&j.ok){ HRM_CLAIMS=j; if(VIEW==='admin'&&DATA) render(DATA); } })
+    .catch(()=>{});
 }
 
 function vAdmin(j,A){
@@ -3665,6 +3918,11 @@ function vAdmin(j,A){
 
 /* ---- THE ROLL AGAINST THE DISTRICT'S TABLE ---- */
   const parsed = TBL_TEXT.trim() ? parseRoster(TBL_TEXT, TBL_ROLE) : null;
+  /* THE PANELS A REGISTER HAS. The roster, the postings and the office
+     staff are the sanitation register's own: a village, a mandal charge and
+     an MPDO office mean nothing on a register that takes leave and nothing
+     else, and a panel that leads to a refusal is worse than no panel. */
+  if(TVIEW!=='HRMS'){
   h+=panel('c12','Correct the roll from your roster',
     'paste the table \u00b7 nothing is written until you say so',
     `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
@@ -3816,6 +4074,10 @@ function vAdmin(j,A){
       'filings and his place in the notice ladder. Only his designation and employee id are noted. A mobile already '+
       'held by a different man is refused and the holder named; the same man in a second mandal is additional charge '+
       'and gets a row of his own, with no second PIN.</div>':''),'rl');
+  }
+
+  /* ---- THE DISTRICT ESTABLISHMENT, on the register that holds it ---- */
+  if(TVIEW==='HRMS') h+=hrmsPanels();
 
   /* ---- the roll ---- */
   const q=ROLLQ.trim().toLowerCase();
@@ -5020,6 +5282,7 @@ function render(j){
   if(VIEW==='advisory' && !ADV) pullAdv(ADV_OPEN);
   if(VIEW==='admin' && !ROLL) pullRoll();
   if(VIEW==='admin') wireAdmin();
+  if(VIEW==='admin' && TVIEW==='HRMS'){ hrmsWire(); if(!HRM_CLAIMS) hrmsPull(); }
   if(VIEW==='schedule' && SCHED && SCHED.forMonth !== (MONTH||'')) SCHED=null;   /* the picker moved */
   if(VIEW==='schedule' && !SCHED) pullSched();
   if(VIEW==='schedule') wireSchedule();

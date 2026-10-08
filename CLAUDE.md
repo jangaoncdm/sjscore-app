@@ -1344,6 +1344,113 @@ live at the top level, beside `parseRoster`.
 
 ---
 
+---
+
+## The third register · District HRMS
+
+**Ordered 05.10.2026.** The whole district applies for leave, tracks it and
+sees what it has left — between two and five thousand employees across every
+office, a third Sheet behind a third `/exec`, with its own app at `/hrms/`.
+`DEPLOY-HRMS.md` is how it is put up. **It takes leave and nothing else**:
+nobody on it is asked to mark attendance, so the whole show-cause ladder has
+nobody to walk — no reminder, no notice, no debit, no lock — and `TENANTS.HRMS`
+carries `sanction:false`. Suite 34 is where that is changed first.
+
+Leave itself is **Code.gs's and is not re-written here**. `saveLeave_`, the
+overlap refusal, the medical spell, the yearly cap and the twin-row rule are
+the same ones the other two registers run on and must stay the same ones;
+`backend/FeatureHrms.gs` is only the three things that are new — the
+establishment, the PIN the employee chooses, and his own view of his leave.
+That view is **bounded**: `hrmsMine_` walks the tail of the register, because
+Code.gs reads the Leave tab whole in four places, which is right at 284
+officers and is not at five thousand.
+
+**THE ROLL IS THE DISTRICT'S AND THE PIN IS THE EMPLOYEE'S.** The office is
+the only body that knows who its employees are, so it seeds them; the employee
+claims his own row. Self-SETUP, not self-REGISTRATION: on a register that
+sanctions leave, anyone who could enrol himself could take leave the district
+never granted to a person it never employed.
+
+**And a mobile number is not a secret.** It is written in every office
+register in the district, so the claim — the one unauthenticated write on any
+of these registers — asks for a second thing. That was the employee id. **The
+district's own list of officers, when it arrived on 08.10.2026, carried none**:
+Sl.No, Section, Designation, Name, Mobile and nothing else. Seventy-three
+officers, and five thousand employees behind them, with no second factor at
+all.
+
+Two ways out and only one of them honest. Dropping the factor lets whoever
+reads a noticeboard become that officer. Asking eleven offices to find five
+thousand employee ids by hand is weeks of work before one person can apply for
+a day off. So where there is no employee id **the register mints one itself**:
+a six-character **enrolment code**, issued per row, printed once on the console
+with a file to take it away in, and **spent the moment it is used**
+(`hrmsCode_`, `HRMS_CODE_HEAD`). The alphabet leaves out O/0, I/1, S/5 and B/8,
+because it is read off a printed sheet and typed on a phone by a man who did
+not write it. It is a one-time token and is not pretended to be more: it is a
+secret an office can distribute on paper, which is what an office actually
+has. **The employee still chooses his own PIN** — the code only proves the row
+is his. `Audit` records that codes were issued and to how many, **never a
+code**, exactly as it records that a PIN was set and never the PIN.
+
+**Where the column is, and whether it exists, are two different questions.**
+`hrmsCodeIx_` reads and `hrmsCodeCol_` makes, because `hrmsPlan_` has to know
+whether a row already carries a code on a **dry** run — and a proposal that
+appends a header to the live sheet has written something. The column is not on
+`U_HEAD`: that array is Code.gs's and is shared by three registers, and the
+column means nothing on the two whose PINs the Collector issues. A module makes
+its own room.
+
+**ONE OFFICER IS ONE EMPLOYEE AND ONE LEAVE ACCOUNT, and the paste is read
+three ways to keep it so.**
+
+- **The section is the office.** Leave is sanctioned through one, and
+  "Forest Department" derived from "District Forest Officer" is a fact the
+  console does not have. A parser that invents an office is worse than one
+  that carries what the district actually wrote down.
+- **Two posts held by one man are folded into one row** with both
+  designations, by `parseOfficers` before anything is sent. Four of the
+  district's seventy-three numbers are like this. Sent as two rows it is one
+  row written twice, the designation flipping between the two on every paste.
+- **One number against two different names is sent UNFOLDED, on purpose.**
+  Which of the two holds it is the district's to settle, not a parser's to
+  guess, so the register takes the first and **refuses the second, naming the
+  holder**.
+
+**A paste is planned against the sheet *and against itself*.** Every row is
+read off one snapshot taken before anything is written, so a number appearing
+twice in the paste was absent from that snapshot **both times** and was
+registered **twice** — one number on two rows, which is what makes the app
+greet a man with somebody else's name, and which the claim would then settle
+by taking the first row it happened to find. `hrmsPlan_` carries a `seen` map
+for it. Caught by driving the district's own list against the real backend
+before it ever ran against the register, which is the whole reason that is
+worth doing.
+
+**The console had no idea the register existed.** It was built, tested and
+given an app of its own, and `hrmsSeed` and `op=hrmsClaims` were endpoints
+nothing could reach: no tenant on the picker, no establishment panel, no way
+to see who had taken it up. `TENANCY.HRMS` adds it, and **the rail shows what
+the register has** — the `off` list is per tenant now rather than a line about
+Gram Palana, and it **opens on Leave**, because Overview is an attendance
+overview and on this register it is a wall of noughts. A row of noughts reads
+as a district doing nothing, which is not the same thing as a register that was
+never asked. The fall-back view is the tenant's own `home`, or switching
+register lands on a hidden screen.
+
+`parseOfficers` lives at the **top level**, beside `parseRoster` and
+`parseStaff`, for the reason the first cut of `parsePostings` did not: a parser
+declared inside the function that draws its panel leaves the button bound,
+enabled, and doing nothing whatever when pressed, with nothing in the page
+saying a word. `tests/render-hrms-console.js` drives the screen and asserts
+**what went on the wire**, that none of it reached the other two registers, and
+that not one enrolment code survives a switch of register.
+
+**The rosters never enter this repository.** `hms/` is gitignored, as `Add/`
+and `Domain/` are, and it was ignored **before the workbook was opened** —
+because `Add/` was not, and a `git add -A` published 192 personal mobile
+numbers on 04.10.2026.
+
 ## House style
 
 The prose in this project is plain, unhurried, and written for an officer

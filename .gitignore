@@ -28,3 +28,9 @@ tests/fixture-schedule.json
 # purged from the history — the same fault this file already warns about for
 # Domain/, made again, in the same way, on the same day.
 Add/
+
+# The district establishment for the HRMS register: personal mobile numbers
+# in bulk, and THIS REPOSITORY IS PUBLIC. Ignored before the file was opened,
+# because `Add/` was not and a `git add -A` published 192 numbers on
+# 04.10.2026.
+hms/

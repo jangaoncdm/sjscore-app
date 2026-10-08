@@ -83,10 +83,114 @@ module.exports = {
       t.eq(e.sheets['Users'].rows.length, n, 'a second paste writes no second row');
       t.eq(again.counts.unchanged, 1, 'and says there was nothing to do');
 
-      /* an employee id is what he claims with, so it is required */
-      const noId = seed(e, [{ name:'X', office:'Y', desig:'Z', emp:'', phone:'9444400002' }], true);
-      t.eq(noId.plans[0].verdict, 'refused', 'a row with no employee id is refused');
-      t.contains(noId.plans[0].why, 'claims his row with', 'and it says why');
+      /* A ROW WITH AN EMPLOYEE ID NEEDS NOTHING FROM THIS REGISTER — the
+         office's own id is the second factor, and minting a code beside it
+         would be a second standing credential for one row. */
+      t.eq(e.eval("hrmsCodeIx_(uidx_())"), -1,
+        'and no enrolment code column was made for a roll that carries ids');
+    }
+
+    /* ---- 2a. AND WHERE THE OFFICE HAS NO EMPLOYEE ID TO GIVE ----
+
+       The district's own list of officers, when it arrived on 08.10.2026,
+       carried Section, Designation, Name and Mobile and no id of any kind.
+       That used to be a refusal, row by row, with nothing the office could do
+       about it. The second factor is not dropped — it is ISSUED. */
+    {
+      const e = start();
+      const NOID = { name:'Y.Ravikiran', office:'Collectorate',
+                     desig:'Administration Officer', emp:'', phone:'9444400009' };
+
+      /* THE PROPOSAL WRITES NOTHING — not even the column. A dry run that
+         appends a header to the live sheet has written something. */
+      const dry = seed(e, [NOID], true);
+      t.eq(dry.plans[0].verdict, 'register', 'he is added rather than refused');
+      t.contains(JSON.stringify(dry.plans[0].changes), 'enrolment code will be issued',
+        'and the proposal says a code will be issued');
+      t.eq(e.eval("hrmsCodeIx_(uidx_())"), -1, 'AND THE PROPOSAL MADE NO COLUMN');
+      t.eq(e.sheets['Users'].rows.length, 2, 'and wrote no row');
+
+      const r = seed(e, [NOID]);
+      t.eq(r.added, 1, 'on Apply he is on the roll');
+      t.eq(r.issued.length, 1, 'with one enrolment code issued');
+      const code = r.issued[0].code;
+      t.eq(r.issued[0].phone, '9444400009', 'against his own number');
+      t.eq(code.length, 6, 'six characters');
+      t.ok(/^[ACDEFGHJKLMNPQRTUVWXYZ23469]{6}$/.test(code),
+        'AND NOT ONE OF THEM IS O, I, S, B, 0, 1, 5 OR 8 — it is read off a printed sheet and typed by a man who did not write it');
+      t.ok(JSON.stringify(e.sheets['Audit'].rows).indexOf(code) < 0,
+        'the Audit tab records that codes were issued, NEVER one of them');
+      t.contains(JSON.stringify(e.sheets['Audit'].rows), 'enrolment code(s) issued',
+        'and how many');
+
+      /* RULE 8 — a nervous second paste must not invalidate the sheet the
+         office has already handed out. */
+      const again = seed(e, [NOID]);
+      t.eq((again.issued || []).length, 0, 'a second paste mints no second code');
+      t.eq(again.counts.unchanged, 1, 'and says there was nothing to do');
+
+      /* THE NUMBER ALONE STILL DOES NOT CLAIM THE ROW. That is the whole
+         reason the code exists. */
+      t.eq(e.post({ kind:'claimPin', u:'9444400009', emp:'', pin:'1234' }).ok, false,
+        'the number alone does not claim it');
+      t.eq(e.post({ kind:'claimPin', u:'9444400009', emp:'ZZZZZZ', pin:'1234' }).ok, false,
+        'nor a wrong code');
+
+      /* the district can read the standing code back, because an office loses
+         the sheet it was printed on */
+      const open = e.get('hrmsClaims', { token:cdm(e) }).open
+        .filter(function(o){ return o.phone === '9444400009'; })[0];
+      t.eq(open.code, code, 'the Collector can read the standing code back');
+
+      const ok = e.post({ kind:'claimPin', u:'9444400009', emp:code, pin:'7351' });
+      t.eq(ok.ok, true, 'AND THE CODE CLAIMS THE ROW');
+      t.eq(e.post({ kind:'login', u:'9444400009', p:'7351' }).ok, true,
+        'his own chosen PIN opens the register afterwards');
+      t.contains(JSON.stringify(e.sheets['Audit'].rows), 'claimed with his enrolment code',
+        'and the Audit tab says which factor he claimed with');
+
+      /* IT IS SPENT. Left on the row it is a standing second credential for a
+         row that already has a PIN, sitting on a sheet somebody photocopied. */
+      const ci = e.eval("hrmsCodeIx_(uidx_())");
+      const row = e.sheets['Users'].rows.filter(function(x){
+        return String(x[0]).replace(/\D/g, '').slice(-10) === '9444400009'; })[0];
+      t.eq(String(row[ci] || ''), '', 'AND THE CODE IS SPENT — it is a one-time token');
+      t.ok(!e.get('hrmsClaims', { token:cdm(e) }).open
+        .some(function(o){ return o.phone === '9444400009'; }),
+        'and he is off the rollout list');
+    }
+
+    /* ---- 2b. ONE NUMBER IS ONE EMPLOYEE, INSIDE ONE PASTE TOO ----
+
+       A paste is planned against ONE snapshot of the sheet, taken before
+       anything is written. So a number appearing twice in the paste was absent
+       from that snapshot both times and was registered TWICE — one number on
+       two rows, which is what makes the app greet a man with somebody else's
+       name, and which the claim would then settle by taking the first row it
+       happened to find. The district's own list of officers has four numbers
+       on two rows apiece. Caught by driving that list against this backend. */
+    {
+      const e = start();
+      const A = { name:'Dr. S. Muralidhar Rao', office:'District Officers',
+                  desig:'Dist. Minority Welfare Officer', emp:'', phone:'9444400011' };
+      const B = { name:'Dr. B. Vikram Kumar', office:'District Officers',
+                  desig:'Dist. SC Development Officer', emp:'', phone:'9444400011' };
+      const r = seed(e, [A, B]);
+      t.eq(r.counts.register, 1, 'the first of the two is registered');
+      t.eq(r.counts.refused, 1, 'AND THE SECOND IS REFUSED, not written beside it');
+      t.eq(e.ctx.rollRows_(e.ctx.uidx_(), e.ctx.uidx_().sh.getDataRange().getValues(), '9444400011').length, 1,
+        'so the number is on exactly one row');
+      const dry = seed(e, [A, B], true).plans[1];
+      t.contains(dry.why, 'appears twice in what was pasted', 'and the proposal says why');
+      t.contains(dry.why, 'Dr. S. Muralidhar Rao', 'naming the other man');
+
+      /* the SAME man holding a second charge is not this: one employee is one
+         leave account, and the two posts are folded before they are sent */
+      const C = { name:'N. L. Narsimha Rao', office:'District Officers', emp:'',
+                  desig:'Dist. BC Welfare Officer / Dist. Youth & Sports Officer', phone:'9444400012' };
+      t.eq(seed(e, [C]).counts.register, 1, 'a man holding two posts is one row');
+      t.eq(e.ctx.findByPhone_('9444400012').desig.indexOf('Youth') > 0, true,
+        'carrying both designations');
     }
 
     /* ---- 3. HE CLAIMS HIS OWN ROW ---- */

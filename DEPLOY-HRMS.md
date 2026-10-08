@@ -60,21 +60,71 @@ file exists, and never overwrites it.
 
 ## 5 — The establishment
 
-Console ▸ Admin ▸ **District HRMS** ▸ paste the establishment list:
+Switch the console to **District HRMS** (the register picker, top left), then
+Admin ▸ **The district establishment**, and paste the office's own list in
+the shape it keeps it in:
 
-    Name · Office · Designation · Employee ID · Mobile
+    Sl.No · Section · Designation · Name of the Officer · Mobile No
 
-It proposes before it writes. **An employee id is required on every row** —
-it is what the employee claims his own row with, and a row seeded without one
-can never be claimed and will need a PIN issued by hand.
+**The section is the office**, because leave is sanctioned through one and a
+department guessed out of a designation ("Forest Department" from "District
+Forest Officer") would be a fact the page does not have.
+
+It **proposes before it writes**: *Compare with the register* prints what
+would change row by row and writes nothing — not even a column. Only *Apply*
+writes.
+
+Three things it does to the list on the way in:
+
+- **Two posts held by one man are folded into one row** with both
+  designations. One officer is one employee and one leave account; sent as two
+  rows he would be one row written twice, the designation flipping between the
+  two on every paste. Four of the district's seventy-three numbers are like
+  this.
+- **One number against two different names is sent unfolded, on purpose.**
+  Which of the two holds it is the district's to settle and not a parser's to
+  guess, so the register registers the first, **refuses the second and names
+  the holder**. A number pasted twice is refused rather than written twice —
+  one number on two rows is what makes an app greet a man with somebody else's
+  name.
+- **A line it cannot read is named, never guessed at** — a row with no mobile
+  number, or with no Section column to take the office from.
+
+### The enrolment code
+
+The claim asks for something only the employee knows, because **a mobile
+number is not a secret** — it is written in every office register in the
+district. The employee id was that something, and the district's own list of
+officers carries **none**: Section, Designation, Name, Mobile and nothing
+else.
+
+So where a row has no employee id the register **mints one itself**: a
+six-character **enrolment code**, issued per row, printed once on the console
+with a CSV to take it away in, and **spent the moment it is used**. The
+alphabet leaves out O/0, I/1, S/5 and B/8, because it is read off a printed
+sheet and typed on a phone by a man who did not write it.
+
+It is a one-time token and is not pretended to be more: it is a secret an
+office can distribute on paper, which is what an office actually has. **The
+employee still chooses his own PIN** — the code only proves the row is his,
+and is spent doing it. A standing code stays readable from *Has the register
+reached them?* for as long as the row is unclaimed, because an office loses
+the sheet it was printed on and re-minting would invalidate the one already
+given out. A second paste mints nothing (rule 8).
+
+`Audit` records that codes were issued and to how many — **never a code**,
+exactly as it records that a PIN was set and never the PIN.
 
 ## 6 — The employees
 
-Send them the address. Each signs in with his own mobile number, is shown the
-claim screen, enters the **employee id his office holds** and chooses his own
-PIN. No PIN is issued by the district and none is printed anywhere.
+Send them the address and the code their office holds for them. Each signs in
+with his own mobile number, is shown the claim screen, enters his **employee
+id or his enrolment code**, and **chooses his own PIN**. No PIN is issued by
+the district and none is printed anywhere.
 
-Console ▸ Admin shows how many have claimed and names those who have not.
+Console ▸ Admin ▸ **Has the register reached them?** shows how many have
+claimed, names those who have not, and gives the standing code against each —
+with a CSV, so an office can be sent only its own.
 
 ## What to watch
 
@@ -83,7 +133,8 @@ Console ▸ Admin shows how many have claimed and names those who have not.
   thousand, that arithmetic fails on all three. Workspace, or the evening
   report and every reminder stop.
 - **The claim is the only unauthenticated write on any of these registers.**
-  It asks for the employee id as a second factor, is rate-limited like a
-  sign-in, answers identically whether the number is absent or the id wrong,
-  and a row is claimed once. Every claim is on `Audit`. A wrong claim is
+  It asks for the employee id — or the enrolment code, where the office had no
+  id to give — as a second factor, is rate-limited like a sign-in, answers
+  identically whether the number is absent or the factor wrong, and a row is
+  claimed once. Every claim is on `Audit`. A wrong claim is
   visible and the Collector can reset it.

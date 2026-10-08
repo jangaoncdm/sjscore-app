@@ -116,10 +116,17 @@ textarea{min-height:84px;resize:vertical}
   </header>
   <div class="wrap">
     <div class="card">
-      <label for="cEmp">Employee ID</label>
-      <input id="cEmp" autocomplete="off" placeholder="As it appears in your service record">
-      <p class="tiny" style="margin-top:5px">This is how the register knows the number is yours.
-        Your own office holds it.</p>
+      <label for="cEmp">Employee ID or enrolment code</label>
+      <input id="cEmp" autocomplete="off" placeholder="From your office">
+      <!-- A MOBILE NUMBER IS NOT A SECRET — it is written in every office
+           register in the district — so the number alone cannot claim a row.
+           The employee id was that second thing, and the district's own list
+           of officers carries none, so the register issues a six-character
+           enrolment code per row instead and the office hands it over. Either
+           one opens this, and both are spent the moment the PIN is set. -->
+      <p class="tiny" style="margin-top:5px">This is how the register knows the number is yours —
+        your employee id, or the <b>six-character code</b> your office was given for you.
+        It is used once and then it is finished with.</p>
       <div class="row2" style="margin-top:4px">
         <div><label for="cPin">Choose a PIN</label>
           <input id="cPin" type="password" inputmode="numeric" maxlength="8" placeholder="4 to 8 digits"></div>

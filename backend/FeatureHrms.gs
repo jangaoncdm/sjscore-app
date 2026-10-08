@@ -50,6 +50,70 @@ var HRMS_TAIL_ROWS = 20000;
    (the MPDO office staff brought them); Office is this register's own. */
 var HRMS_SEED_COLS = ['Office','Designation','EmpId'];
 
+/* THE SECOND FACTOR, WHERE THE OFFICE HAS NO EMPLOYEE ID TO GIVE.
+ *
+ * The claim asks for something only the employee knows, because a mobile
+ * number is written in every office register in the district. The employee id
+ * was that something — and the district's own establishment list, when it
+ * arrived on 08.10.2026, did not carry one: Section, Designation, Name, Mobile
+ * and nothing else. Seventy-three officers, and five thousand employees behind
+ * them, with no second factor at all.
+ *
+ * Two ways out, and only one of them is honest. Dropping the factor lets
+ * whoever reads a noticeboard become that officer on a register that sanctions
+ * leave. Asking the district to find five thousand employee ids by hand is
+ * weeks of work by eleven offices before one person can apply for a day off.
+ *
+ * So where there is no employee id the register MINTS ONE ITSELF: a six-
+ * character enrolment code, issued per row, printed once for the office to
+ * hand over, and CLEARED THE MOMENT IT IS USED. It is a one-time token and is
+ * not pretended to be more: it is a secret the office can distribute on paper,
+ * which is what an office actually has. The employee still chooses his own
+ * PIN — the code only proves the row is his, and is spent doing it.
+ *
+ * The alphabet leaves out O/0, I/1, S/5 and B/8, because this is read off a
+ * printed sheet and typed on a phone by a man who did not write it. */
+var HRMS_CODE_HEAD  = 'EnrolCode';
+var HRMS_CODE_CHARS = 'ACDEFGHJKLMNPQRTUVWXYZ23469';
+var HRMS_CODE_LEN   = 6;
+
+function hrmsCode_(){
+  var out = '';
+  for(var i = 0; i < HRMS_CODE_LEN; i++)
+    out += HRMS_CODE_CHARS.charAt(Math.floor(Math.random() * HRMS_CODE_CHARS.length));
+  return out;
+}
+
+/* WHERE THE COLUMN IS, and WHETHER IT EXISTS, are two different questions,
+   and they are asked by two different callers. hrmsPlan_ has to know whether a
+   row already carries a code before it proposes issuing one — on a DRY run,
+   which must write nothing, not even a header. So reading is read-only and
+   making it is its own act, taken on the write path alone.
+   It is NOT added to U_HEAD: that array is Code.gs's and is shared by three
+   registers, and this column means nothing on the two whose PINs the Collector
+   issues. A module makes its own room. */
+function hrmsCodeIx_(t){
+  if(t.ix.enrolcode != null) return t.ix.enrolcode;
+  var w = Math.max(t.sh.getLastColumn(), 1);
+  var head = t.sh.getRange(1, 1, 1, w).getValues()[0]
+    .map(function(h){ return String(h).toLowerCase().replace(/[^a-z]/g, ''); });
+  t.ix.enrolcode = head.indexOf('enrolcode');
+  return t.ix.enrolcode;
+}
+function hrmsCodeCol_(t){
+  if(hrmsCodeIx_(t) >= 0) return t.ix.enrolcode;
+  ensureHeaders_(t.sh, [HRMS_CODE_HEAD]);
+  t.ix.enrolcode = null;                       /* ask the sheet again */
+  return hrmsCodeIx_(t);
+}
+
+/* the two things a row can be claimed with, read off the roll */
+function hrmsFactors_(t, v, i){
+  var ci = hrmsCodeIx_(t);
+  return { emp: t.ix.empid >= 0 ? cell_(v[i], t.ix.empid) : '',
+           code: ci >= 0 && v[i].length > ci ? cell_(v[i], ci) : '' };
+}
+
 function feature_hrms(){
   return {
     title: 'District HRMS — the leave register and its roll',
@@ -79,12 +143,26 @@ function feature_hrms(){
         catch(err){ return json_({ ok:false, error:'busy — try again' }); }
         try{
           const t = uidx_(), v = t.sh.getDataRange().getValues();
-          const plans = rows.map(function(r){ return hrmsPlan_(t, v, r); });
+          /* A PASTE IS PLANNED AGAINST THE SHEET *AND AGAINST ITSELF*. Every
+             row was read off one snapshot taken before anything was written,
+             so a number appearing twice in the paste was absent from the
+             snapshot both times and was registered TWICE — one number on two
+             rows, which is what makes the app greet a man with somebody
+             else's name, and which the claim would then settle by taking the
+             first row it found. The district's own list of officers has four
+             such numbers. Caught driving this paste against the real backend
+             before it ever ran against the register. */
+          const seen = {};
+          const plans = rows.map(function(r){ return hrmsPlan_(t, v, r, seen); });
           if(b.dry) return json_({ ok:true, dry:true, plans:plans.slice(0, 2000),
                                    counts:hrmsCounts_(plans), total:plans.length });
           const done = hrmsWrite_(t, plans, u);
+          /* THE CODES ARE PRINTED ONCE, in the answer to the call that made
+             them, exactly as a PIN is. They are also readable afterwards from
+             op=hrmsClaims while the row is still unclaimed, because an office
+             loses a printed sheet and a re-paste would mint nothing (rule 8). */
           return json_({ ok:true, dry:false, counts:hrmsCounts_(plans), total:plans.length,
-                         added:done.added, corrected:done.corrected });
+                         added:done.added, corrected:done.corrected, issued:done.issued });
         } finally { lock.releaseLock(); }
       }
     },
@@ -116,9 +194,16 @@ function feature_hrms(){
           const ph = phone10_(v[i][t.ix.phone]); if(!ph) continue;
           if(cell_(v[i], t.ix.hash)){ claimed++; continue; }
           waiting++;
+          /* WITH WHAT HE CLAIMS IT WITH. The office has to put a code in a
+             man's hand and will lose the sheet it was printed on; re-minting
+             it would invalidate the one already given out. So the standing
+             code is readable while the row is unclaimed, by the Collector's
+             own token and nobody else's, and it goes the moment it is used. */
+          const f = hrmsFactors_(t, v, i);
           if(open.length < 500) open.push({ name:cell_(v[i], t.ix.name), phone:ph,
             office:cell_(v[i], t.ix.mandal),
-            desig: t.ix.designation >= 0 ? cell_(v[i], t.ix.designation) : '' });
+            desig: t.ix.designation >= 0 ? cell_(v[i], t.ix.designation) : '',
+            emp:f.emp, code:f.code });
         }
         return json_({ ok:true, claimed:claimed, waiting:waiting, open:open });
       }
@@ -163,27 +248,40 @@ function hrmsClaim_(b){
     const refuse = function(){
       cache_().put(rk, String(n + 1), 3600);
       return json_({ ok:false, error:'That number and employee id do not match a row waiting to be claimed. ' +
-        'Your office holds the establishment; ask it to check the number and the id it has for you.' });
+        'Your office holds the establishment — ask it to check the number against your name, and ' +
+        'for the employee id or the enrolment code it has for you.' });
     };
     if(!live.length) return refuse();
     if(live.some(function(i){ return !!cell_(v[i], t.ix.hash); }))
       return json_({ ok:false, already:true,
         error:'A PIN has already been set for this number. If it was not you, your office can have it reset.' });
 
-    const want = t.ix.empid >= 0 ? cell_(v[live[0]], t.ix.empid) : '';
-    if(!want) return refuse();                 /* seeded without an id: nothing to check against */
-    if(pkey_(want) !== pkey_(emp)) return refuse();
+    /* EITHER THE EMPLOYEE ID HIS OFFICE SEEDED, OR THE ENROLMENT CODE THIS
+       REGISTER ISSUED BECAUSE THE OFFICE HAD NO ID TO SEED. One of the two
+       must be on the row, or there is nothing to check against and the number
+       alone would claim it — which is the whole thing this guard exists for. */
+    const f = hrmsFactors_(t, v, live[0]);
+    if(!f.emp && !f.code) return refuse();
+    const by = pkey_(f.emp) && pkey_(f.emp) === pkey_(emp) ? 'employee id'
+             : pkey_(f.code) && pkey_(f.code) === pkey_(emp) ? 'enrolment code' : '';
+    if(!by) return refuse();
 
     const h = hash_(p, pin);
+    const ci = hrmsCodeIx_(t);
     live.forEach(function(i){
       t.sh.getRange(i + 1, t.ix.hash + 1).setValue(h);
       if(t.ix.initpin >= 0) t.sh.getRange(i + 1, t.ix.initpin + 1).setValue('');
+      /* THE CODE IS SPENT. It is a one-time token: left on the row it would
+         be a standing second credential for a row that already has a PIN,
+         sitting on a sheet the office photocopied. */
+      if(ci >= 0) t.sh.getRange(i + 1, ci + 1).setValue('');
     });
     try{ cache_().remove(rk); }catch(err){}
     const name = cell_(v[live[0]], t.ix.name);
     /* the Audit tab records THAT a PIN was set, on which number and when —
        never the PIN, here as everywhere */
-    admAudit_('HRMS ROW CLAIMED', p, name + ' set his own PIN · ' + live.length + ' row(s)');
+    admAudit_('HRMS ROW CLAIMED', p, name + ' set his own PIN · ' + live.length +
+      ' row(s) · claimed with his ' + by);
     const who = findByPhone_(p);
     return json_({ ok:true, token:issueToken_(who), user:pub_(who) });
   } finally { lock.releaseLock(); }
@@ -214,7 +312,7 @@ function hrmsMine_(phone){
 }
 
 /* ------------------------------------------------------------- the seeding */
-function hrmsPlan_(t, v, r){
+function hrmsPlan_(t, v, r, seen){
   const name = String(r.name || '').trim();
   const office = String(r.office || '').trim();
   const desig = String(r.desig || '').trim();
@@ -226,16 +324,32 @@ function hrmsPlan_(t, v, r){
   if(phone.length !== 10){ out.verdict = 'refused'; out.why = 'a mobile number is ten digits'; return out; }
   if(!name){ out.verdict = 'refused'; out.why = 'a name is needed — the roll is read by people'; return out; }
   if(!office){ out.verdict = 'refused'; out.why = 'an office is needed — leave is sanctioned through one'; return out; }
-  /* AN EMPLOYEE ID IS WHAT HE CLAIMS HIS ROW WITH. Seeded without one, he can
-     never claim it and the office would have to reset a PIN for him by hand. */
-  if(!emp){ out.verdict = 'refused'; out.why = 'an employee id is needed — it is what he claims his row with'; return out; }
+  /* AN EMPLOYEE ID IS WHAT HE CLAIMS HIS ROW WITH — AND WHERE THE OFFICE HAS
+     NONE, AN ENROLMENT CODE IS. This used to be a refusal, and the district's
+     own list of officers has no such column, so the whole establishment would
+     have been refused a row at a time with nothing the office could do about
+     it. The second factor is not dropped; it is issued. */
+  if(!emp) out.issue = true;
   if(!rank_()[role]){ out.verdict = 'refused'; out.why = 'no such role on this register: ' + role; return out; }
+
+  /* the same number earlier in this very paste. A second CHARGE held by the
+     same man is folded before it gets here — one employee is one leave
+     account — so anything still duplicated is two names on one number, which
+     is the district's to settle and not this register's to guess at. */
+  if(seen && seen[phone]){
+    out.verdict = 'refused';
+    out.why = 'that number appears twice in what was pasted, against "' + seen[phone] +
+      '" and "' + name + '". One number is one employee: settle which of the two holds it.';
+    return out;
+  }
+  if(seen) seen[phone] = name;
 
   const mine = rollRows_(t, v, phone).filter(function(i){
     return !(String(v[i][t.ix.active]).toUpperCase() === 'FALSE'); });
   if(!mine.length){
     out.verdict = 'register';
     out.changes.push('added as ' + role + ' of ' + office);
+    if(out.issue) out.changes.push('an enrolment code will be issued');
     return out;
   }
   const was = cell_(v[mine[0]], t.ix.name);
@@ -248,7 +362,16 @@ function hrmsPlan_(t, v, r){
   if(was !== name) out.changes.push('name "' + was + '" → "' + name + '"');
   if(t.ix.mandal >= 0 && cell_(v[mine[0]], t.ix.mandal) !== office) out.changes.push('office → ' + office);
   if(t.ix.designation >= 0 && desig && cell_(v[mine[0]], t.ix.designation) !== desig) out.changes.push('designation → ' + desig);
-  if(t.ix.empid >= 0 && emp && cell_(v[mine[0]], t.ix.empid) !== emp) out.changes.push('employee id → ' + emp);
+  if(t.ix.empid >= 0 && emp && cell_(v[mine[0]], t.ix.empid) !== emp) out.changes.push('employee id → ' + emp);
+  /* A ROW ALREADY ON THE ROLL WITH NO WAY TO CLAIM IT gets a code on this
+     paste rather than on a later one — the office pastes the list it has, and
+     an employee who cannot claim his row is the fault being cured. Once: a
+     row that already carries a code or a PIN is left alone (rule 8). */
+  if(!emp && !cell_(v[mine[0]], t.ix.hash)){
+    var f = hrmsFactors_(t, v, mine[0]);
+    if(!f.emp && !f.code){ out.issue = true; out.row0 = mine[0];
+      out.changes.push('an enrolment code will be issued'); }
+  }
   out.verdict = out.changes.length ? 'correct' : 'unchanged';
   if(!out.changes.length) out.why = 'already on the roll, and nothing differs';
   return out;
@@ -263,7 +386,10 @@ function hrmsCounts_(plans){
 function hrmsWrite_(t, plans, u){
   const sh = t.sh;
   let added = 0, corrected = 0;
-  const fresh = [];
+  const fresh = [], issued = [];
+  /* the column before the first row is written, or a code would have nowhere
+     to go and the office would be handed an establishment it cannot claim */
+  const ci = plans.some(function(p){ return p.issue; }) ? hrmsCodeCol_(t) : -1;
   plans.forEach(function(p){
     if(p.verdict === 'refused' || p.verdict === 'unchanged') return;
     if(p.verdict === 'register'){
@@ -276,6 +402,12 @@ function hrmsWrite_(t, plans, u){
       /* NO PIN. He sets his own, and a seeded PIN would be one more secret
          the office has to carry to five thousand people. */
       put('hash', ''); put('initpin', ''); put('active', 'TRUE');
+      if(p.issue && ci >= 0){
+        while(row.length <= ci) row.push('');
+        p.code = hrmsCode_();
+        row[ci] = p.code;
+        issued.push({ name:p.name, office:p.office, desig:p.desig, phone:p.phone, code:p.code });
+      }
       fresh.push(row);
       added++;
       return;
@@ -286,6 +418,11 @@ function hrmsWrite_(t, plans, u){
       if(t.ix.mandal >= 0 && p.office) sh.getRange(i + 1, t.ix.mandal + 1).setValue(p.office);
       if(t.ix.designation >= 0 && p.desig) sh.getRange(i + 1, t.ix.designation + 1).setValue(p.desig);
       if(t.ix.empid >= 0 && p.emp) sh.getRange(i + 1, t.ix.empid + 1).setValue(p.emp);
+      if(p.issue && ci >= 0){
+        p.code = hrmsCode_();
+        sh.getRange(i + 1, ci + 1).setValue(p.code);
+        issued.push({ name:p.name, office:p.office, desig:p.desig, phone:p.phone, code:p.code });
+      }
       corrected++;
     }
   });
@@ -296,7 +433,10 @@ function hrmsWrite_(t, plans, u){
     const at = sh.getLastRow() + 1;
     sh.getRange(at, 1, fresh.length, fresh[0].length).setValues(fresh);
   }
+  /* the Audit tab records that codes were ISSUED and to how many — never one
+     of them, exactly as it records that a PIN was set and never the PIN */
   admAudit_('HRMS ESTABLISHMENT SEEDED', tenant_().key,
-    added + ' added · ' + corrected + ' corrected · by ' + u.name);
-  return { added:added, corrected:corrected };
+    added + ' added · ' + corrected + ' corrected · ' + issued.length +
+    ' enrolment code(s) issued · by ' + u.name);
+  return { added:added, corrected:corrected, issued:issued };
 }
