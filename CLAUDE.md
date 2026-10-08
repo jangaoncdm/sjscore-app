@@ -1490,11 +1490,38 @@ added and not listed: its contents rendered, its buttons were in the DOM and
 bound, and the section stayed hidden — the same shape of silence as a parser
 declared inside the function that draws its panel.
 
-**Who may order is the tenant's, and the seam stays shut.** The head of an
-office cannot sanction his own staff's leave, deliberately: delegating is the
-obvious next order and `canApproveLeave_` is where it would go, but a hierarchy
-nobody has written down is not a thing to guess at on a register that debits a
-man's casual leave. Suite 34 asserts the HOD is refused.
+**EVERY APPLICATION IN THE DISTRICT COMES TO THE COLLECTOR.** Ordered
+08.10.2026, asked as an open question and answered: *all leave go to collector
+for sanction*. The head of an office cannot sanction his own staff's leave, and
+that is now a direction and no longer a seam left shut for want of one.
+`canApproveLeave_` stays as it is and suite 34 asserts the HOD is refused; it
+is still the one place a delegation would go, and it is not to be opened
+without a further written order.
+
+**And the order settles what the orders screen has to carry.** A thing done by
+one man for two to five thousand employees is the ordinary path, not the rare
+one, so three faults in it stopped being hypothetical:
+
+- **`total` was computed and thrown away.** `op=hrmsPending` sends the oldest
+  300 and counts the rest; the screen showed the 300 and said *"300
+  applications on your desk"*. A desk 450 deep read as 300 to the only person
+  who may sanction any of them, and he would have believed he had seen all of
+  it. It now says *450 waiting in all · the oldest 300 are shown*.
+- **`leaveDecision` slices `b.ids` to 200 however many are sent**, and
+  `decideOneLeave_` re-reads the Leave tab and writes four cells for each in
+  turn — so *Sanction all 300* passed two hundred, said nothing about the other
+  hundred, and was minutes of Apps Script time on a register carrying thousands
+  of leave rows. It goes up in batches of twenty-five, the count moves while he
+  waits, and a failure costs only its own batch. Section 7a of
+  `tests/render-hrms.js` drives thirty through and asserts **two** requests of
+  25 and 5 and **thirty** sanctioned.
+- **A LOST LINE IS NOT PROOF THAT NO ORDER WAS PASSED.** Both the single order
+  and the bulk one answered a dropped connection with *"It did not reach the
+  district, so NO ORDER HAS BEEN PASSED"* — which on a timeout is a false
+  assurance about casual leave that has already been debited, because the write
+  can go through and only the answer be lost on the way back. They now say what
+  is certain, say plainly what is not, and re-read the register, which is the
+  only thing that knows. Section 7b holds it.
 
 **AN APP WITH NO ADDRESS MUST NOT BLAME THE OFFICER'S SIGNAL.** The deploy
 Action publishes `/hrms/` whether or not the register has been stood up, so

@@ -25,7 +25,7 @@ var STORE = 'sjgp-hrms1';          /* browser storage is per DOMAIN, not per
                                       three keys or they sign each other out */
 
 var $ = function(id){ return document.getElementById(id); };
-var DB = { url:SERVER, session:null, me:null, rows:[], ent:null, at:'', pend:[] };
+var DB = { url:SERVER, session:null, me:null, rows:[], ent:null, at:'', pend:[], pendAll:0 };
 
 /* ------------------------------------------------------------------ store */
 function load(){
@@ -186,7 +186,13 @@ function pending(){
   get({ op:'hrmsPending', token:DB.session.token })
     .then(function(r){
       if(!r || !r.ok) return;
-      DB.pend = r.rows || []; save(); drawOrders();
+      /* HOW MANY ARE WAITING IN ALL, not merely how many fit. The server
+         sends the oldest 300 and counts the rest, and the screen threw that
+         count away — so a desk 450 deep read as 300, and by the order of
+         08.10.2026 the Collector is the only person who may sanction any of
+         them, so he would have believed he had seen his whole desk. */
+      DB.pend = r.rows || []; DB.pendAll = Number(r.total) || DB.pend.length;
+      save(); drawOrders();
     })
     .catch(function(){});
 }
@@ -194,8 +200,10 @@ function drawOrders(){
   var n = (DB.pend || []).length;
   var b = $('bOrdersN'); if(b) b.textContent = n ? '  ·  ' + n : '';
   var c = $('oCount');
-  if(c) c.textContent = n ? n + ' application' + (n === 1 ? '' : 's') + ' on your desk'
-                          : 'Nothing is waiting.';
+  var tot = Math.max(Number(DB.pendAll) || 0, n);
+  if(c) c.textContent = !n ? 'Nothing is waiting.'
+      : tot > n ? tot + ' waiting in all · the oldest ' + n + ' are shown, and more come up as you pass them'
+                : n + ' application' + (n === 1 ? '' : 's') + ' on your desk';
   var all = $('bAll'); if(all) all.className = n > 1 ? 'btn' : 'btn hide';
   var list = $('oList'); if(!list) return;
   list.innerHTML = n ? DB.pend.map(function(r){
@@ -233,28 +241,86 @@ function order(id, status, remarks){
       say('mOrders', 'ok', status === 'APPROVED' ? 'Sanctioned.' : 'Refused, and the employee is told why.');
       pending();
     })
-    .catch(function(){ say('mOrders', 'bad', 'It did not reach the district, so NO ORDER HAS BEEN PASSED.'); });
+    /* A LOST LINE IS NOT PROOF THAT NO ORDER WAS PASSED, and a single order
+       is no different from a batch: the write may have gone through and only
+       the answer been lost on the way back, and on a register that debits a
+       man's casual leave an assurance of that kind must not be invented. The
+       register is re-read, which is the only thing that knows. */
+    .catch(function(){
+      say('mOrders', 'bad', 'The line dropped before the district answered, so it is NOT KNOWN ' +
+        'whether this order was passed. The list is re-read below; if the application is still ' +
+        'on it, no order has been passed on it.');
+      pending();
+    });
 }
+/* SANCTION ALL IS SENT IN BATCHES, and that is not an optimisation.
+
+   By the Collector's order of 08.10.2026 every application in the district
+   comes to him, so this is the ordinary path and not the rare one.
+   decideOneLeave_ re-reads the Leave tab and writes four cells for each
+   application in turn, so two hundred in one request is minutes of Apps
+   Script time on a register carrying thousands of leave rows — and
+   leaveDecision slices b.ids to 200 regardless, so 'Sanction all 300' passed
+   two hundred and said nothing whatever about the other hundred. Batches of
+   twenty-five keep every request well inside the limits, move the count while
+   he waits, and cost only their own batch when one fails.
+
+   AND A FAILED BATCH IS NEVER REPORTED AS 'NOTHING WAS PASSED'. The old
+   message asserted exactly that, which on a timeout is a false assurance
+   about casual leave already debited: the orders may well have been written
+   and only the answer lost on the way back. It now says what is certain, says
+   plainly what is not, and re-reads the register — which is the only thing
+   that actually knows. */
+var ORDER_BATCH = 25;
 function orderAll(){
-  var ids = (DB.pend || []).map(function(r){ return r.id; });
+  var ids = (DB.pend || []).map(function(r){ return r.id; })
+            .filter(function(x){ return !!String(x || '').trim(); });
   if(!ids.length) return;
-  if(!window.confirm('Sanction all ' + ids.length + ' of them?\n\n' +
+  var tot = Math.max(Number(DB.pendAll) || 0, ids.length);
+  if(!window.confirm('Sanction ' + ids.length + ' of them?\n\n' +
+    (tot > ids.length ? tot + ' are waiting in all; these are the oldest ' + ids.length +
+      '. The rest come up when you refresh.\n\n' : '') +
     'Each still answers its own checks in turn, so one that cannot be sanctioned is refused BY NAME ' +
     'and stays waiting for your own look. Refusals are never passed this way.')) return;
   clear('mOrders');
   var b = $('bAll'); busy(b, true, 'Passing\u2026');
-  post({ kind:'leaveDecision', token:DB.session.token, ids:ids, status:'APPROVED' })
-    .then(function(r){
-      busy(b, false);
-      if(!r || !r.ok) return say('mOrders', 'bad', (r && r.error) || 'The district did not answer.');
-      var bad = (r.refused || []).length;
-      say('mOrders', bad ? 'info' : 'ok', (r.done || 0) + ' sanctioned' +
-        (bad ? ' · ' + bad + ' could not be, and are still waiting: ' +
-               r.refused.map(function(x){ return x.error; }).join('; ') : '.'));
-      pending();
-    })
-    .catch(function(){ busy(b, false);
-      say('mOrders', 'bad', 'It did not reach the district, so NO ORDER HAS BEEN PASSED.'); });
+
+  var done = 0, refused = [], sent = 0;
+  function finish(lost){
+    busy(b, false);
+    var bits = [];
+    if(done) bits.push(done + ' sanctioned');
+    if(refused.length) bits.push(refused.length + ' could not be and are still waiting (' +
+      refused.slice(0, 3).map(function(x){ return x.error; }).join('; ') +
+      (refused.length > 3 ? '; \u2026' : '') + ')');
+    /* NEVER 'NO ORDER HAS BEEN PASSED' when we cannot know it */
+    if(lost) bits.push('AND ' + lost + ' COULD NOT BE CONFIRMED \u2014 the district may or may not ' +
+      'have passed them before the line dropped. The list below is re-read from the register, ' +
+      'which is the only thing that knows; whatever is still on it was not sanctioned.');
+    say('mOrders', lost ? 'bad' : refused.length ? 'info' : 'ok',
+        bits.join(' · ') || 'Nothing was passed.');
+    pending();
+  }
+  function step(){
+    if(sent >= ids.length) return finish(0);
+    var part = ids.slice(sent, sent + ORDER_BATCH);
+    sent += part.length;
+    say('mOrders', 'info', 'Passing orders\u2026 ' + sent + ' of ' + ids.length + '.');
+    return post({ kind:'leaveDecision', token:DB.session.token, ids:part, status:'APPROVED' })
+      .then(function(r){
+        if(!r || !r.ok){
+          /* the district ANSWERED and refused the batch, so nothing of it was
+             written — that is certain, and not the same as a lost line */
+          refused.push({ error:(r && r.error) || 'the district did not answer' });
+          return finish(0);
+        }
+        done += Number(r.done) || 0;
+        refused = refused.concat(r.refused || []);
+        return step();
+      })
+      .catch(function(){ return finish(part.length); });
+  }
+  step();
 }
 
 var LEAVE_NAME = { CL:'Casual leave', EL:'Earned leave', ML:'Medical leave',
@@ -396,7 +462,7 @@ $('bSend').addEventListener('click', send);
 $('bRefresh').addEventListener('click', refresh);
 ['aType','aFrom','aTo'].forEach(function(id){ $(id).addEventListener('change', note); });
 $('bOut').addEventListener('click', function(){
-  DB.session = null; DB.rows = []; DB.me = null; DB.pend = []; save();
+  DB.session = null; DB.rows = []; DB.me = null; DB.pend = []; DB.pendAll = 0; save();
   $('iPhone').value = ''; $('iPin').value = '';
   show('vSignin');
 });

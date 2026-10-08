@@ -139,11 +139,25 @@ your own look. Refusals are never passed over a list.
 The console's **Leave** view shows the same waiting list and the recent orders,
 and is where to read the register; the orders themselves are passed in the app.
 
-**Only the Collector orders.** The head of an office cannot sanction his own
-staff's leave. Delegating is the obvious next order and the seam is left for it
-in `canApproveLeave_` — but a hierarchy nobody has written down is not a thing
-to guess at on a register that debits a man's casual leave, so suite 34 is
-changed first, deliberately.
+**Only the Collector orders, by his order of 08.10.2026** — *all leave go to
+collector for sanction*. The head of an office cannot sanction his own staff's
+leave, and that is a direction now and not merely a seam left shut. Should it
+ever be delegated, `canApproveLeave_` is the one place it would go and suite 34
+is changed first, deliberately.
+
+Because every application in the district lands on one desk, **Sanction all**
+goes up in **batches of twenty-five**: the server passes at most 200 ids in one
+request however many are sent, and each application is re-read and written on
+its own, so the whole desk in a single request was both silently truncated and
+minutes of waiting. The count moves as the batches go, and a batch that fails
+costs only itself. The heading says how many are waiting **in all**, not merely
+how many are shown — the screen shows the oldest 300 and more come up as you
+pass them.
+
+And if the line drops, the screen does **not** tell you no order was passed: it
+cannot know, because the order may have been written and only the answer lost.
+It says so, and re-reads the register — whatever is still on the list has had no
+order passed on it.
 
 ## What to watch
 

@@ -82,12 +82,14 @@ function serve(noConfig){
 
   let E = register();
   let dead = false;               /* the village road, for the refusal test */
+  const bulk = [];                /* how many ids each bulk POST carried */
   await page.route('**/hrms.district/**', r => {
     if(dead) return r.abort('failed');
     const q = r.request();
     let out;
     if(q.method() === 'POST'){
       let b = {}; try{ b = JSON.parse(q.postData() || '{}'); }catch(e){}
+      if(Array.isArray(b.ids)) bulk.push(b.ids.length);
       out = E.post(b);
     } else {
       const sp = new URL(q.url()).searchParams, p = {};
@@ -307,6 +309,84 @@ function serve(noConfig){
     document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
   ck(!wide, 'no sideways scroll at 390px');
   ck(errs.length === 0, 'no script error', errs[0] || '');
+
+  /* ---- 7a. SANCTION ALL REALLY MEANS ALL, AND IS SENT IN BATCHES ----
+
+     By the Collector's order of 08.10.2026 every application in the district
+     comes to him, so this is the ordinary path. leaveDecision slices b.ids to
+     200 however many are sent, and decideOneLeave_ re-reads the Leave tab and
+     writes four cells for each in turn, so one request carrying the whole desk
+     is both silently truncated and minutes of Apps Script time. Thirty
+     applications must therefore go up as two requests and all thirty must be
+     sanctioned. */
+  {
+    const tk = E.ctx.issueToken_(E.ctx.findByPhone_('9000000001'));
+    const rows = [];
+    for(let i = 0; i < 30; i++)
+      rows.push({ name:'Emp ' + i, office:'DPO', desig:'Clerk',
+                  emp:'JN/B' + i, phone:'94555' + String(10000 + i) });
+    E.post({ kind:'hrmsSeed', token:tk, rows:rows });
+    for(let i = 0; i < 30; i++){
+      const ph = '94555' + String(10000 + i);
+      E.post({ kind:'claimPin', u:ph, emp:'JN/B' + i, pin:'4321' });
+      const t = E.post({ kind:'login', u:ph, p:'4321' }).token;
+      E.post({ kind:'leave', token:t, leave:{ id:'HR-B' + i, type:'CL',
+        from:'2026-11-20', to:'2026-11-20', days:1, reason:'One day of casual leave.' } });
+    }
+
+    bulk.length = 0;
+    await page.click('#bOrders'); await page.waitForTimeout(400);
+    await page.click('#bRefresh').catch(() => {});
+    await page.waitForTimeout(100);
+    /* re-read the desk through the app itself */
+    await page.evaluate(() => pending()); await page.waitForTimeout(600);
+    const waiting = await page.evaluate(() => (DB.pend || []).length);
+    ck(waiting >= 30, 'thirty applications are waiting on the Collector', String(waiting));
+
+    page.once('dialog', d => d.accept());
+    await page.click('#bAll');
+    await page.waitForTimeout(3000);
+
+    ck(bulk.length >= 2, 'SANCTION ALL GOES UP IN BATCHES, not one request',
+       bulk.join('+') + ' ids');
+    ck(bulk.every(n => n <= 25), 'and no batch is larger than twenty-five', bulk.join('+'));
+    const left = E.sheets['Leave'].rows.filter(r => /^HR-B/.test(String(r[0])) &&
+      String(r[14] || 'PENDING').toUpperCase() === 'PENDING').length;
+    ck(left === 0, 'AND EVERY ONE OF THE THIRTY IS SANCTIONED \u2014 none silently dropped',
+       left + ' still pending');
+    const msg = await page.textContent('#mOrders');
+    ck(/30 sanctioned/.test(msg), 'and it says so by number', msg.trim().slice(0, 60));
+    await page.screenshot({ path: path.join(OUT, '11-sanction-all.png') });
+  }
+
+  /* ---- 7b. A DROPPED LINE IS NEVER REPORTED AS 'NO ORDER WAS PASSED' ----
+
+     The message asserted it, which on a timeout is a false assurance about
+     casual leave that may already have been debited: the write can go through
+     and only the answer be lost on the way back. */
+  {
+    const tk = E.ctx.issueToken_(E.ctx.findByPhone_('9000000001'));
+    E.post({ kind:'hrmsSeed', token:tk,
+      rows:[{ name:'C. Lost', office:'DPO', desig:'Clerk', emp:'JN/L1', phone:'9455599999' }] });
+    E.post({ kind:'claimPin', u:'9455599999', emp:'JN/L1', pin:'4321' });
+    const t = E.post({ kind:'login', u:'9455599999', p:'4321' }).token;
+    E.post({ kind:'leave', token:t, leave:{ id:'HR-LOST', type:'CL',
+      from:'2026-12-20', to:'2026-12-20', days:1, reason:'One day.' } });
+    await page.evaluate(() => pending()); await page.waitForTimeout(600);
+
+    dead = true;
+    await page.click('[data-ok="HR-LOST"]').catch(() => {});
+    await page.waitForTimeout(900);
+    const m = (await page.textContent('#mOrders')).trim();
+    dead = false;
+    ck(!/NO ORDER HAS BEEN PASSED/.test(m),
+       'a lost line is NOT reported as no order having been passed', m.slice(0, 70));
+    ck(/not known|NOT KNOWN/i.test(m),
+       'it says plainly that it is not known whether the order was passed', m.slice(0, 70));
+    ck(/still/i.test(m) && /list/i.test(m),
+       'and points him at the register, which is the only thing that knows');
+    await page.screenshot({ path: path.join(OUT, '12-line-dropped.png') });
+  }
 
   /* ---- 8. AN APP WITH NO ADDRESS DOES NOT BLAME THE OFFICER'S SIGNAL ----
 
