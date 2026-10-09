@@ -403,6 +403,50 @@ module.exports = {
         'and the row cannot be claimed a second time');
     }
 
+    /* ---- 7b. AND THE TAB HE TYPES THAT ROW INTO DOES NOT EXIST YET ----
+
+       7a hands itself a Users tab. The pipeline does not: it leaves a
+       spreadsheet carrying a Config row and nothing else whatever, and step 5
+       of the document said "go to the Users tab" as though there were one.
+
+       A tab typed by hand is the dangerous way out of that, because the
+       columns here are matched by header NAME and never by position — one
+       header spelt wrongly is a column that silently does not exist, and the
+       row reads as an employee with no id, or no role, or not active. So the
+       document now tells him to let the REGISTER make the tab, by trying to
+       sign in on a register he is not yet on. That instruction is worth
+       nothing if it is not true, so it is driven here from a register with no
+       tabs at all. */
+    {
+      const e = mock.load({ now:NOW });
+      e.props.TENANT = 'HRMS';
+      Object.keys(e.sheets).forEach(k => { delete e.sheets[k]; });
+      t.eq(Object.keys(e.sheets).length, 0, 'the register starts with no tabs at all');
+
+      const no = e.post({ kind:'login', u:'9625701988', p:'0000' });
+      t.eq(no.ok, false, 'his sign-in is refused, which is true — he is not on the roll');
+
+      const sh = e.sheets['Users'];
+      t.ok(!!sh, 'AND ANSWERING IT MADE THE USERS TAB, so he never types a header');
+      const head = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0].map(String);
+      t.eq(head.join('|'), U.join('|'),
+        'with the eleven columns in order, spelt as headMap_ matches them');
+      t.eq(sh.getLastRow(), 1, 'and not one row under them — nobody has been invented');
+
+      /* THE ROW AS THE DOCUMENT TELLS HIM TO TYPE IT: five cells of eleven,
+         the number as text, and InitPin and Hash left alone. */
+      sh.appendRow(['\'9625701988', 'Sandeep Kumar Jha', 'COLLECTOR', '', '', '', '', '',
+                    'TRUE', '', 'ADMIN1']);
+      e.mkSheet('Leave', L, []);
+      e.mkSheet('Audit', ['At','Action','Subject','Detail','By'], []);
+
+      t.eq(e.post({ kind:'login', u:'9625701988', p:'0000' }).needPin, true,
+        'the row he typed into it is offered the claim');
+      const got = e.post({ kind:'claimPin', u:'9625701988', emp:'ADMIN1', pin:'2468' });
+      t.eq(String((got.user || {}).role).toUpperCase(), 'COLLECTOR',
+        'and the whole of step 5 works from an empty spreadsheet');
+    }
+
     /* ---- 8. IT IS THE HRMS REGISTER'S ALONE ---- */
     {
       const sj = mock.load({ now:NOW });

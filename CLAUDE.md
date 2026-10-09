@@ -1538,11 +1538,19 @@ by hand into the `Users` tab** — number, name, `COLLECTOR`, `Active TRUE`, an
 exactly as every employee will, choosing his own PIN. No bootstrap key is
 planted in a live project and no `Admin.gs` job is automated: he writes the
 row and he claims it, both halves himself, which is the rule rather than a way
-round it. It is step 5 now, and section 7a of suite 34 drives that exact row
-through the real backend — the claim is offered, a wrong id is refused, the
-right one returns him as `COLLECTOR`, the PIN he chose signs him in, the
-establishment paste he was blocked on now answers, and the row cannot be
-claimed twice.
+round it. **And the tab he types it into does not exist yet** — the pipeline
+leaves a spreadsheet carrying a Config row and nothing else, so "go to the
+Users tab" named something that was not there. The cure is not to have him type
+the headers: they are matched by NAME and never by position, so one spelt
+wrongly is a column that silently does not exist and the row reads as an
+employee with no role, or not active. He signs in on a register he is not yet
+on, the refusal is true, and answering it is what creates the tab with its
+eleven headers. It is step 5 now, and sections 7a and 7b of suite 34 drive that
+exact row through the real backend — 7b from a register with no tabs at all,
+which is the state the pipeline actually leaves. The claim is offered, a wrong
+id is refused, the right one returns him as `COLLECTOR`, the PIN he chose signs
+him in, the establishment paste he was blocked on now answers, and the row
+cannot be claimed twice.
 
 **AN APP WITH NO ADDRESS MUST NOT BLAME THE OFFICER'S SIGNAL.** The deploy
 Action publishes `/hrms/` whether or not the register has been stood up, so

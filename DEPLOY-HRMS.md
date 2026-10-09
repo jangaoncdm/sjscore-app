@@ -143,22 +143,40 @@ is empty, the console is Collector-only at its door, and the one action that
 puts an officer on the roll is itself behind a sign-in. Step 6 cannot be
 reached until this is done, and nothing else can do it.
 
-So open the new spreadsheet, go to the **`Users`** tab, and type **one row**:
+**FIRST MAKE THE TAB EXIST, and do not make it yourself.** A brand-new
+spreadsheet has no `Users` tab, and one typed by hand with headers invented
+from memory is a register that reads every column one place to the left —
+columns are matched by header NAME here, never by position, so a header
+spelt wrongly is a column that silently does not exist.
 
-| Phone | Name | Role | Active | EmpId |
-|---|---|---|---|---|
-| `9625701988` | Sandeep Kumar Jha | `COLLECTOR` | `TRUE` | `ADMIN1` |
+So let the register make it. Open **`/hrms/`** and try to sign in with your
+number. It will tell you the number is not on the roll, which is true — and in
+answering it will have created the `Users` tab with the eleven headers in their
+proper order and spelling:
 
-Leave `Hash` and `InitPin` **empty** — a row with no PIN is precisely what the
-app offers the claim to. `EmpId` is the second factor and it is yours to
-choose; it is used once and never again. Type the number with a leading
-apostrophe (`'9625701988`) so the sheet keeps it as text, as every other
-mobile number on these registers is kept.
+    Phone | Name | Role | Mandal | GP | Email | InitPin | Hash | Active | Designation | EmpId
 
-Then open **`/hrms/`** on your own phone, sign in with that number, and the app
-will ask for the employee id and let you **choose your own PIN**. Nobody issues
-it to you and the register stores no copy of it; `Audit` records that a PIN was
-set and never the PIN.
+**Now type one row under them**, filling five of the eleven cells and leaving
+the other six alone:
+
+| Cell | What goes in it |
+|---|---|
+| `Phone` | `'9625701988` — with the leading apostrophe, so the sheet keeps it as text |
+| `Name` | Sandeep Kumar Jha |
+| `Role` | `COLLECTOR` |
+| `Active` | `TRUE` |
+| `EmpId` | `ADMIN1` |
+
+Leave `Mandal`, `GP`, `Email`, `Designation` and — this is the one that
+matters — **`InitPin` and `Hash` empty**. A row with no PIN on it is precisely
+what the app offers the claim to; a row with one is a row that is already
+somebody's, and the claim is refused. `EmpId` is the second factor and it is
+yours to choose: it is used once, spent, and never asked for again.
+
+Then go back to **`/hrms/`** and sign in with that number again. This time the
+app finds the row, asks for the employee id, and lets you **choose your own
+PIN**. Nobody issues it to you and the register stores no copy of it; `Audit`
+records that a PIN was set, on which number and by whom, and never the PIN.
 
 There is no bootstrap key to plant and no `Admin.gs` job to run. You write the
 row and you claim it — both halves yourself, which is the rule rather than a

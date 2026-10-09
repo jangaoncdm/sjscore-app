@@ -212,7 +212,100 @@ jobs:
           git pull --rebase --autostash || true
           git push
 
+      # AND IT SAYS WHERE IT GOT TO ON THE PAGE, NOT ONLY IN THE LOG. The one
+      # thing a half-finished run needs is a link to the consent screen, and
+      # putting it forty lines down a collapsed log is how a register sits
+      # unprovisioned for a week. This runs whatever happened above.
+      - name: Say where this got to, in the run summary
+        if: always()
+        run: |
+          S="$GITHUB_STEP_SUMMARY"
+          SID='${{ steps.create.outputs.script_id }}'
+          EXEC='${{ steps.deploy.outputs.exec_url }}'
+          if [ "${{ steps.verify.outputs.ok }}" = "yes" ]; then
+            {
+              echo "# The District HRMS register is stood up"
+              echo ""
+              echo "| | |"
+              echo "|---|---|"
+              echo "| App | https://jangaoncdm.github.io/sjscore-app/hrms/ |"
+              echo "| Console | https://jangaoncdm.github.io/sjscore-app/dashboard.html |"
+              echo "| Server | \`$EXEC\` |"
+              echo "| Script | https://script.google.com/d/$SID/edit |"
+              echo ""
+              echo "It answered \`\"tenant\":\"HRMS\"\`, so \`hrms/config.js\` has been"
+              echo "committed and the app is published. Give the deploy run a minute to"
+              echo "put the site up."
+              echo ""
+              echo "## Two things remain, both deliberate"
+              echo ""
+              echo "**1. Your own row, by hand.** Open the new Sheet, go to the \`Users\`"
+              echo "tab, and type one row — the number, the name, Role \`COLLECTOR\`,"
+              echo "Active \`TRUE\`, an \`EmpId\` of your choosing, and **Hash left empty**."
+              echo "Then open \`/hrms/\` and claim it: the app asks for that \`EmpId\` and"
+              echo "lets you choose your own PIN. Nobody issues it to you and the"
+              echo "register keeps no copy. Step 5 of DEPLOY-HRMS.md has the exact row."
+              echo ""
+              echo "**2. The establishment, through the console.** Switch the register"
+              echo "picker to District HRMS and paste the office list there. It goes from"
+              echo "your screen to your register over HTTPS and through nothing else:"
+              echo "those are personal mobile numbers and this repository is public."
+            } >> "$S"
+          elif [ -n "$SID" ]; then
+            {
+              echo "# Stopped one click short"
+              echo ""
+              # THE ADVICE MATCHES WHAT ACTUALLY STOPPED. A deployment that
+              # never happened is not a consent screen, and telling him to
+              # accept permissions that are not the obstacle sends him round
+              # a loop that cannot end.
+              if [ -n "$EXEC" ]; then
+                echo "The project and the deployment exist. The new web app has not"
+                echo "answered as HRMS yet, which on a first run almost always means its"
+                echo "OAuth scopes have not been approved — a newly created web app"
+                echo "returns 403 until a person accepts them, and there is no API for"
+                echo "granting consent. It is a security boundary, not a gap."
+                echo ""
+                echo "## Do this"
+                echo ""
+                echo "1. Open **https://script.google.com/d/$SID/edit**"
+                echo "2. Press **Run** on any function and **accept** the permissions."
+                echo "3. **Re-run this workflow.**"
+              else
+                echo "The project exists but the deployment did not complete, so there"
+                echo "is no address to ask anything of yet. This is not the consent"
+                echo "screen; the log above says what happened."
+                echo ""
+                echo "## Do this"
+                echo ""
+                echo "1. Read the failing step in the log above."
+                echo "2. **Re-run this workflow** once the cause is dealt with."
+              fi
+              echo ""
+              echo "Either way it **resumes on the same project** —"
+              echo "\`hrms/project.json\` was committed before anything that could fail,"
+              echo "so nothing is created twice and no second register can appear."
+              echo ""
+              echo "Nothing is published at \`/hrms/\` until the address answers as"
+              echo "HRMS, so no employee can reach a half-made register in the meantime."
+            } >> "$S"
+          else
+            {
+              echo "# Nothing was created"
+              echo ""
+              echo "The run stopped before the project was made, so there is nothing to"
+              echo "clean up and nothing was half-done. The log above says why — the"
+              echo "usual cause is the stored Google credential (\`CLASPRC_JSON\`) having"
+              echo "expired, which is also what DEPLOY-HRMS.md section 2 is for."
+            } >> "$S"
+          fi
+
+      # AND IT ONLY SAYS SO IF IT IS. Without this condition the step ran
+      # whatever the verification found — continue-on-error means a register
+      # that never answered does not stop the run — and printed "the District
+      # HRMS register is stood up" over a 403.
       - name: What is left to a person
+        if: steps.verify.outputs.ok == 'yes'
         run: |
           echo "=============================================================="
           echo " The District HRMS register is stood up."
