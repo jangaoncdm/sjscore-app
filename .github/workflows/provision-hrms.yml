@@ -455,3 +455,22 @@ jobs:
           echo " The register makes its own salt on first use. Nothing to paste,"
           echo " no Script Property to set, no bootstrap key anywhere."
           echo "=============================================================="
+
+      # A RUN THAT DID NOT PUBLISH MUST NOT REPORT SUCCESS. The verification is
+      # continue-on-error so that a register waiting for one click in a browser
+      # does not read as a broken pipeline — and on 09.10.2026 that turned into
+      # something worse: the run went GREEN with hrms/config.js never written,
+      # the publish step quietly skipped, and the district read the tick at the
+      # top and said the register was up. It was not; it was eight consent
+      # pages deep. A green tick that was never earned is the one thing this
+      # project has a rule about.
+      #
+      # So the run ends red whenever the register did not answer as HRMS. The
+      # summary has already said what to do and nothing is half-done — red here
+      # means "not finished", which is exactly what it is. This is a button a
+      # person presses and reads, not a build that gates a deploy.
+      - name: Do not call this done when it is not
+        if: steps.verify.outputs.ok != 'yes'
+        run: |
+          echo "::error::The District HRMS register is NOT published. hrms/config.js was not written because the new address did not answer as HRMS. Read the run summary on this page: it says what stopped it and what to do. Nothing is half-done and re-running makes nothing twice."
+          exit 1
