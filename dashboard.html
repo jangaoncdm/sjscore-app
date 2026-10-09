@@ -1422,7 +1422,7 @@ function initTheme(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = 'cbb0751 - 09 Oct 11:09';
+const BUILD_STAMP = '663956c - 09 Oct 11:18';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -1445,6 +1445,25 @@ function boot(){
   let want=''; try{ want=localStorage.getItem('sjgp-console-tenant')||''; }catch(e){}
   if(want && want!=='SJGP'){ const alt=tenantSession(want); if(alt){ TVIEW=want; ST=alt; } }
   paintTenant();
+  /* AND THE PICKER NOTICES A SIGN-IN MADE IN THE NEXT TAB.
+     The console does not keep its own sign-ins: it reads each register's own
+     app store, so a register becomes available the moment the Collector signs
+     in to ITS app on this device. But those stores were read once, when this
+     page rendered — so he would sign in at /hrms/ in another tab, come back to
+     a console still saying "sign in at /hrms/ on this device", and have no way
+     of knowing that all it wanted was a reload. Asked from the district on
+     09.10.2026: the console is still showing it greyed out.
+
+     localStorage fires `storage` in every OTHER tab of the same origin, which
+     is exactly the case this misses. It repaints the picker and nothing else:
+     no cache is dropped and no register is switched behind him, because the
+     register he is reading is his to choose. */
+  window.addEventListener('storage', ev => {
+    if(!ev || !ev.key) return;
+    const mine = Object.keys(TENANCY).map(k => TENANCY[k].store);
+    if(mine.indexOf(ev.key) < 0) return;
+    try{ paintTenant(); }catch(e){}
+  });
   /* the roll is the Collector's. Hiding the rail item is a courtesy, not a
      rule — every one of those calls re-checks the role on the server. */
   if(String((ST.user||{}).role||'').toUpperCase()==='COLLECTOR'){ const na=$('#navAdmin'); if(na) na.hidden=false; }
