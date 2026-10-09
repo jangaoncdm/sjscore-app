@@ -428,6 +428,62 @@ function serve(noConfig){
     await p2.close(); srv2.close();
   }
 
+  /* ---- 9. A TOKEN THE REGISTER WILL NOT TAKE ----
+
+     'auth' is the register's internal word for "this is not one of my
+     tokens". The app printed r.error exactly as it arrived, so what the man
+     saw on the screen was the word auth and nothing else — reported from the
+     district on 09.10.2026 in those words. It says nothing about what
+     happened and nothing about what to do.
+
+     And the session has to come OFF the handset. One the district will not
+     accept is not a session: left in the store, every screen goes on sending
+     it, every screen goes on failing, and there is no way back to the sign-in
+     he needs. */
+  {
+    const srv3 = await serve();
+    const b3 = 'http://127.0.0.1:' + srv3.address().port;
+    const c3 = await br.newContext({ viewport:{ width:390, height:844 } });
+    const p3 = await c3.newPage();
+    const e3 = []; p3.on('pageerror', e => e3.push(String(e)));
+    /* every call is refused the way the register refuses an unknown token */
+    await p3.route('**/hrms.district/**', r => r.fulfill({ status:200,
+      contentType:'application/json', body:JSON.stringify({ ok:false, error:'auth' }) }));
+    /* a handset carrying a session the register has never heard of */
+    await c3.addInitScript(() => {
+      localStorage.setItem('sjgp-hrms1', JSON.stringify({
+        url:'https://hrms.district/exec',
+        session:{ token:'STALE', user:{ name:'K. Ramesh', role:'EMP', phone:'9876543210' } },
+        rows:[] }));
+    });
+    await p3.goto(b3 + '/', { waitUntil:'domcontentloaded' });
+    await p3.waitForTimeout(900);
+
+    /* he presses sign in, which is what he does when a screen will not work */
+    if(await p3.isVisible('#vSignin')){
+      await p3.fill('#iPhone', '9876543210');
+      await p3.fill('#iPin', '1234');
+      await p3.click('#bSignin');
+      await p3.waitForTimeout(800);
+    }
+    const body = (await p3.textContent('body')).replace(/\s+/g, ' ');
+    ck(!/\bauth\b/.test(body), 'THE WORD auth IS NEVER PUT ON THE SCREEN',
+       (body.match(/.{0,40}auth.{0,40}/) || [''])[0]);
+    ck(/no longer signed in/i.test(body), 'it says the device is not signed in any more',
+       body.slice(0, 80));
+    ck(/nothing of yours is lost/i.test(body), 'and that he loses nothing by signing in again');
+    const held = await p3.evaluate(() => {
+      try{ return (JSON.parse(localStorage.getItem('sjgp-hrms1') || '{}').session) || null; }
+      catch(e){ return 'unreadable'; }
+    });
+    ck(held === null, 'AND THE REJECTED TOKEN IS OFF THE HANDSET, so he is not stuck in a loop',
+       JSON.stringify(held));
+    ck(await p3.isVisible('#vSignin'), 'he is left on the sign-in screen');
+    ck(e3.length === 0, 'no script error on a refused token', e3[0] || '');
+    await p3.screenshot({ path: path.join(OUT, '11-token-refused.png'), fullPage:true });
+    await p3.close(); srv3.close();
+  }
+
   await br.close(); srv.close();
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed   ·   screenshots in Info/hrms-render/\n');
   process.exitCode = fail ? 1 : 0;

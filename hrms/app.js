@@ -38,6 +38,48 @@ function load(){
 }
 function save(){ try{ localStorage.setItem(STORE, JSON.stringify(DB)); }catch(e){} }
 
+/* NOBODY IS EVER SHOWN THE WORD 'auth'.
+   It is the register's internal word for "this token is not one of mine", and
+   it was being printed to the screen exactly as it arrived — reported from the
+   district on 09.10.2026 as "i am getting auth error", which is the whole of
+   what the app told him. It says nothing about what happened and nothing about
+   what to do, and it is the same uselessness as a decoder that says only "no
+   code found".
+
+   AND A REJECTED TOKEN IS TAKEN OFF THE HANDSET. A session the district will
+   not accept is not a session; leaving it in the store means every screen goes
+   on sending it and every screen goes on failing, and the man has no way back
+   to the sign-in he needs. He loses nothing — the token is all that is
+   dropped, never his unsent work. */
+var AUTH_GONE = 'This device is no longer signed in to the register — the sign-in had '
+              + 'expired, or it was made before the register was stood up. Sign in again '
+              + 'below; nothing of yours is lost.';
+
+/* A TOKEN THE REGISTER WILL NOT TAKE IS NOT A MESSAGE, IT IS A STATE.
+   Printing the word was only half the fault. refresh() swallowed a refusal
+   whole — `if(!r || !r.ok) return;` — so a handset carrying a dead session sat
+   on a home screen that never updated, never explained itself, and offered no
+   way back to the sign-in it needed, because home() shows the sign-in screen
+   only when there is no session at all. Every screen went on sending the same
+   token and every screen went on failing in silence.
+
+   So the session comes off the handset and he is put back where he can do
+   something. He loses the token and nothing else. */
+function tokenRefused(r){
+  if(!r || String(r.error || '') !== 'auth') return false;
+  DB.session = null; DB.me = null; DB.pend = []; DB.pendAll = 0;
+  save();
+  show('vSignin');
+  say('mSignin', 'bad', AUTH_GONE);
+  return true;
+}
+/* and nobody is ever shown the register's own word for it */
+function errText(r){
+  var e = String((r && r.error) || '');
+  if(e === 'auth') return AUTH_GONE;
+  return e || 'The district did not answer.';
+}
+
 /* ------------------------------------------------------------------- wire */
 /* AN APP WITH NO ADDRESS MUST NOT BLAME THE OFFICER'S SIGNAL.
    The boot guard says plainly that config.js has not been written — and then
@@ -108,7 +150,7 @@ function signIn(){
         show('vClaim');
         return;
       }
-      if(!r || !r.ok) return say('mSignin', 'bad', (r && r.error) || 'The district did not answer.');
+      if(!r || !r.ok) return say('mSignin', 'bad', errText(r));
       DB.session = { token:r.token, user:r.user };
       save();
       $('iPin').value = '';
@@ -130,7 +172,7 @@ function claim(){
   post({ kind:'claimPin', u:ph, emp:emp, pin:p1 })
     .then(function(r){
       busy(b, false);
-      if(!r || !r.ok) return say('mClaim', 'bad', (r && r.error) || 'The district did not answer.');
+      if(!r || !r.ok){ if(tokenRefused(r)) return; return say('mClaim', 'bad', errText(r)); }
       DB.session = { token:r.token, user:r.user };
       save();
       home(true);
@@ -163,7 +205,7 @@ function refresh(){
   if(!DB.session) return;
   get({ op:'hrms', token:DB.session.token })
     .then(function(r){
-      if(!r || !r.ok) return;
+      if(!r || !r.ok){ tokenRefused(r); return; }
       DB.rows = r.rows || []; DB.ent = r.entitlement || null;
       DB.me = r.me || null; DB.at = new Date().toISOString();
       save(); draw();
@@ -237,7 +279,7 @@ function order(id, status, remarks){
   clear('mOrders');
   post({ kind:'leaveDecision', token:DB.session.token, id:id, status:status, remarks:remarks })
     .then(function(r){
-      if(!r || !r.ok) return say('mOrders', 'bad', (r && r.error) || 'The district did not answer.');
+      if(!r || !r.ok){ if(tokenRefused(r)) return; return say('mOrders', 'bad', errText(r)); }
       say('mOrders', 'ok', status === 'APPROVED' ? 'Sanctioned.' : 'Refused, and the employee is told why.');
       pending();
     })
@@ -311,7 +353,7 @@ function orderAll(){
         if(!r || !r.ok){
           /* the district ANSWERED and refused the batch, so nothing of it was
              written — that is certain, and not the same as a lost line */
-          refused.push({ error:(r && r.error) || 'the district did not answer' });
+          refused.push({ error:errText(r) });
           return finish(0);
         }
         done += Number(r.done) || 0;
@@ -435,7 +477,7 @@ function send(){
     reason:$('aReason').value.trim(), address:$('aAddr').value.trim() } })
     .then(function(r){
       busy(b, false);
-      if(!r || !r.ok) return say('mApply', 'bad', (r && r.error) || 'The district did not answer.');
+      if(!r || !r.ok){ if(tokenRefused(r)) return; return say('mApply', 'bad', errText(r)); }
       say('mApply', 'ok', 'Sent for orders.');
       refresh();
       setTimeout(function(){ home(false); refresh(); }, 700);
