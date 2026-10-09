@@ -346,6 +346,41 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
        pick&&String(pick.items.filter(o=>!o.d).length));
     ck(e2.length===0,'no script error on that console',e2[0]);
     await p2.screenshot({path:path.join(OUT,'picker-hrms-absent.png')});
+
+    /* ---- AND IT NOTICES THE SIGN-IN MADE IN THE NEXT TAB ----
+
+       The console reads each register's own app store, and read them once,
+       when the page rendered. So he signs in at /hrms/ in another tab, comes
+       back to a console still saying "sign in at /hrms/ on this device", and
+       nothing tells him that all it wanted was a reload. Asked from the
+       district on 09.10.2026 in those words: the console is still showing it
+       greyed out.
+
+       localStorage fires `storage` in every OTHER tab of the same origin,
+       which is exactly this case. A second page in the SAME context is how a
+       second tab is driven; writing from the console's own page would fire
+       nothing, and a test that did it that way would pass while the officer
+       went on looking at a grey line. */
+    const tab2=await c2.newPage();
+    await tab2.goto(base+'/hrms-stub.html').catch(()=>{});
+    await tab2.evaluate(()=>{
+      localStorage.setItem('sjgp-hrms1',JSON.stringify({url:'https://mock.hrms/exec',
+        session:{token:'THR',user:{name:'Sandeep Kumar Jha',role:'COLLECTOR',
+                                   phone:'9000000001'}}}));
+    });
+    await p2.waitForTimeout(900);
+    const now=await p2.evaluate(()=>{
+      const s=document.querySelector('#tenPick');
+      return s?[...s.options].map(o=>({t:o.textContent,d:o.disabled,v:o.value})):null;
+    });
+    const hr2=now&&now.filter(o=>/District HRMS/.test(o.t))[0];
+    ck(!!hr2&&!hr2.d,'THE PICKER TAKES THE SIGN-IN FROM THE NEXT TAB, with no reload',
+       hr2&&(hr2.t+' disabled='+hr2.d));
+    ck(!!hr2&&hr2.v==='HRMS','and it is choosable by name',hr2&&hr2.v);
+    ck(now&&now.filter(o=>!o.d).length===3,'all three registers are now his to choose',
+       now&&String(now.filter(o=>!o.d).length));
+    ck(e2.length===0,'still no script error',e2[0]);
+    await p2.screenshot({path:path.join(OUT,'picker-hrms-arrived.png')});
     await c2.close();
   }
 
