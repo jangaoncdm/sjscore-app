@@ -53,7 +53,7 @@ on:
         required: true
         default: 'District HRMS - Jangaon'
       confirm:
-        description: 'Type CREATE to confirm this makes a new Sheet and Apps Script project'
+        description: 'Type the word CREATE here. It makes a new Sheet and Apps Script project in the district Drive.'
         required: true
         default: ''
 
@@ -65,10 +65,18 @@ jobs:
     name: Create, push, deploy and publish
     runs-on: ubuntu-latest
     steps:
+      # THE BOX IS A SPEED BUMP, NOT A SPELLING TEST. It exists so that
+      # creating a Google Sheet and an Apps Script project in the district's
+      # Drive is a deliberate act and never an accidental click. A trailing
+      # space, or the word in lower case, is a man who meant it — refusing
+      # those costs a wasted run and teaches nothing. Typing the word is still
+      # required, which is the whole of the safeguard.
       - name: Refuse unless confirmed
+        id: confirm
         run: |
-          if [ "${{ github.event.inputs.confirm }}" != "CREATE" ]; then
-            echo "::error::Type CREATE in the confirm box. This creates a Google Sheet and an Apps Script project in the district's Drive."
+          SAID=$(printf '%s' "${{ github.event.inputs.confirm }}" | tr -d '[:space:]' | tr '[:lower:]' '[:upper:]')
+          if [ "$SAID" != "CREATE" ]; then
+            echo "::error::The confirm box must say CREATE. It said '${{ github.event.inputs.confirm }}'. Nothing has been created; run the workflow again with the word typed in."
             exit 1
           fi
 
@@ -289,14 +297,36 @@ jobs:
               echo "Nothing is published at \`/hrms/\` until the address answers as"
               echo "HRMS, so no employee can reach a half-made register in the meantime."
             } >> "$S"
+          elif [ "${{ steps.confirm.outcome }}" = "failure" ]; then
+            # A SUMMARY THAT GUESSES AT THE CAUSE IS WORSE THAN ONE THAT SAYS
+            # NOTHING. The first cut of this had only two branches, and when
+            # the run stopped at the confirm box it told the district its
+            # Google credential had expired — sending him to look at the one
+            # thing that was in perfect order while the real reason sat in the
+            # annotation directly above. The same uselessness as a decoder
+            # that says only "no code found".
+            {
+              echo "# The confirm box did not say CREATE"
+              echo ""
+              echo "Nothing was created, nothing was touched, and there is nothing to"
+              echo "clean up. The box is there so that making a Google Sheet and an"
+              echo "Apps Script project in the district's Drive is a deliberate act."
+              echo ""
+              echo "## Do this"
+              echo ""
+              echo "**Run workflow** again, and type **\`CREATE\`** in the second box"
+              echo "before pressing the green button. Capitals are not required and a"
+              echo "stray space does not matter; the word does."
+            } >> "$S"
           else
             {
               echo "# Nothing was created"
               echo ""
               echo "The run stopped before the project was made, so there is nothing to"
-              echo "clean up and nothing was half-done. The log above says why — the"
-              echo "usual cause is the stored Google credential (\`CLASPRC_JSON\`) having"
-              echo "expired, which is also what DEPLOY-HRMS.md section 2 is for."
+              echo "clean up and nothing was half-done. **The failing step in the log"
+              echo "above says why** — do not take a guess from this page. If it is the"
+              echo "\`clasp\` sign-in, the stored Google credential (\`CLASPRC_JSON\`) has"
+              echo "expired and DEPLOY-HRMS.md section 2 is the way through by hand."
             } >> "$S"
           fi
 
