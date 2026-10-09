@@ -389,6 +389,15 @@ function entitlement_(type, year){
 const TENANTS = {
   SJGP: {
     key:'SJGP', name:'Swachh Jangaon Gram Panchayat', short:'SJGP',
+    /* WHAT A MAN IS TOLD WHEN THE REGISTER DOES NOT KNOW HIM, and who he is
+       sent to. It is the register's own, because the login path is shared by
+       all three and the office is not: "Contact the District Panchayat
+       Office" was hardcoded, and on 09.10.2026 the District HRMS said it to
+       the Collector — an establishment of two to five thousand people across
+       every office in the district, Forest to Commercial Taxes, none of whom
+       the Panchayat Office holds. It contradicted the line at the foot of the
+       same screen, which already said the right thing. */
+    notOnRoll:'This number is not registered. Contact the District Panchayat Office.',
     /* seniority, for folding a number that sits on more than one row */
     /* STAFF sits below everybody and is deliberately not a whole number: the
        rank only decides which row wins when one mobile sits on two, and
@@ -444,6 +453,7 @@ const TENANTS = {
   },
   GP: {
     key:'GP', name:'Gram Palana Register · Jangaon', short:'GP',
+    notOnRoll:'This number is not registered. Contact the District Panchayat Office.',
     /* GPO holds the village and marks in; the Revenue Inspectors supervise a
        mandal, ARI under MRI. No role here is a viewer: a GPO is not an officer
        being evaluated, he is the officer keeping the register. */
@@ -522,6 +532,13 @@ const TENANTS = {
    * ==================================================================== */
   HRMS: {
     key:'HRMS', name:'District HRMS · Jangaon', short:'HRMS',
+    /* HIS OWN OFFICE SEEDED HIM AND NOBODY ELSE CAN ANSWER FOR IT. Naming one
+       district office here would send five thousand people to the wrong desk,
+       and the employee id is the other half of what is checked, so he is told
+       to ask for both. The app's own footer says this; now the refusal agrees
+       with it. */
+    notOnRoll:'This number is not on the establishment. Your office holds it — ask it to check '
+             +'the number and the employee id it has against your name.',
     /* an employee, the head of his office, and the sanctioning authority */
     rank:{EMP:1, HOD:5, COLLECTOR:7},
     district:['COLLECTOR'],
@@ -5867,7 +5884,7 @@ function doPost(e){
 
   if(b.kind === 'login'){
     const u = findByPhone_(b.u || '');
-    if(!u || !u.active) return json_({ ok:false, error:'This number is not registered. Contact the District Panchayat Office.' });
+    if(!u || !u.active) return json_({ ok:false, error:tenant_().notOnRoll });
     /* ON A REGISTER WHERE THE EMPLOYEE SETS HIS OWN PIN, a row with none is
        not a fault to telephone about — it is his to claim. The district seeds
        five thousand rows and issues no PINs at all, so "contact the office"

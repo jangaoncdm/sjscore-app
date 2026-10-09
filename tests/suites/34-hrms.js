@@ -63,6 +63,39 @@ module.exports = {
       t.eq(e.eval("canApplyLeave_('EMP')"), true, 'and leave is what he is here for');
     }
 
+    /* ---- 1a. AND IT DOES NOT SEND HIM TO ANOTHER REGISTER'S OFFICE ----
+
+       The login path is shared by all three registers and the office is not.
+       'Contact the District Panchayat Office' was written into it, so on
+       09.10.2026 the District HRMS said exactly that to the Collector on the
+       very first sign-in — an establishment of two to five thousand people
+       across every office in the district, Forest to Commercial Taxes, none
+       of whom that office holds. It also contradicted the line at the foot of
+       the same screen, which already told him his own office holds the
+       establishment. Reported from the district with the screen attached. */
+    {
+      const e = start();
+      const no = e.post({ kind:'login', u:'9999999999', p:'0000' });
+      t.eq(no.ok, false, 'a number the establishment does not carry is refused');
+      t.ok(String(no.error || '').indexOf('District Panchayat Office') < 0,
+        'AND IT DOES NOT NAME THE DISTRICT PANCHAYAT OFFICE, which holds none of these people');
+      t.ok(/establishment/i.test(String(no.error || '')),
+        'it says what this register is, in its own words');
+      t.ok(/your office/i.test(String(no.error || '')),
+        'and sends him where the row was actually seeded, as the screen already did');
+      t.ok(/employee id/i.test(String(no.error || '')),
+        'naming the employee id too, because that is the other half of the claim');
+
+      /* AND THE OTHER TWO ARE UNTOUCHED. The words there are right, 280 and
+         134 officers have read them for months, and this is a wording fix on
+         one register and not a change to the others. */
+      const g = mock.load({ now:NOW });
+      g.mkSheet('Users', U, []);
+      t.ok(String((g.post({ kind:'login', u:'9999999999', p:'0000' }) || {}).error || '')
+             .indexOf('District Panchayat Office') >= 0,
+        'the sanitation register still sends him to the District Panchayat Office');
+    }
+
     /* ---- 2. THE OFFICE SEEDS THE ESTABLISHMENT ---- */
     {
       const e = start();

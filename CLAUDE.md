@@ -1643,6 +1643,21 @@ deploy, for the reason the GP register lost its identity once: `clasp push
 tenant back **by name** — on this register an address that answered as SJGP
 would be filing the district's leave into the sanitation register.
 
+**AND A REFUSAL MUST NOT SEND A MAN TO ANOTHER REGISTER'S OFFICE.** The login
+path is shared by all three registers and the office is not. *"This number is
+not registered. Contact the District Panchayat Office."* was written into it,
+so the first sign-in ever made on the District HRMS — the Collector's own, on
+09.10.2026, reported with the screen attached — sent him to an office that
+holds none of these people. The establishment is two to five thousand across
+every office in the district, Forest to Commercial Taxes, and each one seeded
+its own; worse, the line at the foot of that same screen already said the
+right thing, so the app contradicted itself in one view. The sentence is
+`TENANTS[k].notOnRoll` now, and this register's names the establishment, sends
+him to his own office and asks for the employee id as well, because that is the
+other half of what the claim checks. **The other two are untouched** — their
+wording is right and 414 officers have read it for months. Section 1a of suite
+34 holds both halves.
+
 **The rosters never enter this repository.** `hms/` is gitignored, as `Add/`
 and `Domain/` are, and it was ignored **before the workbook was opened** —
 because `Add/` was not, and a `git add -A` published 192 personal mobile
