@@ -1,6 +1,8 @@
 {
   "sheetId": "1zR38CT4Oub_3SUHnkJuimijnMIUmcYx5CwHpYx-PehY",
+  "scriptId": "1MDxrCziz5P63J_3mwYNVr6-HNJ9NtHqt5M7Z4dhwgjIyganAoJOENawz",
+  "deploymentId": "AKfycbyVrJLa2ZqBSnZ4Dlu3x_B0ZDnoHKVae2DvTuMa6wOMArZE0tp3yYD7iy-vIlZ34es6",
+  "execUrl": "https://script.google.com/macros/s/AKfycbyVrJLa2ZqBSnZ4Dlu3x_B0ZDnoHKVae2DvTuMa6wOMArZE0tp3yYD7iy-vIlZ34es6/exec",
   "note": "Written by provision-hrms. The deploy pipeline reads this to keep the HRMS backend up to date, and its absence is what tells the pipeline the register has not been stood up. sheetId is recorded the moment it exists so that a failed run can never cause a second spreadsheet. Neither id is a credential: access is governed by Drive, and the live /exec address in config.js is public already.",
-  "recordedByHand": "Run 37883620539 on 09.10.2026 made this spreadsheet and then Google answered 'The service is currently unavailable' while making the script bound to it, so the run recorded nothing and the spreadsheet was left with no script on it. It is adopted here rather than abandoned, so the next run binds a script to this one instead of making a second. The pipeline records sheetId for itself now.",
-  "scriptId": "1MDxrCziz5P63J_3mwYNVr6-HNJ9NtHqt5M7Z4dhwgjIyganAoJOENawz"
+  "recordedByHand": "Run 37883620539 made the spreadsheet and Google failed the script half, so it recorded nothing; run 37884823060 bound the script to that same spreadsheet, pushed the backend and deployed it, then met Google's consent page eight times and so never wrote config.js. The consent was cleared in the browser on 09.10.2026 and the address was then asked op=diag directly: tenant HRMS, modules health and hrms live with none failed, sanction false. deploymentId and execUrl are completed here from that run's log, so every ordinary deploy keeps this register's backend current rather than leaving it frozen. A further provisioning run would write exactly these four values and change nothing."
 }
