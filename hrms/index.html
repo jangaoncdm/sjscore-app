@@ -49,6 +49,11 @@ input,select,textarea{width:100%;border:1px solid var(--line);border-radius:11px
   padding:12px 13px;font:15px var(--sys);background:#fff;color:var(--ink);min-height:46px}
 input:focus,select:focus,textarea:focus{outline:2px solid var(--pri);outline-offset:1px}
 textarea{min-height:84px;resize:vertical}
+/* a tick is not a text box: input{width:100%} above would stretch it across
+   the card and leave the words nowhere to sit */
+.chk{display:flex;align-items:flex-start;gap:10px;font-weight:500;
+     margin:15px 0 0;line-height:1.45;font-size:14px}
+.chk input{width:19px;height:19px;flex:0 0 19px;margin:1px 0 0}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 
 .msg{margin-top:11px;font-size:13.5px;line-height:1.6;padding:10px 12px;border-radius:11px;display:none}
@@ -222,6 +227,20 @@ textarea{min-height:84px;resize:vertical}
       <textarea id="aReason" placeholder="Briefly, in your own words"></textarea>
       <label for="aAddr">Address while on leave</label>
       <input id="aAddr" placeholder="Where you may be reached">
+      <!-- LEAVING HEADQUARTERS IS ASKED FOR, NOT ASSUMED. It is a separate
+           permission under the leave rules and the register has carried a
+           column for it since the first day; this app simply never asked, so
+           every application reached the Collector saying false whatever the
+           employee intended. He is the only one who knows. -->
+      <label class="chk" for="aHq"><input type="checkbox" id="aHq">
+        <span>I will be away from my headquarters during this leave, and seek
+        permission for it</span></label>
+      <!-- shown only for medical leave, because asking everybody for a
+           certificate is how a form teaches people to leave boxes empty -->
+      <div id="aCertWrap" class="hide">
+        <label for="aCert">Medical certificate</label>
+        <input id="aCert" placeholder="Who issued it, and on what date">
+      </div>
       <div style="margin-top:14px"><button class="btn" id="bSend">Send for orders</button></div>
       <button class="btn ghost" id="bCancel" style="margin-top:9px">Not now</button>
       <div class="msg" id="mApply" role="alert"></div>

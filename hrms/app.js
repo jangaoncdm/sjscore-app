@@ -427,10 +427,22 @@ function openApply(){
   sel.innerHTML = Object.keys(ent).map(function(k){
     return '<option value="' + k + '">' + esc(LEAVE_NAME[k] || k) + '</option>'; }).join('');
   $('aFrom').value = ''; $('aTo').value = ''; $('aReason').value = ''; $('aAddr').value = '';
+  $('aHq').checked = false; $('aCert').value = '';
+  certBox();
   clear('mApply');
   note();
   show('vApply');
 }
+/* THE CERTIFICATE IS ASKED FOR ONLY WHERE IT IS WANTED. A form that asks
+   everybody for a medical certificate is a form that teaches people to leave
+   boxes empty, and an empty box on an application that NEEDED one is worse
+   than no box at all. */
+function certBox(){
+  var ml = $('aType').value === 'ML';
+  $('aCertWrap').className = ml ? '' : 'hide';
+  if(!ml) $('aCert').value = '';
+}
+
 /* WHAT THIS APPLICATION WOULD LEAVE HIM, against the dates he has actually
    picked — the rule the leave card carries on the other registers. The
    district still refuses at sanction anything that would breach the year;
@@ -474,7 +486,8 @@ function send(){
   post({ kind:'leave', token:DB.session.token, leave:{
     id:'HR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
     type:t, from:f, to:to, days:days(f, to),
-    reason:$('aReason').value.trim(), address:$('aAddr').value.trim() } })
+    reason:$('aReason').value.trim(), address:$('aAddr').value.trim(),
+    hq:$('aHq').checked === true, cert:$('aCert').value.trim() } })
     .then(function(r){
       busy(b, false);
       if(!r || !r.ok){ if(tokenRefused(r)) return; return say('mApply', 'bad', errText(r)); }
@@ -503,6 +516,7 @@ $('bCancel').addEventListener('click', function(){ home(false); });
 $('bSend').addEventListener('click', send);
 $('bRefresh').addEventListener('click', refresh);
 ['aType','aFrom','aTo'].forEach(function(id){ $(id).addEventListener('change', note); });
+$('aType').addEventListener('change', certBox);
 $('bOut').addEventListener('click', function(){
   DB.session = null; DB.rows = []; DB.me = null; DB.pend = []; DB.pendAll = 0; save();
   $('iPhone').value = ''; $('iPin').value = '';

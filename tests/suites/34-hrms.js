@@ -480,6 +480,74 @@ module.exports = {
         'and the whole of step 5 works from an empty spreadsheet');
     }
 
+    /* ---- 7c. A YEAR THAT IS REALLY A QUARTER, AND THE TWO THINGS AN
+            APPLICATION HAS TO CARRY ----
+
+       The register was stood up on 09.10.2026, so the year it opens in is
+       three months long. A full year's allowance against three months of
+       register lets an employee take in December what he is owed for a
+       January he never had here, so it is prorated on the months remaining,
+       exactly as both other registers were: CL 15 x 3/12 = 3.75 taken as 4,
+       EL 30 x 3/12 = 7.5 taken as 8.
+
+       AND THE SCREEN MUST BE THE SAME ARITHMETIC AS THE ORDER. op=hrms sent
+       tenant_().entitlement — the table, twelve months of it — so the app
+       would have shown 15 and 30 while the sanction refused at 4 and 8, and
+       the register would have argued with itself in front of the employee. */
+    {
+      const e = start();
+      seed(e, [EMP]);
+      e.post({ kind:'claimPin', u:'9444400001', emp:'JN/2291', pin:'8421' });
+      const tok = e.post({ kind:'login', u:'9444400001', p:'8421' }).token;
+      const mine = e.get('hrms', { token:tok });
+
+      t.eq(mine.entitlement.CL, 4, 'CASUAL LEAVE IS THE QUARTER\'S, not the year\'s');
+      t.eq(mine.entitlement.EL, 8, 'and earned leave likewise');
+      t.eq(e.ctx.entitlement_('CL', '2026'), 4, 'which is what the sanction will measure against');
+      t.eq(e.ctx.entitlement_('EL', '2026'), 8, 'for both');
+      t.eq(mine.entitlement.ML, 0,
+        'medical leave answers to no yearly figure, so there is nothing to prorate');
+      t.eq(mine.entitlement.OH, 3,
+        'AND OPTIONAL HOLIDAYS ARE NOT PRORATED — the G.O. grants them for the year, '
+        + 'and the Collector already cut 2026 to three');
+      t.eq(e.ctx.entitlement_('EL', '2027'), 30,
+        'AND 2027 TAKES THE WHOLE YEAR BY ITSELF, because the opening is scoped to its year');
+      t.eq(e.ctx.entitlement_('CL', '2027'), 15, 'for casual leave too');
+
+      /* LEAVING HEADQUARTERS IS A SEPARATE PERMISSION and the register has
+         carried a column for it since the first day. The app never asked, so
+         every application reached the Collector saying false whatever the
+         employee meant — and he is the only one who knows. */
+      const ap = e.post({ kind:'leave', token:tok, leave:{ id:'LVQ', type:'CL',
+        from:'2026-11-02', to:'2026-11-03', days:2, reason:'a wedding at home',
+        address:'H.No 4-5-6, Warangal', hq:true } });
+      t.eq(ap.ok, true, 'he applies, saying he will be away from headquarters');
+
+      const L2 = e.sheets['Leave'];
+      const head = L2.getRange(1, 1, 1, L2.getLastColumn()).getValues()[0].map(String);
+      const row = L2.getDataRange().getValues().slice(1)
+        .filter(r => String(r[head.indexOf('id')]) === 'LVQ')[0];
+      t.ok(!!row, 'the application is on the register');
+      t.eq(String(row[head.indexOf('leaveHq')]), 'true',
+        'AND IT CARRIES THAT HE IS LEAVING HEADQUARTERS');
+      t.eq(String(row[head.indexOf('reason')]), 'a wedding at home',
+        'with the reason the orders are passed on');
+      t.eq(String(row[head.indexOf('address')]), 'H.No 4-5-6, Warangal',
+        'and where he may be reached');
+
+      /* and the certificate, which is asked for on medical leave alone */
+      const ml = e.post({ kind:'leave', token:tok, leave:{ id:'LVM', type:'ML',
+        from:'2026-11-20', to:'2026-11-22', days:3, reason:'fever',
+        cert:'Dist. Hospital, 19.11.2026' } });
+      t.eq(ml.ok, true, 'and a medical application is taken');
+      const mrow = L2.getDataRange().getValues().slice(1)
+        .filter(r => String(r[head.indexOf('id')]) === 'LVM')[0];
+      t.eq(String(mrow[head.indexOf('certificate')]), 'Dist. Hospital, 19.11.2026',
+        'carrying the certificate it was given');
+      t.eq(String(mrow[head.indexOf('leaveHq')]), 'false',
+        'and NOT claiming he left headquarters when he never said so');
+    }
+
     /* ---- 8. IT IS THE HRMS REGISTER'S ALONE ---- */
     {
       const sj = mock.load({ now:NOW });

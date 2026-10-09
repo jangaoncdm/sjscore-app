@@ -174,7 +174,23 @@ function feature_hrms(){
         return json_({ ok:true, me:{ name:u.name, role:u.role, phone:u.phone,
                                      office:u.mandal, desig:u.desig || '' },
                        rows:hrmsMine_(u.phone),
-                       entitlement:tenant_().entitlement,
+                       /* THE YEAR'S FIGURE, NOT THE TABLE'S. This sent
+                          tenant_().entitlement — the full twelve months — so a
+                          register adopted in October would have shown every
+                          employee 15 days of casual leave and 30 of earned,
+                          and only the sanction would have refused them. The
+                          screen that tells a man what he has must be the same
+                          arithmetic as the order that refuses him, or the
+                          register argues with itself. entitlement_() is that
+                          arithmetic: the opening balance for a part year, the
+                          Collector's reduced optional holidays, and the table
+                          only where neither applies. */
+                       entitlement:(function(){
+                         var y = String(new Date().getFullYear()), out = {};
+                         Object.keys(tenant_().entitlement || {}).forEach(function(k){
+                           out[k] = entitlement_(k, y); });
+                         return out;
+                       })(),
                        year:String(new Date().getFullYear()),
                        /* IT IS A LEAVE REGISTER AND NOTHING ELSE */
                        attendance:false, sanction:false });

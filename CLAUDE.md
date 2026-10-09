@@ -1658,6 +1658,36 @@ other half of what the claim checks. **The other two are untouched** — their
 wording is right and 414 officers have read it for months. Section 1a of suite
 34 holds both halves.
 
+**A YEAR THAT IS REALLY A QUARTER, AND A SCREEN THAT MUST NOT ARGUE WITH THE
+ORDER.** Ordered 09.10.2026. The register was stood up on the 9th of October,
+so the year it opens in is three months long, and a full year's allowance
+against three months of register lets an employee take in December what he is
+owed for a January he never had here. Prorated on the months remaining, the
+same way both other registers were — casual leave 15 × 3/12 = 3.75 taken as 4,
+earned leave 30 × 3/12 = 7.5 taken as 8, which are the Gram Palana figures
+exactly because that register was adopted in the same quarter. **Optional
+holidays are not prorated** (the G.O. grants them for the calendar year
+whichever months the register covers, and the Collector's order already cut
+2026 to three), **medical leave answers to no yearly figure** so there is
+nothing to prorate, and HQ is a permission and not days. 2027 takes the whole
+year by itself, because the opening is scoped to the year it names.
+
+And `op=hrms` was sending `tenant_().entitlement` — **the table, twelve months
+of it** — so the app would have shown every employee 15 and 30 while the
+sanction refused at 4 and 8. The screen that tells a man what he has must be
+the same arithmetic as the order that refuses him, or the register argues with
+itself in front of him. It goes through `entitlement_()` now, which is that
+arithmetic.
+
+**And the application asks what it has always had a column for.** `leaveHq`
+and `certificate` have been on the Leave tab since the first day and this app
+never asked, so every application reached the Collector saying `false`
+whatever the employee intended — and he is the only one who knows. The form
+carries the tick now, in words he can answer, and the medical certificate
+**only on medical leave**, because a form that asks everybody for one teaches
+people to leave boxes empty. The reason was already there and already
+required: the orders are passed on it.
+
 **The rosters never enter this repository.** `hms/` is gitignored, as `Add/`
 and `Domain/` are, and it was ignored **before the workbook was opened** —
 because `Add/` was not, and a `git add -A` published 192 personal mobile

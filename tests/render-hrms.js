@@ -83,6 +83,7 @@ function serve(noConfig){
   let E = register();
   let dead = false;               /* the village road, for the refusal test */
   const bulk = [];                /* how many ids each bulk POST carried */
+  const sent = [];                /* every leave body that went on the wire */
   await page.route('**/hrms.district/**', r => {
     if(dead) return r.abort('failed');
     const q = r.request();
@@ -90,6 +91,7 @@ function serve(noConfig){
     if(q.method() === 'POST'){
       let b = {}; try{ b = JSON.parse(q.postData() || '{}'); }catch(e){}
       if(Array.isArray(b.ids)) bulk.push(b.ids.length);
+      if(b.kind === 'leave') sent.push(b.leave || {});
       out = E.post(b);
     } else {
       const sp = new URL(q.url()).searchParams, p = {};
@@ -161,7 +163,24 @@ function serve(noConfig){
 
   await page.fill('#aReason', 'Family function at Warangal.');
   await page.fill('#aAddr', 'H.No 4-21, Warangal.');
+
+  /* LEAVING HEADQUARTERS IS ASKED FOR, NOT ASSUMED. It is a separate
+     permission under the leave rules, the register has carried a column for
+     it since the first day, and this app never asked — so every application
+     reached the Collector saying false whatever the employee meant. */
+  ck(await page.isVisible('#aHq'), 'the form asks whether he is leaving headquarters');
+  const hqWords = await page.textContent('label[for="aHq"]');
+  ck(/away from my headquarters/i.test(hqWords), 'in words he can answer',
+     hqWords.replace(/\s+/g, ' ').trim().slice(0, 70));
+  /* A CERTIFICATE IS ASKED FOR WHERE IT IS WANTED AND NOWHERE ELSE. Asking
+     everybody for one is how a form teaches people to leave boxes empty. */
+  ck(!(await page.isVisible('#aCert')), 'and does NOT ask casual leave for a medical certificate');
+  await page.check('#aHq');
   await page.click('#bSend'); await page.waitForTimeout(1400);
+  const wire = sent[sent.length - 1] || {};
+  ck(wire.hq === true, 'AND IT GOES ON THE WIRE', JSON.stringify(wire.hq));
+  ck(wire.reason === 'Family function at Warangal.', 'with the reason beside it', wire.reason);
+  ck(wire.address === 'H.No 4-21, Warangal.', 'and the address while on leave', wire.address);
   ck(await page.isVisible('#vHome'), 'on sending he is returned to his own page');
   const list = await page.textContent('#hList');
   ck(/Casual leave/.test(list), 'the application is on it', list.replace(/\s+/g,' ').slice(0, 70));
@@ -169,6 +188,16 @@ function serve(noConfig){
   await page.screenshot({ path: path.join(OUT, '4-home-applied.png') });
   ck(E.sheets['Leave'].rows.length === 2, 'and the register holds exactly one row for it',
      (E.sheets['Leave'].rows.length - 1) + ' row(s)');
+
+  /* ---- 3a. the certificate follows the kind of leave ---- */
+  await page.click('#bApply'); await page.waitForTimeout(300);
+  await page.selectOption('#aType', 'ML'); await page.waitForTimeout(200);
+  ck(await page.isVisible('#aCert'), 'MEDICAL LEAVE IS ASKED FOR ITS CERTIFICATE');
+  ck(!(await page.isChecked('#aHq')), 'and the headquarters tick starts clear on a fresh form');
+  await page.selectOption('#aType', 'CL'); await page.waitForTimeout(200);
+  ck(!(await page.isVisible('#aCert')), 'and the box goes away again when it is not wanted');
+  await page.screenshot({ path: path.join(OUT, '3a-apply-hq.png') });
+  await page.click('#bCancel'); await page.waitForTimeout(300);
 
   /* ---- 4. the overlap is the REGISTER's refusal, not the page's ---- */
   await page.click('#bApply'); await page.waitForTimeout(300);

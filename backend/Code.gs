@@ -552,6 +552,26 @@ const TENANTS = {
     sanction:false, evaluation:false, schedule:false,
     placeOfDuty:false,
     entitlement:{CL:15, EL:30, HQ:0, ML:0, OH:5},
+    /* AND 2026 IS NOT A YEAR ON THIS REGISTER, IT IS A QUARTER. The district
+       stood the HRMS up on 09.10.2026, so the year it opens in is three months
+       long — October, November, December — and a full year's allowance against
+       three months of register would let an employee take in December what he
+       is owed for a January he never had here. Prorated on the months
+       remaining, the same way both other registers were: casual leave
+       15 x 3/12 = 3.75, taken as 4; earned leave 30 x 3/12 = 7.5, taken as 8.
+       Those are the Gram Palana figures exactly, because that register was
+       adopted in the same quarter.
+
+       OPTIONAL HOLIDAYS ARE NOT PRORATED and are deliberately absent here: the
+       G.O. grants them for the calendar year whichever months the register
+       covers, and the Collector's order has already cut 2026 to three. MEDICAL
+       LEAVE ANSWERS TO NO YEARLY FIGURE at all — an illness does not keep to an
+       allowance — so there is nothing to prorate; what it answers to is the
+       fifteen-day spell. HQ is a permission and not days.
+
+       2027 takes the whole year by itself, because this is scoped to the year
+       it names. */
+    leaveOpening:{ '2026':{ CL:4, EL:8 } },
     gpdp:false,
     /* THE EMPLOYEE SETS HIS OWN PIN, on a number the district has already put
        on the roll. The other two registers issue a PIN and print it once;
