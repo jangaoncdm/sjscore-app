@@ -1598,6 +1598,31 @@ It is a file and not a variable because `GITHUB_TOKEN` cannot manage
 variables, and a personal token planted here to save one click is the worse
 trade.
 
+**AND `clasp create` IS TWO ACTS, WHICH IS HOW THAT GUARD WAS WRONG ANYWAY.**
+It makes the spreadsheet, and then it makes the script bound to it. On the
+first real run, 09.10.2026, the first succeeded and the second answered *The
+service is currently unavailable* sixty-five seconds later — leaving a
+spreadsheet in the district's Drive and **nothing recorded**, because the
+record was waiting for a script id that never came. A re-run would have made a
+second spreadsheet, which is the one thing the record exists to prevent, and
+the claim that it could not was simply wrong for that failure. The
+spreadsheet's own id is now written and pushed **the moment clasp prints it**,
+whether or not the rest of the call ever returns, and a later attempt binds a
+script to that spreadsheet with `--parentId` rather than making another. The
+step also tries three times, because a transient Google outage is the single
+most expensive place to give up: the spreadsheet is already made. The orphan
+from that run was adopted rather than abandoned — a register is a spreadsheet,
+and two of them is the fault worth more than the tidiness.
+
+**A summary that guesses at the cause is worse than one that says nothing.**
+The run that stopped at the confirm box told the district its Google
+credential had expired — the only cause the "nothing was created" branch knew
+how to name — sending him to look at the one thing in perfect order while the
+real reason sat in the annotation directly above. It reads the gate's own
+outcome now, and the branch that cannot know says so and points at the failing
+step instead of offering a cause. The same lesson as the pre-flight's *failed
+to run or failed outright*, learnt again a day later in a different file.
+
 **No bootstrap key and no salt.** The GP pipeline planted a key so 134 mobile
 numbers could reach an empty register without passing through this public
 repository; the establishment comes through the console under the Collector's

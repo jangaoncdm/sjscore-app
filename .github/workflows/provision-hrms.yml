@@ -127,31 +127,94 @@ jobs:
       # screen, which is the usual way a first run stops, could be re-run and
       # make a second Sheet. The record is committed here instead, by the
       # pipeline, before anything that can fail.
+      #
+      # AND `clasp create` IS TWO ACTS, NOT ONE. It makes the spreadsheet, and
+      # then it makes the script bound to it. On 09.10.2026 the first succeeded
+      # and the second answered "The service is currently unavailable" sixty-
+      # five seconds later — leaving a spreadsheet in the district's Drive and
+      # NOTHING RECORDED, because the record waited for a script id that never
+      # came. A re-run would have made a second spreadsheet, which is the one
+      # thing this step exists to prevent. The claim that it could not was
+      # simply wrong for that failure.
+      #
+      # So the spreadsheet's own id is recorded the moment clasp prints it,
+      # whether or not the rest of the call ever returns, and a later attempt
+      # binds a script to THAT spreadsheet (`--parentId`) instead of making
+      # another. One register, one spreadsheet, however many times this runs.
       - name: Create the Sheet and its bound project, if it does not exist yet
         id: create
         run: |
-          if [ -f hrms/project.json ]; then
-            SID=$(node -e "console.log(JSON.parse(require('fs').readFileSync('hrms/project.json','utf8')).scriptId)")
+          mkdir -p hrms
+          rd(){ node -e "try{console.log(JSON.parse(require('fs').readFileSync('hrms/project.json','utf8'))['$1']||'')}catch(e){console.log('')}"; }
+          SID=$(rd scriptId); SHEET=$(rd sheetId)
+
+          # WHAT IS RECORDED IS PUSHED BEFORE THE NEXT THING IS TRIED. A record
+          # held in the working tree until the end of the step is no record at
+          # all: the step is what fails.
+          record(){
+            node -e "
+              const fs=require('fs'), f='hrms/project.json';
+              let j={}; try{ j=JSON.parse(fs.readFileSync(f,'utf8')); }catch(e){}
+              if(process.argv[1]) j.sheetId=process.argv[1];
+              if(process.argv[2]) j.scriptId=process.argv[2];
+              j.note='Written by provision-hrms. The deploy pipeline reads this to keep the HRMS backend up to date, and its absence is what tells the pipeline the register has not been stood up. sheetId is recorded the moment it exists so that a failed run can never cause a second spreadsheet. Neither id is a credential: access is governed by Drive, and the live /exec address in config.js is public already.';
+              fs.writeFileSync(f, JSON.stringify(j,null,2)+String.fromCharCode(10));
+            " "$1" "$2"
+            git config user.name  "SJGP deploy"
+            git config user.email "deploy@users.noreply.github.com"
+            git add hrms/project.json
+            if ! git diff --staged --quiet; then
+              git commit -m "provision: $3"
+              git pull --rebase --autostash || true
+              git push
+            fi
+          }
+
+          if [ -n "$SID" ]; then
             echo "script_id=$SID" >> "$GITHUB_OUTPUT"
             echo "Already created: $SID - resuming rather than making a second register."
             exit 0
           fi
-          clasp create --type sheets --title "${{ github.event.inputs.title }}" --rootDir hrmsbuild
-          # clasp writes .clasp.json INTO --rootDir, not into the working
-          # directory. Reading it from the wrong place once failed a run whose
-          # Sheet and script had in fact been created perfectly well.
-          CJ=hrmsbuild/.clasp.json; [ -f "$CJ" ] || CJ=.clasp.json
-          SID=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$CJ','utf8')).scriptId)")
+
+          # "The service is currently unavailable" is Google having a bad
+          # minute, not a fault here, and it is the single most expensive place
+          # to give up: the spreadsheet is already made. Three goes, spaced.
+          for attempt in 1 2 3; do
+            rm -f hrmsbuild/.clasp.json .clasp.json
+            if [ -n "$SHEET" ]; then
+              echo "--- attempt $attempt: binding a script to the spreadsheet already made ---"
+              clasp create --parentId "$SHEET" --title "${{ github.event.inputs.title }}" --rootDir hrmsbuild 2>&1 | tee /tmp/create.log || true
+            else
+              echo "--- attempt $attempt: making the spreadsheet and its script ---"
+              clasp create --type sheets --title "${{ github.event.inputs.title }}" --rootDir hrmsbuild 2>&1 | tee /tmp/create.log || true
+              NEW=$(grep -oE 'open\?id=[A-Za-z0-9_-]+' /tmp/create.log | head -n1 | cut -d= -f2 || true)
+              if [ -n "$NEW" ]; then
+                SHEET="$NEW"
+                echo "The spreadsheet exists: $SHEET - recording it now, before anything else is tried."
+                record "$SHEET" "" "the District HRMS spreadsheet exists, recorded so no run can ever make a second"
+              fi
+            fi
+            # clasp writes .clasp.json INTO --rootDir, not into the working
+            # directory. Reading it from the wrong place once failed a run whose
+            # Sheet and script had in fact been created perfectly well.
+            CJ=hrmsbuild/.clasp.json; [ -f "$CJ" ] || CJ=.clasp.json
+            if [ -f "$CJ" ]; then
+              SID=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$CJ','utf8')).scriptId||'')")
+            fi
+            [ -n "$SID" ] && break
+            echo "::warning::Attempt $attempt did not produce a script. Google said: $(tr -d '\r' < /tmp/create.log | tail -n2 | tr '\n' ' ')"
+            [ "$attempt" = "3" ] || sleep 25
+          done
+
+          if [ -z "$SID" ]; then
+            echo "::error::The script could not be created after three attempts. The spreadsheet ${SHEET:-(none)} is recorded, so re-running binds a script to that same one and never makes a second."
+            echo "sheet_id=$SHEET" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
           echo "script_id=$SID" >> "$GITHUB_OUTPUT"
-          mkdir -p hrms
-          node -e "require('fs').writeFileSync('hrms/project.json', JSON.stringify({scriptId:process.argv[1],note:'Written by provision-hrms. The deploy pipeline reads this to keep the HRMS backend up to date, and its absence is what tells the pipeline the register has not been stood up. A script id is not a credential: access to the project is governed by Drive, and the live /exec address in config.js is public already.'},null,2)+String.fromCharCode(10))" "$SID"
-          git config user.name  "SJGP deploy"
-          git config user.email "deploy@users.noreply.github.com"
-          git add hrms/project.json
-          git commit -m "provision: the District HRMS project exists, recorded before anything that can fail"
-          git pull --rebase --autostash || true
-          git push
-          echo "Created script $SID, and recorded it."
+          echo "sheet_id=$SHEET" >> "$GITHUB_OUTPUT"
+          record "$SHEET" "$SID" "the District HRMS project exists, recorded before anything that can fail"
+          echo "Created script $SID on spreadsheet $SHEET, and recorded both."
 
       - name: Point clasp at the project
         run: |
@@ -229,6 +292,7 @@ jobs:
         run: |
           S="$GITHUB_STEP_SUMMARY"
           SID='${{ steps.create.outputs.script_id }}'
+          SHEET='${{ steps.create.outputs.sheet_id }}'
           EXEC='${{ steps.deploy.outputs.exec_url }}'
           if [ "${{ steps.verify.outputs.ok }}" = "yes" ]; then
             {
@@ -296,6 +360,34 @@ jobs:
               echo ""
               echo "Nothing is published at \`/hrms/\` until the address answers as"
               echo "HRMS, so no employee can reach a half-made register in the meantime."
+            } >> "$S"
+          elif [ -n "$SHEET" ]; then
+            # THE SPREADSHEET WITHOUT ITS SCRIPT. `clasp create` makes the one
+            # and then the other, and on 09.10.2026 Google failed the second
+            # half with "the service is currently unavailable". Nothing is
+            # wrong with the credential, nothing needs deleting, and the
+            # re-run binds a script to this same spreadsheet.
+            {
+              echo "# The spreadsheet is made; its script is not"
+              echo ""
+              echo "\`clasp create\` is two acts — make the spreadsheet, then make the"
+              echo "Apps Script project bound to it. The first worked. The second did"
+              echo "not, and three attempts were made."
+              echo ""
+              echo "| | |"
+              echo "|---|---|"
+              echo "| Spreadsheet | https://docs.google.com/spreadsheets/d/$SHEET/edit |"
+              echo ""
+              echo "**This is Google having a bad minute, not a fault in the"
+              echo "credential and not anything you did.** The log above carries what"
+              echo "it actually said."
+              echo ""
+              echo "## Do this"
+              echo ""
+              echo "**Re-run this workflow.** The spreadsheet's id is already recorded"
+              echo "in \`hrms/project.json\`, so the next attempt binds a script to"
+              echo "**that** spreadsheet rather than making another one. Nothing to"
+              echo "delete, and there can never be two."
             } >> "$S"
           elif [ "${{ steps.confirm.outcome }}" = "failure" ]; then
             # A SUMMARY THAT GUESSES AT THE CAUSE IS WORSE THAN ONE THAT SAYS

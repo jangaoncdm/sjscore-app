@@ -1,0 +1,5 @@
+{
+  "sheetId": "1zR38CT4Oub_3SUHnkJuimijnMIUmcYx5CwHpYx-PehY",
+  "note": "Written by provision-hrms. The deploy pipeline reads this to keep the HRMS backend up to date, and its absence is what tells the pipeline the register has not been stood up. sheetId is recorded the moment it exists so that a failed run can never cause a second spreadsheet. Neither id is a credential: access is governed by Drive, and the live /exec address in config.js is public already.",
+  "recordedByHand": "Run 37883620539 on 09.10.2026 made this spreadsheet and then Google answered 'The service is currently unavailable' while making the script bound to it, so the run recorded nothing and the spreadsheet was left with no script on it. It is adopted here rather than abandoned, so the next run binds a script to this one instead of making a second. The pipeline records sheetId for itself now."
+}
