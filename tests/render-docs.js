@@ -134,6 +134,8 @@ function makeRouter(state){
                                              url:'https://drive.mock/plan.pdf',
                                              uploadedAt:'2026-08-23T11:45:00.000Z' });
       if(b.kind === 'advPublish') return reply({ ok:true, id:'ADV-20260823-tst', url:'https://drive.mock/adv.pdf', title:b.title });
+      /* retiring stands the circular down: the next read says nothing stands */
+      if(b.kind === 'advRetire'){ state.retired = b.id; return reply({ ok:true, id:b.id, status:'RETIRED' }); }
       if(b.kind === 'schedAck')  return reply({ ok:true, ym:b.ym, ackAt:'2026-08-23T11:50:00.000Z' });
       if(b.kind === 'schedSeen') return reply({ ok:true, done:(b.ids||[]).length });
       if(b.kind === 'schedNudge') return reply({ ok:true, sent:1, mailed:1,
@@ -151,6 +153,14 @@ function makeRouter(state){
       const want = m2 ? decodeURIComponent(m2[1]) : '';
       if(want && FIX.advRetired && FIX.advRetired.advisory && FIX.advRetired.advisory.id === want)
         return reply(FIX.advRetired);
+      if(state.retired && state.adv && state.adv.advisory && state.adv.advisory.id === state.retired){
+        const gone = Object.assign({}, state.adv.advisory,
+          { status:'RETIRED', retiredAt:'2026-08-23T12:00:00.000Z', retiredBy:'Sandeep Kumar Jha (COLLECTOR)' });
+        const list = (state.adv.list || []).map(x => x.id === state.retired ? Object.assign({}, x, gone) : x);
+        /* opened out of the history, it comes back retired; asked for plainly, nothing stands */
+        if(want === state.retired) return reply(Object.assign({}, state.adv, { advisory:gone, standing:'', viewing:want, list:list }));
+        if(!want) return reply(Object.assign({}, state.adv, { advisory:null, standing:'', viewing:'', list:list }));
+      }
       return reply(state.adv);
     }
     if(/op=schedule/.test(url)) return reply(state.sched || { ok:true, ym:'', mine:null });
@@ -738,6 +748,33 @@ function makeRouter(state){
       check('the broadcast line is what is sent', !!(pub && /monsoon season and act accordingly/i.test(pub.message)),
         pub ? pub.message : '');
       await shot(page, 'console-advisory-published', true);
+
+      /* ---- RETIRING THE STANDING CIRCULAR (10.10.2026) ----
+         The button retires the circular on the screen, by id. The district is
+         read again afterwards, and with nothing standing the console says so
+         rather than going on showing what it last read. */
+      const retireBtn = await page.$('#advRetire');
+      check('the standing circular carries a button to retire it', !!retireBtn);
+      page.once('dialog', d => d.accept());
+      await page.click('#advRetire');
+      await page.waitForTimeout(1200);
+      const ret = state.posts.find(p => p.kind === 'advRetire');
+      check('pressing it posts the order on that circular, by id',
+        !!ret && ret.id === FIX.advDistrict.advisory.id, ret ? 'id=' + ret.id : 'nothing posted');
+      const retTxt = await page.$eval('#g', el => el.innerText);
+      check('and the console then says nothing is standing',
+        /Standing advisory/i.test(retTxt) && /publish one below/i.test(retTxt) && !/The standing advisory/i.test(retTxt));
+      check('while the retired circular stays on the history, marked retired',
+        /PS MPDO MPO Health Advisory/i.test(retTxt) && (await page.$$eval('[data-advopen]', rs => rs.length)) === (FIX.advDistrict.list || []).length);
+      await shot(page, 'console-advisory-retired-by-order', true);
+
+      await page.click('[data-advopen="' + FIX.advDistrict.advisory.id + '"]');
+      await page.waitForTimeout(900);
+      const roTxt = await page.$eval('#g', el => el.innerText);
+      check('opening it says it was retired by order, and offers no second retirement',
+        /already retired/i.test(roTxt) && /Retired by order/i.test(roTxt) && !(await page.$('#advRetire')));
+      await page.click('#advBack');
+      await page.waitForTimeout(600);
     }
 
     /* ---- weather ---- */

@@ -270,6 +270,59 @@ module.exports = {
     t.ok(!afterBlank.advisory || !!afterBlank.advisory.id,
       'no officer is ever handed a circular without an id');
 
+    /* ================= THE COLLECTOR RETIRES ONE (10.10.2026) =================
+       Until now the only way to take a circular off every officer's screen was
+       to publish another over it. The Collector may now stand one down from
+       the console on its own. Nothing is destroyed: the row stays, marked
+       RETIRED with the day and the hand, and every receipt stands. */
+    const standId = env.get('advisory', { token: cdm }).advisory.id;
+    r = env.post({ kind:'advRetire', token: ps, id: standId });
+    t.eq(r.ok, false, 'a Secretary may not retire a circular');
+    r = env.post({ kind:'advRetire', token: cdm });
+    t.eq(r.ok, false, 'and the order is passed by id — no id, no order');
+    r = env.post({ kind:'advRetire', token: cdm, id:'ADV-NOSUCH' });
+    t.eq(r.ok, false, 'an id nobody issued retires nothing');
+    t.eq(env.get('advisory', { token: ps }).advisory.id, standId, 'and the circular still stands after all three');
+
+    const ackRows = env.sheets['AdvAck'].rows.length;
+    const audN = env.sheets['Audit'].rows.length;
+    r = env.post({ kind:'advRetire', token: cdm, id: standId });
+    t.eq(r.ok, true, 'the Collector retires the circular standing');
+    t.eq(r.status, 'RETIRED', 'and is told so');
+
+    const gone = env.get('advisory', { token: ps });
+    t.eq(gone.advisory, null, 'no officer is shown it any more — the card, the pop-up and the badge go with it');
+    const kept = (gone.recent || []).find(x => x.id === standId);
+    t.ok(!!kept, 'but it is still under More ▸ Advisories');
+    t.eq(kept.standing, false, 'no longer marked as standing');
+
+    const after = env.get('advisory', { token: cdm });
+    t.eq(after.advisory, null, 'the district sees nothing standing');
+    t.eq(after.standing, '', 'and the answer says so');
+    t.ok(after.totals && after.roll.length === 3, 'while the roll is still shown, as before the first circular');
+    const row = after.list.find(x => x.id === standId);
+    t.eq(row.status, 'RETIRED', 'the circular is on the history, marked retired');
+    t.ok(String(row.retiredAt).length > 10 && /Sandeep/.test(row.retiredBy), 'with the day and the hand');
+    t.eq(row.due, 3, 'carrying the roll it addressed');
+    t.eq(env.sheets['AdvAck'].rows.length, ackRows, 'not one receipt was touched');
+    t.ok(env.sheets['Audit'].rows.slice(audN).some(x => /ADVISORY RETIRED/.test(String(x[1]))),
+      'and the order is on the audit record');
+
+    const open = env.get('advisory', { token: cdm, id: standId });
+    t.eq(open.advisory.id, standId, 'the Collector may still open it');
+    t.eq(open.advisory.status, 'RETIRED', 'and is told it was retired by order, not by a later circular');
+    t.eq(open.totals.due, 3, 'with its register rebuilt, receipts and all');
+
+    const audN2 = env.sheets['Audit'].rows.length;
+    const again = env.post({ kind:'advRetire', token: cdm, id: standId });
+    t.eq(again.ok, true, 'a second press is accepted');
+    t.eq(again.already, true, 'as a repeat');
+    t.eq(env.sheets['Audit'].rows.length, audN2, 'and writes nothing');
+
+    r = env.post({ kind:'advPublish', token: cdm, title:'After the retirement', message:'The next one.', audience:'ALL' });
+    t.eq(r.ok, true, 'the next circular is published when there is one to publish');
+    t.eq(env.get('advisory', { token: ps }).advisory.title, 'After the retirement', 'and stands in front of the officer as it always did');
+
     /* ---- THE LINE THAT MUST HOLD ---- */
     t.ok(!env.sheets['Notices'] || env.sheets['Notices'].rows.length <= 1,
       'not acknowledging a circular raises no notice');

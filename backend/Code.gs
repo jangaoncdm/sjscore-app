@@ -4893,7 +4893,8 @@ function gpdpRegister_(u, yearReq){
  *
  * NOTHING IS DESTROYED. Publishing a new advisory retires the standing one to
  * SUPERSEDED; it does not delete it, and the acknowledgements against it stay
- * exactly where they are.
+ * exactly where they are. The Collector may also retire one on its own, from
+ * the console (RETIRED, with the day and the hand) — same rule, same receipts.
  * ========================================================================== */
 const ADV_FOLDER = 'SJ-SCORE Advisories';
 /* 'audience' is the ROLE the circular addresses (ALL, or PS/MPDO/MPO/MSO) and
@@ -4902,7 +4903,8 @@ const ADV_FOLDER = 'SJ-SCORE Advisories';
    and nobody else. Adding a column to a *_HEAD array is safe — ensureHeaders_
    appends it and no migration is needed. */
 const ADV_HEAD = ['id','title','message','fileName','mime','sizeKB','fileId','url',
-                  'publishedAt','publishedBy','audience','mandals','status'];
+                  'publishedAt','publishedBy','audience','mandals','status',
+                  'retiredAt','retiredBy'];
 const ADV_ACK_HEAD = ['advId','phone','name','role','mandal','ackAt','receivedAt'];
 const ADV_MAX_KB = 12 * 1024;
 /* a circular may be a PDF, a Word file or an image of the signed page */
@@ -4970,6 +4972,53 @@ function publishAdvisory_(b, u){
   return json_({ ok:true, id:id, url:url, title:title });
 }
 
+/* ---- the Collector retires one (ordered 10.10.2026) ----
+   Until now the only way to take a circular off every officer's screen was to
+   publish another one over it. A circular whose moment has passed — a weather
+   warning for a week that is over, an instruction since withdrawn — went on
+   opening on every phone until acknowledged, and the only cure was to issue
+   something new. This stands the circular down on its own: it stops opening
+   on every handset, the card and the badge go with it, and the next circular
+   is published when there is one to publish.
+
+   NOTHING IS DESTROYED (rule 7). The row stays, marked RETIRED with the day
+   and the hand, and every receipt given against it stands exactly where it
+   is — the console still opens it out of the history, name by name. The
+   officer side needs nothing new: a retired circular is simply not the one
+   standing, which the app already understood.
+
+   THE ORDER IS PASSED ON THE CIRCULAR, BY ID, never on "whatever is standing"
+   — a console that had read the register fifty seconds ago may be looking at
+   one circular while a later publish has stood another up, and retiring by
+   name cannot take down the one the Collector has not seen. A second press on
+   the same circular changes nothing (rule 8). */
+function retireAdvisory_(b, u){
+  if(!districtRole_(u.role)) return json_({ ok:false, error:'Only the district may retire an advisory.' });
+  const id = String(b.id || '').trim();
+  if(!id) return json_({ ok:false, error:'Say which circular is to be retired — an order is passed by id.' });
+  const sh = sheet_('Advisories', ADV_HEAD), m = headMap_(sh, ADV_HEAD);
+  const lock = LockService.getScriptLock();
+  try{ lock.waitLock(20000); }catch(err){ return json_({ ok:false, error:'busy — try again' }); }
+  let title = '', status = '', at = -1;
+  try{
+    const v = sh.getDataRange().getValues();
+    for(let i = 1; i < v.length; i++){
+      if(cell_(v[i], m.ix.id) !== id) continue;
+      at = i + 1; title = cell_(v[i], m.ix.title);
+      status = String(v[i][m.ix.status] || 'ACTIVE');
+      break;
+    }
+    if(at < 0) return json_({ ok:false, error:'No circular carries the id ' + id + '.' });
+    if(status !== 'ACTIVE') return json_({ ok:true, id:id, title:title, already:true, status:status });
+    const now = new Date().toISOString();
+    sh.getRange(at, m.ix.status + 1).setValue('RETIRED');
+    if(m.ix.retiredAt >= 0) sh.getRange(at, m.ix.retiredAt + 1).setValue(now);
+    if(m.ix.retiredBy >= 0) sh.getRange(at, m.ix.retiredBy + 1).setValue(u.name + ' (' + u.role + ')');
+  } finally { lock.releaseLock(); }
+  admAudit_('ADVISORY RETIRED', title, id + ' · by ' + u.name + ' (' + u.role + ') · the receipts stand');
+  return json_({ ok:true, id:id, title:title, status:'RETIRED' });
+}
+
 /* EVERY CIRCULAR THE DISTRICT HAS ISSUED, newest first. A superseded one is
    retired, never deleted — and the acknowledgements given against it stand
    exactly where they were. The console reads this so the Collector can look
@@ -4987,7 +5036,9 @@ function advAll_(){
                mandals: advMandalList_(cell_(v[i], m.ix.mandals)),
                publishedAt: String(v[i][m.ix.publishedAt] || ''),
                publishedBy: cell_(v[i], m.ix.publishedBy),
-               status: String(v[i][m.ix.status] || 'ACTIVE') });
+               status: String(v[i][m.ix.status] || 'ACTIVE'),
+               retiredAt: String(m.ix.retiredAt >= 0 ? (v[i][m.ix.retiredAt] || '') : ''),
+               retiredBy: cell_(v[i], m.ix.retiredBy) });
   }
   return out;
 }
@@ -5105,8 +5156,11 @@ function advisoryRegister_(u, idReq){
     if(ph === u.phone) mine[aid] = at;
   }
 
-  if(!districtRole_(u.role) && !standing) return json_({ ok:true, advisory:null, recent:[] });
-
+  /* NOTHING STANDING IS NOT NOTHING ISSUED. This used to answer an officer
+     with an empty history the moment no circular stood, which was harmless
+     while the only way to stand one down was to publish another — but a
+     circular retired by order (10.10.2026) leaves nothing standing, and the
+     circulars he has read must stay under More ▸ Advisories all the same. */
   if(!districtRole_(u.role)){
     /* THE CIRCULARS STAY IN THE APP. An officer must be able to go back and
        read what the district has issued — a message he can only see once is a
@@ -5122,6 +5176,7 @@ function advisoryRegister_(u, idReq){
                     publishedAt: String(vA[i][mA.ix.publishedAt] || ''),
                     publishedBy: cell_(vA[i], mA.ix.publishedBy),
                     standing: String(vA[i][mA.ix.status] || 'ACTIVE') === 'ACTIVE' };
+      if(!one.id) continue;   /* a blank row is not a circular here either */
       if(!advApplies_(one, role, u.mandal)) continue;
       one.acknowledged = !!mine[one.id];
       one.ackAt = mine[one.id] || '';
@@ -5202,6 +5257,7 @@ function advisoryRegister_(u, idReq){
       due++; if(got[o.phone]) done2++;
     });
     return { id:a2.id, title:a2.title, publishedAt:a2.publishedAt, status:a2.status,
+             retiredAt:a2.retiredAt || '', retiredBy:a2.retiredBy || '',
              audience:a2.audience, mandals:a2.mandals, url:a2.url,
              due:due, acknowledged:done2, pending:due - done2 };
   });
@@ -6034,12 +6090,23 @@ function vpWords_(s){
   return String(s || '').toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/)
     .filter(function(w){ return w.length >= 4 && VP_SKIP_.indexOf(w) < 0; });
 }
-function vpWho_(officers, words, mandal){
+function vpWho_(officers, words, mandal, gp){
   var mk = mkeyM_(mandal);
   var pool = (officers || []).filter(function(o){ return mkeyM_(o.mandal) === mk; });
   if(!mandal || !pool.length) return [];
-  var cells = (words || []).map(function(w){ return vpWords_(w); });
-  var best = [], score = 0, long = 0;
+  /* THE MANDAL AND THE VILLAGE ARE NOT NAMES OF PEOPLE, AND THE ROLL IS FULL
+     OF OFFICERS CALLED AFTER THEIR MANDAL. "MPDO Chilpur", "MSO Chilpur" and
+     "MPO Devaruppula" are rows on the Users tab, so the mandal cell of the
+     line — which is on every line — matched them on the word "chilpur", and
+     a village office line came back reading as six different officers. The
+     mandal and village cells are struck out before anybody is looked for;
+     they are already matched, by name, as places. */
+  var strike = {};
+  vpWords_(mandal).concat(vpWords_(gp)).forEach(function(w){ strike[w] = 1; });
+  var cells = (words || []).map(function(w){
+    return vpWords_(w).filter(function(x){ return !strike[x]; });
+  });
+  var scored = [];
   pool.forEach(function(o){
     var on = vpWords_(o.name); if(!on.length) return;
     var s = 0, lg = 0;
@@ -6050,13 +6117,19 @@ function vpWho_(officers, words, mandal){
         lg = Math.max.apply(null, hits.map(function(w){ return w.length; }));
       }
     });
-    if(!s) return;
-    if(s > score){ score = s; long = lg; best = [o]; }
-    else if(s === score){ best.push(o); if(lg > long) long = lg; }
+    if(s) scored.push({ o:o, s:s, lg:lg });
   });
-  if(!score) return [];
-  if(score === 1 && long < 6) return [];   /* one short surname is not a man */
-  return best;
+  if(!scored.length) return [];
+  var top = Math.max.apply(null, scored.map(function(z){ return z.s; }));
+  var best = scored.filter(function(z){ return z.s === top; });
+  /* ONE SHARED WORD IS NOT A MAN WHEN SEVERAL ANSWER TO IT. Half this
+     district is somebody Reddy, Ramesh or Raju, and a line that reads as
+     "either MUPPIDI RAJU or Sontekka Raju or N. Raju" is noise and not a
+     reading — it is dropped here so that the VILLAGE on the line can settle
+     it instead, which is the one thing that actually does. */
+  if(top === 1 && best.length > 1) return [];
+  if(top === 1 && best[0].lg < 6) return [];
+  return best.map(function(z){ return z.o; });
 }
 
 /* THE NAMES ON THE ROLL THAT ARE CLOSE TO THIS ONE, nearest first.
@@ -6123,17 +6196,27 @@ function villagePoints_(b, u){
      spellings and 96 over a village name the roll writes differently. Not one
      of those lines was wrong about who the officer was. */
   const t = uidx_(), uv = t.sh.getDataRange().getValues();
-  const held = {}, officers = [];
+  const held = {}, seenPh = {};
+  let officers = [];
   for(let i = 1; i < uv.length; i++){
     const ph = phone10_(uv[i][t.ix.phone]); if(!ph) continue;
     const act = t.ix.active < 0 ? true : !(uv[i][t.ix.active] === false ||
       String(uv[i][t.ix.active]).toUpperCase() === 'FALSE');
     if(!act) continue;
     const md = cell_(uv[i], t.ix.mandal), nm = cell_(uv[i], t.ix.name);
-    officers.push({ phone:ph, name:nm, mandal:md });
+    if(!seenPh[ph]){ seenPh[ph] = 1; officers.push({ phone:ph, name:nm, mandal:md }); }
     String(cell_(uv[i], t.ix.gp) || '').split(',').map(x => x.trim()).filter(String)
       .forEach(g => { (held[ph] = held[ph] || []).push({ gp:g, mandal:md, name:nm }); });
   }
+  /* A MANDAL OFFICER HOLDS NO VILLAGE, AND THIS LINE IS ABOUT A VILLAGE.
+     The MPO, the MPDO and the MSO answer for a mandal; only the Secretary
+     holds a Gram Panchayat, which is the rule rollPlan_ and FeaturePosting
+     already keep. They were being offered as readings of a village office
+     line all the same — "either B Lingam or MPDO Tharigoppula or MSO
+     Tharigoppula or MPO Tharigoppula" — and three of those four could never
+     be the answer to this question. An officer with no village on the
+     register is not a candidate for a village's office. */
+  officers = officers.filter(function(o){ return !!held[o.phone]; });
 
   const plans = rows.map(function(r){
     const y = Number(r.lat), x = Number(r.lng);
@@ -6151,107 +6234,148 @@ function villagePoints_(b, u){
     const find = function(mandal, gp){
       return at[vkey_(mandal, gp)] || at2[mkeyM_(mandal) + '|' + mkey2_(gp)] || null;
     };
-    /* ======== THE OFFICER FIRST. THAT IS THE WHOLE OF IT. ========
-       The row to write is found through the man the line names, because the
-       register already knows which village he holds and the two never have to
-       agree about how it is spelt. The village name on the line is used for
-       one thing only: to say WHICH of his, where he holds more than one — 34
-       of the district's 280 Secretaries do — and it is then matched against
-       his own two or three names and never against all 280, which is what
-       makes a near spelling safe to accept here and not safe to accept out
-       there.
+    /* ================== HOW A LINE FINDS ITS ROW ==================
+       THE PLACE IS A PROPERTY OF THE PLACE. The point is stored against the
+       village and not against the man, so the village the line names is
+       tried first and wins outright. The officer is how a line is resolved
+       when the two tabs spell that village differently, which 96 of the
+       district's 280 lines did.
 
-       Read the other way round, which is how the first paste read it, 162 of
-       280 villages were refused — 66 over three mandal spellings and 96 over
-       a village name the roll writes differently — and not one of those lines
-       was wrong about who the officer was. */
-    let cur = null;
-    let mine = p.phone ? (held[p.phone] || []).slice() : [];
+       AND TWO WEAK AGREEMENTS MAKE A STRONG ONE. This is the Collector's own
+       direction of 10.10.2026, and it is the rule the first cut of this was
+       missing. A near spelling ON ITS OWN is a guess and stays refused: the
+       roll carries Thammadapally (G) and Thammadapally (I) one letter apart,
+       and pairing the wrong one writes a village's office against another
+       village and refuses an honest Secretary every morning. But a near
+       spelling that the SECRETARY NAMED ON THE LINE actually holds is not a
+       guess — the register itself says that village is his — and a point
+       sitting where that mandal is says it a third time. Basireddypally /
+       Basireddypalle, Keshireddipally / Kesireddipalle and Pembarthi /
+       Pembarthy were each refused for want of that second reading, and each
+       of them is one village.
+
+       So nothing here is paired on a resemblance alone, and nothing is
+       refused that two independent readings agree about. Every line says
+       which of the two it was, because the Collector reads that column
+       before he presses Apply.
+       ============================================================== */
+    const nearOne = function(mandal, gp){
+      const nr = vnear_(inMandal[mkeyM_(mandal)] || [], gp);
+      return nr.length === 1 ? nr[0] : null;
+    };
+    /* the third reading: is this point where that mandal actually is */
+    const inOwnMandal = function(mandal){
+      const c = mid0[mkeyM_(mandal)];
+      if(!c) return false;
+      const d = distKm_(y, x, c.lat, c.lng);
+      return d != null && d <= VP_MANDAL_KM_;
+    };
+
+    /* who the line names — by his number first, and only then by his name */
+    let mine = (p.phone && held[p.phone]) ? held[p.phone].slice() : [];
     if(mine.length) p.who = mine[0].name;
-    if(!mine.length){
-      const who = vpWho_(officers, words, p.mandal);
-      if(who.length === 1){
-        p.phone = who[0].phone; p.who = who[0].name;
-        mine = (held[who[0].phone] || []).slice();
-      } else if(who.length > 1){
-        return Object.assign(p, { verdict:'ambiguous',
-          why:'that line reads as either ' + who.map(function(z){ return z.name; }).join(' or ') +
-              ' — which of them is it? The office is written against the village he holds.' });
-      }
+    else {
+      const cand = vpWho_(officers, words, p.mandal, p.gp);
+      if(cand.length === 1){
+        p.phone = cand[0].phone; p.who = cand[0].name;
+        mine = (held[cand[0].phone] || []).slice();
+      } else if(cand.length > 1) p.readsAs = cand.map(function(z){ return z.name; });
     }
-    if(mine.length){
+    const holds = function(gp){
+      return mine.some(function(z){ return mkey2_(z.gp) === mkey2_(gp); });
+    };
+
+    let cur = null;
+
+    /* ---- 1. the village the line names, as the roll spells it ---- */
+    if(p.gp){
+      cur = find(p.mandal, p.gp);
+      if(cur) p.how = 'the village the line names';
+    }
+
+    /* ---- 2. the village the register says this officer holds ---- */
+    if(!cur && mine.length){
       let pick = mine;
       if(mine.length > 1 && p.gp){
         const want = mkey2_(p.gp);
         let same = mine.filter(function(z){ return mkey2_(z.gp) === want; });
         if(!same.length){
-          /* AND HERE A NEAR SPELLING IS SAFE, where out on the whole roll it
-             is not: the choice is between the two or three villages this one
-             officer actually holds, and the register has already said they
-             are his. */
-          const near = vnear_(mine.map(function(z){ return z.gp; }), p.gp);
-          same = mine.filter(function(z){ return near.indexOf(z.gp) >= 0; });
+          /* a near spelling is safe HERE, where it is not safe out on the
+             whole roll: the choice is between the two or three villages this
+             one officer actually holds, and the register has already said
+             they are his */
+          const nr = vnear_(mine.map(function(z){ return z.gp; }), p.gp);
+          same = mine.filter(function(z){ return nr.indexOf(z.gp) >= 0; });
         }
         if(same.length) pick = same;
       }
-      if(pick.length > 1) return Object.assign(p, { verdict:'ambiguous',
-        why:(p.who || p.phone) + ' holds ' + pick.map(function(z){ return z.gp; }).join(' and ') +
-            ' — name on the line which of them this office is' });
-      cur = find(pick[0].mandal, pick[0].gp);
-      if(cur){
-        p.via = 'officer';
-        p.why0 = 'matched through ' + (p.who || p.phone) + ', who holds ' + cur.gp;
-      } else return Object.assign(p, { verdict:'refused',
-        why:'the village he holds (' + pick[0].gp + ') is not on the roll' });
-    }
-
-    /* ======== and only then by the name of the village ======== */
-    if(!cur && p.gp){
-      cur = find(p.mandal, p.gp);
-      if(!cur){
-        const inM = byName[mkey2_(p.gp)] || [];
-        if(!inM.length){
-          /* AND A REFUSAL THAT NAMES WHAT IT NEARLY MATCHED IS EVIDENCE;
-             ONE THAT DOES NOT IS A PUZZLE. "No village of that name is on the
-             roll" was answered to ninety-six of the district's 280 villages,
-             and it is true of two quite different things: a village the roll
-             has never carried, and a village the roll carries under a slightly
-             different spelling. The Collector cannot tell those apart from
-             that sentence, and ninety-six villages is a third of the order.
-             So the nearest name in that same mandal is named.
-
-             IT IS NAMED AND NOT PAIRED. Nothing is written on a resemblance:
-             two villages of one mandal can be a letter apart — the roll
-             carries Thammadapally (G) and Thammadapally (I) — and placing one
-             village's office against the other refuses an honest Secretary
-             every morning, which is the one harm this whole paste is built
-             around. So it is reported as AMBIGUOUS, which is not written, with
-             both spellings in front of him; the spelling is corrected on one
-             side or the other and the next paste places it. Where more than
-             one name is that close, all of them are named: that is the
-             register saying honestly that it cannot tell. */
-          const nearby = vnear_(inMandal[mkeyM_(p.mandal)] || [], p.gp);
-          if(nearby.length) return Object.assign(p, { verdict:'ambiguous', near:nearby,
-            why:'the roll has no "' + p.gp + '" in ' + p.mandal + ', but it does carry ' +
-                nearby.map(function(z){ return '"' + z + '"'; }).join(' and ') +
-                ' — nothing is paired on a resemblance, so settle the spelling on one side and paste again' });
-          return Object.assign(p, { verdict:'refused',
-            why:'no village of that name is on the roll, and nothing on the roll is near it — nothing is created from a paste' });
+      if(pick.length === 1){
+        cur = find(pick[0].mandal, pick[0].gp);
+        if(cur) p.how = 'the register — ' + p.who + ' holds ' + cur.gp;
+        else {
+          /* THE SAME DISAGREEMENT, ONE TAB FURTHER IN. Users says he holds
+             "Krishnajigudem" and the GPs roll spells it another way, so the
+             officer resolved and his own village still could not be found.
+             A near spelling on the roll, backed by the register saying that
+             village is his, is the same two readings as anywhere else. */
+          const nm2 = nearOne(pick[0].mandal, pick[0].gp);
+          if(nm2){
+            cur = find(pick[0].mandal, nm2);
+            if(cur) p.how = 'the register — ' + p.who + ' holds "' + pick[0].gp +
+              '", which the roll spells "' + cur.gp + '"';
+          }
         }
-        if(p.mandal) return Object.assign(p, { verdict:'refused',
-          why:'the roll has that village under ' + inM.join(' / ') + ', not under ' + p.mandal });
-        if(inM.length > 1) return Object.assign(p, { verdict:'ambiguous',
-          why:'that village name is on the roll in ' + inM.join(' / ') + ' — name the mandal' });
-        cur = find(inM[0], p.gp);
+      } else if(pick.length > 1){
+        return Object.assign(p, { verdict:'ambiguous',
+          why:(p.who || p.phone) + ' holds ' + pick.map(function(z){ return z.gp; }).join(' and ') +
+              ' — name on the line which of them this office is' });
       }
     }
-    if(!cur && !p.gp && !p.phone)
-      return Object.assign(p, { verdict:'refused', why:'the line names neither a village nor an officer' });
+
+    /* ---- 3. a near spelling on the roll, with a second reading behind it ---- */
+    if(!cur && p.gp){
+      const nm3 = nearOne(p.mandal, p.gp);
+      if(nm3){
+        const byHim = holds(nm3), byPoint = inOwnMandal(p.mandal);
+        if(byHim || byPoint){
+          cur = find(p.mandal, nm3);
+          if(cur) p.how = 'the roll spells it "' + cur.gp + '", and ' +
+            (byHim ? (p.who || 'the officer named on the line') + ' holds it'
+                   : 'the point is where ' + cur.mandal + ' is');
+        } else {
+          const nrAll = vnear_(inMandal[mkeyM_(p.mandal)] || [], p.gp);
+          return Object.assign(p, { verdict:'ambiguous', near:nrAll,
+            why:'the roll has no "' + p.gp + '" in ' + p.mandal + ', but it does carry "' + nm3 +
+                '" — and nothing on this line agrees that they are the same village, so it is not paired' });
+        }
+      }
+    }
+
+    /* ---- 4. and what is left is said plainly ---- */
+    if(!cur && p.gp && !(byName[mkey2_(p.gp)] || []).length){
+      const nrAll = vnear_(inMandal[mkeyM_(p.mandal)] || [], p.gp);
+      if(nrAll.length > 1) return Object.assign(p, { verdict:'ambiguous', near:nrAll,
+        why:'the roll has no "' + p.gp + '" in ' + p.mandal + ' and ' + nrAll.length +
+            ' names there are equally close — ' + nrAll.map(function(z){ return '"' + z + '"'; }).join(', ') +
+            ' — so it is not paired on a resemblance' });
+      return Object.assign(p, { verdict:'refused',
+        why:'no village of that name is on the roll, and nothing on the roll is near it — nothing is created from a paste' });
+    }
+    if(!cur && p.gp){
+      const inM = byName[mkey2_(p.gp)] || [];
+      return Object.assign(p, { verdict:'refused',
+        why:'the roll has that village under ' + inM.join(' / ') + ', not under ' + p.mandal });
+    }
+    if(!cur && p.readsAs)
+      return Object.assign(p, { verdict:'ambiguous',
+        why:'that line reads as either ' + p.readsAs.join(' or ') +
+            ', and it names no village the roll carries — so neither the man nor the place is settled' });
     if(!cur && p.phone)
       return Object.assign(p, { verdict:'refused',
-        why:'neither that number nor any name on the line is an active officer of ' +
-            (p.mandal || 'any mandal') + ' on the register' });
-    if(!cur) return Object.assign(p, { verdict:'refused', why:'that village is not on the roll' });
+        why:'neither that number nor any name on the line is an officer of ' +
+            (p.mandal || 'any mandal') + ' who holds a village on the register' });
+    if(!cur)
+      return Object.assign(p, { verdict:'refused', why:'the line names neither a village nor an officer' });
     p.mandal = cur.mandal; p.gp = cur.gp; p.row = cur.row;
     const had = isFinite(Number(cur.lat)) && Number(cur.lat) && isFinite(Number(cur.lng)) && Number(cur.lng);
     /* RULE 8. A second paste finds its own work done. Compared to five
@@ -6975,6 +7099,7 @@ function doPost(e){
      to acknowledge one. */
   if(b.kind === 'advAck') return ackAdvisory_(b, u);
   if(b.kind === 'advPublish') return publishAdvisory_(b, u);
+  if(b.kind === 'advRetire') return retireAdvisory_(b, u);
 
   /* THE FILING SCHEDULE. The two receipts stand above the evaluation guard for
      the same reason the advisory's does — a receipt is not an evaluation. The

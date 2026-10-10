@@ -631,6 +631,21 @@ previous circular and its whole read/unread register off the screen and it
 looked as though the tracking had been thrown away. An officer is never handed
 a retired circular by asking for one: history is not an instruction.
 
+**The Collector may retire the standing circular on its own** (ordered
+10.10.2026). Until then the only way to take a circular off every phone was to
+publish another over it. *Retire this circular* on the console's Advisory view
+sends `kind:'advRetire'` **by id** — never "whatever is standing", because the
+payload on the screen may be older than the register — and the row is marked
+`RETIRED` with the day and the hand. The officer side needed nothing: a retired
+circular is not the one standing, so the pop-up, the home card and the badge
+go at the next refresh. **Nothing is destroyed** (rule 7): the row and every
+receipt stay, the Collector opens it from the history as before, and a second
+press writes nothing (rule 8). Retiring exposed a seam: `op=advisory` answered
+an officer with an **empty** history the moment nothing stood, which was
+harmless while nothing standing meant nothing issued; it now builds the list
+regardless, so what he has read stays under More ▸ Advisories. Suite 16 and
+`tests/render-docs.js` hold it.
+
 **A receipt is written on the phone before the wire is tried.** An officer who
 presses *I have read this* is never shown that circular again on that handset —
 the acknowledgement is recorded locally, the sheet closes at once, and the

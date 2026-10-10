@@ -5535,7 +5535,9 @@ function vAdvisory(j,A){
   const T=(ADV&&ADV.totals)||{due:0,acknowledged:0,pending:0};
   /* a circular the Collector has opened out of the history, rather than the
      one now in force — the register reads the same either way */
-  const retired=!!(a && ADV.standing && a.id!==ADV.standing);
+  const retired=!!(a && ((ADV.standing && a.id!==ADV.standing) || (a.status && a.status!=='ACTIVE')));
+  /* retired by the Collector's own hand, rather than by a later circular */
+  const byOrder=!!(a && a.status==='RETIRED');
 
   if(a){
     h+='<div class="kpirow">';
@@ -5553,8 +5555,17 @@ function vAdvisory(j,A){
 
     h+=panel('c12',retired?'A circular already retired':'The standing advisory',
       (retired?'<span class="pill mut">retired</span> ':'')+esc(a.id||''),
-      (retired?'<div class="expbar" style="margin-bottom:12px"><button class="tbtn" id="advBack">Back to the circular now standing</button>'+
-               '<span class="expnote">This one was retired when a later circular was published. Nothing was deleted and every receipt below still stands.</span></div>':'')+
+      (retired?'<div class="expbar" style="margin-bottom:12px"><button class="tbtn" id="advBack">'+(ADV.standing?'Back to the circular now standing':'Back to the register')+'</button>'+
+               '<span class="expnote">'+(byOrder
+                 ? 'Retired by order'+(a.retiredAt?' on '+esc(docWhen(a.retiredAt)):'')+(a.retiredBy?' · '+esc(a.retiredBy):'')+'. It no longer opens on any phone. Nothing was deleted and every receipt below still stands.'
+                 : 'This one was retired when a later circular was published. Nothing was deleted and every receipt below still stands.')+'</span></div>'
+      /* THE STANDING ONE CAN BE STOOD DOWN (10.10.2026). Until now the only way
+         to take a circular off every officer's screen was to publish another
+         over it. The button retires this one by id — it stops opening on
+         every handset, the card and the badge go with it, and the row and its
+         receipts stay on the register below. */
+      :'<div class="expbar" style="margin-bottom:12px"><button class="tbtn" id="advRetire"'+(ADVBUSY?' disabled':'')+'>'+(ADVBUSY?'Retiring…':'Retire this circular')+'</button>'+
+        '<span class="expnote">It stops opening on every officer’s phone and the badge clears at the next refresh. Nothing is deleted: the circular and every receipt stay on the register, and you can open it from the history below.</span></div>')+
       `<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">
          <div style="flex:1;min-width:280px">
            <div style="font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--tx-3)">Title</div>
@@ -5602,13 +5613,17 @@ function vAdvisory(j,A){
     h+='<div class="kpirow">';
     h+=kpi('Officers on the roll',IC.u,T.due,'', 'who a circular would reach','');
     h+=kpi('Standing advisory',IC.c,'none','', 'publish one below','');
-    h+=kpi('Acknowledged',IC.u,'—','', 'nothing to acknowledge yet','');
-    h+=kpi('Pending',IC.u,'—','', 'nothing issued yet','');
+    /* nothing standing is not nothing issued: once a circular has been retired
+       by order the history below is not empty, and the caption must not say
+       it is */
+    const issued=(ADV&&ADV.list||[]).length;
+    h+=kpi('Acknowledged',IC.u,'—','', issued?'nothing standing to acknowledge':'nothing to acknowledge yet','');
+    h+=kpi('Pending',IC.u,'—','', issued?'nothing standing':'nothing issued yet','');
     h+=kpi('Mandals',IC.h,(ADV&&ADV.coverage||[]).length,'', 'covered by the roll','');
     h+='</div>';
-    h+=panel('c12','No advisory is standing','nothing has been issued to the district yet',
+    h+=panel('c12','No advisory is standing',issued?(issued+' circular'+(issued===1?'':'s')+' on the record, every one retired'):'nothing has been issued to the district yet',
       '<div class="empty">Publish one below. It opens on every officer’s home screen the next time the app is opened, '+
-      'and this section then names who has read it and who has not.</div>');
+      'and this section then names who has read it and who has not.'+(issued?' The circulars already issued are kept in the history below, receipts and all.':'')+'</div>');
     if((ADV&&ADV.coverage||[]).length){
       /* one series, so one colour — and the rows are scaled against the
          largest mandal, or every bar fills its track and the lengths say
@@ -5831,6 +5846,29 @@ function publishAdvisory(){
   fr.readAsDataURL(file);
 }
 
+/* RETIRING THE STANDING CIRCULAR. The order is passed on the circular the
+   Collector is looking at, by id — never on "whatever is standing", because
+   the payload he is reading may be fifty seconds old. The register is read
+   again afterwards rather than patched on the screen, so what he sees is
+   what the district holds. */
+function retireAdvisory(){
+  if(ADVBUSY || !ADV || !ADV.advisory || !ADV.advisory.id) return;
+  const a=ADV.advisory;
+  if(!confirm('Retire this circular?\n\n“'+a.title+'”\n\nIt will stop opening on every officer’s phone. Nothing is deleted — the circular and every receipt stay on the register.')) return;
+  /* the note under the composer is the screen's one line of running commentary */
+  const say=(t,bad)=>{ const note=$('#advNote'); if(note){ note.textContent=t; note.style.color=bad?'var(--red)':'var(--tx-3)'; } };
+  ADVBUSY=true; if(DATA) render(DATA);
+  fetch(ST.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({kind:'advRetire',token:ST.token,id:a.id})})
+    .then(r=>r.json()).then(j=>{
+      ADVBUSY=false;
+      if(!j||j.ok===false){ say((j&&j.error)||'The district refused it.',true); if(DATA) render(DATA); return; }
+      say(j.already?'That circular had already been retired.':'Retired. It no longer opens on any phone; the receipts stand.');
+      ADV_OPEN=''; ADV=null; ADVFILTER='all'; pullAdv().then(()=>{ if(DATA) render(DATA); });
+    })
+    .catch(err=>{ ADVBUSY=false; say('It did not get through: '+err+'. Re-open the Advisory view to see whether the order was passed.',true); if(DATA) render(DATA); });
+}
+
 /* ---------------- interactions ---------------- */
 /* THE SCREEN'S OWN DROPDOWNS. A <select> fires `change` and not `click`, and
    these are re-created by every render, so they are read here rather than
@@ -5928,6 +5966,7 @@ document.addEventListener('click',e=>{
     if(DATA) render(DATA);
     return; }
   if(e.target.closest('#advGo')){ publishAdvisory(); return; }
+  if(e.target.closest('#advRetire')){ retireAdvisory(); return; }
   if(e.target.closest('#wxToggle')){
     WXON=!WXON;
     if(DATA) render(DATA);
