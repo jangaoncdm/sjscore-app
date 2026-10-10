@@ -1427,7 +1427,7 @@ function initTheme(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = 'f0b8144 - 10 Oct 11:58';
+const BUILD_STAMP = '884c845 - 10 Oct 20:15';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -3607,7 +3607,7 @@ function vpRows(text){
   });
 }
 function parseVillagePoints(text){
-  const rows = [], bad = [], nopoint = [];
+  const rows = [], bad = [], nopoint = [], sci = [];
   vpRows(text).forEach(function(cells0){
     const cells = cells0.map(function(c){
       /* a space inside a decimal has one reading and only one */
@@ -3628,6 +3628,17 @@ function parseVillagePoints(text){
     let phone = '';
     const rest = [];
     body.forEach(function(c){
+      /* A MOBILE IS A NUMBER IN THAT SPREADSHEET, AND A NARROW COLUMN COPIES
+         IT AS 8.33E+09. Excel puts on the clipboard what it DISPLAYS, so the
+         last digits are not shortened — they are gone, and nothing here can
+         get them back. The first cut of this expanded the exponent, which
+         turns 8.33299E+09 into 8332990000: a number that is not his, may well
+         be somebody else's, and would quietly place one village's office
+         against another man's village. One number, one officer.
+         So it is NOT read as a mobile and it is NOT guessed at. It is
+         reported, and the line is matched by the Secretary's name instead,
+         which every line of the district's table carries. */
+      if(/^\d(\.\d+)?[eE]\+?\d+$/.test(String(c).trim())){ sci.push(String(c).trim()); return; }
       const d = c.replace(/\D/g, '');
       if(!phone && (d.length === 10 || (d.length === 12 && d.slice(0, 2) === '91')) &&
          /^[+\d ()-]+$/.test(c)){ phone = d.slice(-10); return; }
@@ -3649,9 +3660,19 @@ function parseVillagePoints(text){
       return;
     }
     if(!mandal && !gp && !phone){ bad.push(head.slice(0, 60)); return; }
-    rows.push({ mandal:mandal, gp:gp, phone:phone, lat:two[0].v, lng:two[1].v });
+    /* AND THE NAME OF THE SECRETARY GOES WITH IT, which is the whole of how
+       this line is matched now. The parser kept words[0] and words[1] as the
+       mandal and the village and threw the rest away — so the one column that
+       the register can resolve without arguing about spelling, the officer
+       himself, never left this page. It is sent as the whole row of word
+       cells rather than as words[2], because the designation, the
+       Regular/Deputation column and the remarks sit among them in an order
+       that is the office's and not ours; which cell is a name is a question
+       the register can answer and a parser cannot. */
+    rows.push({ mandal:mandal, gp:gp, phone:phone, lat:two[0].v, lng:two[1].v,
+                words:words.slice(0, 10).map(function(w){ return String(w).slice(0, 80); }) });
   });
-  return { rows:rows, bad:bad, nopoint:nopoint };
+  return { rows:rows, bad:bad, nopoint:nopoint, sci:sci };
 }
 
 const LOC_PILL = { placed:['ok','placed'], moved:['warn','moved'], unchanged:['mut','already there'],
@@ -4230,6 +4251,12 @@ function vAdmin(j,A){
       lparsed.nopoint.map(b=>esc(b)).join(' &nbsp;|&nbsp; ')+'</div>':''}
     ${lparsed&&lparsed.bad.length?'<div style="font-size:12px;color:var(--red);margin-top:7px">Not understood, and left alone: '+
       lparsed.bad.map(b=>esc(b)).join(' &nbsp;|&nbsp; ')+'</div>':''}
+    ${lparsed&&lparsed.sci.length?'<div style="font-size:12px;color:var(--tx-3);margin-top:7px">'+
+      '<b>'+lparsed.sci.length+' mobile number(s) came across as '+esc(lparsed.sci[0])+'.</b> '+
+      'The column was narrower than the number, so Excel copied what it was showing and the last digits '+
+      'are gone — they are not guessed at here, because a number that is not his may well be somebody '+
+      'else’s. Those lines are matched by the Secretary’s name instead. To match by number, widen '+
+      'the column or format it as text before copying.</div>':''}
     <div style="margin-top:11px;display:flex;gap:9px;flex-wrap:wrap">
       <button class="tbtn" id="locRead"${(!lparsed||!lparsed.rows.length||ROLLBUSY)?' disabled':''}>Compare with the roll</button>
       ${LOC_PLANS?'<button class="tbtn pri" id="locApply"'+(ROLLBUSY?' disabled':'')+'>Apply what is listed</button>':''}
@@ -4548,13 +4575,22 @@ function wireAdmin(){
   const locCsv=$('#locCsv');
   if(locCsv) locCsv.onclick=()=>{
     const stuck=(LOC_PLANS||[]).filter(p=>p.verdict==='refused'||p.verdict==='ambiguous');
-    const rows=[['Mandal (as sent)','Village (as sent)','Latitude sent','Longitude sent',
-                 'What the register says','What is needed']];
-    stuck.forEach(p=>rows.push([p.mandal||'',p.gp||'',String(p.lat==null?'':p.lat),
+    /* THE ROLL'S OWN SPELLING TRAVELS IN A COLUMN OF ITS OWN, because that is
+       what this file is read for. Ninety-six of the district's 280 villages
+       came back as a name the roll does not carry, and most of those the roll
+       carries under another spelling — a sentence in a prose column is read,
+       but a column beside his own name is COMPARED, which is the act. */
+    const rows=[['Mandal (as sent)','Village (as sent)','The roll spells it','Latitude sent',
+                 'Longitude sent','What the register says','What is needed']];
+    stuck.forEach(p=>rows.push([p.mandal||'',p.gp||'',(p.near||[]).join(' / '),
+      String(p.lat==null?'':p.lat),
       String(p.lng==null?'':p.lng), p.why||'',
       /not in this district/.test(p.why||'') ? 'Check the figure and send the office coordinate again'
-        : (p.verdict==='ambiguous' ? 'Name the mandal, or which of his villages this office is'
-                                   : 'Send the village name as the roll carries it')]));
+        : ((p.near&&p.near.length) ? (p.near.length>1
+              ? 'Two names on the roll are this close — say which village this office is'
+              : 'Settle the spelling: send it as "'+p.near[0]+'", or correct the roll')
+          : (p.verdict==='ambiguous' ? 'Name the mandal, or which of his villages this office is'
+                                     : 'Send the village name as the roll carries it'))]));
     rows.push([]);
     rows.push(['Lines sent', String((LOC_PLANS||[]).length)]);
     rows.push(['Could not be placed', String(stuck.length)]);
