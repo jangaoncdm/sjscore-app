@@ -470,7 +470,10 @@ module.exports = {
         rows:[{ phone:'9000000052', lat:17.61, lng:79.06 }] });
       t.eq(two.counts.ambiguous, 1,
         'AND AN OFFICER HOLDING TWO VILLAGES IS AMBIGUOUS, not guessed at');
-      t.ok(/which office/.test(two.plans[0].why), 'and the district is asked which', two.plans[0].why);
+      t.ok(/which of them/.test(two.plans[0].why), 'and the district is asked which', two.plans[0].why);
+      t.contains(two.plans[0].why, 'B. TwoVillages', 'named, so the line can be found in the sheet');
+      t.contains(two.plans[0].why, 'Peddapalle', 'with the villages he holds — the first');
+      t.contains(two.plans[0].why, 'Kadavendi', 'and the second');
     }
 
     /* ---- 16. WHAT THE FENCE IS DOING — the console's monitoring screen.
@@ -554,6 +557,175 @@ module.exports = {
       env.props.FENCE_OFF = '1';
       t.eq(env.ctx.fenceReport_().on, false, 'with the fence stood down the report says so');
       t.eq(env.ctx.fenceReport_().km, 0, 'and reports no radius');
+    }
+
+    /* ---- 17. THE ROLL AND THE DISTRICT'S TABLE SPELL THREE MANDALS
+            DIFFERENTLY, AND THAT COST SIXTY-SIX VILLAGES THEIR OFFICE.
+            On the first dry run of the district's own table of 09.10.2026,
+            66 of 280 rows came back "the roll has that village under
+            Bachannapeta, not under Bachannapet" — a quarter of the order
+            held out of force by three vowels. mkey2_ strips punctuation and
+            nothing else, so it carried "Ghanpur(Stn)" and could not carry
+            this. MANDAL_ALIAS_ names the twelve mandals instead. */
+    {
+      const env = world();
+      const cdm = tok(env, '9000000001');
+      const row = (m, g, y, x) => ({ mandal:m, gp:g, lat:y, lng:x });
+      /* the roll's own spellings, against which the district's table is read */
+      env.sheets['GPs'].rows.push(['Bachannapeta',   'Salvapur',    '', '']);
+      env.sheets['GPs'].rows.push(['Palakurthi',     'Visnoor',     '', '']);
+      env.sheets['GPs'].rows.push(['Raghunathpalle', 'Komalla',     '', '']);
+      env.sheets['GPs'].rows.push(['Raghunathpalle', 'Ibrahimpur',  '', '']);
+
+      const d = env.post({ kind:'villagePoints', token:cdm, dry:true, rows:[
+        row('Bachannapet',     'Salvapur',   17.815, 78.882),
+        row('Palakurthy',      'Visnoor',    17.630, 79.407),
+        row('Raghunathapally', 'Komalla',    17.774, 79.303),
+        row('Raghunathpally',  'Ibrahimpur', 17.760, 79.226) ] });
+      t.eq(d.counts.placed, 4,
+        'THE DISTRICT MAY SPELL A MANDAL ITS OWN WAY — all four are placed');
+      t.eq(d.plans[0].mandal, 'Bachannapeta',
+        'and the roll’s own spelling is what the plan carries back');
+
+      /* AND THE ALIAS IS A TABLE OF TWELVE NAMED MANDALS, NEVER A
+         RESEMBLANCE. Lingala Ghanpur and Ghanpur (Stn) are two edits apart
+         and are two different mandals seventy kilometres from one another;
+         merging them would put a man's place of duty in the wrong half of
+         the district. */
+      t.eq(env.ctx.mkeyM_('Lingala Ghanpur') === env.ctx.mkeyM_('Ghanpur (Stn)'), false,
+        'LINGALA GHANPUR IS STILL NOT GHANPUR (Stn)');
+      t.eq(env.ctx.mkeyM_('Ghanpur(Stn)'), env.ctx.mkeyM_('Ghanpur (Stn)'),
+        'while a bracket is still only a bracket');
+      t.eq(env.ctx.mkeyM_('Bachannapet'), env.ctx.mkeyM_('Bachannapeta'), 'the three aliases hold');
+      t.eq(env.ctx.mkeyM_('Palakurthy'), env.ctx.mkeyM_('Palakurthi'), 'the second');
+      t.eq(env.ctx.mkeyM_('Raghunathapally'), env.ctx.mkeyM_('Raghunathpalle'), 'and the third');
+
+      /* AND THE TWO TABS NEED NOT AGREE EITHER. Users carries the mandal
+         against the officer and GPs carries it against the village. Where
+         they differ the exact key misses, the fallback by village name alone
+         finds two Lingampallys and gives up, and the Secretary is quietly
+         UNPLACED — safe, and still an officer the order does not reach. */
+      env.post({ kind:'villagePoints', token:cdm, dry:false, rows:[
+        row('Bachannapet', 'Salvapur', 17.815, 78.882) ] });
+      const pts = env.ctx.dutyPoints_({ role:'PS', mandal:'Bachannapet',
+        mandals:['Bachannapet'], gps:['Salvapur'] });
+      t.eq(pts.length, 1, 'HE IS PLACED THOUGH THE TWO TABS SPELL HIS MANDAL DIFFERENTLY');
+      t.eq(pts[0].name, 'Salvapur', 'at his own village office');
+      t.eq(pts[0].which, 'village', 'and it is the village and not the mandal office');
+      /* the village name itself is still matched exactly — that is what keeps
+         one village's office off another */
+      t.eq(env.ctx.dutyPoints_({ role:'PS', mandal:'Bachannapet',
+        mandals:['Bachannapet'], gps:['Salvapuram'] }).length, 0,
+        'while a village name a letter out is NOT quietly matched');
+    }
+
+    /* ---- 18. AND A REFUSAL NAMES WHAT IT NEARLY MATCHED.
+            "No village of that name is on the roll" was answered to
+            ninety-six of the 280, and it is true of two different things: a
+            village the roll has never carried, and one it carries under
+            another spelling. From that sentence the Collector cannot tell
+            which, and ninety-six villages is a third of the order. */
+    {
+      const env = world();
+      const cdm = tok(env, '9000000001');
+      const row = (m, g, y, x) => ({ mandal:m, gp:g, lat:y, lng:x });
+      env.sheets['GPs'].rows.push(['Devaruppula', 'Peddamaddur',       '', '']);
+      env.sheets['GPs'].rows.push(['Devaruppula', 'Thammadapally (G)', '', '']);
+      env.sheets['GPs'].rows.push(['Devaruppula', 'Thammadapally (I)', '', '']);
+
+      const d = env.post({ kind:'villagePoints', token:cdm, dry:true, rows:[
+        row('Devaruppula', 'Peddamadduru',  17.598, 79.301),
+        row('Devaruppula', 'Thammadapally', 17.772, 79.074),
+        row('Devaruppula', 'Zahirabad',     17.600, 79.050) ] });
+
+      t.eq(d.plans[0].verdict, 'ambiguous',
+        'a village the roll spells differently is AMBIGUOUS and not refused');
+      t.contains(d.plans[0].why, 'Peddamaddur',
+        'and the refusal names the spelling the roll actually carries');
+      t.eq(d.counts.placed, 0,
+        'AND NOTHING IS PAIRED ON A RESEMBLANCE — placing one village’s office '
+        + 'against another refuses an honest Secretary every morning');
+
+      /* WHERE MORE THAN ONE IS THAT CLOSE, ALL OF THEM ARE NAMED. The roll
+         carries Thammadapally (G) and Thammadapally (I) a letter apart, and
+         the register saying honestly that it cannot tell is the whole of what
+         AMBIGUOUS means here. */
+      t.eq(d.plans[1].verdict, 'ambiguous', 'two close names are ambiguous too');
+      t.contains(d.plans[1].why, '(G)', 'and both are named — the first');
+      t.contains(d.plans[1].why, '(I)', 'and the second');
+
+      /* AND A VILLAGE THE ROLL HAS NEVER CARRIED IS STILL REFUSED, which is
+         the distinction this section exists to draw. */
+      t.eq(d.plans[2].verdict, 'refused', 'a name nothing on the roll is near is refused');
+      t.contains(d.plans[2].why, 'nothing on the roll is near it',
+        'and says that is what it is');
+
+      /* RULE 8 AND THE WRITE PATH: ambiguous is not written. */
+      const w = env.post({ kind:'villagePoints', token:cdm, dry:false, rows:[
+        row('Devaruppula', 'Peddamadduru', 17.598, 79.301) ] });
+      t.eq(w.wrote, 0, 'and an ambiguous row is not written when Apply is pressed');
+    }
+
+    /* ---- 19. THE OFFICER IS THE KEY, AND THAT IS THE WHOLE OF IT.
+            The district's table names the Secretary on every one of its 280
+            lines and the register knows which village he holds, so the two
+            never have to agree about a spelling. Read the other way round —
+            by the name of the village — the first paste refused 162 of 280:
+            66 over three mandal spellings and 96 over a village name the roll
+            writes differently. Not one of those lines was wrong about who the
+            officer was. */
+    {
+      const env = world();
+      const cdm = tok(env, '9000000001');
+      /* the roll's own spellings, and the district's table's are different in
+         BOTH columns — the mandal and the village */
+      env.sheets['GPs'].rows.push(['Bachannapeta', 'Salvapur', '', '']);
+      env.sheets['Users'].rows.push(['9000000061', 'Boyana Bhagyaraju', 'PS',
+        'Bachannapeta', 'Salvapur', '', '', env.ctx.hash_('9000000061', '1111'), 'TRUE']);
+
+      const d = env.post({ kind:'villagePoints', token:cdm, dry:true, rows:[
+        { mandal:'Bachannapet', gp:'Salvapuram', phone:'9000000061',
+          words:['Bachannapet', 'Salvapuram', 'Boyana Bhagyaraju', 'Panchayat Secretary'],
+          lat:17.815, lng:78.882 } ] });
+      t.eq(d.counts.placed, 1,
+        'THE MANDAL AND THE VILLAGE ARE BOTH SPELT DIFFERENTLY AND IT IS STILL PLACED');
+      t.eq(d.plans[0].gp, 'Salvapur', 'against the village the ROLL names, never the paste’s spelling');
+      t.eq(d.plans[0].mandal, 'Bachannapeta', 'under the mandal the roll names');
+      t.contains(d.plans[0].why, 'Boyana Bhagyaraju',
+        'AND IT SAYS HOW IT FOUND THE ROW — the Collector reads this before he presses Apply');
+
+      /* A MOBILE OUT OF A SPREADSHEET IS OFTEN NOT TEN DIGITS ON THE SCREEN:
+         a column narrower than the number renders it 8.33299E+09, and that is
+         what the clipboard carries. The parser expands it; here the register
+         is handed the name alone, which is the other half of the same cure. */
+      const byName = env.post({ kind:'villagePoints', token:cdm, dry:true, rows:[
+        { mandal:'Bachannapet', gp:'Salvapuram',
+          words:['Bachannapet', 'Salvapuram', 'Boyana Bhagyaraju', 'Regular'],
+          lat:17.815, lng:78.882 } ] });
+      t.eq(byName.counts.placed, 1, 'A LINE WITH NO READABLE NUMBER IS MATCHED BY THE NAME');
+      t.eq(byName.plans[0].gp, 'Salvapur', 'to the village the register says he holds');
+
+      /* AND ONE SURNAME IS NOT A MAN. Half this district is somebody Kumar,
+         and the wrong answer here writes one village's office against
+         another and refuses an honest Secretary every morning. */
+      env.sheets['GPs'].rows.push(['Bachannapeta', 'Laxmapur', '', '']);
+      env.sheets['Users'].rows.push(['9000000062', 'G. Praveen Kumar', 'PS',
+        'Bachannapeta', 'Laxmapur', '', '', env.ctx.hash_('9000000062', '1111'), 'TRUE']);
+      const loose = env.post({ kind:'villagePoints', token:cdm, dry:true, rows:[
+        { mandal:'Bachannapet', gp:'Nowhere',
+          words:['Bachannapet', 'Nowhere', 'D. Kumar'], lat:17.82, lng:78.89 } ] });
+      t.eq(loose.counts.placed, 0,
+        'A SINGLE SHORT SURNAME MATCHES NOBODY — it is not written on a guess');
+
+      /* nor is a line that reads as two men */
+      env.sheets['Users'].rows.push(['9000000063', 'Boyana Bhagyaraju', 'PS',
+        'Bachannapeta', 'Laxmapur', '', '', env.ctx.hash_('9000000063', '1111'), 'TRUE']);
+      const twoMen = env.post({ kind:'villagePoints', token:cdm, dry:true, rows:[
+        { mandal:'Bachannapet', gp:'Nowhere',
+          words:['Bachannapet', 'Nowhere', 'Boyana Bhagyaraju'], lat:17.82, lng:78.89 } ] });
+      t.eq(twoMen.counts.ambiguous, 1,
+        'AND A LINE THAT READS AS TWO OFFICERS IS AMBIGUOUS, not resolved to the first');
+      t.contains(twoMen.plans[0].why, 'either', 'and both are named for him to settle');
     }
 
     /* ---- 13. AND THE SANITATION REGISTER IS, which is the order ---- */

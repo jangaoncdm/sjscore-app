@@ -376,7 +376,12 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
       '1\tBachannapet\tAlimpur\tB Ajaykumar\t9849692350\tPanchayat Secretary\tGr-IV\tRegular\t17.82393\t79.017003',
       '2\tBachannapet\tBachannapet\tK. Sridhar\t9951517364\tPanchayat Secretary\tGr-II\tRegular\t17.7896\t79.040179',
       '3\tJangaon\tPasarmadla\tSome One\t9000000111\tPanchayat Secretary\tGr-IV\tRegular\t17.7415325\t7979.1198397',
-      '4\tRaghunathapally\tKurchapally\tD. Venkataramana\t9000000222\tPanchayat Secretary\tGr-IV\tRegular\t\t'
+      '4\tRaghunathapally\tKurchapally\tD. Venkataramana\t9000000222\tPanchayat Secretary\tGr-IV\tRegular\t\t',
+      /* AND A MOBILE THE COLUMN WAS TOO NARROW FOR. Excel copies what it
+         DISPLAYS, so the last digits are gone and cannot be got back; the
+         line must be matched by the Secretary's name instead, and the page
+         has to SAY so rather than quietly dropping the officer. */
+      '5\tChilpur\tFathepur\tBoyana Bhagyaraju\t8.33299E+09\tPanchayat Secretary\tGr-IV\tRegular\t17.89605\t79.260904'
     ].join('\n');
     await page.fill('#locTbl', paste);
     await page.evaluate(() => document.getElementById('locTbl').blur());
@@ -386,9 +391,12 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
       const el = [...document.querySelectorAll('.panel')].find(c => /Village offices/i.test(c.innerText));
       return el ? el.innerText.replace(/\s+/g, ' ') : '';
     });
-    ck(/3 line\(s\) with a point/.test(counted), 'it reads three lines carrying a point',
+    ck(/4 line\(s\) with a point/.test(counted), 'it reads four lines carrying a point',
        (counted.match(/\d+ line\(s\) with a point[^·]*/) || [''])[0].trim());
     ck(/1 with none/.test(counted), 'AND NAMES THE ONE THAT HAS NONE rather than dropping it');
+    ck(/8\.33299E\+09/.test(counted),
+       'AND SAYS A MOBILE DID NOT SURVIVE THE COPY instead of inventing the digits');
+    ck(/matched by the Secretary’s name/.test(counted), 'naming what it does about it');
     ck(/Kurchapally/.test(counted), 'by village, so the office knows what to survey');
 
     await page.click('#locRead'); await page.waitForTimeout(900);
@@ -396,7 +404,20 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
     ck(sent.length === before + 1, 'COMPARE WITH THE ROLL ACTUALLY REACHES THE DISTRICT');
     const b = sent[sent.length - 1] || {};
     ck(b.dry === true, 'as a proposal — nothing is written yet', String(b.dry));
-    ck((b.rows || []).length === 3, 'carrying the three lines that had a point', String((b.rows || []).length));
+    ck((b.rows || []).length === 4, 'carrying the four lines that had a point', String((b.rows || []).length));
+    /* THE NAME OF THE SECRETARY IS ON THE WIRE, which is the whole of how a
+       line is matched now: the register knows which village he holds, so the
+       two never have to agree about how the village is spelt. The parser kept
+       the mandal and the village and threw the name away. */
+    ck((b.rows || []).every(r => (r.words || []).length >= 3),
+       'EVERY LINE CARRIES ITS WORD CELLS \u2014 the PS name among them',
+       String(((b.rows || [])[0] || {}).words));
+    ck(String((((b.rows || [])[0] || {}).words || []).join('|')).indexOf('B Ajaykumar') >= 0,
+       'the Secretary named on the line reaches the register',
+       String(((b.rows || [])[0] || {}).words));
+    ck(((b.rows || [])[3] || {}).phone === '',
+       'AND THE ROUNDED MOBILE IS NOT SENT AS A NUMBER \u2014 it is not his',
+       JSON.stringify(((b.rows || [])[3] || {}).phone));
     ck(b.token === 'T', 'under the Collector’s own token, which the server re-checks', String(b.token));
     ck((b.rows || [])[2] && b.rows[2].lng === 7979.1198397,
        'INCLUDING THE BROKEN ONE — it is sent so the register can refuse it BY NAME',
