@@ -1422,7 +1422,7 @@ function initTheme(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '663956c - 09 Oct 11:18';
+const BUILD_STAMP = 'a7b3792 - 10 Oct 11:32';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -3076,6 +3076,14 @@ function vAttendance(j,A){
   h+=kpi('Not marked',IC.u,A.off?'—':A.absent,'',A.off?esc(A.off)+' — not tracked today':'as of now');
   h+=kpi('Marked by 10:00',IC.u,A.present?pct(A.by10,A.present)+'%':'—','',A.by10+' of '+A.present);
   h+=kpi('Location not trustworthy',IC.u,j.today.present.filter(r=>suspect(r)||!r.verified).length,'','of '+A.present+' present');
+  /* A MAN WHO TRIED AND WAS REFUSED IS NOT A MAN WHO DID NOT COME. Under the
+     fence his mark is not taken, so he falls into "not marked" beside a
+     genuine absence — and the ladder cannot tell them apart either. This is
+     the figure that lets the Collector tell them apart before a notice is
+     proposed against the wrong man. */
+  if((j.outside||[]).length)
+    h+=kpi('Refused \u2014 away from the place of duty',IC.u,(j.outside||[]).length,'',
+           'they are inside \u201cnot marked\u201d');
   /* MARKING OUT IS A FIGURE OF THE DAY, so it stands with the day's other
      figures rather than in a panel of its own below the charts. It is filled
      in when the feature's endpoint answers — a dash until then, never a
@@ -3095,6 +3103,34 @@ function vAttendance(j,A){
         .sort((a,b)=>b.dutyKm-a.dutyKm)
     : (j.today.present||[]).filter(r=>r.far).sort((a,b)=>b.km-a.km);
   h+='</div>';
+
+  /* WHO TRIED AND WAS REFUSED, BY NAME, BEFORE ANY NOTICE IS PROPOSED.
+     The count alone says forty; which forty, and from where, is the question
+     a Collector actually has — and the difference between an officer at a
+     mandal meeting and an officer who did not come to work. Nothing here is
+     a charge: it is the opposite, a list of men whose absence from the
+     attendance register has an explanation the register itself knows. */
+  if((j.outside||[]).length){
+    const ou=(j.outside||[]);
+    h+=panel('c12','Refused — marked away from the place of duty',
+      'today · within '+esc(String(j.fenceKm||5))+' km is the rule',
+      `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
+        These officers tried to mark and the register did not take it, so they stand inside
+        <b>Not marked</b> above. <b>A refused mark is not a sanction and this list is not a charge</b> —
+        an officer may have been at a mandal meeting, at the Collectorate or on tour, and the register
+        cannot know which. What it does know is that he was holding the phone. Read it before any
+        notice is proposed, and <b>if the village office is recorded in the wrong place, correct the
+        point rather than the officer</b> — the panel on the Admin screen does it.</div>
+      <div class="twrap"><table>
+        <thead><tr><th>Officer</th><th>Mandal</th><th>Place of duty</th><th>How far out</th><th>Tried</th></tr></thead>
+        <tbody>${ou.map(r=>'<tr><td>'+esc(r.name||'—')+
+          '<br><span class="mut num" style="font-size:11px">'+esc(r.phone||'')+' · '+esc(r.role||'')+'</span></td>'+
+          '<td>'+esc(r.mandal||'—')+'</td><td>'+esc(r.place||'—')+'</td>'+
+          '<td class="num">'+(r.km==null?'—':esc(String(r.km)+' km'))+'</td>'+
+          '<td class="num">'+esc(String(r.tries||1))+(r.which==='OUT'?' · marking out':'')+'</td></tr>').join('')}
+        </tbody></table></div>`,'at');
+  }
+
   /* THE QUESTION THE WORD "VERIFIED" INVITED. It never meant the officer was at
      his place of duty — only that his handset returned a precise fix, which a
      phone 70 km away under open sky returns better than one indoors. This names
@@ -3328,6 +3364,7 @@ let ROLL=null, ROLLQ='', ROLLBUSY=false, ROLLPIN=null, ROLLMSG='', ROLLBAD=false
    register over HTTPS and nowhere else, exactly as the Gram Palana roster did. */
 let TBL_TEXT='', TBL_ROLE='MPO', TBL_PLANS=null, TBL_DONE=null;
 let PST_TEXT='', PST_PLANS=null, PST_DONE=null;
+let LOC_TEXT='', LOC_PLANS=null, LOC_DONE=null;
 let STF_TEXT='', STF_PLANS=null, STF_DONE=null, STF_PINS=null;
 let HRM_TEXT='', HRM_ROLE='HOD', HRM_PLANS=null, HRM_DONE=null, HRM_CODES=null, HRM_CLAIMS=null;
 /* THE REGISTER'S OWN PRE-FLIGHT. Read once when the Admin screen is opened,
@@ -3500,6 +3537,121 @@ const POST_PILL = { move:['ok','moved'], add:['ok','also holds'], release:['warn
    are mandal and name; for a Panchayat Secretary they are not enough, and the
    line is NAMED rather than guessed at. */
 const PST_MANDAL_ROLE = /mandal panchayat officer|mandal parishad|sanitation officer|\bmpo\b|\bmpdo\b|\bmso\b/i;
+/* WHERE EACH VILLAGE OFFICE IS, read off the district's own sheet.
+   Pasted straight out of the workbook, which carries: serial, mandal, GP, the
+   Secretary, his mobile, designation, grade, whether he is regular, the
+   latitude, the longitude and a remark.
+
+   EVERY RULE BELOW CAME OFF THE DISTRICT'S REAL TABLE OF 09.10.2026, by
+   running its 280 rows through the register before a line of it was written.
+   An idea of what a spreadsheet looks like would have placed 268 of them.
+
+   A CELL MAY CONTAIN A NEWLINE, and five of the district's did — "Krishnaji-
+   gudem\n", "Mohammad \nYousaf Pasha". Excel QUOTES such a cell on the
+   clipboard, so the paste is read quote-aware rather than line by line: split
+   naively and the row breaks in half, the second half reads an officer's NAME
+   as his mandal, and five villages are refused for not existing.
+
+   A NUMBER MAY CONTAIN A SPACE. Two of the district's did — "79. 348866" and
+   "17 .741961" — and a space inside a decimal has exactly one reading, so it
+   is closed up. Two villages that would otherwise have gone unplaced.
+
+   THE COORDINATES ARE THE LAST TWO DECIMAL NUMBERS ON THE LINE, and not
+   whatever looks like a plausible latitude. Three of the 280 carried a BROKEN
+   coordinate — 7979.1198397, 70.256598, and one with the latitude copied into
+   the longitude column — and a reader that only accepts what looks right
+   drops those three silently, so nobody ever learns which villages are wrong.
+   They are passed through and the register refuses them BY NAME, which is the
+   whole difference between a correction and a silence.
+
+   THE SERIAL IS NOT A COORDINATE. It exports as "224.0", which is a decimal
+   like any other: on the two rows whose longitude had a space in it, the
+   serial and the latitude were taken as the pair, and a village 224 degrees
+   north was proposed. It is dropped where it stands, in the first column.
+
+   A LINE WITH ONE DECIMAL OR NONE HAS NO COORDINATE and is reported rather
+   than sent: the village is simply not fenced until the office surveys it.
+
+   It lives at the top level, beside parseRoster and parseStaff, because the
+   first cut of parsePostings sat inside the function that drew its panel: the
+   button was bound, enabled, and did nothing whatever when pressed. */
+function vpRows(text){
+  /* a tab-separated paste, with Excel's own quoting respected so a cell
+     carrying a newline stays one cell and one row stays one row */
+  const rows = [];
+  let cell = '', row = [], q = false;
+  const t = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  for(let i = 0; i < t.length; i++){
+    const ch = t[i];
+    if(q){
+      if(ch === '"'){ if(t[i + 1] === '"'){ cell += '"'; i++; } else q = false; }
+      else cell += ch;
+      continue;
+    }
+    if(ch === '"' && cell === ''){ q = true; continue; }
+    if(ch === '\t'){ row.push(cell); cell = ''; continue; }
+    if(ch === '\n'){ row.push(cell); rows.push(row); row = []; cell = ''; continue; }
+    cell += ch;
+  }
+  row.push(cell); rows.push(row);
+  /* a paste with no tabs at all came off a document rather than a sheet;
+     runs of spaces are the only separator it has */
+  return rows.map(function(r){
+    if(r.length > 1) return r;
+    return String(r[0] || '').split(/\s{2,}/);
+  });
+}
+function parseVillagePoints(text){
+  const rows = [], bad = [], nopoint = [];
+  vpRows(text).forEach(function(cells0){
+    const cells = cells0.map(function(c){
+      /* a space inside a decimal has one reading and only one */
+      const c2 = String(c).replace(/\n/g, ' ').trim();
+      return /^-?\d[\d\s]*\.[\d\s]+$/.test(c2) ? c2.replace(/\s+/g, '') : c2;
+    });
+    if(!cells.join('').trim()) return;
+    const head = cells.join(' ');
+    if(/^\s*(sl\.?\s*no|s\.?\s*no|name of the mandal|panchayat secretaries)/i.test(head)) return;
+    /* the row that numbers the columns: 1 2 3 4 ... and nothing else */
+    if(cells.filter(function(c){ return c !== ''; })
+            .every(function(c){ return /^\d+(\.0+)?$/.test(c); })) return;
+
+    /* the serial, which exports as a decimal and is not a coordinate */
+    const body = cells.slice();
+    if(/^\d+(\.0+)?$/.test(String(body[0] || '').trim())) body.shift();
+
+    let phone = '';
+    const rest = [];
+    body.forEach(function(c){
+      const d = c.replace(/\D/g, '');
+      if(!phone && (d.length === 10 || (d.length === 12 && d.slice(0, 2) === '91')) &&
+         /^[+\d ()-]+$/.test(c)){ phone = d.slice(-10); return; }
+      rest.push(c);
+    });
+
+    const nums = [];
+    rest.forEach(function(c, i){ if(/^-?\d+\.\d+$/.test(c)) nums.push({ v:Number(c), i:i }); });
+    const two = nums.slice(-2);
+    const words = rest.filter(function(c, i){
+      return c !== '' && !two.some(function(x){ return x.i === i; }) && !/^-?\d+\.?\d*$/.test(c);
+    });
+    const mandal = words[0] || '', gp = words[1] || '';
+
+    if(two.length < 2){
+      if(mandal || gp) nopoint.push((mandal || '?') + ' / ' + (gp || '?'));
+      else if(phone) nopoint.push(phone);
+      else bad.push(head.slice(0, 60));
+      return;
+    }
+    if(!mandal && !gp && !phone){ bad.push(head.slice(0, 60)); return; }
+    rows.push({ mandal:mandal, gp:gp, phone:phone, lat:two[0].v, lng:two[1].v });
+  });
+  return { rows:rows, bad:bad, nopoint:nopoint };
+}
+
+const LOC_PILL = { placed:['ok','placed'], moved:['warn','moved'], unchanged:['mut','already there'],
+                   refused:['bad','refused'], ambiguous:['warn','ambiguous'] };
+
 function parsePostings(text){
   const rows = [], bad = [];
   String(text || '').split(/\r?\n/).forEach(line => {
@@ -4049,6 +4201,54 @@ function vAdmin(j,A){
       Nothing is deleted either — the row stays, with his attendance, his notices and his leave still
       pointing at it.</div>`:''}`,'rl');
 
+  /* ---- WHERE EACH VILLAGE OFFICE IS, AND THE FENCE THAT STANDS ON IT ---- */
+  const lparsed = LOC_TEXT.trim() ? parseVillagePoints(LOC_TEXT) : null;
+  h+=panel('c12','Village offices \u2014 where attendance may be marked',
+    'paste the district\u2019s latitude and longitude list \u00b7 nothing is written until you say so',
+    `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
+      Paste the district\u2019s table \u2014 mandal, village, the Secretary and his number, and the
+      <b>latitude and longitude of the village office</b>. The coordinates are read as the last two
+      decimal numbers on each line, so the whole sheet may be pasted as it stands.
+      <b>Attendance is then marked within ${esc(String((ROLL&&ROLL.fenceKm)||5))} km of that point and
+      nowhere else</b>, in and out, and an officer standing further away is told how far out he is.
+      <br><br><b>A village with no point is not fenced at all</b> \u2014 its Secretary marks exactly as he
+      did before, because a blank cell in the district\u2019s own table must not refuse a man\u2019s
+      attendance. A point outside the district is refused rather than believed, and named, so it can
+      be corrected rather than quietly dropped. <b>Nothing is written until you press Apply.</b></div>
+    <div style="margin-bottom:9px">${lparsed?'<span style="font-size:12px;color:var(--tx-3)">'+lparsed.rows.length+' line(s) with a point'+
+      (lparsed.nopoint.length?' \u00b7 <span style="color:var(--amber,var(--tx-3))">'+lparsed.nopoint.length+' with none</span>':'')+
+      (lparsed.bad.length?' \u00b7 <span style="color:var(--red)">'+lparsed.bad.length+' not understood</span>':'')+'</span>':''}</div>
+    <textarea id="locTbl" rows="${LOC_TEXT?4:6}" placeholder="Paste the village location list here"
+      style="width:100%;padding:10px;border:1px solid var(--ln);border-radius:9px;background:var(--bg-2);
+             color:var(--tx);font:12.5px/1.6 var(--mono);resize:vertical">${esc(LOC_TEXT)}</textarea>
+    ${lparsed&&lparsed.nopoint.length?'<div style="font-size:12px;color:var(--tx-3);margin-top:7px">No coordinate on the line, so not sent and not fenced: '+
+      lparsed.nopoint.map(b=>esc(b)).join(' &nbsp;|&nbsp; ')+'</div>':''}
+    ${lparsed&&lparsed.bad.length?'<div style="font-size:12px;color:var(--red);margin-top:7px">Not understood, and left alone: '+
+      lparsed.bad.map(b=>esc(b)).join(' &nbsp;|&nbsp; ')+'</div>':''}
+    <div style="margin-top:11px;display:flex;gap:9px;flex-wrap:wrap">
+      <button class="tbtn" id="locRead"${(!lparsed||!lparsed.rows.length||ROLLBUSY)?' disabled':''}>Compare with the roll</button>
+      ${LOC_PLANS?'<button class="tbtn pri" id="locApply"'+(ROLLBUSY?' disabled':'')+'>Apply what is listed</button>':''}
+      ${LOC_PLANS?'<button class="tbtn" id="locCsv">Send back what could not be placed</button>':''}
+      ${LOC_TEXT?'<button class="fchip" id="locClear">Clear</button>':''}
+    </div>
+    ${LOC_DONE?`<div style="margin-top:12px;font-size:13px;color:var(--tx-2);line-height:1.7;
+        border-left:3px solid var(--st-ok);padding-left:12px">${esc(LOC_DONE)}</div>`:''}
+    ${LOC_PLANS?`<div class="twrap" style="margin-top:13px;max-height:460px"><table>
+      <thead><tr><th>Mandal</th><th>Village</th><th>Point</th><th>What it is</th><th>What would change</th></tr></thead>
+      <tbody>${LOC_PLANS.filter(p=>p.verdict!=='unchanged').concat(LOC_PLANS.filter(p=>p.verdict==='unchanged').slice(0,3)).map(p=>{
+        const V=LOC_PILL[p.verdict]||['warn',p.verdict];
+        return '<tr><td>'+esc(p.mandal||'\u2014')+'</td><td>'+esc(p.gp||(p.phone?'(by number '+p.phone+')':'\u2014'))+'</td>'+
+          '<td class="num" style="font-size:11.5px">'+esc(String(p.lat)+', '+String(p.lng))+'</td>'+
+          '<td><span class="pill '+V[0]+'">'+esc(V[1])+'</span></td>'+
+          '<td style="color:var(--tx-2)">'+esc(p.why||'\u2014')+'</td></tr>';
+      }).join('')}</tbody></table></div>
+      <div class="expnote" style="margin-top:9px"><b>A wrong point is not a wrong figure on a screen.</b>
+      Under the fence it refuses an honest officer\u2019s attendance every morning, and an unmarked day
+      walks the ladder to a show-cause notice. So a point outside the district is refused and named
+      rather than written; a village not on the roll is refused rather than created; and a village
+      moved a long way from where it already stood says how far, because that is how a typed digit
+      shows itself. Every change is written to the Audit tab with what was there before.</div>`:''}`,'rl');
+
   /* ---- THE MPDO OFFICE STAFF ---- */
   const sparsed = STF_TEXT.trim() ? parseStaff(STF_TEXT) : null;
   const sdup = sparsed ? (function(){ const n = {}, d = [];
@@ -4324,6 +4524,55 @@ function wireAdmin(){
     rows.push(['Could not be taken', String(stuck.length)]);
     rows.push(['Note','A village is never invented by the register. Where the roll spells a name differently, the roll’s spelling is given above — confirm it and the posting will be taken.']);
     dlBlob('SJGP-postings-to-correct.csv','text/csv;charset=utf-8',csvText(rows));
+  };
+
+  /* ---- the village offices ---- */
+  const locT=$('#locTbl');
+  if(locT) locT.onblur=()=>{ if(locT.value!==LOC_TEXT){ LOC_TEXT=locT.value; LOC_PLANS=null; LOC_DONE=null; if(DATA) render(DATA); } };
+  const locC=$('#locClear');
+  if(locC) locC.onclick=()=>{ LOC_TEXT=''; LOC_PLANS=null; LOC_DONE=null; if(DATA) render(DATA); };
+  const locR=$('#locRead');
+  if(locR) locR.onclick=()=>{
+    const p=parseVillagePoints(LOC_TEXT); if(!p.rows.length) return;
+    LOC_DONE=null;
+    rollPost({kind:'villagePoints',rows:p.rows,dry:true}, r=>{ LOC_PLANS=r.plans||[]; });
+  };
+  /* WHAT GOES BACK TO THE MANDAL. A refusal the Collector can read is no use
+     to the office that has to correct it. Every line that could not be
+     placed, with the register's own reason beside it. */
+  const locCsv=$('#locCsv');
+  if(locCsv) locCsv.onclick=()=>{
+    const stuck=(LOC_PLANS||[]).filter(p=>p.verdict==='refused'||p.verdict==='ambiguous');
+    const rows=[['Mandal (as sent)','Village (as sent)','Latitude sent','Longitude sent',
+                 'What the register says','What is needed']];
+    stuck.forEach(p=>rows.push([p.mandal||'',p.gp||'',String(p.lat==null?'':p.lat),
+      String(p.lng==null?'':p.lng), p.why||'',
+      /not in this district/.test(p.why||'') ? 'Check the figure and send the office coordinate again'
+        : (p.verdict==='ambiguous' ? 'Name the mandal, or which of his villages this office is'
+                                   : 'Send the village name as the roll carries it')]));
+    rows.push([]);
+    rows.push(['Lines sent', String((LOC_PLANS||[]).length)]);
+    rows.push(['Could not be placed', String(stuck.length)]);
+    rows.push(['Note','A village with no point is not fenced: its Secretary marks as he always did. Nothing here is held against any officer.']);
+    dlBlob('SJGP-village-points-to-correct.csv','text/csv;charset=utf-8',csvText(rows));
+  };
+  const locA=$('#locApply');
+  if(locA) locA.onclick=()=>{
+    const p=parseVillagePoints(LOC_TEXT); if(!p.rows.length) return;
+    const n=k=>(LOC_PLANS||[]).filter(x=>x.verdict===k).length;
+    if(!confirm('Write these village offices to '+((ROLL&&ROLL.tenantName)||'this register')+'?\n\n'+
+      n('placed')+' placed for the first time \u00b7 '+n('moved')+' moved \u00b7 '+n('unchanged')+' already there\n'+
+      n('refused')+' refused \u00b7 '+n('ambiguous')+' ambiguous \u2014 these are NOT written.\n\n'+
+      'ATTENDANCE WILL BE REFUSED MORE THAN 5 km FROM THESE POINTS, in and out.\n'+
+      'A village with no point is not fenced. Every change is written to the Audit tab.')) return;
+    rollPost({kind:'villagePoints',rows:p.rows,dry:false}, r=>{
+      LOC_PLANS=null;
+      LOC_DONE=(r.wrote||0)+' village office(s) written \u00b7 '+
+        ((r.counts&&r.counts.unchanged)||0)+' already there \u00b7 '+
+        ((r.counts&&r.counts.refused)||0)+' refused \u00b7 '+
+        ((r.counts&&r.counts.ambiguous)||0)+' ambiguous. Attendance is now marked within '+
+        (r.fence||5)+' km of a placed village office, in and out.';
+    });
   };
 
   const pstA=$('#pstApply');

@@ -15,7 +15,7 @@ const TENANT = /\/gp\//.test(self.location.pathname) ? 'gp' : 'sjf';
    from before one officer's mark stopped showing against another's name.
    Code is fetched newest-first, so an online phone was never stale; this
    is for the one that opened the app on a village road with no signal. */
-const CACHE = TENANT + '-v6-14-0';
+const CACHE = TENANT + '-v6-15-0';
 const SHELL = [
   './', './index.html', './app.js', './manifest.webmanifest', './privacy.html',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',

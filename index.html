@@ -507,7 +507,19 @@ html[data-sun="1"] .brandband{background:#fff}
 .chk .tx{flex:1;font-size:14px;line-height:1.4}
 .chk .tx span{display:block;font-size:12.5px;color:var(--ink-3);margin-top:2px}
 
-.sheet{position:fixed;inset:0;z-index:70;display:none}
+/* A SHEET MUST SIT ABOVE THE GATES, OR IT IS A DIALOG NOBODY CAN SEE.
+   The sign-in screen is z-index 80, the attendance gate 78 and the notice
+   gate 77, and all three are opaque and cover the screen — so a sheet at 70
+   was painted UNDERNEATH whichever of them was up. Two things were affected
+   and neither announced itself: the Sign out confirmation on the attendance
+   gate (tapped, and the screen sat exactly as it was, which is the same
+   silence as a button bound to nothing), and the geo-fence pop-up of
+   10.10.2026, which is shown FROM that gate and is the whole of what the
+   officer standing in the wrong place is told. Found by driving the screen in
+   a browser: Playwright reported the button visible and enabled and then
+   could not click it, because #attend was intercepting every tap.
+   85 is above all three gates and below the toast at 90. */
+.sheet{position:fixed;inset:0;z-index:85;display:none}
 .sheet.on{display:block}
 .sheet .scrim{position:absolute;inset:0;background:rgba(11,20,16,.36);animation:fade .2s}
 .sheet .panel{position:absolute;left:0;right:0;bottom:0;background:var(--canvas);border-radius:20px 20px 0 0;
