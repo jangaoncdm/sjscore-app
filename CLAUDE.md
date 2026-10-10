@@ -160,6 +160,15 @@ the Collectorate or on tour — the register cannot know which, and a table must
 not decide it. Whether a distance is a default is read by the Collector on the
 facts, under the Conduct Rules.
 
+**This rule was departed from on 10.10.2026, once and by written order** — see
+*The geo-fence* below. The district supplied the village office of every Gram
+Panchayat, so the premise of this rule ("the register has nothing to check
+against") no longer holds, and the Collector ordered that attendance be marked
+within five kilometres of that office or not at all. Everything else here
+stands: the distance from the mandal median still accuses nobody, the Gram
+Palana register is **not** fenced, and a village the district has not placed
+fences nobody.
+
 ---
 
 ## Doctrine of the notice ladder
@@ -1271,6 +1280,131 @@ fall-through `doPost`’s tail already caused once (“This register does not ta
 village evaluations”, answered to a console button), which is why `op=diag`
 exists. An op this build does not answer is now refused **by name**. A missing
 op still gets the list, because an old handset asked that way.
+
+---
+
+## The geo-fence
+
+**Ordered 10.10.2026.** *"Many Panchayat Secretaries are marking attendance
+from distant places, which means not in the location assigned."* A mark made
+further than **five kilometres** from the officer's own place of duty is **not
+taken**, in or out, and the app tells him how far away he is while he is
+standing there.
+
+**The sentence is the district's own**, dictated on the day: *"You are 35 km
+away from Konne, your place of duty. Please reach the location to mark
+attendance."* It is short because it is read once, often in a toast hours
+later when a queued mark is refused on the way up, and it says the one thing
+the officer can act on. The radius lives on the screen behind it — the
+location step and the photograph step both carry it — not in the sentence.
+`fenceCheck_` on the server and `fenceWords` in the app say the same words off
+the same arithmetic, so the screen and the order cannot tell him two different
+things.
+
+**THIS IS THE ONE DEPARTURE FROM RULE 10 AND IT CHANGES WHAT A DISTANCE IS
+FOR.** That rule exists because the register had nothing to measure against —
+the `GPs` tab carried `Mandal` and `GP` and no coordinates, so `verified` meant
+only that the handset returned a precise fix, and a phone 70 km away under open
+sky returned a *better* reading than one inside the panchayat office. The
+district's own table of 09.10.2026 placed 278 of 280 villages, so the distance
+is now a fact and the order makes it decide something.
+
+And that is the whole of the danger: **a refused mark is an unmarked day, and
+an unmarked day walks the ladder** to a reminder, a show-cause notice and a
+casual-leave debit. A wrong coordinate in the district's table is therefore an
+accusation against an honest officer — the very harm rule 10 was written to
+prevent. Every guard below exists for that one reason.
+
+**NO COORDINATE IS NOT A FENCE.** An officer whose village the office has not
+placed marks exactly as he did before. Two of the district's 280 villages had
+not been surveyed when the order came, and refusing their Secretaries would
+have punished them for a blank cell in the district's own table. The same for a
+point outside the district's box: it is dropped, so that village is *unplaced*
+rather than fenced against nonsense.
+
+**THE SERVER DECIDES AND THE SCREEN ONLY ASKS** (rule 6), and both read **one
+derivation**, `fenceCheck_`. The app has to refuse on a village road with no
+signal, so it carries the officer's own points and the radius (`op=duty`,
+cached) and measures with the same arithmetic — but every mark is measured
+again when it reaches the district, and a mark the register refuses is **taken
+off the phone and he is told**. Until the fence there was no refusal a retry
+could not eventually cure, so `_syncAttendance` simply kept the row and tried
+again; a mark made out of place would have read "marked" on the card all day
+and the officer would have learnt at the end of the month, from a notice.
+
+**THE BENEFIT OF THE DOUBT IS THE OFFICER'S.** A fix is a circle, not a point,
+so the accuracy radius is subtracted before refusing: 5.8 km out on a ±900 m
+fix is inside. Refusing an honest man's attendance costs him a show-cause
+notice; taking a mark three hundred metres too generously costs nothing. A fix
+coarser than `FENCE_ACC_M_` (1 km) does not place a man at all and is reported
+as a fault of the **fix**, not as his being away.
+
+**AND A MARK WITH NO LOCATION IS NOT TAKEN WHERE A FENCE IS IN FORCE.** The
+camera used to open after two failed attempts and the mark was filed
+unverified — right while nothing turned on the place, and a hole the size of
+the order now that something does, because a fence any officer can step over by
+switching his location off is not a fence. But **nothing is said before the
+satellite has had its chance**: a cold GPS needs a minute of open sky, and a
+pop-up saying "no location yet" the instant the screen opens is the app blaming
+the officer for its own wait.
+
+**IT IS THE SANITATION REGISTER'S ALONE.** `TENANTS[k].fence` is the radius;
+the Gram Palana register has carried village offices since 18.09.2026 and
+**measures without deciding** (rule 10), because nobody ordered otherwise, and
+nobody on the HRMS register marks attendance at all. Suite 35 is where that is
+changed first. **And it stands down in a minute with no deploy**, the way
+`FEATURE_OFF` takes a module out of the road: `FENCE_OFF` stops the whole
+thing, `FENCE_KM` moves the radius, and both reach every handset with a line.
+A gate on attendance that needs a deploy to loosen is a gate that locks a
+mandal out all day.
+
+**A REFUSAL THE DISTRICT CANNOT SEE IS A MAN MARKED ABSENT FOR NOTHING.** The
+refused officer falls into *Not marked* beside a genuine absence and the ladder
+cannot tell them apart — which is rule 9 exactly, the lesson that showed ninety
+sanctioned officers as defaulters. Every refusal is kept on the `Outside` tab
+(one row per officer per day per kind, with the attempts, because a man tapping
+six times is one occasion) and the console names them on the attendance screen,
+with how far out and from where. It is not a charge: he may have been at a
+mandal meeting. It is the list to read **before** a notice is proposed, and if
+the office is recorded in the wrong place the cure is the point, not the man.
+
+**Where the villages are placed from.** `kind:'villagePoints'` on the Admin
+screen: the district's sheet pasted as it stands, proposed before it is written,
+applied under the Collector's hand. The coordinates are read as the **last two
+decimal numbers on the line**, not by recognising a plausible latitude on
+sight — a reader that only accepts what *looks* like a coordinate drops a
+broken one silently, and then nobody learns which village is wrong. The mandal
+is matched through `mkey2_`, because the roll spells it "Ghanpur (Stn)" and the
+district's table spells it "Ghanpur(Stn)" and a bracket must not cost fifteen
+villages their office. A village not on the roll is refused rather than
+created; a point outside the district is refused **by name**; a second paste
+changes nothing (rule 8); every change is on `Audit` with what was there
+before. The table itself never enters this repository — `Loc/` is gitignored,
+as `Domain/`, `Add/` and `hms/` are.
+
+**What the district's own table carried, on 09.10.2026.** 280 Secretaries, 278
+placed, and five rows that needed the office before they could be used: three
+refused by the box (`7979.1198397`, `70.256598`, and one with the latitude
+copied into the longitude), and **two that pass every automatic check and are
+still wrong** — a longitude of `78.23` and one of `79.955`, each about a
+hundred kilometres from the middle of its own mandal. Those two are the
+dangerous shape: nothing refuses them, and they would refuse their Secretary
+every morning. A coordinate is checked against the box **and** against the
+middle of its own mandal before it is trusted.
+
+**Held by** suite 35 (`tests/suites/35-fence.js`, 112 assertions) and
+`tests/render-fence.js`, which stands a real browser 40 km away and asserts the
+pop-up, the held camera, the officer the district has not placed, and the mark
+taken off the phone. `tests/render-admin.js` presses the paste button and
+asserts what went on the wire, because a parser declared inside the function
+that draws its panel leaves the button bound, enabled and doing nothing.
+
+**And a sheet must sit above the gates.** The pop-up is shown from the
+attendance gate, which is `z-index:78` and opaque; `.sheet` was 70, so it was
+painted *underneath* and Playwright reported the button visible, enabled, and
+unclickable. The same stacking had been swallowing the **Sign out** confirmation
+on that gate for as long as both existed — tapped, and the screen sat exactly as
+it was. It is 85 now, above all three gates and below the toast.
 
 ---
 

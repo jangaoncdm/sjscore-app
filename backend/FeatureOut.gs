@@ -181,6 +181,19 @@ function feature_out(){
           return json_({ ok:false, early:true, outFrom:from,
             error: 'Marking out opens at ' + hhmm_(from) + ', seven and a half hours after you marked in.' });
 
+        /* AND THE PLACE OF DUTY, ASKED OF THE OUT EXACTLY AS IT IS OF THE IN.
+           The district's order of 10.10.2026 is about both marks — "able to
+           mark attendance in or out" — and the same single derivation answers
+           for both, so the two can never come to differ. Asked before the
+           photograph goes to Drive, for the reason the IN's is. */
+        const fx = fenceCheck_(u, a.lat, a.lng, a.acc);
+        if(fx.gated && !fx.ok){
+          fenceRefused_(u, fx, 'OUT', a.lat, a.lng, a.acc, claim);
+          return json_({ ok:false, outside:true, km:fx.km == null ? null : fx.km,
+                         place:fx.place || '', limit:fx.limit, nofix:!!fx.nofix,
+                         coarse:!!fx.coarse, error:fx.error });
+        }
+
         /* the photograph goes to Drive BEFORE the lock, exactly as the IN's
            does — that rule was paid for during the Drive outage of 19.08.2026,
            when one hung upload held the global lock and starved the district */

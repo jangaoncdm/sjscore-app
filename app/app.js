@@ -216,6 +216,11 @@ function load(){
      the district's last answer about the hour, which is the district's to
      decide and never this handset's (rule 1). */
   DB.out = DB.out || {};
+  /* WHERE HE IS SUPPOSED TO BE, AND HOW FAR HE MAY STRAY. Attendance is
+     marked with no signal and sent later, so the fence cannot be asked about
+     at the moment of marking — the district's answer is carried on the phone
+     and asked for again whenever there is a line. */
+  DB.duty = DB.duty || null;
   DB.records = DB.records || {}; DB.cache = DB.cache || []; DB.master = DB.master || []; DB.leave = DB.leave || [];
   DB.notices = DB.notices || {rows:[], at:0, grace:3};
   DB.reminders = DB.reminders || [];        /* informal nudges — they never lock the app */
@@ -563,8 +568,7 @@ function refineAttFix(){
       const step = $('#stepGeo');
       if(step){
         step.className = 'step done'; $('#geoN').innerHTML = ICON.tick;
-        $('#geoTxt').innerHTML = `<span class="num">${esc(fixText(f))}</span>` +
-          (f.acc > ACC_LIMIT ? '<br>Still coarse — the phone is listening for a better fix. Open sky helps.' : '');
+        $('#geoTxt').innerHTML = geoSay(f, 'again');
       }
       if(!had){ drawAttendance(); sendSeenPing(); }   /* the photograph step unlocks */
     }
@@ -572,6 +576,156 @@ function refineAttFix(){
   }, ()=>{}, {enableHighAccuracy:true, maximumAge:0});
 }
 const fixText = f => f ? `${f.lat.toFixed(5)}, ${f.lng.toFixed(5)} · \u00b1${Math.round(f.acc)} m` : 'Not captured';
+
+/* ============================================================
+   THE GEO-FENCE — ordered 10.10.2026
+
+   Attendance is marked at the place of duty and nowhere else: within
+   DB.duty.km of the officer's own village office, or of his mandal office
+   where he answers for a mandal. Secretaries were marking from distant
+   places, and a mark made somewhere else is not taken.
+
+   THE SERVER DECIDES AND THIS SCREEN ONLY ASKS (rule 6). Every mark is
+   measured again when it reaches the district, by the same arithmetic. What
+   this half is for is the officer standing in the wrong place right now: he
+   is told so, and told how far out he is, instead of marking, walking away,
+   and learning hours later that the district refused him.
+
+   IT GATES ONLY ON WHAT THE DISTRICT ACTUALLY SAID. No answer, no points, or
+   an answer too old to rely on, and nothing is refused here — a handset must
+   not invent a fence, and FENCE_OFF at the district has to be able to reach
+   every phone that has a line. An officer the office has not placed yet marks
+   exactly as he always did.
+   ============================================================ */
+const FENCE_STALE_MS = 14 * 24 * 3600 * 1000;
+function kmBetween(aLat, aLng, bLat, bLng){
+  const R = 6371, rad = Math.PI / 180;
+  const dLa = (bLat - aLat) * rad, dLn = (bLng - aLng) * rad;
+  const h = Math.sin(dLa / 2) * Math.sin(dLa / 2) +
+            Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLn / 2) * Math.sin(dLn / 2);
+  return +(2 * R * Math.asin(Math.min(1, Math.sqrt(h)))).toFixed(1);
+}
+/* a distance a person reads: metres close in, one decimal beyond a kilometre */
+const fenceSay = km => km == null ? 'an unknown distance'
+  : (km < 1 ? Math.round(km * 1000) + ' m' : (Math.round(km * 10) / 10) + ' km');
+
+/* WHAT THE DISTRICT SAID ABOUT THIS OFFICER'S PLACE. Asked whenever there is
+   a line — it is two points and two numbers, smaller than the village list
+   the phone already holds. An older register that does not answer `duty`
+   leaves the last answer alone rather than wiping it. */
+async function refreshDuty(){
+  try{
+    if(!navigator.onLine || !(DB.session && DB.session.token)) return;
+    const r = await get({op:'duty'});
+    if(!r || !r.ok) return;
+    DB.duty = { on:!!r.on, km:Number(r.km) || 0, acc:Number(r.acc) || 1000,
+                which:String(r.which || ''), why:String(r.why || ''),
+                pts:(r.duty || []).filter(p => p && p.lat && p.lng), at:Date.now() };
+    saveNow();
+    /* HE MAY BE LOOKING AT THE SCREEN RIGHT NOW, AND THE STEP IS ALREADY
+       WRITTEN. The fix is read in under a second and this answer comes over
+       the network behind it, so the location step was painted before the
+       phone knew there was a fence at all — it said the coordinate and
+       nothing else, which is exactly what it said before the order. Repaint
+       it, then redraw the rest. */
+    if(ATT){
+      if(ATT.fix && $('#geoTxt')) $('#geoTxt').innerHTML = geoSay(ATT.fix, 'again');
+      drawAttendance();
+    }
+  }catch(e){}
+}
+/* THE SAME ARITHMETIC THE REGISTER USES, so the screen and the order can
+   never tell an officer two different things. `gated:false` means there is
+   nothing here to enforce and the mark goes as it always did. */
+function fenceState(fix){
+  const f = DB.duty;
+  if(!f || !f.on || !f.pts || !f.pts.length) return {gated:false, ok:true};
+  if(f.at && Date.now() - f.at > FENCE_STALE_MS) return {gated:false, ok:true, stale:true};
+  const limit = Number(f.km) || 0;
+  if(!(limit > 0)) return {gated:false, ok:true};
+  if(!fix || !fix.lat || !fix.lng) return {gated:true, ok:false, nofix:true, limit:limit,
+    place:f.pts[0].name || 'your place of duty'};
+  if(Number(fix.acc) > (Number(f.acc) || 1000)) return {gated:true, ok:false, coarse:true,
+    limit:limit, acc:Math.round(Number(fix.acc)), place:f.pts[0].name || 'your place of duty'};
+  let best = null;
+  f.pts.forEach(p => {
+    const d = kmBetween(fix.lat, fix.lng, Number(p.lat), Number(p.lng));
+    if(best === null || d < best.km) best = {km:d, place:p.name || 'your place of duty'};
+  });
+  if(!best) return {gated:false, ok:true};
+  /* THE BENEFIT OF THE DOUBT IS THE OFFICER'S, exactly as it is on the
+     server: a fix is a circle and not a point, and the cost of refusing an
+     honest man's attendance is a show-cause notice. */
+  const slack = Number(fix.acc) > 0 ? Number(fix.acc) / 1000 : 0;
+  return {gated:true, ok:Math.max(0, best.km - slack) <= limit,
+          km:best.km, place:best.place, limit:limit};
+}
+/* THE SENTENCE HE READS, in each of the three ways a mark can be out of
+   place. It names the distance, the place and the radius, so it answers the
+   question it raises. */
+function fenceWords(st, out){
+  const what = out ? 'Marking out' : 'Attendance';
+  if(st.nofix) return {title:'No location yet',
+    body:what + ' is marked at your place of duty, so the app has to be able to read where you are. '
+       + 'Switch location on for this app, step into the open, and read the location again.'};
+  if(st.coarse) return {title:'The location is not precise enough',
+    body:'The phone has placed you only to about ' + fenceSay(st.acc / 1000) + ', which is not close '
+       + 'enough to tell where you are standing. Step into the open and wait a moment — the app keeps '
+       + 'listening and takes the best reading it gets.'};
+  /* THE DISTRICT'S OWN WORDS (10.10.2026), and the same sentence the register
+     answers with, so the screen and the order cannot tell him two different
+     things. The radius is on the steps behind this sheet, not in it. */
+  return {title:'You are not at your place of duty',
+    body:'You are ' + fenceSay(st.km) + ' away from ' + st.place + ', your place of duty. '
+       + 'Please reach the location to mark ' + (out ? 'out' : 'attendance') + '.'};
+}
+/* WHAT THE LOCATION STEP SAYS, in ONE place.
+   Two paths write that line — the first reading in startAttFix, and every
+   better fix the phone hears afterwards in refineAttFix — and the first cut
+   of the fence put the distance into the second alone. A handset that got a
+   good fix first time therefore never mentioned the fence at all, which is
+   most of them: the refinement only runs when the first reading is coarser
+   than 100 m. Found by rendering it, with the handset standing 40 km out and
+   the step reporting nothing but a coordinate. */
+function geoSay(f, when){
+  let h = `<span class="num">${esc(fixText(f))}</span>`;
+  const st = fenceState(f);
+  if(st.gated && st.km != null){
+    h += '<br>' + (st.ok
+      ? esc(fenceSay(st.km) + ' from ' + st.place + ' — inside the ' + st.limit +
+            ' km your place of duty allows.')
+      /* the two halves are one sentence and the line wraps between them, so
+         the break must not land on a dash sitting alone at the margin */
+      : `<b>${esc(fenceSay(st.km) + ' from ' + st.place + '.')}</b>` +
+        esc(' Attendance can only be marked within ' + st.limit + ' km of it.'));
+  }
+  if(when === 'again' && f.acc > ACC_LIMIT)
+    h += '<br>Still coarse — the phone is listening for a better fix. Open sky helps.';
+  else if(when === 'first' && f.acc > 100)
+    h += '<br>The fix is coarse — the phone keeps listening while you take the photograph. Open sky helps.';
+  return h;
+}
+
+/* AND IT IS A POP-UP, because he is holding the phone and about to take a
+   photograph he cannot use. It is shown once for a given reading: redrawn on
+   every improved fix, a sheet that reopened itself would be unclosable. */
+let FENCE_SHOWN = '';
+function fencePopup(st, out){
+  const w = fenceWords(st, out);
+  showSheet(`<div style="padding:6px 20px 4px"><h2>${esc(w.title)}</h2>
+    <p style="font-size:15px;color:var(--ink-2);margin-top:9px;line-height:1.5">${esc(w.body)}</p></div>
+    <div style="padding:16px 20px 4px">
+      <button class="btn" id="fnAgain">Read the location again</button>
+      <button class="btn quiet" id="fnClose">Close</button></div>`);
+  $('#fnAgain').addEventListener('click', () => { hideSheet(); FENCE_SHOWN = ''; if(ATT) startAttFix(); });
+  $('#fnClose').addEventListener('click', hideSheet);
+}
+function fenceTell(st, out){
+  const key = (st.nofix ? 'n' : st.coarse ? 'c' : 'd') + ':' + (st.km == null ? '' : st.km);
+  if(FENCE_SHOWN === key) return;
+  FENCE_SHOWN = key;
+  fencePopup(st, out);
+}
 const stampTime = ts => new Date(ts).toLocaleString('en-IN',
   {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', hour12:true});
 
@@ -789,6 +943,8 @@ function openAttendance(out){
   }
   $('#attSteps').innerHTML = ATT_STEPS;
   wireAttSteps();
+  FENCE_SHOWN = '';            /* a fresh visit may say it again */
+  refreshDuty();               /* and the district's answer is asked for now */
   drawAttendance();
   startAttFix();
   /* said on the screen, because it is done from this screen — no location
@@ -834,8 +990,7 @@ async function startAttFix(){
   try{
     ATT.fix = await getFixTwice(); ATT.geoFailed = false;
     step.className = 'step done'; $('#geoN').innerHTML = ICON.tick;
-    $('#geoTxt').innerHTML = `<span class="num">${esc(fixText(ATT.fix))}</span>` +
-      (ATT.fix.acc > 100 ? '<br>The fix is coarse — the phone keeps listening while you take the photograph. Open sky helps.' : '');
+    $('#geoTxt').innerHTML = geoSay(ATT.fix, 'first');
     if(ATT.fix.acc > 100) refineAttFix();        /* the satellite may still improve on the network's guess */
     sendSeenPing();                              /* the district is told the app was opened here */
   }catch(e){
@@ -855,11 +1010,28 @@ function drawAttendance(){
   const holBack = (dayOff() && !DB.att[todayStr()])
     ? '<button class="btn quiet" id="attHolBack" style="margin-top:9px">Not now — today is a holiday</button>' : '';
   const camStep = $('#stepCam'), fix = ATT && ATT.fix;
-  const canShoot = !!fix || (attTries >= 2);
+  /* WHERE A FENCE IS IN FORCE, A PHOTOGRAPH TAKEN OUT OF PLACE IS WASTED
+     WORK. The camera used to open after two failed attempts at a fix, and
+     the mark was filed unverified — right while nothing turned on the place,
+     and now a hole the size of the order, because a fence any officer can
+     step over by switching his location off is not a fence. He is told the
+     one thing that cures it instead. */
+  const fst = fenceState(fix);
+  const fenceBlocks = fst.gated && !fst.ok;
+  const canShoot = fenceBlocks ? false : (!!fix || (attTries >= 2));
+  /* AND IT DOES NOT SAY A WORD BEFORE THE SATELLITE HAS HAD ITS CHANCE. This
+     screen is drawn the moment it opens, with no fix yet — a cold GPS needs
+     a minute of open sky — and a pop-up saying "no location yet" before the
+     phone has even been asked is the app blaming the officer for its own
+     wait. The camera stays shut either way; only the telling waits. */
+  const fenceSays = fenceBlocks && (!fst.nofix || attTries >= 1);
+  if(fenceSays) fenceTell(fst, !!(ATT && ATT.out));
   camStep.className = 'step' + (ATT && ATT.b64 ? ' done' : (canShoot ? ' busy' : ''));
   $('#camN').innerHTML = (ATT && ATT.b64) ? ICON.tick : '2';
   if(ATT && ATT.b64){
     $('#camTxt').textContent = 'Taken at ' + stampTime(ATT.ts) + '.';
+  } else if(fenceSays){
+    $('#camTxt').textContent = fenceWords(fst, !!(ATT && ATT.out)).body;
   } else if(canShoot && !fix){
     $('#camTxt').textContent = 'No location fix is available here. You may still mark attendance — it will be filed as unverified and the DPO office will see it as such.';
   } else if(canShoot){
@@ -948,6 +1120,13 @@ function closeOut(){
 async function markAttendance(){
   if(!ATT || !ATT.b64) return;
   if(ATT.out) return markOut();
+  /* ASKED AGAIN AT THE MOMENT OF MARKING. The fix improves while he takes
+     the photograph and he may have walked; the button was drawn against an
+     older reading than this one. */
+  {
+    const st = fenceState(ATT.fix);
+    if(st.gated && !st.ok){ FENCE_SHOWN = ''; fenceTell(st, false); drawAttendance(); return; }
+  }
   stopAttWatch();                              /* whatever fix stands now is the one filed */
   const btn = $('#attMark'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Marking';
   const u = user(), key = todayStr();
@@ -983,6 +1162,12 @@ $('#attSignOut').addEventListener('click', () => {
    saying 'marked out' when the district refused it is the fault this app
    already learnt from the advisory receipt. */
 async function markOut(){
+  /* the order of 10.10.2026 is about both marks, so the out is asked the
+     same question by the same arithmetic */
+  {
+    const st = fenceState(ATT && ATT.fix);
+    if(st.gated && !st.ok){ FENCE_SHOWN = ''; fenceTell(st, true); drawAttendance(); return; }
+  }
   const btn = $('#attMark'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Marking out';
   stopAttWatch();
   const u = user(), key = todayStr();
@@ -1091,6 +1276,21 @@ async function _syncAttendance(){
             toast('The district already holds your attendance for today'+(r.firstAt?' — first marked at '+new Date(r.firstAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'')+'. Repeated marking is recorded.', 6000);
         }
         saveNow();
+      }
+      /* A MARK THE DISTRICT REFUSED IS NOT A MARK, AND MUST NOT GO ON SITTING
+         ON THE PHONE SAYING IT IS. Until the fence there was no refusal a
+         retry could not eventually cure, so this loop simply kept the row and
+         tried again; a mark made out of place will be refused for ever, the
+         card would read "marked" all day, and the officer would learn at the
+         end of the month from a show-cause notice. The same honesty the mark
+         out already keeps, and the same the advisory receipt had to learn. */
+      else if(r && r.ok === false && r.outside){
+        if(a.photoId) BLOBS.del(a.photoId);
+        delete DB.att[a.date];
+        saveNow();
+        if(document.visibilityState === 'visible')
+          toast(r.error || 'That mark was made away from your place of duty and the district did not take it.', 9000);
+        if(a.date === todayStr()) gate();
       }
     }catch(e){ break; }
   }
@@ -1290,6 +1490,7 @@ function renderHome(){
     refreshAdvisory();  /* and the circular is put up the moment it is issued */
     refreshSchedule();  /* his own villages, his own days, and what the district has sent him */
     refreshWeather();   /* the sky over his own mandal, from the district's one call */
+    refreshDuty();      /* and where he is supposed to be, so the gate works with no signal */
     flushAdvAcks();     /* any receipt the signal swallowed goes up now */
     flushSchedAcks();   /* and the same for the schedule's */
   }

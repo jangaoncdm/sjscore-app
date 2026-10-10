@@ -439,9 +439,23 @@ const TENANTS = {
        for THEM there is a place of duty to measure from (rule 10: it measures
        and accuses nobody) */
     staffDuty:true,
-    /* THE GPs TAB HAS NO COORDINATES (rule 10), so this register has nothing
-       to measure a mark against and says so rather than guessing */
-    placeOfDuty:false,
+    /* IT HAS COORDINATES NOW. For as long as rule 10 has existed this tab
+       carried Mandal and GP and nothing else, which is why the register
+       measured a mark against the MEDIAN of its mandal's own marks and said
+       so rather than guessing. The district supplied the village offices on
+       10.10.2026, so the distance from the officer's own place of duty is a
+       fact here too — and where a village has not been placed yet the mandal
+       median still answers, so nothing is lost while the table is filled in.
+
+       AND ON THIS REGISTER ALONE THE DISTANCE NOW DECIDES SOMETHING.
+       `fence` is the radius in kilometres within which attendance may be
+       marked, in or out; 0 is no fence. The order of 10.10.2026 is 5 km from
+       the assigned point, because Secretaries were marking from distant
+       places. It is the one departure from rule 10's restraint and it was
+       ordered in writing; the script property FENCE_KM moves it and FENCE_OFF
+       stands it down, both without a deploy. */
+    placeOfDuty:true,
+    fence:5,
     /* CL 15 a year, EL 30, HQ a permission and ML on certificate. 2026 opened
        in August, so casual leave that year is five months' worth: 15 x 5/12,
        taken as 6 — the figure this register has run on since adoption. */
@@ -479,6 +493,13 @@ const TENANTS = {
        measured against for the first time. It MEASURES AND IT ACCUSES NOBODY
        (rule 10): the distance is printed and the mark stands. */
     placeOfDuty:true,
+    /* AND IT MEASURES WITHOUT DECIDING, WHICH IS WHERE THIS REGISTER STAYS.
+       The sanitation register was fenced by the order of 10.10.2026 and this
+       one was not. Its distance is printed for the Collector and the mark
+       stands (rule 10) — a Gram Palana Officer refused a mark would be
+       sanctioned by a table under an order nobody gave. Fencing it is the
+       Collector's written order and suite 35 is where it is changed first. */
+    fence:0,
     /* THE SAME YEARLY FIGURES, PRO-RATED TO WHAT IS LEFT OF THE YEAR. This
        register opened on 19.09.2026 and so counts from October — three months
        of twelve. CL 15 x 3/12 = 3.75 taken as 4; EL 30 x 3/12 = 7.5 taken as
@@ -551,6 +572,8 @@ const TENANTS = {
     leaveApply:['EMP','HOD'],
     sanction:false, evaluation:false, schedule:false,
     placeOfDuty:false,
+    /* nobody on this register marks attendance, so there is nothing to fence */
+    fence:0,
     entitlement:{CL:15, EL:30, HQ:0, ML:0, OH:5},
     /* AND 2026 IS NOT A YEAR ON THIS REGISTER, IT IS A QUARTER. The district
        stood the HRMS up on 09.10.2026, so the year it opens in is three months
@@ -669,7 +692,14 @@ const rank_ = () => tenant_().rank;
    measured nothing and said so. The GP register's roll carries the village office
    of every revenue village, so it CAN measure. The two extra columns are
    written only on the register that has them; SJGP's tab is not touched. */
-const GPS_HEAD = () => tenant_().placeOfDuty ? ['Mandal','GP','Lat','Lng'] : ['Mandal','GP'];
+/* AND FROM 10.10.2026 THE SANITATION REGISTER HAS ONE TOO. The district's
+   order is that attendance is marked at the place of duty and nowhere else,
+   which cannot be enforced against a roll that does not know where
+   Devaruppula is. The two columns are the same two, on every register;
+   ensureHeaders_ appends them and no migration is needed. An empty pair is
+   simply a village the district has not placed yet, and nothing is enforced
+   against an officer for want of a coordinate the office never supplied. */
+const GPS_HEAD = () => ['Mandal','GP','Lat','Lng'];
 
 /* Leave is applied for by these, and sanctioned by the Collector alone. */
 const canApplyLeave_   = r => tenant_().leaveApply.indexOf(String(r || '').toUpperCase()) >= 0;
@@ -2012,6 +2042,218 @@ function dutyDistance_(places, gpsOfOfficer, lat, lng){
     if(best === null || d < best.km) best = { km:d, gp:pt.gp, mandal:pt.mandal };
   });
   return best;
+}
+
+/* ==========================================================================
+ * THE GEO-FENCE  —  ordered 10.10.2026
+ *
+ * "Many Panchayat Secretaries are marking attendance from distant places,
+ * which means not in the location assigned." So a mark made further than
+ * TENANTS[k].fence kilometres from the officer's own place of duty is NOT
+ * TAKEN, in or out, and the app says how far away he is while he is standing
+ * there. Five kilometres from the assigned point, by that order.
+ *
+ * THIS IS A DELIBERATE DEPARTURE FROM RULE 10, AND THE ONLY ONE. That rule
+ * says the register measures a distance and accuses nobody, and it exists
+ * because the register had nothing to measure against: the GPs tab carried
+ * Mandal and GP and no coordinates, so a "verified" mark meant only that the
+ * handset returned a precise fix — a phone 70 km away under open sky returned
+ * a BETTER reading than one inside the panchayat office. The district has now
+ * supplied the coordinates and given the order, so the distance decides
+ * something for the first time. Three consequences follow, and they are the
+ * reason for every guard below:
+ *
+ *   A REFUSED MARK IS AN UNMARKED DAY, and an unmarked day walks the ladder —
+ *   reminder, show-cause notice, casual leave. A wrong coordinate in the
+ *   table is therefore an accusation against an honest officer, which is
+ *   exactly the harm rule 10 was written to prevent. So a coordinate outside
+ *   the district's box is not a coordinate (the Gram Palana roll had two such
+ *   rows), and every refusal is RECORDED on its own tab — the district must
+ *   be able to see that forty officers were refused and from where, or it
+ *   reads their silence as absence, which is rule 9 all over again.
+ *
+ *   NO COORDINATE IS NOT A FENCE. An officer whose village the office has not
+ *   placed yet marks exactly as he did before. Refusing him would punish him
+ *   for a blank cell in the district's own table.
+ *
+ *   AND IT CAN BE STOOD DOWN IN A MINUTE, with no deploy, the way FEATURE_OFF
+ *   takes a module out of the road: the script property FENCE_OFF stands the
+ *   whole thing down, and FENCE_KM changes the radius. A gate on attendance
+ *   that needs a deploy to loosen is a gate that locks a mandal out all day.
+ * ========================================================================== */
+/* THE RADIUS LIVES ON THE REGISTER (TENANTS[k].fence) and not here, so that
+   a register nobody fenced cannot be fenced by a constant in a shared file. */
+var FENCE_ACC_M_ = 1000;   /* a fix coarser than this does not place a man at all */
+var FENCE_HEAD = ['date','phone','name','role','mandal','which','tries','at',
+                  'lat','lng','accuracy','place','km','receivedAt'];
+
+/* the radius and the switch, read at every call so a change needs no deploy */
+function fenceRule_(){
+  /* THE REGISTER SAYS WHETHER IT IS FENCED AT ALL, and the same bytes deploy
+     to all three (see TENANTS). The sanitation register was fenced by the
+     order of 10.10.2026; the Gram Palana register measures and accuses
+     nobody, and nobody on the HRMS register marks attendance. A property that
+     fails to read must land on the register that already exists, so a tenant
+     with no `fence` key is not fenced. */
+  var km = Number(tenant_().fence || 0), off = !(km > 0);
+  try{
+    var p = PropertiesService.getScriptProperties();
+    var s = String(p.getProperty('FENCE_KM') || '').trim();
+    if(s !== '' && isFinite(Number(s))) km = Number(s);
+    if(String(p.getProperty('FENCE_OFF') || '').trim()) off = true;
+  }catch(e){}
+  if(!(km > 0)) off = true;          /* a radius of nought is not a fence */
+  return { km:km, off:off, acc:FENCE_ACC_M_ };
+}
+
+/* WHERE THIS OFFICER IS SUPPOSED TO BE.
+   The Secretary holds the village, so his place is the village office — and
+   he may hold four, in which case he is at his place of duty at ANY of them
+   (the Gram Palana register learnt that one: measuring to the first alone
+   calls a man absent for standing in the second village he is in charge of).
+   The MPO, the MPDO and the MSO hold no village: they answer for a mandal, so
+   their place is the mandal office, which the roster paste already writes.
+   The district officers hold neither and are not fenced at all. */
+function dutyPoints_(u){
+  var out = [], seen = {};
+  var gps = (u && u.gps) || [], mandals = (u && u.mandals) || [];
+  if(u && u.mandal && mandals.indexOf(u.mandal) < 0) mandals = mandals.concat([u.mandal]);
+
+  if(gps.length){
+    var places = gpPlaces_(), keys = Object.keys(places);
+    gps.forEach(function(g){
+      var gl = String(g).toLowerCase().trim();
+      /* his own mandal first — a village name can repeat across mandals and
+         "Ghanpur" is three different things in this district */
+      var hit = null;
+      mandals.forEach(function(m){
+        var k = String(m).toLowerCase().trim() + '|' + gl;
+        if(!hit && places[k]) hit = places[k];
+      });
+      if(!hit){
+        var only = keys.filter(function(k){ return k.slice(k.indexOf('|') + 1) === gl; });
+        if(only.length === 1) hit = places[only[0]];
+      }
+      if(hit && !seen['v' + hit.lat + ',' + hit.lng]){
+        seen['v' + hit.lat + ',' + hit.lng] = 1;
+        out.push({ name:hit.gp, mandal:hit.mandal, lat:hit.lat, lng:hit.lng, which:'village' });
+      }
+    });
+  }
+  if(out.length) return out;
+
+  /* no village of his is placed — the mandal office, if he answers for one */
+  if(mandalRole_(u && u.role) || gps.length === 0){
+    var offs = mandalOffices_();
+    mandals.forEach(function(m){
+      var o = offs[String(m).toLowerCase().trim()];
+      if(o && !seen['m' + o.lat + ',' + o.lng]){
+        seen['m' + o.lat + ',' + o.lng] = 1;
+        out.push({ name:o.office || (o.mandal + ' mandal office'), mandal:o.mandal,
+                   lat:o.lat, lng:o.lng, which:'mandal' });
+      }
+    });
+  }
+  return out;
+}
+
+/* IS THIS MARK INSIDE THE FENCE — the one derivation, read by the mark in,
+   by the mark out and by the app, so the three can never disagree.
+   `gated:false` means there is nothing to enforce and the mark stands. */
+function fenceCheck_(u, lat, lng, acc){
+  var rule = fenceRule_();
+  if(rule.off) return { gated:false, ok:true, why:'the fence is stood down' };
+  if(districtRole_(u && u.role)) return { gated:false, ok:true, why:'a district officer holds no one place' };
+
+  var pts = dutyPoints_(u);
+  if(!pts.length) return { gated:false, ok:true, limit:rule.km,
+    why:'the district has not placed this officer' };
+
+  var y = Number(lat), x = Number(lng);
+  /* A MARK WITH NO LOCATION CANNOT BE SHOWN TO BE AT THE PLACE OF DUTY, and
+     once a fence is in force that is the whole of the enforcement: an app that
+     took the mark anyway when the phone reported nothing would be a fence any
+     officer could step over by switching his location off. He is told what to
+     do about it, which is the one thing that cures it. */
+  if(!(isFinite(y) && isFinite(x) && y && x)) return { gated:true, ok:false, nofix:true,
+    limit:rule.km, place:pts[0].name,
+    error:'Attendance cannot be marked without a location. Switch location on for this app, step into the open, and read the location again.' };
+
+  if(acc != null && acc !== '' && Number(acc) > rule.acc) return { gated:true, ok:false, coarse:true,
+    limit:rule.km, place:pts[0].name, acc:Math.round(Number(acc)),
+    error:'The location is only accurate to about ' + Math.round(Number(acc) / 100) / 10 +
+          ' km, which is not precise enough to say where you are. Step into the open and wait for a better fix.' };
+
+  var best = null;
+  pts.forEach(function(p){
+    var d = distKm_(y, x, p.lat, p.lng);
+    if(d == null) return;
+    if(best === null || d < best.km) best = { km:d, place:p.name, mandal:p.mandal, which:p.which };
+  });
+  if(!best) return { gated:false, ok:true, why:'nothing to measure against' };
+
+  /* THE BENEFIT OF THE DOUBT IS THE OFFICER'S. A fix is a circle, not a
+     point, so a reading of +/-900 m taken 5.4 km out might be 4.5 km out —
+     and the harm of refusing an honest man's attendance is a show-cause
+     notice, while the harm of taking a mark 300 m too generously is nothing
+     at all. The raw distance is what is recorded and reported; the accuracy
+     is allowed only when deciding to refuse. */
+  var slack = (acc != null && acc !== '' && isFinite(Number(acc))) ? Number(acc) / 1000 : 0;
+  var nearest = Math.max(0, best.km - slack);
+  best.limit = rule.km;
+  best.gated = true;
+  best.ok = nearest <= rule.km;
+  /* THE DISTRICT'S OWN WORDS, 10.10.2026: "you are 35 km away from duty,
+     please reach the location to mark attendance". Short, and it says the one
+     thing the officer can act on. The radius belongs on the screen he is
+     looking at — the location step and the photograph step both carry it —
+     and not in the sentence, which is read once, often in a toast hours
+     later when a queued mark is refused on the way up. The app says exactly
+     this, from the same arithmetic, so the two can never differ. */
+  if(!best.ok) best.error = 'You are ' + fenceSay_(best.km) + ' away from ' + best.place +
+    ', your place of duty. Please reach the location to mark attendance.';
+  return best;
+}
+/* a distance a person reads: metres close in, one decimal beyond a kilometre */
+function fenceSay_(km){
+  if(km == null) return 'an unknown distance';
+  if(km < 1) return Math.round(km * 1000) + ' m';
+  return (Math.round(km * 10) / 10) + ' km';
+}
+
+/* A REFUSAL THE DISTRICT CANNOT SEE IS A MAN MARKED ABSENT FOR NOTHING.
+   The mark is not taken, so at 18:00 he counts as unmarked and the ladder
+   begins to walk — and rule 9's lesson is exactly that silence read as
+   absence is how ninety sanctioned officers were shown as defaulters. This
+   tab is what lets the Collector tell a refused officer from an absent one.
+   One row per officer per day per kind, with the number of attempts, because
+   a man tapping six times is one occasion and not six. */
+function fenceRefused_(u, fx, which, lat, lng, acc, claimAt){
+  try{
+    var sh = sheet_('Outside', FENCE_HEAD), m = headMap_(sh, FENCE_HEAD);
+    var date = today_(), last = sh.getLastRow();
+    var at = 0, tries = 0;
+    if(last >= 2){
+      var start = Math.max(2, last - 2000);
+      var v = sh.getRange(start, 1, last - start + 1, sh.getLastColumn()).getValues();
+      for(var i = 0; i < v.length; i++){
+        if(phone10_(v[i][m.ix.phone]) === u.phone && dateText_(v[i][m.ix.date]) === date &&
+           String(v[i][m.ix.which]) === which){ at = start + i; tries = Number(v[i][m.ix.tries]) || 1; }
+      }
+    }
+    var row = new Array(m.width).fill('');
+    var put = function(k, val){ if(m.ix[k] >= 0) row[m.ix[k]] = val; };
+    put('date', "'" + date); put('phone', "'" + u.phone);
+    put('name', u.name); put('role', u.role); put('mandal', u.mandal || '');
+    put('which', which); put('tries', tries + 1);
+    put('at', String(claimAt || new Date().toISOString()));
+    put('lat', lat == null ? '' : lat); put('lng', lng == null ? '' : lng);
+    put('accuracy', acc == null || acc === '' ? '' : Math.round(Number(acc)));
+    put('place', fx.place || ''); put('km', fx.km == null ? '' : fx.km);
+    put('receivedAt', new Date().toISOString());
+    if(at) sh.getRange(at, 1, 1, m.width).setValues([row]);
+    else sh.appendRow(row);
+  }catch(e){}
 }
 
 function unfiledVillages_(ym){
@@ -3762,6 +4004,51 @@ function doGet(e){
     return json_({ ok:true, gps:rows });
   }
 
+  /* WHERE THIS OFFICER IS SUPPOSED TO BE, AND HOW FAR HE MAY STRAY.
+     The app has to be able to refuse a mark on a village road with no signal
+     at all, so it cannot ask at the moment of marking — it carries his own
+     places and the radius, and asks for them again whenever it can reach the
+     district. Two or three points and two numbers: it is smaller than the
+     village list it already holds.
+
+     An officer the district has not placed gets `on:false` and is gated by
+     nothing, which is the same answer the register itself would give. */
+  if(p.op === 'duty'){
+    const rule = fenceRule_();
+    const pts = districtRole_(u.role) ? [] : dutyPoints_(u);
+    return json_({ ok:true, on: !rule.off && pts.length > 0, km:rule.km, acc:rule.acc,
+                   duty:pts, which:(pts[0] || {}).which || '',
+                   why: rule.off ? 'the district has stood the fence down'
+                      : (!pts.length ? 'the district has not placed your office yet' : '') });
+  }
+
+  /* AND WHO WAS REFUSED, which the district must be able to see.
+     A refused mark is an unmarked day and an unmarked day walks the ladder, so
+     without this screen forty officers refused by a wrong coordinate look
+     exactly like forty officers who never came to work — rule 9's lesson,
+     which cost the district ninety sanctioned officers shown as absent. */
+  if(p.op === 'outside'){
+    if(!districtRole_(u.role)) return json_({ ok:false, error:'Not for this role.' });
+    const day = dateText_(p.date) || today_();
+    const sh = sheet_('Outside', FENCE_HEAD), m = headMap_(sh, FENCE_HEAD);
+    const last = sh.getLastRow();
+    if(last < 2) return json_({ ok:true, date:day, rows:[] });
+    const start = Math.max(2, last - 3000);
+    const v = sh.getRange(start, 1, last - start + 1, sh.getLastColumn()).getValues();
+    const rows = [];
+    v.forEach(r => {
+      if(dateText_(r[m.ix.date]) !== day) return;
+      rows.push({ phone:phone10_(r[m.ix.phone]), name:String(r[m.ix.name] || ''),
+                  role:String(r[m.ix.role] || ''), mandal:String(r[m.ix.mandal] || ''),
+                  which:String(r[m.ix.which] || ''), tries:Number(r[m.ix.tries]) || 1,
+                  at:String(r[m.ix.at] || ''), place:String(r[m.ix.place] || ''),
+                  km:r[m.ix.km] === '' ? null : Number(r[m.ix.km]),
+                  acc:r[m.ix.accuracy] === '' ? null : Number(r[m.ix.accuracy]) });
+    });
+    rows.sort((x, y) => (y.km || 0) - (x.km || 0));
+    return json_({ ok:true, date:day, rows:rows, limit:fenceRule_().km });
+  }
+
   /* the notice register: an officer sees his own SERVED file — a proposal
      the Collector has not passed does not exist for him. The Collector,
      with all=1, sees everything. The year's holidays travel with the reply
@@ -4126,6 +4413,35 @@ function doGet(e){
               due:officers.filter(o => String(o.role).toUpperCase() !== 'COLLECTOR' &&
                                        !attExempt_(o.role)).length},
       today:{present:todayRows.filter(r=>r.status!=='LEAVE'), onLeave:todayRows.filter(r=>r.status==='LEAVE'), absent:absent},
+      /* WHO WAS REFUSED, AND FROM HOW FAR. Under the geo-fence of 10.10.2026
+         a mark made away from the place of duty is not taken, so the officer
+         who tried appears in "not marked" beside the officer who never came
+         to work — and the first is a man standing in the wrong village while
+         the second is an absence. Rule 9 is exactly this lesson: silence read
+         as absence showed ninety sanctioned officers as defaulters. It rides
+         on the payload rather than on a fetch of its own, because it is read
+         on the same screen as the day's attendance and at the same moment. */
+      outside:(function(){
+        try{
+          if(!fenceRule_().km) return [];
+          const osh = sheet_('Outside', FENCE_HEAD), om = headMap_(osh, FENCE_HEAD);
+          const last = osh.getLastRow(); if(last < 2) return [];
+          const st = Math.max(2, last - 2000);
+          const ov = osh.getRange(st, 1, last - st + 1, osh.getLastColumn()).getValues();
+          const out = [];
+          ov.forEach(function(r){
+            if(dateText_(r[om.ix.date]) !== today_()) return;
+            out.push({ phone:phone10_(r[om.ix.phone]), name:String(r[om.ix.name] || ''),
+                       role:String(r[om.ix.role] || ''), mandal:String(r[om.ix.mandal] || ''),
+                       which:String(r[om.ix.which] || ''), tries:Number(r[om.ix.tries]) || 1,
+                       place:String(r[om.ix.place] || ''),
+                       km:r[om.ix.km] === '' ? null : Number(r[om.ix.km]) });
+          });
+          out.sort(function(a, b){ return (b.km || 0) - (a.km || 0); });
+          return out;
+        }catch(err){ return []; }
+      })(),
+      fenceKm:(function(){ try{ var f = fenceRule_(); return f.off ? 0 : f.km; }catch(err){ return 0; } })(),
       att14:att14, month:{rows:monthRows, grades:gradeCount,
         avg: monthRows.length ? Math.round(monthRows.reduce((s,r)=>s+r.score,0)/monthRows.length) : null,
         rfCount: monthRows.filter(r=>String(r.rf||'').trim()).length},
@@ -4953,6 +5269,12 @@ function rollRegister_(u){
      on a machine a day out would say one had passed when it had not. */
   return json_({ ok:true, rows:rows, roles:Object.keys(rank_()), adoption:adopt, today:today_(),
                  tenant:tenant_().key, tenantName:tenant_().name,
+                 /* the radius the console states on the village-office panel,
+                    read from the register rather than typed into the page, so
+                    FENCE_KM moves what the Collector is told as well as what
+                    the register enforces. 0 where the register is not fenced. */
+                 fenceKm:(function(){ try{ var f = fenceRule_(); return f.off ? 0 : f.km; }
+                                      catch(e){ return 0; } })(),
                  holidays:{ year:holYear, count:hol, onOrder:hol - holExtra.length,
                             extra:holExtra.slice(0, 60) },
                  mandals:gpRoll_().map(r => r.mandal).filter((m, i, A) => m && A.indexOf(m) === i).sort() });
@@ -5487,6 +5809,215 @@ function rollPlan_(t, v, r){
 
   out.verdict = out.changes.length ? 'correct' : 'unchanged';
   return out;
+}
+
+/* ==========================================================================
+ * WHERE EACH VILLAGE OFFICE IS  —  10.10.2026
+ *
+ * The fence is worth nothing without this. Until the district's table reaches
+ * the GPs tab the register does not know where Devaruppula is, every officer
+ * is unplaced, and not one mark is measured against anything.
+ *
+ * IT COMES FROM THE COLLECTOR'S SCREEN AND NOWHERE ELSE, as the officer roll
+ * and the Gram Palana roster do. It is not committed to this repository: the
+ * repository is public, and a district's own table is the district's.
+ *
+ * THE OFFICE IS NAMED EITHER WAY ROUND. The table may name the village, or it
+ * may name the officer who holds it — both arrived in the Gram Palana rolls —
+ * so a row carrying a mobile number is resolved through the register to the
+ * village that officer actually holds. The place is a property of the PLACE
+ * and is stored against the village, never against the man: an officer
+ * transferred tomorrow takes nothing with him, and the next man inherits the
+ * same office.
+ *
+ * NOTHING IS INVENTED AND NOTHING IS GUESSED (the rule every paste here
+ * keeps). A village not on the roll is refused rather than created; a
+ * coordinate outside the district's box is refused rather than believed, for
+ * the reason two of the Gram Palana roll's 180 rows were — a longitude of
+ * 7852556 is a five-hundred-kilometre accusation against a man in his own
+ * office, and under a fence it is worse than that: it refuses his attendance
+ * every morning. A mobile against an officer holding four villages is
+ * ambiguous and left alone, because which of the four the table meant is the
+ * district's to say. It proposes before it writes, it writes every change to
+ * Audit with what was there before, and a second paste changes nothing.
+ * ========================================================================== */
+/* no mandal in this district is anywhere near this wide, so a village further
+   than this from the middle of its own is a typed digit and not a village */
+var VP_MANDAL_KM_ = 25;
+function villagePoints_(b, u){
+  if(u.role !== 'COLLECTOR') return json_({ ok:false, error:'The village roll is the Collector’s alone.' });
+  const rows = (b.rows && b.rows.length) ? b.rows : [];
+  if(!rows.length) return json_({ ok:false, error:'Nothing was sent.' });
+  if(rows.length > 2000) return json_({ ok:false, error:'That is more than one district.' });
+  const dry = b.dry !== false;
+
+  const sh = sheet_('GPs', GPS_HEAD());
+  const v = sh.getDataRange().getValues();
+  const head = v[0].map(h => String(h).toLowerCase().trim());
+  let mi = head.indexOf('mandal'), gi = head.indexOf('gp');
+  let la = -1, ln = -1;
+  head.forEach((h, i) => { if(h.indexOf('lat') >= 0) la = i; else if(h.indexOf('lng') >= 0 || h.indexOf('lon') >= 0) ln = i; });
+  if(mi < 0) mi = 0;
+  if(gi < 0) gi = 1;
+  if(la < 0 || ln < 0) return json_({ ok:false, error:'The village roll has no Lat and Lng columns.' });
+
+  /* the roll, by village, so a name can be matched case-blind and a village
+     under the wrong mandal can be told apart from one that does not exist */
+  /* THE ROLL SPELLS "Ghanpur (Stn)" THREE WAYS and the district's table
+     spells it a fourth, "Ghanpur(Stn)" — so the mandal is matched through
+     mkey2_, which is what every other mandal name in this file is matched
+     through, and a bracket must not cost fifteen villages their office.
+     Lingala Ghanpur is still not Ghanpur (Stn): mkey2_ strips punctuation
+     and nothing else, so the two stay apart. */
+  const at = {}, at2 = {}, byName = {};
+  for(let i = 1; i < v.length; i++){
+    const m2 = String(v[i][mi] || '').trim(), g = String(v[i][gi] || '').trim();
+    if(!m2 || !g) continue;
+    const rec = { row:i + 1, mandal:m2, gp:g, lat:v[i][la], lng:v[i][ln] };
+    at[vkey_(m2, g)] = rec;
+    at2[mkey2_(m2) + '|' + mkey2_(g)] = rec;
+    (byName[mkey2_(g)] = byName[mkey2_(g)] || []).push(m2);
+  }
+  /* and the officers, for a table that names the man rather than the place */
+  const t = uidx_(), uv = t.sh.getDataRange().getValues();
+  const held = {};
+  for(let i = 1; i < uv.length; i++){
+    const ph = phone10_(uv[i][t.ix.phone]); if(!ph) continue;
+    const act = t.ix.active < 0 ? true : !(uv[i][t.ix.active] === false ||
+      String(uv[i][t.ix.active]).toUpperCase() === 'FALSE');
+    if(!act) continue;
+    const md = cell_(uv[i], t.ix.mandal);
+    String(cell_(uv[i], t.ix.gp) || '').split(',').map(x => x.trim()).filter(String)
+      .forEach(g => { (held[ph] = held[ph] || []).push({ gp:g, mandal:md }); });
+  }
+
+  const plans = rows.map(function(r){
+    const y = Number(r.lat), x = Number(r.lng);
+    const p = { mandal:String(r.mandal || '').trim(), gp:String(r.gp || '').trim(),
+                phone:phone10_(r.phone || ''), lat:y, lng:x };
+    if(!isFinite(y) || !isFinite(x) || !y || !x)
+      return Object.assign(p, { verdict:'refused', why:'no coordinate on the line' });
+    /* A COORDINATE THAT CANNOT BE BELIEVED IS NOT A COORDINATE */
+    if(!(y > 16.4 && y < 19.2 && x > 77.6 && x < 80.9))
+      return Object.assign(p, { verdict:'refused',
+        why:'that point is not in this district — it is refused rather than believed' });
+
+    /* the village, named or resolved through the officer who holds it */
+    const find = function(mandal, gp){
+      return at[vkey_(mandal, gp)] || at2[mkey2_(mandal) + '|' + mkey2_(gp)] || null;
+    };
+    let cur = null;
+    if(p.gp){
+      cur = find(p.mandal, p.gp);
+      if(!cur){
+        const inM = byName[mkey2_(p.gp)] || [];
+        if(!inM.length) return Object.assign(p, { verdict:'refused',
+          why:'no village of that name is on the roll — nothing is created from a paste' });
+        if(p.mandal) return Object.assign(p, { verdict:'refused',
+          why:'the roll has that village under ' + inM.join(' / ') + ', not under ' + p.mandal });
+        if(inM.length > 1) return Object.assign(p, { verdict:'ambiguous',
+          why:'that village name is on the roll in ' + inM.join(' / ') + ' — name the mandal' });
+        cur = find(inM[0], p.gp);
+      }
+    } else if(p.phone){
+      const mine = held[p.phone] || [];
+      if(!mine.length) return Object.assign(p, { verdict:'refused',
+        why:'that number holds no village on the register' });
+      if(mine.length > 1) return Object.assign(p, { verdict:'ambiguous',
+        why:'that officer holds ' + mine.map(z => z.gp).join(', ') + ' — which office is this?' });
+      cur = find(mine[0].mandal, mine[0].gp);
+      if(!cur) return Object.assign(p, { verdict:'refused',
+        why:'the village he holds (' + mine[0].gp + ') is not on the roll' });
+    } else {
+      return Object.assign(p, { verdict:'refused', why:'the line names neither a village nor an officer' });
+    }
+    if(!cur) return Object.assign(p, { verdict:'refused', why:'that village is not on the roll' });
+    p.mandal = cur.mandal; p.gp = cur.gp; p.row = cur.row;
+    const had = isFinite(Number(cur.lat)) && Number(cur.lat) && isFinite(Number(cur.lng)) && Number(cur.lng);
+    /* RULE 8. A second paste finds its own work done. Compared to five
+       decimals, which is about a metre — a float that came back from a sheet
+       is not the float that went in, and a strict compare would rewrite the
+       whole district on every paste and fill Audit with changes nobody made. */
+    const same = had && Math.abs(Number(cur.lat) - y) < 1e-5 && Math.abs(Number(cur.lng) - x) < 1e-5;
+    if(same) return Object.assign(p, { verdict:'unchanged', why:'already placed there' });
+    p.was = had ? { lat:Number(cur.lat), lng:Number(cur.lng) } : null;
+    p.moved = had ? distKm_(Number(cur.lat), Number(cur.lng), y, x) : null;
+    return Object.assign(p, { verdict: had ? 'moved' : 'placed',
+      why: had ? ('moved ' + (p.moved == null ? '' : p.moved + ' km') + ' from where it was')
+               : 'placed for the first time' });
+  });
+
+  /* ==== AND A POINT INSIDE THE DISTRICT CAN STILL BE IN THE WRONG MANDAL ====
+     The box catches a longitude of 7979 and a latitude copied into the
+     longitude column. It does not catch a 78 typed for a 79, which lands a
+     village a hundred kilometres west and INSIDE the district's box — and
+     that is the shape that matters, because nothing refuses it and it would
+     refuse its own Secretary's attendance every morning for ever. Two of the
+     district's 280 rows on 09.10.2026 were exactly that: a longitude of 78.23
+     against Madharam and one of 79.955 against Konne.
+
+     So every point is also measured against the MIDDLE OF ITS OWN MANDAL,
+     taken as the median of that mandal's other villages — the roll's and the
+     paste's together, because a paste correcting one village has no mandal of
+     its own to average. A median and not a mean, for the reason mandalCentres_
+     uses one: a mean is dragged towards the very points this is meant to
+     find. THREE POINTS MINIMUM, because one village is not a mandal.
+
+     It is reported as AMBIGUOUS and not refused: the point may be right and
+     the register cannot know, so it is put in front of the Collector with the
+     distance, and it is not written until the office confirms it. */
+  (function(){
+    const pts = {};
+    const add = function(m, y, x){
+      if(!m || !isFinite(y) || !isFinite(x)) return;
+      const k = mkey2_(m); (pts[k] = pts[k] || []).push([y, x]);
+    };
+    for(let i = 1; i < v.length; i++){
+      const m2 = String(v[i][mi] || '').trim();
+      const y = Number(v[i][la]), x = Number(v[i][ln]);
+      if(y && x) add(m2, y, x);
+    }
+    plans.forEach(function(p){
+      if(p.verdict === 'placed' || p.verdict === 'moved') add(p.mandal, p.lat, p.lng);
+    });
+    const mid = {};
+    Object.keys(pts).forEach(function(k){
+      if(pts[k].length < 3) return;             /* one village is not a mandal */
+      mid[k] = { lat:median_(pts[k].map(function(a){ return a[0]; })),
+                 lng:median_(pts[k].map(function(a){ return a[1]; })) };
+    });
+    plans.forEach(function(p){
+      if(p.verdict !== 'placed' && p.verdict !== 'moved') return;
+      const c = mid[mkey2_(p.mandal)]; if(!c) return;
+      const d = distKm_(p.lat, p.lng, c.lat, c.lng);
+      if(d == null || d <= VP_MANDAL_KM_) return;
+      p.verdict = 'ambiguous';
+      p.offBy = d;
+      p.why = 'that point is ' + d + ' km from the middle of ' + p.mandal +
+              ' — inside the district, but not where that mandal is. Check the figure before it ' +
+              'is written: a wrong point refuses this officer every morning.';
+    });
+  })();
+
+  const counts = { placed:0, moved:0, unchanged:0, refused:0, ambiguous:0 };
+  plans.forEach(p => { counts[p.verdict] = (counts[p.verdict] || 0) + 1; });
+  if(dry) return json_({ ok:true, dry:true, plans:plans, counts:counts, total:plans.length });
+
+  const lock = LockService.getScriptLock();
+  try{ lock.waitLock(30000); }catch(e){ return json_({ ok:false, error:'busy — try again' }); }
+  let wrote = 0;
+  try{
+    plans.forEach(function(p){
+      if(p.verdict !== 'placed' && p.verdict !== 'moved') return;
+      sh.getRange(p.row, la + 1).setValue(p.lat);
+      sh.getRange(p.row, ln + 1).setValue(p.lng);
+      admAudit_('VILLAGE OFFICE PLACED', p.mandal + ' / ' + p.gp,
+        (p.was ? ('was ' + p.was.lat + ', ' + p.was.lng + ' — now ') : 'set to ') + p.lat + ', ' + p.lng);
+      wrote++;
+    });
+  } finally { lock.releaseLock(); }
+  return json_({ ok:true, dry:false, wrote:wrote, counts:counts, plans:plans,
+                 fence:fenceRule_().km });
 }
 
 function rollUpdate_(b, u){
@@ -6145,6 +6676,7 @@ function doPost(e){
     return holidayLoad_('COLLECTOR ' + u.phone);
   }
   if(b.kind === 'rollUpdate') return rollUpdate_(b, u);
+  if(b.kind === 'villagePoints') return villagePoints_(b, u);
   if(b.kind === 'userCreate') return createUser_(b, u);
   if(b.kind === 'userPin')    return resetUserPin_(b, u);
   if(b.kind === 'userActive') return setUserActive_(b, u);
@@ -6182,6 +6714,29 @@ function saveAttendance_(b, u){
   const date = dateText_(a.date) || today_();
   const sh = sheet_('Attendance', A_HEAD);
   const m = headMap_(sh, A_HEAD);
+
+  /* THE PLACE OF DUTY IS CHECKED HERE, AND HERE IS WHERE IT COUNTS (rule 6).
+     The app refuses first and tells the officer how far out he is while he is
+     standing there — that is a courtesy and it is also a page that can be
+     stale, so the register asks the same question again of every mark that
+     reaches it, exactly as the hour of the mark out is asked again.
+
+     It is asked BEFORE the photograph goes to Drive: a refused mark has no
+     business costing the district a file, and during the outage of 19.08.2026
+     one hung upload held the lock and starved every other officer.
+
+     A DAY OF SANCTIONED LEAVE IS NOT A MARK AND IS NEVER FENCED. The officer
+     whose leave the Collector approved is rightly at home, and that row is
+     the register recording the order, not a claim to have been anywhere. */
+  if(String(a.status || 'PRESENT') !== 'LEAVE'){
+    const fx = fenceCheck_(u, a.lat, a.lng, a.acc);
+    if(fx.gated && !fx.ok){
+      fenceRefused_(u, fx, 'IN', a.lat, a.lng, a.acc, String(a.ts || ''));
+      return json_({ ok:false, outside:true, km:fx.km == null ? null : fx.km,
+                     place:fx.place || '', limit:fx.limit, nofix:!!fx.nofix,
+                     coarse:!!fx.coarse, error:fx.error });
+    }
+  }
 
   /* THE PHOTOGRAPH GOES TO DRIVE BEFORE THE LOCK IS TAKEN. It touches no
      sheet, so it never belonged inside — and during the Drive outage of

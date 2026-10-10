@@ -753,10 +753,27 @@ module.exports = {
     /* ---- and the sanitation register is untouched by any of it ---- */
     {
       const e2 = mock.load({ now:'2026-09-21T09:00:00+05:30' });
-      t.eq(e2.ctx.tenant_().placeOfDuty, false,
-        'SJGP measures no place of duty — its roll has never carried one, which is why rule 10 exists');
-      t.eq(e2.eval('GPS_HEAD()').length, 2,
-        'and its GPs tab is left at two columns: the second register’s coordinates are not written onto it');
+      /* THIS PAIR OF ASSERTIONS USED TO SAY THE OPPOSITE, and it was right
+         until 10.10.2026: SJGP's roll carried Mandal and GP and no
+         coordinates, which is the whole premise of rule 10 and the reason the
+         register located a mandal from the median of its own marks. The
+         district then supplied the village offices and ordered a fence, so
+         the fact changed by order and the assertion had to change with it.
+         Both rolls now carry the same four columns.
+
+         THAT IS NOT A LEAK AND COULD NOT BE ONE. The isolation between these
+         registers is two spreadsheets behind two addresses, never a column
+         and never a filter — there is no Tenant column and there must not be
+         one — so a shared HEADER shares nothing. What the two registers do
+         with the place they now both know is what differs, and that is the
+         line this block exists to hold. */
+      t.eq(e2.ctx.tenant_().placeOfDuty, true,
+        'SJGP measures a place of duty too now, by the order of 10.10.2026');
+      t.eq(e2.eval('GPS_HEAD()').length, 4, 'its roll carries the same four columns');
+      t.eq(Number(e2.ctx.tenant_().fence), 5,
+        'AND IT IS THE ONE THAT IS FENCED — five kilometres, by that order');
+      t.eq(Number(env.ctx.tenant_().fence || 0), 0,
+        'while the Gram Palana register measures and accuses nobody (rule 10), as nobody ordered otherwise');
       t.eq(e2.ctx.tenant_().evaluation, true, 'the evaluation is still the sanitation register’s');
       t.eq(e2.ctx.tenant_().schedule, true, 'and so is the filing schedule');
       t.eq(e2.get('diag', {}).tenant, 'SJGP', 'and its own address still names itself SJGP');

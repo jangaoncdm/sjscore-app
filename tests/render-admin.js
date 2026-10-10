@@ -135,6 +135,19 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
       ]} : {ok:true,dry:false,moved:1,added:1,released:(b.keep||[]).length,registered:0,pins:[]});
       if(b.kind==='holidaysLoad'){ ROLL.holidays={year:2026,count:53};
         return reply({ok:true,tenant:'SJGP',before:0,after:53,added:53}); }
+      /* the village-office proposal, shaped as villagePoints_ answers it:
+         one placed, one moved, and one refused for a broken longitude —
+         which is three of the district's own 280 rows on 09.10.2026 */
+      if(b.kind==='villagePoints') return reply(b.dry ? {ok:true,dry:true,counts:
+        {placed:1,moved:1,unchanged:0,refused:1,ambiguous:0},total:3,plans:[
+        {mandal:'Bachannapet',gp:'Alimpur',lat:17.82393,lng:79.017003,
+         verdict:'placed',why:'placed for the first time'},
+        {mandal:'Bachannapet',gp:'Bachannapet',lat:17.7896,lng:79.040179,
+         verdict:'moved',why:'moved 2.4 km from where it was'},
+        {mandal:'Jangaon',gp:'Pasarmadla',lat:17.7415325,lng:7979.1198397,
+         verdict:'refused',why:'that point is not in this district — it is refused rather than believed'}
+      ]} : {ok:true,dry:false,wrote:2,fence:5,
+            counts:{placed:1,moved:1,unchanged:0,refused:1,ambiguous:0}});
       return reply({ok:true});
     }
     if(/op=health/.test(q.url())) return reply(HEALTH);
@@ -340,6 +353,69 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   await page.screenshot({path:path.join(OUT,'admin-holidays-gp.png'),fullPage:true});
   await page.selectOption('#tenPick','SJGP'); await page.waitForTimeout(1200);
   await page.click('#nav [data-v="admin"]'); await page.waitForTimeout(600);
+
+  /* ---------------------------------------------------------------
+     WHERE EACH VILLAGE OFFICE IS — the paste the geo-fence stands on.
+
+     A PARSER DECLARED INSIDE THE FUNCTION THAT DRAWS ITS PANEL leaves the
+     button bound, enabled, and doing nothing whatever when pressed, with
+     nothing in the page saying a word. That is exactly what the first cut of
+     parsePostings did, and nothing but driving the screen finds it. So this
+     presses the button and asserts WHAT WENT ON THE WIRE.
+     --------------------------------------------------------------- */
+  {
+    const before = posts.filter(p => p.kind === 'villagePoints').length;
+    const panel = await page.$('#locTbl');
+    ck(!!panel, 'the village-office panel is on the Admin screen');
+
+    /* the district's own sheet, pasted as Excel puts it on the clipboard —
+       including a row whose longitude is plainly broken, and one that was
+       never surveyed */
+    const paste = [
+      'Sl. No.\tName of the Mandal\tName of the GP\tName of the PS\tMobile Number\tDesignation\t\tRegular\tLatitude\tLongitude',
+      '1\tBachannapet\tAlimpur\tB Ajaykumar\t9849692350\tPanchayat Secretary\tGr-IV\tRegular\t17.82393\t79.017003',
+      '2\tBachannapet\tBachannapet\tK. Sridhar\t9951517364\tPanchayat Secretary\tGr-II\tRegular\t17.7896\t79.040179',
+      '3\tJangaon\tPasarmadla\tSome One\t9000000111\tPanchayat Secretary\tGr-IV\tRegular\t17.7415325\t7979.1198397',
+      '4\tRaghunathapally\tKurchapally\tD. Venkataramana\t9000000222\tPanchayat Secretary\tGr-IV\tRegular\t\t'
+    ].join('\n');
+    await page.fill('#locTbl', paste);
+    await page.evaluate(() => document.getElementById('locTbl').blur());
+    await page.waitForTimeout(700);
+
+    const counted = await page.evaluate(() => {
+      const el = [...document.querySelectorAll('.panel')].find(c => /Village offices/i.test(c.innerText));
+      return el ? el.innerText.replace(/\s+/g, ' ') : '';
+    });
+    ck(/3 line\(s\) with a point/.test(counted), 'it reads three lines carrying a point',
+       (counted.match(/\d+ line\(s\) with a point[^·]*/) || [''])[0].trim());
+    ck(/1 with none/.test(counted), 'AND NAMES THE ONE THAT HAS NONE rather than dropping it');
+    ck(/Kurchapally/.test(counted), 'by village, so the office knows what to survey');
+
+    await page.click('#locRead'); await page.waitForTimeout(900);
+    const sent = posts.filter(p => p.kind === 'villagePoints');
+    ck(sent.length === before + 1, 'COMPARE WITH THE ROLL ACTUALLY REACHES THE DISTRICT');
+    const b = sent[sent.length - 1] || {};
+    ck(b.dry === true, 'as a proposal — nothing is written yet', String(b.dry));
+    ck((b.rows || []).length === 3, 'carrying the three lines that had a point', String((b.rows || []).length));
+    ck(b.token === 'T', 'under the Collector’s own token, which the server re-checks', String(b.token));
+    ck((b.rows || [])[2] && b.rows[2].lng === 7979.1198397,
+       'INCLUDING THE BROKEN ONE — it is sent so the register can refuse it BY NAME',
+       String((b.rows || [])[2] && b.rows[2].lng));
+
+    await page.waitForTimeout(500);
+    const after = await page.evaluate(() => {
+      const el = [...document.querySelectorAll('.panel')].find(c => /Village offices/i.test(c.innerText));
+      return el ? el.innerText.replace(/\s+/g, ' ') : '';
+    });
+    ck(/refused/.test(after), 'and the refusal is shown to the Collector');
+    ck(/not in this district/.test(after), 'with the register’s own reason beside it');
+    ck(/Pasarmadla/.test(after), 'against the village it belongs to');
+    ck(/moved 2.4 km/.test(after), 'and a village that moved says how far — a typed digit shows itself');
+    await page.screenshot({ path:path.join(OUT, 'admin-village-points.png'), fullPage:true });
+
+    ck(!!(await page.$('#locApply')), 'Apply appears only once there is a proposal to apply');
+    ck(!!(await page.$('#locCsv')), 'and there is a list to send back to the mandals');
+  }
 
   /* --- the Collector is not offered a way to shut himself out --- */
   ck(!(await page.$('[data-rlact="9000000001"]')),'the Collector’s own row has no Take off button');

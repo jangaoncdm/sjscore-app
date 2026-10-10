@@ -160,6 +160,36 @@ function build(){
   }
   env.mkSheet('Leave', env.eval('L_HEAD'), lv);
 
+  /* THREE OFFICERS WHO TRIED AND WERE REFUSED BY THE GEO-FENCE.
+     Written straight onto the tab rather than by marking from 40 km away,
+     because env.mark() writes the Attendance tab directly and never passes
+     through doPost at all — a refusal cannot arise from it. Without these
+     rows the console's "Refused — away from the place of duty" panel is
+     never drawn on any screenshot, and a panel nobody has looked at is a
+     panel nobody has checked. They are chosen from the officers who have no
+     mark today, which is exactly where a refused officer lands: inside "not
+     marked", beside a genuine absence. */
+  {
+    const asheet = env.sheets['Attendance'];
+    const ah = asheet.rows[0].map(String);
+    const markedToday = {};
+    asheet.rows.slice(1).forEach(r => {
+      if(String(r[ah.indexOf('date')]).replace(/^'/, '') === TODAY)
+        markedToday[c.phone10_(r[ah.indexOf('phone')])] = true;
+    });
+    const refused = marking.filter(u => !markedToday[c.phone10_(u.Phone)] &&
+                                        onLeaveToday.indexOf(u.Phone) < 0).slice(0, 3);
+    const FH = ['date','phone','name','role','mandal','which','tries','at',
+                'lat','lng','accuracy','place','km','receivedAt'];
+    env.mkSheet('Outside', FH, refused.map((u, i) => ({
+      date:TODAY, phone:u.Phone, name:u.Name, role:u.Role, mandal:u.Mandal,
+      which:i === 2 ? 'OUT' : 'IN', tries:i + 1,
+      at:TODAY + 'T09:' + String(12 + i * 7).padStart(2, '0') + ':00+05:30',
+      lat:17.40, lng:78.49, accuracy:18, place:u.GP || (u.Mandal + ' mandal office'),
+      km:[38.4, 26.1, 11.7][i], receivedAt:TODAY + 'T09:30:00+05:30'
+    })));
+  }
+
   const d = env.get('dashboard', { token: token });
   if(d.ok === false) throw new Error('the backend refused: ' + d.error);
 
