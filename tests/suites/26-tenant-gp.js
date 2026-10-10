@@ -356,7 +356,7 @@ module.exports = {
       /* the log records that PINs were issued, never a PIN */
       const audit = JSON.stringify((e.sheets['Audit'] || { rows:[] }).rows);
       t.contains(audit, 'ISSUE_PINS', 'the Audit tab records it');
-      t.ok(audit.indexOf(r.collectorPin) < 0, 'and does NOT record the PIN');
+      t.noToken(audit, r.collectorPin, 'and does NOT record the PIN');
     }
     {
       /* the sanitation register has no key and never will */
@@ -393,7 +393,7 @@ module.exports = {
 
       const audit = JSON.stringify((e.sheets['Audit'] || { rows:[] }).rows);
       t.contains(audit, 'COLLECTOR_PIN_RESET', 'the Audit tab records that it happened');
-      t.ok(audit.indexOf(r.pin) < 0, 'and does NOT record the PIN');
+      t.noToken(audit, r.pin, 'and does NOT record the PIN');
     }
     {
       /* NOT A STANDING DOOR. Every routine deploy strips the key out, so on a
@@ -445,7 +445,7 @@ module.exports = {
 
       const audit = JSON.stringify((e.sheets['Audit'] || { rows:[] }).rows);
       t.contains(audit, 'PIN_LIST', 'the Audit tab records that the list was taken');
-      t.ok(audit.indexOf(by['9111100001'].pin) < 0, 'and does NOT record a PIN');
+      t.noToken(audit, by['9111100001'].pin, 'and does NOT record a PIN');
     }
     {
       const e = mock.load({ now:'2026-09-21T09:00:00+05:30' });

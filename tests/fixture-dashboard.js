@@ -180,6 +180,11 @@ function build(){
      mark today, which is exactly where a refused officer lands: inside "not
      marked", beside a genuine absence. */
   {
+    /* read off the tenant itself rather than hardcoded here, so a change to
+       who counts as district reaches this fixture too. districtRole_ is a
+       top-level const and is therefore not on the mock's context at all —
+       the scope rule the suites already hold. */
+    const DISTRICT_ROLES = (c.tenant_().district || []).map(r => String(r).toUpperCase());
     const asheet = env.sheets['Attendance'];
     const ah = asheet.rows[0].map(String);
     const markedToday = {};
@@ -187,8 +192,19 @@ function build(){
       if(String(r[ah.indexOf('date')]).replace(/^'/, '') === TODAY)
         markedToday[c.phone10_(r[ah.indexOf('phone')])] = true;
     });
+    /* AND NEVER A DISTRICT OFFICER. fenceCheck_ stands down for one on
+       sight — "a district officer holds no one place" — so a refusal
+       against a DLPO is a row the live register cannot write. The first cut
+       of this fixture put one on the screen, and the screenshot showed the
+       Collector a DLPO under the strongest verdict the table has, "the
+       point, most likely", against an officer who holds no point to
+       correct. A fixture that shows an impossible row is worse than one
+       that shows none: it is checked by eye, and what it teaches the eye is
+       wrong. */
     const refused = marking.filter(u => !markedToday[c.phone10_(u.Phone)] &&
-                                        onLeaveToday.indexOf(u.Phone) < 0).slice(0, 3);
+                                        onLeaveToday.indexOf(u.Phone) < 0 &&
+                                        DISTRICT_ROLES.indexOf(String(u.Role || '').toUpperCase()) < 0)
+                                .slice(0, 3);
     const FH = ['date','phone','name','role','mandal','which','tries','at',
                 'lat','lng','accuracy','place','km','receivedAt'];
     env.mkSheet('Outside', FH, refused.map((u, i) => ({

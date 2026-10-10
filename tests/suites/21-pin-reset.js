@@ -75,7 +75,7 @@ module.exports = {
     const audit = env.sheets['Audit'].rows.slice(1).map(r => r.join('|'));
     t.ok(audit.some(x => x.indexOf('PIN RESET') >= 0 && x.indexOf('9949364872') >= 0),
       'the reset is on the Audit tab');
-    t.ok(!audit.some(x => x.indexOf(pin) >= 0), 'but the PIN itself is not — it is printed once and nowhere else');
+    t.noToken(audit.join(' | '), pin, 'but the PIN itself is not — it is printed once and nowhere else');
 
     /* ---- Rule 8: a nervous second run the same day ---- */
     const after = env.sheets['Users'].rows.map(r => r.slice());

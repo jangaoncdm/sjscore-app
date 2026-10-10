@@ -145,7 +145,7 @@ module.exports = {
     t.ok(env.sheets['Audit'].rows.length >= 10, 'every change wrote a line');
     t.ok(audit.indexOf('FIELD FIX 17.08.2026') >= 0, 'under the batch’s own name');
     [c.fix2Pin_('9848188052'), c.fix2Pin_('9866775245'), c.fix2Pin_('9133467909')].forEach(pin =>
-      t.ok(audit.indexOf(pin) < 0, 'no PIN value ever reaches the Audit register'));
+      t.noToken(audit, pin, 'no PIN value ever reaches the Audit register'));
 
     /* Rule 8 — the batch run twice changes nothing, PINs included */
     const after = JSON.stringify(env.sheets['Users'].rows);

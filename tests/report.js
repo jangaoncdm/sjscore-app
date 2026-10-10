@@ -101,7 +101,13 @@ const PASSES = [
   { name: 'The Admin view, pressed',
     what: 'The console’s Admin screen with its buttons actually pressed, and the gate that keeps everyone but the ' +
           'Collector out of it.',
-    cmd: ['tests/render-admin.js'], needs: BROWSER ? null : 'playwright is not installed', shots: null }
+    cmd: ['tests/render-admin.js'], needs: BROWSER ? null : 'playwright is not installed', shots: null },
+  { name: 'The geo-fence, from forty kilometres away',
+    what: 'A real browser stood at the place of duty, two kilometres out and forty kilometres out, with the '
+        + 'handset’s own satellite fix. It asserts the pop-up in the district’s own words, the camera held '
+        + 'shut, that nothing whatever is marked or posted, the officer the district has not placed marking '
+        + 'exactly as he always did, and a queued mark the register refused being taken off the phone.',
+    cmd: ['tests/render-fence.js'], needs: BROWSER ? null : 'playwright is not installed', shots: 'fence-render' }
 ];
 
 /* the fixtures the browser passes read, rebuilt from the real backend first */
