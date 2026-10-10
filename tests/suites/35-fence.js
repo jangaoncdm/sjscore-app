@@ -717,15 +717,144 @@ module.exports = {
       t.eq(loose.counts.placed, 0,
         'A SINGLE SHORT SURNAME MATCHES NOBODY — it is not written on a guess');
 
-      /* nor is a line that reads as two men */
+      /* A VILLAGE THE ROLL DOES NOT CARRY IS REFUSED WHATEVER ELSE THE LINE
+         SAYS, because nothing is created from a paste — the officer reading
+         is moot when there is no row to write into. */
+      const noVill = env.post({ kind:'villagePoints', token:cdm, dry:true, rows:[
+        { mandal:'Bachannapet', gp:'Nowhere',
+          words:['Bachannapet', 'Nowhere', 'Boyana Bhagyaraju'], lat:17.82, lng:78.89 } ] });
+      t.eq(noVill.counts.placed, 0, 'a village the roll does not carry is not created');
+      t.contains(noVill.plans[0].why, 'nothing is created from a paste', 'and says why');
+
+      /* nor is a line that names only an officer, read as two men */
       env.sheets['Users'].rows.push(['9000000063', 'Boyana Bhagyaraju', 'PS',
         'Bachannapeta', 'Laxmapur', '', '', env.ctx.hash_('9000000063', '1111'), 'TRUE']);
       const twoMen = env.post({ kind:'villagePoints', token:cdm, dry:true, rows:[
-        { mandal:'Bachannapet', gp:'Nowhere',
-          words:['Bachannapet', 'Nowhere', 'Boyana Bhagyaraju'], lat:17.82, lng:78.89 } ] });
+        { mandal:'Bachannapet',
+          words:['Bachannapet', 'Boyana Bhagyaraju'], lat:17.82, lng:78.89 } ] });
       t.eq(twoMen.counts.ambiguous, 1,
         'AND A LINE THAT READS AS TWO OFFICERS IS AMBIGUOUS, not resolved to the first');
       t.contains(twoMen.plans[0].why, 'either', 'and both are named for him to settle');
+    }
+
+    /* ---- 20. THE TWENTY-SIX THAT WERE STILL STUCK, and the rule that
+            unstuck them: TWO WEAK AGREEMENTS MAKE A STRONG ONE.
+            The Collector's direction of 10.10.2026, off the second dry run of
+            his own table: 254 of 280 placed and 26 held up. Reading the 26 one
+            by one, three were faults of mine and the fourth was his rule
+            being better than my refusal. */
+    {
+      const env = world();
+      const cdm = tok(env, '9000000001');
+      const B = { lat:17.820, lng:79.030 };     /* where Bachannapeta is */
+
+      /* SIX VILLAGES ALREADY PLACED, so the mandal has a middle that a bad
+         point can be measured against. Three is the minimum the code will
+         take and three is not a mandal to measure a hundred kilometres with:
+         with a four-point sample one wrong point drags the median itself,
+         which is the whole reason it is a median. */
+      [['Bonakollur', 0.005, 0.004], ['Laxmapur', -0.004, 0.006], ['Pochannapet', 0.007, -0.003],
+       ['Gangapur', -0.006, -0.005], ['Nakkavanigudem', 0.002, 0.008], ['VSR Nagar', -0.002, -0.007]]
+        .forEach(function(r){ env.sheets['GPs'].rows.push(
+          ['Bachannapeta', r[0], B.lat + r[1], B.lng + r[2]]); });
+      /* and the five this section is about, with no point yet */
+      ['Basireddypalle', 'Kesireddipalle', 'Konne2', 'Alimpur', 'Katkoor', 'Salvapur']
+        .forEach(function(g){ env.sheets['GPs'].rows.push(['Bachannapeta', g, '', '']); });
+
+      /* the officers, including the three shapes that were drowning the name
+         match: a mandal officer called after his own mandal, two Secretaries
+         sharing a short surname, and two sharing a long one */
+      [['9000000071', 'Pochamalla Ravi',   'PS',   'Basireddypalle'],
+       ['9000000072', 'Kesari Yadagiri',   'PS',   'Kesireddipalle'],
+       ['9000000073', 'T.Srinivas',        'PS',   'Salvapur'],
+       ['9000000074', 'K.Srinivas Reddy',  'PS',   'Laxmapur'],
+       ['9000000075', 'MUPPIDI RAJU',      'PS',   'Alimpur'],
+       ['9000000076', 'Sontekka Raju',     'PS',   'Katkoor'],
+       ['9000000077', 'MPDO Bachannapeta', 'MPDO', ''],
+       ['9000000078', 'MSO Bachannapeta',  'MSO',  ''],
+       ['9000000079', 'Konne Holder',      'PS',   'Konne2'],
+       ['9000000080', 'Nobody Here',       'PS',   'Gangapur']]
+        .forEach(function(r){ env.sheets['Users'].rows.push([r[0], r[1], r[2],
+          'Bachannapeta', r[3], '', '', env.ctx.hash_(r[0], '1111'), 'TRUE']); });
+
+      /* the district's table spells the mandal its own way on every line */
+      const line = (gp, name, y, x, ph) => ({ mandal:'Bachannapet', gp:gp, phone:ph || '',
+        words:['Bachannapet', gp, name, 'Panchayat Secretary', 'Gr-IV', 'Regular'], lat:y, lng:x });
+
+      const d = env.post({ kind:'villagePoints', token:cdm, dry:true, rows:[
+        /* 1 — a near spelling the officer named on the line actually holds */
+        line('Basireddypally',  'Pochamalla Ravi', 17.812987, 79.055270),
+        /* 2 — the same, matched by his number rather than by his name */
+        line('Keshireddipally', 'Kesari Yadagiri', 17.843920, 79.086571, '9000000072'),
+        /* 3 — a mandal officer is named after his mandal, and the mandal is
+               on every line: he must not be a reading of a VILLAGE office */
+        line('Alimpur',         'MUPPIDI RAJU',    17.823930, 79.017003),
+        /* 4 — two Secretaries share the short surname "Raju": that is noise
+               and not a reading, and the village on the line settles it */
+        line('Katkoor',         'Somebody Raju',   17.858481, 79.026874),
+        /* 5 — and one wrong digit, ninety-eight kilometres out */
+        line('Konne2',          'Konne Holder',    17.816774, 79.955163)
+      ] });
+
+      const byGp = {}; (d.plans || []).forEach(function(z){ byGp[z.gp] = z; });
+
+      /* 1 and 2 — TWO WEAK AGREEMENTS MAKE A STRONG ONE */
+      t.eq(byGp['Basireddypalle'] && byGp['Basireddypalle'].verdict, 'placed',
+        'A NEAR SPELLING THE OFFICER ON THE LINE HOLDS IS ONE VILLAGE, not a guess');
+      t.contains(byGp['Basireddypalle'].why, 'Pochamalla Ravi',
+        'and it says which second reading carried it');
+      t.eq(byGp['Kesireddipalle'] && byGp['Kesireddipalle'].verdict, 'placed',
+        'and the same by his number — Keshireddipally is Kesireddipalle');
+
+      /* 3 — A MANDAL OFFICER HOLDS NO VILLAGE */
+      t.eq(byGp['Alimpur'] && byGp['Alimpur'].verdict, 'placed',
+        'a line is no longer read as "either B Lingam or MPDO or MSO or MPO"');
+      t.ok(!/MPDO|MSO/.test(byGp['Alimpur'].why),
+        'because an officer holding no village is not a candidate for a village office',
+        byGp['Alimpur'].why);
+
+      /* 4 — ONE SHORT SURNAME IS NOT A MAN WHEN SEVERAL ANSWER TO IT */
+      t.eq(byGp['Katkoor'] && byGp['Katkoor'].verdict, 'placed',
+        'a surname two Secretaries share is dropped, and the VILLAGE settles the line');
+      t.ok(!/either/.test(byGp['Katkoor'].why), 'so nothing reads as three men', byGp['Katkoor'].why);
+
+      /* 5 — AND THE DIGIT IS NAMED, never written */
+      const k = byGp['Konne2'];
+      t.eq(k && k.verdict, 'ambiguous', 'a point 98 km from its own mandal is still NOT written');
+      t.contains(k.why, 'One digit', 'BUT THE DIGIT IS NAMED — "check the figure" is not an answer');
+      t.ok(k.fix && Math.abs(k.fix.lng - 79.055163) < 1e-6,
+        'and it is the right one: 79.955163 reads 79.055163', JSON.stringify(k.fix));
+      t.ok(k.fix && k.fix.km < 10, 'which puts it inside its own mandal', String(k.fix && k.fix.km));
+      t.contains(k.why, 'written nowhere', 'and it says plainly that it is a suggestion');
+
+      /* COMPARE IT WITH WHERE THE OFFICE ALREADY STOOD (his rule). A better
+         reading of a point the district has already confirmed is taken, and
+         the mandal is not second-guessed over two hundred metres. */
+      const g = env.sheets['GPs'].rows.filter(function(r){ return r[1] === 'Gangapur'; })[0];
+      g[2] = 17.600; g[3] = 79.950;          /* already on the roll, and well out */
+      const same = env.post({ kind:'villagePoints', token:cdm, dry:true, rows:[
+        line('Gangapur', 'Nobody Here', 17.6009, 79.9509) ] });
+      t.eq(same.plans[0].verdict, 'moved',
+        'A FRESH READING OF THE SAME OFFICE IS TAKEN, not held up against the mandal');
+      t.contains(same.plans[0].why, 'the same office', 'and says that is what it is');
+
+      /* while one that has genuinely crossed the district is still put in
+         front of him, which is the distinction the rule turns on */
+      const jumped = env.post({ kind:'villagePoints', token:cdm, dry:true, rows:[
+        line('Gangapur', 'Nobody Here', 17.820, 79.700) ] });
+      t.eq(jumped.plans[0].verdict, 'ambiguous',
+        'but a point that moved a long way from where it stood is not');
+
+      /* AND A VILLAGE THE LINE NAMES IS NEVER TRADED FOR A DIFFERENT ONE.
+         T Srikanth holds Jalbai Thanda and Ankushapur and the line said
+         Bothala Parre: his name resolves, and writing that coordinate against
+         Ankushapur would put one village's office on another. */
+      const notHis = env.post({ kind:'villagePoints', token:cdm, dry:true, rows:[
+        line('Bothala Parre', 'Pochamalla Ravi', 17.82, 79.03) ] });
+      t.eq(notHis.plans[0].verdict, 'refused',
+        'A LINE NAMING A VILLAGE THAT IS NONE OF HIS IS REFUSED, not written against one of his');
+      t.contains(notHis.plans[0].why, 'Basireddypalle',
+        'and it names what he does hold, so the disagreement is readable');
     }
 
     /* ---- 13. AND THE SANITATION REGISTER IS, which is the order ---- */
