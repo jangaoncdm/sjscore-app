@@ -818,6 +818,7 @@ body[data-tenant="gp"] .rail .brand b::after{content:" · GP";color:var(--teal);
 .nav [data-v="villages"][aria-current]{background:var(--violet-2);color:var(--violet)}
 .nav [data-v="leave"][aria-current]{background:var(--amber-2);color:var(--amber)}
 .nav [data-v="notices"][aria-current]{background:var(--red-2);color:var(--red)}
+.nav [data-v="duty"][aria-current]{background:var(--teal-2);color:var(--teal)}
 .nav [data-v="map"][aria-current]{background:var(--blue-2);color:var(--blue)}
 .nav [data-v="gpdp"][aria-current]{background:var(--teal-2);color:var(--teal)}
 .nav [data-v="advisory"][aria-current]{background:var(--amber-2);color:var(--gold)}
@@ -1180,6 +1181,7 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
       <button data-v="schedule"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4"/><path d="M8.2 14.2l2.2 2.2 4.4-4.4"/></svg>Schedule</button>
       <button data-v="leave"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>Leave</button>
       <button data-v="notices"><svg viewBox="0 0 24 24"><path d="M12 3a5.5 5.5 0 0 0-5.5 5.5V12l-1.8 3.4h14.6L17.5 12V8.5A5.5 5.5 0 0 0 12 3z"/><path d="M9.8 17.8a2.3 2.3 0 0 0 4.4 0"/></svg>Notices</button>
+      <button data-v="duty"><svg viewBox="0 0 24 24"><path d="M12 2.6c-3.2 0-5.8 2.6-5.8 5.8 0 4.2 5.8 12 5.8 12s5.8-7.8 5.8-12c0-3.2-2.6-5.8-5.8-5.8z"/><circle cx="12" cy="8.4" r="2.2"/></svg>Place of duty</button>
       <button data-v="map"><svg viewBox="0 0 24 24"><path d="M9 4 3.8 6v14L9 18l6 2 5.2-2V4L15 6 9 4zM9 4v14M15 6v14"/></svg>Map</button>
       <button data-v="gpdp"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>GPDP</button>
       <button data-v="advisory"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/><path d="M12 8v3M12 13.4v.2"/></svg>Advisory</button>
@@ -1268,7 +1270,10 @@ const TENANCY = {
     aud:[['PS','Panchayat Secretaries'],['MPDO','MPDOs'],['MPO','MPOs'],['MSO','MSOs']] },
   GP:  { key:'GP',   name:'Gram Palana',    full:'Gram Palana Register',       store:'sjgp-gp1',
     cfg:'gp/config.js',
-    off:['villages','schedule','gpdp'],
+    /* IT MEASURES AND IT ACCUSES NOBODY (rule 10), so there is no fence to
+       monitor here — a screen of noughts reads as a fence doing nothing
+       rather than as a register that was never fenced. */
+    off:['villages','schedule','gpdp','duty'],
     aud:[['GPO','Gram Palana Officers'],['ARI','Assistant Revenue Inspectors'],['MRI','Mandal Revenue Inspectors']] },
   /* THE THIRD REGISTER TAKES LEAVE AND NOTHING ELSE, and the rail says so.
      Nobody marks in on it, no village is evaluated, no notice is served and no
@@ -1278,7 +1283,7 @@ const TENANCY = {
      Leave. */
   HRMS:{ key:'HRMS', name:'District HRMS',  full:'District HRMS · leave',      store:'sjgp-hrms1',
     cfg:'hrms/config.js', home:'leave',
-    off:['overview','attendance','analytics','villages','schedule','notices','map','gpdp','advisory'],
+    off:['overview','attendance','analytics','villages','schedule','notices','map','gpdp','advisory','duty'],
     aud:[['EMP','Employees'],['HOD','Heads of office']] }
 };
 let TVIEW='SJGP';
@@ -3081,8 +3086,8 @@ function vAttendance(j,A){
      genuine absence — and the ladder cannot tell them apart either. This is
      the figure that lets the Collector tell them apart before a notice is
      proposed against the wrong man. */
-  if((j.outside||[]).length)
-    h+=kpi('Refused \u2014 away from the place of duty',IC.u,(j.outside||[]).length,'',
+  if(((j.fence||{}).today||[]).length)
+    h+=kpi('Refused \u2014 away from the place of duty',IC.u,(j.fence.today||[]).length,'',
            'they are inside \u201cnot marked\u201d');
   /* MARKING OUT IS A FIGURE OF THE DAY, so it stands with the day's other
      figures rather than in a panel of its own below the charts. It is filled
@@ -3110,10 +3115,10 @@ function vAttendance(j,A){
      mandal meeting and an officer who did not come to work. Nothing here is
      a charge: it is the opposite, a list of men whose absence from the
      attendance register has an explanation the register itself knows. */
-  if((j.outside||[]).length){
-    const ou=(j.outside||[]);
+  if(((j.fence||{}).today||[]).length){
+    const ou=(j.fence.today||[]);
     h+=panel('c12','Refused — marked away from the place of duty',
-      'today · within '+esc(String(j.fenceKm||5))+' km is the rule',
+      'today · within '+esc(String((j.fence||{}).km||5))+' km is the rule',
       `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
         These officers tried to mark and the register did not take it, so they stand inside
         <b>Not marked</b> above. <b>A refused mark is not a sanction and this list is not a charge</b> —
@@ -5356,6 +5361,136 @@ function vGpdp(j,A){
 }
 
 /* ---------------- Advisory ---------------- */
+/* ============================================================
+   PLACE OF DUTY — monitoring the geo-fence of 10.10.2026
+
+   The fence decides something, which is what makes it different from every
+   other distance this console prints. So it has to be watched, and three
+   different questions have to be answerable from one screen:
+
+     HOW MUCH OF THE ORDER IS ACTUALLY IN FORCE. A village with no office on
+     the roll fences nobody. That is deliberate — a blank cell in the
+     district's own table must not refuse a man's attendance — but it means
+     the order covers exactly as many officers as the roll has points, and a
+     figure nobody can read is a figure nobody chases.
+
+     WHETHER IT IS REFUSING ANYBODY. A fence that refuses nobody is either
+     working or switched off, and from a single tile those look identical.
+
+     AND WHICH REFUSALS ARE THE REGISTER'S OWN FAULT. An officer refused once
+     was somewhere else that morning. An officer refused every morning from
+     the same distance is not wandering: his office is recorded in the wrong
+     place, and each day he is refused he walks a day further up a ladder that
+     ends in a show-cause notice. That one table is the reason this screen
+     exists at all.
+
+   IT ACCUSES NOBODY, and says so where it would be read as accusing. A
+   refusal is not a sanction; whether a distance is a default is the
+   Collector's to read on the facts, under the Conduct Rules.
+   ============================================================ */
+function vDuty(j,A){
+  const f=j.fence||{}, vg=f.villages||{total:0,placed:0,unplaced:0};
+  const rep=f.repeat||[], days=f.days||[], today=f.today||[];
+  let h='';
+
+  if(!f.on) h+=panel('c12','The fence is not in force','nothing is being refused',
+    `<div style="font-size:13px;color:var(--tx-2);line-height:1.7">Attendance is being taken wherever it
+     is marked, as it was before 10.10.2026. Either the radius is set to nought or <b>FENCE_OFF</b> is set
+     in the register's script properties. Nothing below is being enforced.</div>`);
+
+  h+='<div class="kpirow">';
+  h+=kpi('Villages placed',IC.u,vg.placed,'',
+         vg.total?pct(vg.placed,vg.total)+'% of '+vg.total+' on the roll':'the roll is empty');
+  h+=kpi('Not placed yet',IC.u,vg.unplaced,'',
+         vg.unplaced?'their Secretaries are not fenced':'every village has an office');
+  h+=kpi('Refused today',IC.u,today.length,'',f.on?'within '+f.km+' km is the rule':'the fence is down');
+  h+=kpi('Refused on more than one day',IC.u,rep.length,'','in the last 14 days');
+  h+=kpi('Probably a wrong point',IC.u,rep.filter(r=>r.steady).length,'',
+         'same distance, every time');
+  h+='</div>';
+
+  /* ---- THE ONE THAT MATTERS ---- */
+  if(rep.length){
+    h+=panel('c12','Refused more than once — and which of them is the register\u2019s fault',
+      'the last 14 days',
+      `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
+        An officer refused <b>once</b> was somewhere else that morning, and that is not a matter for this
+        screen. An officer refused <b>every morning from the same distance</b> is not wandering — his
+        village office is almost certainly recorded in the wrong place, and every day he is refused he
+        walks a day further up a ladder that ends in a show-cause notice. The distance below is the
+        <b>median</b> of his refusals and the spread is how much they vary; a spread of nearly nothing is
+        the tell. <b>Correct the point, not the officer</b> — the panel on the Admin screen does it.
+        <br><br>This is not a charge against anybody: the register cannot know whether a man was at a
+        mandal meeting, at the Collectorate or on tour, and a table must not decide it.</div>
+      <div class="twrap"><table>
+        <thead><tr><th>Officer</th><th>Mandal</th><th>Place of duty</th><th>Days</th>
+          <th>Usually</th><th>Varies by</th><th>What it looks like</th></tr></thead>
+        <tbody>${rep.map(r=>'<tr><td>'+esc(r.name||'\u2014')+
+          '<br><span class="mut num" style="font-size:11px">'+esc(r.phone||'')+' \u00b7 '+esc(r.role||'')+'</span></td>'+
+          '<td>'+esc(r.mandal||'\u2014')+'</td><td>'+esc(r.place||'\u2014')+'</td>'+
+          '<td class="num">'+esc(String(r.days))+'</td>'+
+          '<td class="num">'+(r.km==null?'\u2014':esc(String(r.km)+' km'))+'</td>'+
+          '<td class="num mut">'+(r.spread?('\u00b1'+esc(String(r.spread))+' km'):'\u2014')+'</td>'+
+          '<td>'+(r.steady
+            ? '<span class="pill bad">the point, most likely</span>'
+            : '<span class="pill mut">a different place each time</span>')+'</td></tr>').join('')}
+        </tbody></table></div>`,'dr');
+  }
+
+  /* ---- the fortnight ---- */
+  h+=panel('c6','Marks refused — day by day','the last 14 days',
+    '<div class="plot">'+(days.some(d=>d.n)
+      ? Charts.bar(days.map(d=>({label:String(d.date).slice(8)+'/'+String(d.date).slice(5,7),
+          value:d.n, title:d.n+' refusal'+(d.n===1?'':'s')+' on '+d.date})),{ord:true})
+      : Charts.empty('Nothing has been refused in the last fortnight.'))+'</div>');
+
+  /* ---- coverage, mandal by mandal ---- */
+  h+=panel('c6','Where the district is placed','worst first',
+    (f.byMandal||[]).length
+    ? `<div class="twrap" data-k="dm"><table>
+        <thead><tr><th>Mandal</th><th>Placed</th><th></th><th>Not yet</th></tr></thead>
+        <tbody>${(f.byMandal||[]).map(m=>{
+          const p=pct(m.placed,Math.max(1,m.total));
+          /* ONE HUE AND THE NUMBERS DO THE WORK. Coverage is a magnitude
+             compared down a column, never a verdict on a mandal. */
+          return '<tr><td>'+esc(m.mandal)+'</td><td class="num">'+m.placed+'/'+m.total+'</td>'+
+            '<td><div class="bar"><i style="width:'+p+'%;background:var(--cs1)"></i></div></td>'+
+            '<td class="num'+(m.total-m.placed?'':' mut')+'">'+(m.total-m.placed||'\u2014')+'</td></tr>';
+        }).join('')}</tbody></table></div>`
+    : '<div style="font-size:13px;color:var(--tx-2)">No villages on the roll.</div>');
+
+  /* ---- and the villages still to survey ---- */
+  if((f.unplaced||[]).length){
+    h+=panel('c12','Villages with no office on the roll','their Secretaries are not fenced',
+      `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
+        Nothing is being enforced against these officers and nothing is held against them — they mark
+        exactly as they did before the order. A village is listed here when its office has no coordinate,
+        or one that is not in this district: <b>a point that cannot be believed is not a point</b>, and
+        placing a village wrongly is worse than leaving it unplaced, because a wrong point refuses an
+        honest officer every morning. Paste the figures on the Admin screen as the offices send them.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">${(f.unplaced||[]).map(u=>
+        '<span class="fchip" style="cursor:default">'+esc(u.gp)+' <span class="mut">\u00b7 '+esc(u.mandal)+'</span></span>').join('')}</div>`);
+  }
+
+  /* ---- today, by name ---- */
+  if(today.length){
+    h+=panel('c12','Refused today','within '+esc(String(f.km||5))+' km is the rule',
+      `<div class="twrap"><table>
+        <thead><tr><th>Officer</th><th>Mandal</th><th>Place of duty</th><th>How far out</th><th>Tried</th></tr></thead>
+        <tbody>${today.map(r=>'<tr><td>'+esc(r.name||'\u2014')+
+          '<br><span class="mut num" style="font-size:11px">'+esc(r.phone||'')+'</span></td>'+
+          '<td>'+esc(r.mandal||'\u2014')+'</td><td>'+esc(r.place||'\u2014')+'</td>'+
+          '<td class="num">'+(r.km==null?'\u2014':esc(String(r.km)+' km'))+'</td>'+
+          '<td class="num">'+esc(String(r.tries||1))+(r.which==='OUT'?' \u00b7 marking out':'')+
+          '</td></tr>').join('')}</tbody></table></div>`,'dt');
+  } else if(f.on){
+    h+=panel('c12','Refused today','none',
+      '<div style="font-size:13px;color:var(--tx-2);line-height:1.7">Every mark the district took today '
+      +'was made within '+esc(String(f.km||5))+' km of the officer\u2019s own place of duty.</div>');
+  }
+  return h;
+}
+
 function vAdvisory(j,A){
   if(!ADV) return panel('c12','Advisories','loading',
     '<div class="empty">Reading the advisory register…</div>');
@@ -5489,7 +5624,7 @@ function vAdvisory(j,A){
        <div class="expnote" style="margin-top:8px">Open any circular to read it and see, name by name, who has acknowledged it. A retired circular keeps every receipt given against it.</div>`);
   }
 
-  /* ---- publishing ---- */
+/* ---- publishing ---- */
   h+=panel('c12','Publish an advisory',
     'it opens on every officer’s home screen and stays there until acknowledged',
     `<div style="display:grid;gap:12px;max-width:760px">
@@ -5555,6 +5690,7 @@ function render(j){
     : VIEW==='notices'?vNotices(j,A)
     : VIEW==='gpdp'?vGpdp(j,A)
     : VIEW==='advisory'?vAdvisory(j,A)
+    : VIEW==='duty'?vDuty(j,A)
     : VIEW==='admin'?vAdmin(j,A) : vMap(j,A);
   document.querySelectorAll('#g [data-k]').forEach(el=>{ if(keep[el.dataset.k]) el.scrollTop=keep[el.dataset.k]; });
   if((VIEW==='map'||VIEW==='advisory') && !WX) pullWeather();

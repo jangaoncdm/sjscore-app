@@ -473,6 +473,89 @@ module.exports = {
       t.ok(/which office/.test(two.plans[0].why), 'and the district is asked which', two.plans[0].why);
     }
 
+    /* ---- 16. WHAT THE FENCE IS DOING — the console's monitoring screen.
+            Three questions that are not the same question: how much of the
+            order is in force, whether it refuses anybody, and which of the
+            refusals are the register's OWN fault. The third is the one the
+            screen exists for. ---- */
+    {
+      const env = world();
+      const cdm = tok(env, '9000000001');
+
+      /* HOW MUCH OF THE ORDER IS IN FORCE. Of the five villages on this roll,
+         Tirumalagiri has no point and Konne's is a longitude of 7852556 —
+         and the second must be counted with the unplaced, not the placed,
+         because gpPlaces_ drops it too and it therefore fences nobody. A
+         coverage figure that counts an unbelievable point as covered is a
+         lie about how much of the district the Collector's order reaches. */
+      const r0 = env.ctx.fenceReport_();
+      t.eq(r0.on, true, 'the report says the fence is in force');
+      t.eq(r0.km, 5, 'at five kilometres');
+      t.eq(r0.villages.total, 5, 'five villages on the roll');
+      t.eq(r0.villages.placed, 3, 'three of them placed');
+      t.eq(r0.villages.unplaced, 2,
+        'AND THE UNBELIEVABLE POINT COUNTS AS UNPLACED — it fences nobody, so it covers nobody');
+      t.eq(r0.unplaced.filter(u => u.gp === 'Konne').length, 1, 'Konne is named among them');
+      t.eq(r0.unplaced.filter(u => u.gp === 'Tirumalagiri').length, 1, 'and so is Tirumalagiri');
+      t.eq((r0.byMandal[0] || {}).mandal, 'Devaruppula', 'and it is broken down by mandal');
+
+      /* WHETHER IT IS REFUSING ANYBODY, day by day */
+      mark(env, tok(env, '9000000051'), FAR);
+      const r1 = env.ctx.fenceReport_();
+      t.eq(r1.days.length, 14, 'the fortnight is always fourteen days long');
+      t.eq(r1.days[13].n, 1, 'today carries the refusal');
+      t.eq(r1.days[0].n, 0,
+        'AND A DAY WITH NONE IS A NOUGHT, not a gap — a chart with days missing reads as a quiet week');
+      t.eq(r1.today.length, 1, 'and today is listed by name');
+
+      /* AND WHICH REFUSALS ARE THE REGISTER'S OWN FAULT.
+         One refusal is a man who was somewhere else. The same distance every
+         morning is a village office recorded in the wrong place — and that
+         officer is walking up the notice ladder for the register's mistake. */
+      const FH = ['date','phone','name','role','mandal','which','tries','at',
+                  'lat','lng','accuracy','place','km','receivedAt'];
+      const sh = env.sheets['Outside'];
+      const back = n => new Date(Date.parse('2026-10-12T12:00:00+05:30') - n * 86400000)
+        .toISOString().slice(0, 10);
+      const put = o => { const row = new Array(sh.rows[0].length).fill('');
+        Object.keys(o).forEach(k => { const i = sh.rows[0].indexOf(k); if(i >= 0) row[i] = o[k]; });
+        sh.rows.push(row); };
+      [1, 2, 3, 4].forEach(n => put({ date:back(n), phone:'9000000052', name:'B. TwoVillages',
+        role:'PS', mandal:'Devaruppula', which:'IN', tries:1, at:back(n) + 'T09:10:00+05:30',
+        lat:17.4, lng:79.05, accuracy:15, place:'Peddapalle', km:21.8 + (n % 2) * 0.3,
+        receivedAt:back(n) + 'T09:20:00+05:30' }));
+      [1, 3, 6].forEach((n, i) => put({ date:back(n), phone:'9000000055', name:'E. TheMpo',
+        role:'MPO', mandal:'Devaruppula', which:'IN', tries:1, at:back(n) + 'T09:40:00+05:30',
+        lat:17.4, lng:79.05, accuracy:15, place:'MPDO Office, Devaruppula',
+        km:[6.1, 24.0, 44.5][i], receivedAt:back(n) + 'T09:50:00+05:30' }));
+
+      const r2 = env.ctx.fenceReport_();
+      const steady = r2.repeat.filter(x => x.phone === '9000000052')[0];
+      const roam   = r2.repeat.filter(x => x.phone === '9000000055')[0];
+      t.ok(!!steady && !!roam, 'both repeat cases are reported');
+      t.eq(steady.days, 4, 'the steady one was refused on four days');
+      t.eq(steady.steady, true,
+        'AND IS CALLED OUT AS THE POINT, because the distance never varies');
+      t.ok(steady.spread <= 0.5, 'the spread is what says so', String(steady.spread));
+      t.eq(roam.steady, false,
+        'while a man refused from six, twenty-four and forty-four kilometres is NOT the point');
+      t.ok(roam.spread > 30, 'and his spread says that too', String(roam.spread));
+      t.eq(r2.repeat.filter(x => x.phone === '9000000051').length, 0,
+        'AND A MAN REFUSED ONCE IS NOT ON THIS LIST AT ALL — he was somewhere else that morning');
+
+      /* THE DISTANCE IS THE MEDIAN, not the mean, for the reason
+         mandalCentres_ takes one: a mean is dragged by the very outlier that
+         would hide the pattern it is meant to find. */
+      t.ok(steady.km >= 21.8 && steady.km <= 22.1, 'the distance reported is the median of his refusals',
+        String(steady.km));
+
+      /* AND WITH THE FENCE DOWN THE SCREEN SAYS SO rather than showing a
+         wall of noughts, which reads as a fence doing nothing. */
+      env.props.FENCE_OFF = '1';
+      t.eq(env.ctx.fenceReport_().on, false, 'with the fence stood down the report says so');
+      t.eq(env.ctx.fenceReport_().km, 0, 'and reports no radius');
+    }
+
     /* ---- 13. AND THE SANITATION REGISTER IS, which is the order ---- */
     {
       const env = world();

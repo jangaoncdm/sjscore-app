@@ -2221,6 +2221,115 @@ function fenceSay_(km){
   return (Math.round(km * 10) / 10) + ' km';
 }
 
+/* WHAT THE FENCE IS ACTUALLY DOING, in one read, for the console's own
+   screen. Three questions, and they are not the same question:
+
+   HOW MUCH OF THE DISTRICT IS EVEN FENCED. An order that covers 275 of 280
+   villages covers 275, and the five Secretaries whose offices are not placed
+   mark exactly as they did before. That is by design, and the district has to
+   be able to see how much of its own order is in force — a figure nobody can
+   read is a figure nobody chases.
+
+   HOW OFTEN IT REFUSES ANYBODY, day by day. A fence that refuses nobody is
+   either working or switched off, and the two look identical from a tile.
+
+   AND WHICH REFUSALS ARE PROBABLY THE REGISTER'S FAULT. This is the one worth
+   building. An officer refused once was somewhere else that morning. An
+   officer refused every morning from about the SAME distance is not wandering
+   — his village office is recorded in the wrong place, and every day he is
+   refused he walks a day further up a ladder that ends in a show-cause
+   notice. The distance is taken as the MEDIAN of his refusals, for the reason
+   mandalCentres_ takes one: a mean is dragged by the very outlier that would
+   hide the pattern. The register says which it suspects and nothing more —
+   whether a man was at a mandal meeting is not a thing a table can know. */
+function fenceReport_(){
+  var rule = fenceRule_();
+  var out = { km:rule.off ? 0 : rule.km, on:!rule.off, today:[], days:[], repeat:[],
+              villages:{ total:0, placed:0, unplaced:0 }, byMandal:[], unplaced:[] };
+  try{
+    var sh = sheet_('GPs', GPS_HEAD()), v = sh.getDataRange().getValues();
+    var head = (v[0] || []).map(function(h){ return String(h).toLowerCase().trim(); });
+    var mi = 0, gi = 1, la = -1, ln = -1;
+    head.forEach(function(h, i){
+      if(h.indexOf('mandal') >= 0) mi = i;
+      else if(h === 'gp' || h.indexOf('village') >= 0) gi = i;
+      else if(h.indexOf('lat') >= 0) la = i;
+      else if(h.indexOf('lng') >= 0 || h.indexOf('lon') >= 0) ln = i;
+    });
+    var byM = {};
+    for(var i = 1; i < v.length; i++){
+      var m2 = String(v[i][mi] || '').trim(), g = String(v[i][gi] || '').trim();
+      if(!m2 || !g) continue;
+      var y = la < 0 ? NaN : Number(v[i][la]), x = ln < 0 ? NaN : Number(v[i][ln]);
+      /* placed means believable, not merely filled in — a point outside the
+         district is dropped by gpPlaces_ too, so that village fences nobody
+         and must be counted with the unplaced or the figure is a lie */
+      var ok = !!(isFinite(y) && isFinite(x) && y && x &&
+                  y > 16.4 && y < 19.2 && x > 77.6 && x < 80.9);
+      out.villages.total++;
+      if(ok) out.villages.placed++;
+      else { out.villages.unplaced++; if(out.unplaced.length < 400) out.unplaced.push({ mandal:m2, gp:g }); }
+      byM[m2] = byM[m2] || { mandal:m2, total:0, placed:0 };
+      byM[m2].total++; if(ok) byM[m2].placed++;
+    }
+    out.byMandal = Object.keys(byM).map(function(k){ return byM[k]; })
+      .sort(function(a, b){ return (a.placed / a.total) - (b.placed / b.total) ||
+                                   String(a.mandal).localeCompare(String(b.mandal)); });
+  }catch(e){}
+
+  try{
+    var osh = sheet_('Outside', FENCE_HEAD), om = headMap_(osh, FENCE_HEAD);
+    var last = osh.getLastRow();
+    var dstr = function(k){ return Utilities.formatDate(new Date(Date.now() - k * 86400000),
+                              Session.getScriptTimeZone(), 'yyyy-MM-dd'); };
+    var span = [], k2;
+    for(k2 = 13; k2 >= 0; k2--) span.push(dstr(k2));
+    var from = span[0], today = today_();
+    var dayN = {}, per = {};
+    if(last >= 2){
+      var st = Math.max(2, last - 3000);
+      var ov = osh.getRange(st, 1, last - st + 1, osh.getLastColumn()).getValues();
+      ov.forEach(function(r){
+        var d = dateText_(r[om.ix.date]);
+        if(!d || d < from) return;
+        var row = { phone:phone10_(r[om.ix.phone]), name:String(r[om.ix.name] || ''),
+                    role:String(r[om.ix.role] || ''), mandal:String(r[om.ix.mandal] || ''),
+                    which:String(r[om.ix.which] || ''), tries:Number(r[om.ix.tries]) || 1,
+                    at:String(r[om.ix.at] || ''), place:String(r[om.ix.place] || ''),
+                    km:r[om.ix.km] === '' ? null : Number(r[om.ix.km]),
+                    acc:r[om.ix.accuracy] === '' ? null : Number(r[om.ix.accuracy]) };
+        dayN[d] = (dayN[d] || 0) + 1;
+        if(d === today) out.today.push(row);
+        if(!row.phone) return;
+        var e = per[row.phone] = per[row.phone] ||
+          { phone:row.phone, name:row.name, role:row.role, mandal:row.mandal,
+            place:row.place, days:{}, kms:[], last:'' };
+        e.days[d] = 1;
+        if(row.km != null) e.kms.push(row.km);
+        if(d > e.last) e.last = d;
+        if(row.place) e.place = row.place;
+      });
+    }
+    out.days = span.map(function(d){ return { date:d, n:dayN[d] || 0 }; });
+    out.today.sort(function(a, b){ return (b.km || 0) - (a.km || 0); });
+    out.repeat = Object.keys(per).map(function(p){
+      var e = per[p], ds = Object.keys(e.days);
+      var mid = median_(e.kms);
+      /* HOW STEADY THE DISTANCE IS is what tells the two apart. A man who is
+         refused from 38 km every single morning is not touring; a man refused
+         from 6 km one day and 40 the next is somewhere different each time. */
+      var spread = e.kms.length > 1 ? Math.max.apply(null, e.kms) - Math.min.apply(null, e.kms) : 0;
+      return { phone:e.phone, name:e.name, role:e.role, mandal:e.mandal, place:e.place,
+               days:ds.length, km:mid == null ? null : Math.round(mid * 10) / 10,
+               spread:Math.round(spread * 10) / 10, last:e.last,
+               steady: ds.length >= 3 && mid != null && spread <= Math.max(1, mid * 0.15) };
+    }).filter(function(e){ return e.days >= 2; })
+      .sort(function(a, b){ return (b.steady - a.steady) || (b.days - a.days) || ((b.km || 0) - (a.km || 0)); })
+      .slice(0, 100);
+  }catch(e){}
+  return out;
+}
+
 /* A REFUSAL THE DISTRICT CANNOT SEE IS A MAN MARKED ABSENT FOR NOTHING.
    The mark is not taken, so at 18:00 he counts as unmarked and the ladder
    begins to walk — and rule 9's lesson is exactly that silence read as
@@ -4413,35 +4522,10 @@ function doGet(e){
               due:officers.filter(o => String(o.role).toUpperCase() !== 'COLLECTOR' &&
                                        !attExempt_(o.role)).length},
       today:{present:todayRows.filter(r=>r.status!=='LEAVE'), onLeave:todayRows.filter(r=>r.status==='LEAVE'), absent:absent},
-      /* WHO WAS REFUSED, AND FROM HOW FAR. Under the geo-fence of 10.10.2026
-         a mark made away from the place of duty is not taken, so the officer
-         who tried appears in "not marked" beside the officer who never came
-         to work — and the first is a man standing in the wrong village while
-         the second is an absence. Rule 9 is exactly this lesson: silence read
-         as absence showed ninety sanctioned officers as defaulters. It rides
-         on the payload rather than on a fetch of its own, because it is read
-         on the same screen as the day's attendance and at the same moment. */
-      outside:(function(){
-        try{
-          if(!fenceRule_().km) return [];
-          const osh = sheet_('Outside', FENCE_HEAD), om = headMap_(osh, FENCE_HEAD);
-          const last = osh.getLastRow(); if(last < 2) return [];
-          const st = Math.max(2, last - 2000);
-          const ov = osh.getRange(st, 1, last - st + 1, osh.getLastColumn()).getValues();
-          const out = [];
-          ov.forEach(function(r){
-            if(dateText_(r[om.ix.date]) !== today_()) return;
-            out.push({ phone:phone10_(r[om.ix.phone]), name:String(r[om.ix.name] || ''),
-                       role:String(r[om.ix.role] || ''), mandal:String(r[om.ix.mandal] || ''),
-                       which:String(r[om.ix.which] || ''), tries:Number(r[om.ix.tries]) || 1,
-                       place:String(r[om.ix.place] || ''),
-                       km:r[om.ix.km] === '' ? null : Number(r[om.ix.km]) });
-          });
-          out.sort(function(a, b){ return (b.km || 0) - (a.km || 0); });
-          return out;
-        }catch(err){ return []; }
-      })(),
-      fenceKm:(function(){ try{ var f = fenceRule_(); return f.off ? 0 : f.km; }catch(err){ return 0; } })(),
+      /* WHAT THE FENCE IS DOING: the day's refusals, which the attendance
+         screen reads, and the coverage and the fortnight, which the Place of
+         duty screen reads. One read of a small tab answers all three. */
+      fence:fenceReport_(),
       att14:att14, month:{rows:monthRows, grades:gradeCount,
         avg: monthRows.length ? Math.round(monthRows.reduce((s,r)=>s+r.score,0)/monthRows.length) : null,
         rfCount: monthRows.filter(r=>String(r.rf||'').trim()).length},

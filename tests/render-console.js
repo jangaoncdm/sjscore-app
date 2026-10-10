@@ -44,7 +44,7 @@ function serve(){
   });
 }
 
-const VIEWS = ['overview', 'attendance', 'villages', 'schedule', 'leave', 'notices', 'map', 'admin'];
+const VIEWS = ['overview', 'attendance', 'villages', 'schedule', 'leave', 'notices', 'map', 'duty', 'admin'];
 /* the filing schedule is fetched by its own call, so it needs its own fixture —
    built by fixture-dashboard.js off the same real backend run */
 const SCHEDFIX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-schedule.json'), 'utf8'));

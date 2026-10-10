@@ -1392,7 +1392,47 @@ dangerous shape: nothing refuses them, and they would refuse their Secretary
 every morning. A coordinate is checked against the box **and** against the
 middle of its own mandal before it is trusted.
 
-**Held by** suite 35 (`tests/suites/35-fence.js`, 112 assertions) and
+**And it is watched from a screen of its own — "Place of duty" on the rail.**
+A distance that decides something has to be monitored, and three questions
+that are not the same question have to be answerable from one place.
+
+*How much of the order is in force.* A village with no office fences nobody,
+which is deliberate; it also means the order reaches exactly as many officers
+as the roll has points, and a figure nobody can read is a figure nobody
+chases. **A point that cannot be believed is counted with the unplaced**, not
+the placed — `gpPlaces_` drops it, so it covers nobody, and a coverage figure
+that counted it would be a lie about the Collector's own order.
+
+*Whether it refuses anybody*, day by day over a fortnight, with a nought on a
+quiet day rather than a gap: a fence that refuses nobody and a fence that is
+switched off look identical from a tile.
+
+*And which refusals are the register's own fault.* **This is why the screen
+exists.** An officer refused once was somewhere else that morning. An officer
+refused every morning **from the same distance** is not wandering — his
+village office is recorded in the wrong place, and every day he is refused he
+walks a day further up a ladder that ends in a show-cause notice. The figure
+is the **median** of his refusals and the **spread** is the tell, median for
+the reason `mandalCentres_` takes one: a mean is dragged by the very outlier
+that would hide the pattern. The screen says *the point, most likely* against
+a steady distance and *a different place each time* against a scattered one,
+and nothing more — whether a man was at a mandal meeting is not a thing a
+table can know. The cure for the first is the point, not the officer.
+
+`fenceReport_()` answers all three in one bounded read and rides on the
+dashboard payload as `fence`, because it is read on the same screen and at the
+same moment as the day's attendance. The Gram Palana and HRMS registers do not
+get the rail item at all: a screen of noughts reads as a fence doing nothing
+rather than as a register that was never fenced.
+
+**`vDuty` had to be moved out of `vAdvisory`.** It was inserted above a
+`/* ---- publishing ---- */` comment that turned out to be *inside* that
+function, so the view was declared at column 0 and was still invisible to the
+dispatch — `ReferenceError: vDuty is not defined`, on all six renders. The
+same shape as the first cut of `parsePostings`, and the render pass is what
+caught it. Indentation is not scope; brace-count before believing a comment.
+
+**Held by** suite 35 (`tests/suites/35-fence.js`, 140 assertions) and
 `tests/render-fence.js`, which stands a real browser 40 km away and asserts the
 pop-up, the held camera, the officer the district has not placed, and the mark
 taken off the phone. `tests/render-admin.js` presses the paste button and

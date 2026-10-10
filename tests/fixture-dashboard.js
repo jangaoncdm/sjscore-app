@@ -70,7 +70,17 @@ function build(){
   });
   const token = env.post({ kind:'login', u:'9000000001', p:'9999' }).token;
 
-  env.mkSheet('GPs', ['Mandal','GP'], gps);
+  /* THE VILLAGE OFFICES. From 10.10.2026 the roll carries them and the fence
+     is measured against them, so the fixture places most of the district and
+     leaves a few unplaced — a console that has never been drawn with an
+     unplaced village has never been shown the state the order actually left
+     the district in. */
+  env.mkSheet('GPs', ['Mandal','GP','Lat','Lng'], gps.map((g, i) => {
+    const hm = HOME[g.Mandal] || { lat:17.72, lng:79.14 };
+    return (i % 11 === 5) ? { Mandal:g.Mandal, GP:g.GP, Lat:'', Lng:'' }
+      : { Mandal:g.Mandal, GP:g.GP, Lat:+(hm.lat + ((i % 7) - 3) * 0.012).toFixed(6),
+          Lng:+(hm.lng + ((i % 5) - 2) * 0.013).toFixed(6) };
+  }));
   env.mkSheet('Holidays', ['Date','Occasion'], [{ Date:'2026-08-15', Occasion:'Independence Day' }]);
 
   /* this month's filings — a real spread of scores, some red flags */
@@ -188,6 +198,30 @@ function build(){
       lat:17.40, lng:78.49, accuracy:18, place:u.GP || (u.Mandal + ' mandal office'),
       km:[38.4, 26.1, 11.7][i], receivedAt:TODAY + 'T09:30:00+05:30'
     })));
+
+    /* A FORTNIGHT, AND THE ONE TABLE THIS SCREEN EXISTS FOR. Two shapes have
+       to be told apart or the screen is worth nothing: an officer refused
+       from the SAME distance every single morning, whose village office is
+       recorded in the wrong place and who is walking up the notice ladder for
+       the register's own mistake; and an officer refused from somewhere
+       different each time, who was simply somewhere different each time. */
+    const osh = env.sheets['Outside'], oh = osh.rows[0].map(String);
+    const put = o => { const r = new Array(oh.length).fill('');
+      Object.keys(o).forEach(k => { const i2 = oh.indexOf(k); if(i2 >= 0) r[i2] = o[k]; });
+      osh.rows.push(r); };
+    const back = n => new Date(Date.parse(TODAY + 'T12:00:00+05:30') - n * 86400000)
+      .toISOString().slice(0, 10);
+    const steady = refused[0], roaming = refused[1];
+    if(steady) for(let n = 1; n <= 6; n++) put({ date:back(n), phone:steady.Phone,
+      name:steady.Name, role:steady.Role, mandal:steady.Mandal, which:'IN', tries:1,
+      at:back(n) + 'T09:14:00+05:30', lat:17.40, lng:78.49, accuracy:16,
+      place:steady.GP || (steady.Mandal + ' mandal office'),
+      km:38.4 + (n % 3) * 0.2, receivedAt:back(n) + 'T09:30:00+05:30' });
+    if(roaming) [2, 5, 9].forEach((n, k) => put({ date:back(n), phone:roaming.Phone,
+      name:roaming.Name, role:roaming.Role, mandal:roaming.Mandal, which:'IN', tries:1,
+      at:back(n) + 'T10:02:00+05:30', lat:17.5, lng:79.0, accuracy:20,
+      place:roaming.GP || (roaming.Mandal + ' mandal office'),
+      km:[7.2, 26.1, 41.8][k], receivedAt:back(n) + 'T10:20:00+05:30' }));
   }
 
   const d = env.get('dashboard', { token: token });
