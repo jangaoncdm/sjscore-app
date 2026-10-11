@@ -1,0 +1,49 @@
+/*@META {"n":"G","slug":"elevated","title":"Elevated","dark":false,
+  "oneline":"Material 3 proper: a tonal indigo ground, 20px panels on real elevation, and fully rounded controls.",
+  "feel":"The most conventionally modern of the eight, and the one a visitor would call finished. Elevation does the grouping that rules do elsewhere. The cost is that soft shadows are the first thing a cheap monitor renders as mud, which is the ground the console already walked away from once."} */
+
+/* TONAL, NOT TINTED. M3 builds the surface from the primary hue at low
+   chroma, so the ground, the wells and the panels are one family rather than
+   a neutral grey with an indigo button on it. The panels stay #FFFFFF: the
+   chart series were validated against that surface and nothing here is worth
+   invalidating them for. */
+:root{
+  --bg:#ECEDFA; --panel:#FFFFFF; --well:#F3F3FD; --line:#E0E1F2; --line-2:#EDEDF8;
+  --nm-out:0 1px 2px rgba(26,30,70,.07), 0 7px 20px rgba(26,30,70,.10);
+  --nm-out-sm:0 1px 2px rgba(26,30,70,.06), 0 2px 7px rgba(26,30,70,.08);
+  --nm-in:inset 0 0 0 1px var(--line);
+  --nm-in-sm:inset 0 0 0 1px var(--line-2);
+  --r:20px; --r-sm:14px;
+  --row-hover:#F5F5FD; --row-hover-2:#ECEDFA;
+  --ch-grid:#EDEDF8; --ch-axis:#E0E1F2;
+}
+body.dark{
+  --bg:#111225; --panel:#1B1D35; --well:#232543; --line:#32355A; --line-2:#2A2C4C;
+  --nm-out:0 1px 2px rgba(0,0,0,.4), 0 7px 20px rgba(0,0,0,.45);
+  --nm-out-sm:0 1px 2px rgba(0,0,0,.35), 0 2px 7px rgba(0,0,0,.4);
+  --ch-surface:#1B1D35; --ch-grid:#2A2C4C; --ch-axis:#32355A;
+  --row-hover:#232543; --row-hover-2:#2A2C4C;
+}
+
+/* M3 controls are fully rounded; the shape IS the affordance here, since
+   nothing carries a border. */
+.btn,.chip,select.sel,input.inp{border-radius:999px}
+.states{border-radius:999px;padding:5px} .states button{border-radius:999px}
+.nav button{border-radius:999px;min-height:48px}
+.pill,.sev,.delta{border-radius:999px}
+.kpi .ic{border-radius:16px}
+.spk{border-radius:14px}
+.twrap{border-radius:16px}
+.empty,.err{border-radius:16px}
+
+/* a tonal header band rather than a saturated one: M3 puts the app bar on a
+   surface container, not on the primary */
+.appbar{background:var(--well);padding:var(--s2) var(--s3);
+  box-shadow:0 1px 0 var(--line)}
+.body{padding-top:var(--s3)}
+.rail{background:var(--bg);border-right:0}
+.rail .brand .lg{border-radius:14px}
+.nav button[aria-current]{background:var(--pri-2);color:var(--pri-strong);font-weight:750}
+.card>.hd{padding:var(--s3) var(--s3) var(--s1)}
+.card>.bd{padding:var(--s1) var(--s3) var(--s3)}
+.kpi{padding:var(--s3)}

@@ -1,0 +1,226 @@
+<!--@META {"n":"09","slug":"scorecard","title":"Scorecard and delta ranking board","origin":"NITI Aayog Champions of Change / Swachh Survekshan Grameen","family":"Comparative"} -->
+<!--@CSS-->
+/* ZONES: the composite score and its weights / the ranking board, ordered by
+   MOVEMENT and not by level / the parts behind each rank / a watch list.
+   The Indian government monitoring convention this district's own officers
+   already read: a weighted composite, a published rank, and a DELTA rank that
+   rewards improvement rather than endowment.
+
+   WHY DELTA MATTERS HERE. A mandal with few villages and good roads is top of
+   an absolute board every month whatever it does, and the board stops being
+   read. Champions of Change ranks the MONTH-ON-MONTH change for exactly that
+   reason. Both columns are shown, because a rank with no level behind it is
+   as misleading as a level with no movement. */
+.page{max-width:1600px;margin:0 auto;padding:0 var(--s3) var(--s6)}
+.phead{display:flex;align-items:flex-end;gap:var(--s2);flex-wrap:wrap;padding:var(--s3) 0 var(--s2)}
+.phead h1{font-size:var(--f-h1);letter-spacing:-.015em}
+.phead .sub{font-size:var(--f-small);color:var(--tx-3);margin-top:2px}
+.phead .sp{flex:1}
+.top{display:grid;grid-template-columns:320px minmax(0,1fr);gap:var(--s3);margin-bottom:var(--s3)}
+.weights{display:flex;flex-direction:column;gap:11px}
+.wt{display:flex;align-items:center;gap:var(--s1);font-size:var(--f-small)}
+.wt b{flex:1;font-weight:650}
+.wt .pc{font:750 var(--f-small)/1 var(--mono);color:var(--tx-3);width:38px;text-align:right}
+.podium{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s2)}
+.pod{border-radius:var(--r);padding:var(--s2);background:var(--panel);box-shadow:var(--nm-out);
+  border-top:4px solid var(--c);display:flex;flex-direction:column;gap:5px}
+.pod .r{font:750 var(--f-eyebrow)/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--c)}
+.pod .n{font-size:var(--f-base);font-weight:750;line-height:1.25}
+.pod .s{font:750 26px/1 var(--mono)}
+.pod .d{font-size:var(--f-micro);color:var(--tx-3)}
+.board th:nth-child(1),.board td:nth-child(1){width:52px}
+.board td:nth-child(2){text-align:left;font-weight:650}
+.board .mv{font:750 var(--f-small)/1 var(--mono);padding:3px 8px;border-radius:8px;display:inline-block}
+.board .mv.up{color:var(--green);background:var(--green-2)}
+.board .mv.dn{color:var(--red);background:var(--red-2)}
+.board .mv.fl{color:var(--tx-3);background:var(--line-2)}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--s3)}
+.c5{grid-column:span 5} .c7{grid-column:span 7} .c12{grid-column:span 12}
+@media(max-width:1180px){
+  .top{grid-template-columns:1fr}
+  .c5,.c7{grid-column:span 12}
+}
+@media(max-width:760px){
+  .page{padding:0 var(--s2) var(--s5)}
+  .top,.grid{gap:var(--s2)}
+  .podium{grid-template-columns:1fr}
+  /* twelve ranked rows of eight columns do not fit; the rank becomes a card */
+  .board thead{display:none}
+  .board,.board tbody,.board tr,.board td{display:block;width:100%}
+  .board tbody tr{background:var(--panel);border-radius:var(--r);box-shadow:var(--nm-out-sm);
+    margin-bottom:var(--s1);padding:11px var(--s2)}
+  .board td{border:0;text-align:left!important;padding:3px 0;display:flex;justify-content:space-between;
+    gap:var(--s2);font-size:var(--f-small)}
+  .board td::before{content:attr(data-l);color:var(--tx-3);font-size:var(--f-micro)}
+  .board td:nth-child(1),.board td:nth-child(2){width:auto}
+  .board td:nth-child(2){font-size:var(--f-base);padding-bottom:6px}
+  .board td:nth-child(1)::before,.board td:nth-child(2)::before{display:none}
+  .board td:nth-child(1){font:750 var(--f-small) var(--mono);color:var(--tx-3)}
+  .twrap{background:transparent;box-shadow:none;overflow:visible}
+}
+<!--@HTML-->
+<div class="page">
+  <div class="phead">
+    <div><div class="eyebrow">Jangaon district · Telangana · mandal scorecard</div>
+      <h1>Where each mandal stands, and which way it is moving</h1>
+      <div class="sub" id="sub"></div></div>
+    <span class="sp"></span>
+    <button class="btn">Publish the board</button>
+    <button class="btn">Export CSV</button>
+  </div>
+
+  <div class="filters" style="padding-bottom:var(--s3)">
+    <label>Month <select class="sel"><option>October 2026 · 10 Oct – 9 Nov</option><option>September 2026</option></select></label>
+    <label>Rank by <select class="sel" id="fRank">
+      <option value="delta">Movement since last month (delta rank)</option>
+      <option value="level">Score this month (absolute rank)</option></select></label>
+    <span class="chip" aria-pressed="true">Show the parts</span>
+  </div>
+
+  <div class="top">
+    <section class="card">
+      <div class="hd">The composite<span class="r">five parts</span></div>
+      <div class="bd" id="weights"></div>
+    </section>
+    <div>
+      <div class="eyebrow" style="padding-bottom:var(--s1)" id="podLbl"></div>
+      <div class="podium" id="podium"></div>
+      <div style="font-size:var(--f-micro);color:var(--tx-3);margin-top:11px;line-height:var(--lh)">
+        A board is a comparison, not a charge. Nothing on this screen raises a reminder,
+        a notice, a casual-leave debit or a lock. Where a mandal is behind, read the parts
+        before the rank.</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <section class="card c12">
+      <div class="hd">The board<span class="r" id="boardR"></span></div>
+      <div class="bd" id="wBoard"></div>
+    </section>
+    <section class="card c7">
+      <div class="hd">Composite by mandal<span class="r">this month against last</span></div>
+      <div class="bd"><div style="overflow-x:auto"><div class="plot" id="pBar"></div></div>
+        <div class="legend"><span><i style="background:var(--cs1)"></i>October</span>
+          <span><i style="background:var(--st-idle)"></i>September</span></div></div>
+    </section>
+    <section class="card c5">
+      <div class="hd">Watch list<span class="r">fallen two places or more</span></div>
+      <div class="bd" id="watch"></div>
+    </section>
+  </div>
+</div>
+<!--@JS-->
+const S = window.SJ, C = window.CH, T = S.totals;
+document.getElementById('sub').textContent =
+  '12 mandals · ' + S.ym + ' (' + S.window + ') · against September 2026';
+
+/* THE WEIGHTS ARE THE CONSOLE'S OWN five-part district health index, not a
+   set invented for this board. Named so a reader can argue with them. */
+const PARTS = [
+  { k:'Coverage',   w:30, c:'var(--cs1)', why:'villages evaluated against those expected by now' },
+  { k:'Scores',     w:25, c:'var(--cs2)', why:'the average of the 100-mark evaluations filed' },
+  { k:'Attendance', w:25, c:'var(--cs4)', why:'marked against due, over working days only' },
+  { k:'Red flags',  w:10, c:'var(--cs3)', why:'filings carrying a red flag, fewer is better' },
+  { k:'Leave desk', w:10, c:'var(--cs6)', why:'applications settled inside 48 hours' }
+];
+document.getElementById('weights').innerHTML =
+  `<div style="margin-bottom:var(--s2)">${C.meter(T.health, 100, 'district composite',
+     'the weighted total of the five parts below')}</div>` +
+  `<div class="weights">${PARTS.map(p => `<div><div class="wt">
+    <i style="width:10px;height:10px;border-radius:3px;background:${p.c};flex:none"></i>
+    <b>${p.k}</b><span class="pc">${p.w}%</span></div>
+    <div style="font-size:var(--f-micro);color:var(--tx-3);margin-left:18px">${p.why}</div></div>`).join('')}</div>` +
+  `<div style="font-size:var(--f-micro);color:var(--tx-3);margin-top:var(--s2);line-height:var(--lh)">
+     The weights are the Collector's, not the register's. Changing them re-ranks the
+     board and nothing else — no figure underneath moves.</div>`;
+
+/* a composite per mandal, and last month's, so a DELTA exists */
+const rows = S.coverage.map((c, i) => {
+  const att = Math.round(c.present / c.officers * 100);
+  const sc  = c.avg == null ? 0 : c.avg;
+  const now = Math.round(c.pct * .30 + sc * .25 + att * .25 + (100 - i * 3) * .10 + (90 - i * 2) * .10);
+  const was = Math.max(20, Math.min(99, now - (((i * 7) % 11) - 5)));
+  return { mandal:c.mandal, now, was, d:now - was, cov:c.pct, sc, att,
+           done:c.done, total:c.total, officers:c.officers };
+});
+const byLevel = [...rows].sort((a, b) => b.now - a.now);
+const byDelta = [...rows].sort((a, b) => b.d - a.d);
+const rankIn = (arr, m) => arr.findIndex(x => x.mandal === m) + 1;
+let mode = 'delta';
+
+function board(){
+  const order = mode === 'delta' ? byDelta : byLevel;
+  document.getElementById('podLbl').textContent = mode === 'delta'
+    ? 'Top three by movement — the three that improved most this month'
+    : 'Top three by score — the three standing highest this month';
+  document.getElementById('boardR').textContent = mode === 'delta'
+    ? 'ranked by movement · level shown beside it' : 'ranked by score · movement shown beside it';
+  document.getElementById('podium').innerHTML = order.slice(0, 3).map((r, i) => `
+    <div class="pod" style="--c:${['var(--gold)', 'var(--tx-3)', 'var(--amber)'][i]}">
+      <span class="r">${['first', 'second', 'third'][i]}</span>
+      <span class="n">${r.mandal}</span>
+      <span class="s">${mode === 'delta' ? (r.d > 0 ? '+' : '') + r.d : r.now}
+        <span style="font-size:var(--f-small);color:var(--tx-3);font-weight:400">${
+          mode === 'delta' ? 'places of score' : '/ 100'}</span></span>
+      <span class="d">${mode === 'delta' ? 'now ' + r.now + ' / 100, was ' + r.was
+        : (r.d > 0 ? 'up ' : r.d < 0 ? 'down ' : 'level at ') + Math.abs(r.d) + ' on last month'}</span>
+    </div>`).join('');
+  window.setWidgetState(state);
+}
+
+function boardTable(){
+  const order = mode === 'delta' ? byDelta : byLevel;
+  return `<div class="twrap" style="max-height:560px"><table class="board">
+    <thead><tr><th>#</th><th>Mandal</th><th>Composite</th><th>Last month</th><th>Movement</th>
+      <th>Coverage</th><th>Average score</th><th>Attendance</th><th>Absolute rank</th></tr></thead>
+    <tbody>${order.map((r, i) => {
+      const cls = r.d > 0 ? 'up' : r.d < 0 ? 'dn' : 'fl';
+      return `<tr><td data-l="Rank">${i + 1}</td><td data-l="Mandal">${r.mandal}</td>
+        <td data-l="Composite" class="num"><b>${r.now}</b></td>
+        <td data-l="Last month" class="num mut">${r.was}</td>
+        <td data-l="Movement"><span class="mv ${cls}">${r.d > 0 ? '▲ +' : r.d < 0 ? '▼ ' : '– '}${
+          r.d === 0 ? '0' : Math.abs(r.d)}</span></td>
+        <td data-l="Coverage" class="num">${r.done}/${r.total} · ${r.cov}%</td>
+        <td data-l="Average score" class="num">${r.sc || '—'}</td>
+        <td data-l="Attendance" class="num">${r.att}%</td>
+        <td data-l="Absolute rank" class="num mut">${rankIn(byLevel, r.mandal)} of 12</td></tr>`;
+    }).join('')}</tbody></table></div>
+    <div style="font-size:var(--f-micro);color:var(--tx-3);margin-top:11px;line-height:var(--lh)">
+      Ranked by ${mode === 'delta' ? 'movement since September' : 'the composite this month'}.
+      A mandal of five villages and a mandal of eight are not the same denominator — coverage is a
+      share and the rank is of the share, never of the count.</div>`;
+}
+
+document.getElementById('fRank').onchange = e => { mode = e.target.value; board(); };
+
+const fallen = byLevel.filter(r => r.d <= -2);
+document.getElementById('watch').innerHTML = fallen.length ? fallen.map(r => `
+  <div class="row bad"><span class="av">${Math.abs(r.d)}</span>
+    <div><b>${r.mandal}</b><span>${r.now} this month, ${r.was} last · coverage ${r.cov}%</span></div>
+    <span class="t"><span class="pill bad">▼ ${Math.abs(r.d)}</span></span></div>`).join('') +
+  `<div style="font-size:var(--f-micro);color:var(--tx-3);margin-top:var(--s1);line-height:var(--lh)">
+     A fall is a question, not a finding. Read the parts before the rank: a mandal can fall
+     two places on a leave desk and nothing else.</div>`
+  : `<div class="empty"><b>Nothing has fallen two places</b>No mandal is on the watch list this month.</div>`;
+
+C.fit('pBar', w => C.columns(rows.map(r => ({ label:r.mandal, now:r.now, was:r.was })),
+  [{ k:'now', n:'October', c:'var(--cs1)' }, { k:'was', n:'September', c:'var(--st-idle)' }],
+  Math.max(w, 760), 240));
+
+let state = 'ready';
+window.setWidgetState = st => {
+  state = st;
+  document.getElementById('wBoard').innerHTML =
+    st === 'loading' ? Array(8).fill(0).map(() =>
+        `<div class="skel skel-line" style="height:30px"></div>`).join('')
+  : st === 'empty'   ? `<div class="empty"><b>No board for this month yet</b>
+      A delta rank needs two months. September is the first full month on the register,
+      so October is the first month this board can be drawn for.</div>`
+  : st === 'error'   ? `<div class="err"><b>Last month's figures could not be read</b>
+      The movement column cannot be computed, so no rank is published rather than a
+      board ordered on half the data.
+      <button class="btn sm" style="display:block">Try again</button></div>`
+  : boardTable();
+};
+board();
+window.onThemeChange = C.redraw;

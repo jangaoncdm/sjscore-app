@@ -1,0 +1,53 @@
+/*@META {"n":"F","slug":"dense-console","title":"Dense console","dark":false,
+  "oneline":"The 8pt grid run at 6pt and every type size down a step, so appreciably more of the district fits on one screen.",
+  "feel":"For the reader who wants the whole morning in one view and will not scroll for it. It buys about a fifth of the page height back. What it costs is reading comfort and, on a phone, touch targets, which is why the phone keeps the full sizes."} */
+
+/* A SMALLER GRID IS STILL A GRID. The spacing steps stay in proportion -
+   6/12/18/24/30/36 instead of 8/16/24/32/40/48 - because an 8pt system run
+   at 6pt is still a system, while nudging individual paddings is how a
+   layout stops having one. */
+:root{
+  --s1:6px; --s2:12px; --s3:18px; --s4:24px; --s5:30px; --s6:36px;
+  --f-eyebrow:9.5px; --f-micro:10.5px; --f-small:11.5px; --f-body:12.5px;
+  --f-base:13px; --f-h2:15px; --f-h1:19px; --f-metric:25px; --f-metric-lg:32px;
+  --bg:#E7EBF4; --panel:#FFFFFF; --well:#F1F4FA; --line:#D1D8E7; --line-2:#E5E9F3;
+  --nm-out:0 0 0 1px var(--line);
+  --nm-out-sm:0 0 0 1px var(--line);
+  --nm-in:inset 0 0 0 1px var(--line);
+  --nm-in-sm:inset 0 0 0 1px var(--line-2);
+  --r:7px; --r-sm:5px;
+}
+body.dark{
+  --bg:#0A0D1A; --line:#2E3550; --line-2:#262C42;
+  --nm-out:0 0 0 1px var(--line);
+  --nm-out-sm:0 0 0 1px var(--line);
+}
+
+.kpi{min-height:78px;padding:11px 12px}
+.kpi .v{margin-top:5px}
+.kpi .foot{margin-top:4px}
+.card>.hd{padding:11px 12px 5px}
+.card>.bd{padding:5px 12px 12px}
+th{padding:6px 8px}
+td{padding:5px 8px}
+.hbar{margin:6px 0}
+.feed{padding:11px 0}
+.btn,.chip,select.sel,input.inp,.states,.states button,.nav button{border-radius:5px}
+.nav button{min-height:36px;margin-bottom:2px}
+.btn{min-height:34px;padding:0 12px}
+.btn.sm{min-height:28px;padding:0 9px}
+.chip{min-height:30px}
+select.sel,input.inp{min-height:32px}
+.row{min-height:44px}
+
+/* A DENSE DESK IS NOT A DENSE HANDSET. Thirty-four pixels is a comfortable
+   target for a mouse and a miss for a thumb, so below 760 every control goes
+   back to the forty-four the field app is built on. The density is bought on
+   the Collector's monitor and nowhere else. */
+@media(max-width:760px){
+  :root{--s1:8px; --s2:16px; --s3:24px; --s4:32px;
+    --f-small:12.5px; --f-body:13.5px; --f-base:14px;}
+  .btn{min-height:44px} .btn.sm{min-height:36px} .chip{min-height:36px}
+  select.sel,input.inp{min-height:40px}
+  .bottomnav button{min-height:54px}
+}

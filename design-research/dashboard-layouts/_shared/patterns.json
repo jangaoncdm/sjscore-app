@@ -1,0 +1,82 @@
+[
+  {
+    "file": "01-kpi-grid.html",
+    "n": "01",
+    "slug": "kpi-grid",
+    "title": "KPI strip + chart grid",
+    "origin": "Few / Power BI / Grafana",
+    "family": "Analytical"
+  },
+  {
+    "file": "02-nav-rail.html",
+    "n": "02",
+    "slug": "nav-rail",
+    "title": "Navigation rail + content canvas",
+    "origin": "Material 3 / IBM Carbon / Ant Design Pro",
+    "family": "Admin console"
+  },
+  {
+    "file": "03-persona-tabs.html",
+    "n": "03",
+    "slug": "persona-tabs",
+    "title": "Persona workspaces with top tabs",
+    "origin": "Atlassian / Salesforce console / Fluent 2",
+    "family": "Role-scoped"
+  },
+  {
+    "file": "04-geo-split.html",
+    "n": "04",
+    "slug": "geo-split",
+    "title": "Map-first geographic split",
+    "origin": "Swachh Bharat / Jal Jeevan Mission / Esri ArcGIS Dashboards",
+    "family": "Geographic"
+  },
+  {
+    "file": "05-status-wall.html",
+    "n": "05",
+    "slug": "status-wall",
+    "title": "Operations status wall",
+    "origin": "Grafana / Datadog / NOC video wall",
+    "family": "Operational"
+  },
+  {
+    "file": "06-master-detail.html",
+    "n": "06",
+    "slug": "master-detail",
+    "title": "Index table + detail drawer",
+    "origin": "Shopify Polaris resource index / Carbon data table / Salesforce",
+    "family": "Record-centric"
+  },
+  {
+    "file": "07-drilldown.html",
+    "n": "07",
+    "slug": "drilldown",
+    "title": "Drill-down hierarchy with breadcrumb",
+    "origin": "Power BI drillthrough / eGramSwaraj / Jal Jeevan Mission",
+    "family": "Hierarchical"
+  },
+  {
+    "file": "08-feed.html",
+    "n": "08",
+    "slug": "feed",
+    "title": "Work queue and activity feed",
+    "origin": "Atlassian / Gmail priority inbox / ServiceNow agent workspace",
+    "family": "Task-centric"
+  },
+  {
+    "file": "09-scorecard.html",
+    "n": "09",
+    "slug": "scorecard",
+    "title": "Scorecard and delta ranking board",
+    "origin": "NITI Aayog Champions of Change / Swachh Survekshan Grameen",
+    "family": "Comparative"
+  },
+  {
+    "file": "10-mobile-first.html",
+    "n": "10",
+    "slug": "mobile-first",
+    "title": "Mobile-first card stack with bottom navigation",
+    "origin": "GOV.UK one column first / Material 3 navigation bar / PWA",
+    "family": "Field-first"
+  }
+]

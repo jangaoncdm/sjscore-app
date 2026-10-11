@@ -1,0 +1,215 @@
+<!--@META {"n":"10","slug":"mobile-first","title":"Mobile-first card stack with bottom navigation","origin":"GOV.UK one column first / Material 3 navigation bar / PWA","family":"Field-first"} -->
+<!--@CSS-->
+/* ZONES: a compact app bar / one column of cards in priority order / a bottom
+   navigation bar of five / the same column widened to two and three at a desk.
+
+   THIS IS THE ONLY PATTERN DESIGNED AT 390 AND WIDENED, and it is in the study
+   because the audit's worst finding is a phone one: the console's rail turns
+   into thirteen stacked full-width buttons below 760px, so a supervisor on a
+   handset scrolls a whole screen of menu before the first figure.
+
+   GOV.UK's rule is the one followed here - design for small screens first,
+   starting with a single-column layout - and the desktop view is this column
+   laid ACROSS the width rather than a different screen. */
+.app{max-width:1760px;margin:0 auto;padding:0 var(--s2) 96px}
+.bar{position:sticky;top:0;z-index:9;background:var(--bg);display:flex;align-items:center;
+  gap:11px;padding:var(--s2) 0 11px}
+.bar .lg{width:34px;height:34px;border-radius:10px;flex:none;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--grad-a),var(--grad-b));color:#fff;font:800 13px var(--sans)}
+.bar h1{font-size:var(--f-h2);letter-spacing:-.01em;line-height:1.15}
+.bar .sub{font-size:var(--f-micro);color:var(--tx-3)}
+.bar .sp{flex:1}
+.bar .ib{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+  background:var(--panel);box-shadow:var(--nm-out-sm);flex:none;position:relative}
+.bar .ib svg{width:19px;height:19px;fill:none;stroke:var(--tx-2);stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round}
+.bar .ib .dot{position:absolute;top:7px;right:8px;width:8px;height:8px;border-radius:50%;
+  background:var(--red);box-shadow:0 0 0 2px var(--panel)}
+.fscroll{display:flex;gap:7px;overflow-x:auto;padding:0 0 var(--s2);scrollbar-width:none;
+  margin:0 calc(var(--s2) * -1);padding-left:var(--s2);padding-right:var(--s2)}
+.fscroll::-webkit-scrollbar{display:none}
+.fscroll .chip{flex:none}
+.stack{display:flex;flex-direction:column;gap:var(--s2)}
+.hero{background:var(--panel);border-radius:var(--r);box-shadow:var(--nm-out);padding:var(--s3) var(--s2)}
+.hero .big{font:750 46px/1 var(--mono);letter-spacing:-.02em}
+.hero .of{font-size:var(--f-body);color:var(--tx-3);margin-top:6px}
+.hero .line{display:flex;gap:6px;margin-top:var(--s2);height:10px;border-radius:5px;overflow:hidden}
+.hero .line i{display:block;height:100%}
+.hero .key{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:11px;font-size:var(--f-micro);
+  color:var(--tx-2)}
+.hero .key i{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:-1px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2)}
+.mini{background:var(--panel);border-radius:var(--r);box-shadow:var(--nm-out-sm);padding:13px var(--s2)}
+.mini .k{font-size:var(--f-micro);color:var(--tx-3);line-height:1.35}
+.mini .v{font:750 25px/1 var(--mono);margin-top:6px}
+.mini .f{font-size:var(--f-micro);color:var(--tx-3);margin-top:5px}
+.act{display:flex;align-items:center;gap:11px;width:100%;min-height:58px;padding:11px var(--s2);
+  border-radius:var(--r);background:var(--panel);box-shadow:var(--nm-out-sm);text-align:left}
+.act .ic{width:36px;height:36px;border-radius:11px;flex:none;display:grid;place-items:center;
+  background:var(--pri-2);color:var(--pri);font:750 var(--f-small) var(--mono)}
+.act.bad .ic{background:var(--red-2);color:var(--red)}
+.act.warn .ic{background:var(--amber-2);color:var(--amber)}
+.act b{display:block;font-size:var(--f-body)}
+.act span{display:block;font-size:var(--f-micro);color:var(--tx-3);margin-top:2px}
+.act .go{margin-left:auto;color:var(--tx-3);flex:none}
+.bnav{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;background:var(--panel);
+  border-top:1px solid var(--line);padding:6px 4px env(safe-area-inset-bottom,6px)}
+.bnav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;min-height:54px;font-size:10px;font-weight:650;color:var(--tx-3);border-radius:12px;
+  position:relative}
+.bnav button svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round}
+.bnav button[aria-current]{color:var(--pri)}
+.bnav .bdg{position:absolute;top:3px;left:50%;margin-left:5px;font:750 9px var(--mono);
+  background:var(--red);color:#fff;border-radius:7px;padding:1px 5px}
+/* ---- and the SAME column, laid across the width ---- */
+@media(min-width:980px){
+  .app{padding:0 var(--s3) var(--s4)}
+  .bar{padding:var(--s3) 0 var(--s2)}
+  .bar h1{font-size:var(--f-h1)}
+  .stack{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s3);align-items:start}
+  .stack>.wide{grid-column:1 / -1}
+  .two{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .hero{display:flex;gap:var(--s4);align-items:center;flex-wrap:wrap}
+  .hero>.herofig{flex:none}
+  .hero>.herorest{flex:1;min-width:280px}
+  .bnav{display:none}
+  .acts2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s1)}
+}
+@media(min-width:1500px){
+  .stack{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .two{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+<!--@HTML-->
+<div class="app">
+  <div class="bar">
+    <span class="lg">SJ</span>
+    <div><h1>Swachh Jangaon</h1><div class="sub" id="sub"></div></div>
+    <span class="sp"></span>
+    <button class="ib" aria-label="Search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.7" y2="16.7"/></svg></button>
+    <button class="ib" aria-label="Alerts"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/></svg><span class="dot"></span></button>
+  </div>
+  <div class="fscroll">
+    <button class="chip" aria-pressed="true">Today</button>
+    <button class="chip">This month</button>
+    <button class="chip">All 12 mandals</button>
+    <button class="chip">All roles</button>
+    <button class="chip">Needs orders <b id="nIss"></b></button>
+  </div>
+  <div class="stack" id="stack"></div>
+</div>
+<nav class="bnav" id="bnav" aria-label="Sections"></nav>
+<!--@JS-->
+const S = window.SJ, C = window.CH, T = S.totals;
+document.getElementById('sub').textContent = S.today.replace('Friday, ', '') + ' · 11:42';
+document.getElementById('nIss').textContent = S.issues.length;
+
+const I = {
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  user:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  home:'<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  bell:'<path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/>',
+  more:'<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>'
+};
+document.getElementById('bnav').innerHTML = [
+  ['Today', I.grid, 0], ['Officers', I.user, T.missing], ['Villages', I.home, 0],
+  ['Orders', I.bell, S.leave.length + 2], ['More', I.more, 0]
+].map(([n, d, b], i) => `<button ${i === 0 ? 'aria-current="page"' : ''}>
+  <svg viewBox="0 0 24 24">${d}</svg><span>${n}</span>
+  ${b ? `<span class="bdg">${b}</span>` : ''}</button>`).join('');
+
+const seg = [
+  { n:'Marked', v:T.present, c:'var(--st-ok)' },
+  { n:'On leave', v:T.onLeave, c:'var(--blue)' },
+  { n:'Refused', v:T.refused, c:'var(--st-warn)' },
+  { n:'Not marked', v:T.missing, c:'var(--st-bad)' }
+];
+const mini = (k, v, f) => `<div class="mini"><div class="k">${k}</div>
+  <div class="v">${v}</div><div class="f">${f}</div></div>`;
+const act = (cls, ic, b, s) => `<button class="act ${cls}"><span class="ic">${ic}</span>
+  <div><b>${b}</b><span>${s}</span></div><span class="go">›</span></button>`;
+
+/* PRIORITY ORDER IS THE WHOLE LAYOUT. On one column there is no top-left, only
+   a first card — so the order IS the hierarchy, and it is: where the district
+   stands, what needs me, then the detail. */
+document.getElementById('stack').innerHTML = `
+  <div class="hero wide">
+    <div class="herofig">
+      <div class="eyebrow">Marked attendance</div>
+      <div class="big">${S.fmt.pct(T.present, T.officers)}%</div>
+      <div class="of">${T.present} of ${T.officers} officers</div>
+    </div>
+    <div class="herorest">
+      <div class="line">${seg.map(s =>
+        `<i style="width:${s.v / T.officers * 100}%;background:${s.c}"></i>`).join('')}</div>
+      <div class="key">${seg.map(s =>
+        `<span><i style="background:${s.c}"></i>${s.n} ${s.v}</span>`).join('')}</div>
+    </div>
+  </div>
+
+  <div class="two wide">
+    ${mini('Villages evaluated', T.filedN + '/' + T.villages, S.fmt.pct(T.filedN, T.villages) + '% of the month')}
+    ${mini('District average', T.avg, 'was ' + T.prevAvg + ' last month')}
+    ${mini('Refused by the fence', T.refused, 'a distance, not a default')}
+    ${mini('Leave waiting', S.leave.length, 'oldest ' + Math.max.apply(null, S.leave.map(l => l.waited)) + ' h')}
+  </div>
+
+  <section class="card wide">
+    <div class="hd">Needs your orders<span class="r">${S.issues.length}</span></div>
+    <div class="bd" id="wIssues"></div>
+  </section>
+
+  <section class="card">
+    <div class="hd">Attendance · 14 days</div>
+    <div class="bd"><div class="plot" id="pA"></div></div>
+  </section>
+
+  <section class="card">
+    <div class="hd">Mandals behind<span class="r">coverage</span></div>
+    <div class="bd">${[...S.coverage].sort((a, b) => a.pct - b.pct).slice(0, 6).map(c =>
+      `<div class="hbar"><b>${c.mandal}</b><div class="bar">
+        <i style="width:${c.pct}%;background:${c.pct >= 60 ? 'var(--st-ok)' : c.pct >= 35 ? 'var(--st-warn)' : 'var(--st-bad)'}"></i></div>
+       <span class="n">${c.done}/${c.total}</span></div>`).join('')}</div>
+  </section>
+
+  <section class="card">
+    <div class="hd">Quick actions</div>
+    <div class="bd"><div class="acts2" style="display:flex;flex-direction:column;gap:var(--s1)">
+      ${act('bad', String(T.missing), 'Who has not marked', 'across 12 mandals · tap for the names')}
+      ${act('warn', String(S.leave.length), 'Pass leave orders', 'one has waited past 48 hours')}
+      ${act('', '2', 'Approve show-cause notices', 'nothing is served until you approve')}
+      ${act('', '✎', 'Write today’s briefing', 'drawn from the figures on this screen')}
+    </div></div>
+  </section>
+
+  <section class="card wide">
+    <div class="hd">Today's marks<span class="r">${T.present} present</span></div>
+    <div class="bd" style="max-height:420px;overflow:auto">${
+      S.officers.filter(o => o.status === 'present' || o.status === 'refused').slice(0, 10).map(o =>
+      `<div class="row ${o.status === 'refused' ? 'warn' : ''}">
+        <span class="av">${S.fmt.inits(o.name)}</span>
+        <div style="min-width:0"><b>${o.name}</b><span>${o.role} · ${o.mandal}</span></div>
+        <span class="t">${o.at}<br><span class="pill ${o.status === 'refused' ? 'warn' : 'ok'}">
+          ${o.status === 'refused' ? o.dutyKm + ' km out' : '±' + o.acc + ' m'}</span></span></div>`).join('')}</div>
+  </section>`;
+
+C.fit('pA', w => C.area(S.days, 'present', 'var(--cs1)', w, 180));
+
+const READY = S.issues.map(x => `<div class="feed" style="padding:11px 0">
+  <span class="sev p${x.p}">P${x.p}</span>
+  <div style="flex:1;min-width:0"><b style="font-size:var(--f-body);display:block;line-height:1.35">${x.t}</b>
+    <div style="font-size:var(--f-small);color:var(--seal);font-weight:650;margin-top:4px">→ ${x.a}</div></div>
+</div>`).join('');
+window.setWidgetState = st => {
+  document.getElementById('wIssues').innerHTML =
+    st === 'loading' ? Array(4).fill(0).map((_, i) =>
+        `<div class="skel skel-line" style="width:${[82, 95, 68, 90][i]}%;height:22px"></div>`).join('')
+  : st === 'empty'   ? `<div class="empty"><b>All clear</b>Nothing needs orders right now.</div>`
+  : st === 'error'   ? `<div class="err"><b>No line to the district</b>
+      These figures were read at 09:14 and are not today's. The app keeps working;
+      what you are reading is the last answer it had.
+      <button class="btn sm" style="display:block">Try again</button></div>`
+  : READY;
+};
+window.setWidgetState('ready');
+window.onThemeChange = C.redraw;

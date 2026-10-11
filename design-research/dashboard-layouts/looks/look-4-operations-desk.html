@@ -1,0 +1,1441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="description" content="Look D, Operations desk - Dark by default: a near-black ground, flat panels, and the KPI figures a size up. Layout 02 for the SJGP district monitoring console. Sample data only.">
+<title>SJGP look D &middot; Operations desk</title>
+<style>
+/* ============================================================================
+   SJGP LAYOUT RESEARCH - SHARED TOKEN SET
+   ----------------------------------------------------------------------------
+   Lifted verbatim from app/dashboard.html so that the ten mockups differ in
+   LAYOUT ONLY. Nothing here is a new colour decision. The chart series were
+   computed and validated against the district's own console surfaces; the
+   record of that validation, including the palette that failed, is in
+   prompt/palette-validation.txt. Do not pick a chart colour by eye.
+
+   Spacing is the 8pt system already in the console (--s1..--s6).
+   The type scale below is the one measured off the console's existing rules;
+   it was implicit there and is named here so ten files can share it.
+   ========================================================================== */
+
+:root{
+  /* -------- 8pt spacing -------- */
+  --s1:8px; --s2:16px; --s3:24px; --s4:32px; --s5:40px; --s6:48px;
+
+  /* -------- type scale (named from the console's existing sizes) -------- */
+  --f-eyebrow:10.5px;   /* mono uppercase section labels */
+  --f-micro:11.5px;     /* card feet, deltas */
+  --f-small:12.5px;     /* table body, captions */
+  --f-body:13.5px;      /* default reading size */
+  --f-base:14px;        /* card headings */
+  --f-h2:17px;
+  --f-h1:21px;          /* page title */
+  --f-metric:29px;      /* KPI figure, mono */
+  --f-metric-lg:38px;
+  --lh-tight:1.25; --lh:1.45; --lh-prose:1.65;
+
+  /* -------- ground -------- */
+  --bg:#EEF1F7; --panel:#FFFFFF; --well:#F3F5FA; --line:#DFE3EE; --line-2:#E9EDF4;
+  --nm-out:0 0 0 1px var(--line), 0 8px 22px rgba(30,41,70,.07);
+  --nm-out-sm:0 0 0 1px var(--line), 0 2px 6px rgba(30,41,70,.06);
+  --nm-in:inset 0 0 0 1px var(--line);
+  --nm-in-sm:inset 0 0 0 1px var(--line-2);
+
+  /* -------- ink (contrast on white noted) -------- */
+  --tx:#1A2437;    /* 13.9:1 */
+  --tx-2:#46536B;  /* 6.9:1  */
+  --tx-3:#57647D;  /* 5.0:1 - smallest text never lighter than this */
+
+  /* -------- accents -------- */
+  --pri:#4A40CE; --pri-strong:#3A32A5; --pri-2:#E7E5F9;
+  --teal:#0F766E; --teal-2:#D8EEEB;
+  --blue:#1D4ED8; --blue-2:#DEE8FB; --seal:#14532D;
+  --green:#15803D; --green-2:#DCEFE2; --amber:#B45309; --amber-2:#F6E8D2;
+  --red:#B91C1C; --red-2:#F7DFDF; --gold:#8A6508; --violet:#6D28D9; --violet-2:#EAE2F8;
+  --grade-b:#65A30D;
+  --pill-ok-ink:#14532D; --pill-warn-ink:#7C3E06; --pill-bad-ink:#8F1D1D; --pill-info-ink:#1E3A8A;
+  --row-hover:#F8FAFC; --row-hover-2:#E9EDF6;
+  --scrim:rgba(23,35,59,.38);
+  --grad-a:#4A40CE; --grad-b:#0F766E;
+
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  --r:14px; --r-sm:10px;
+
+  /* -------- chart system: TOKENS, never literals -------- */
+  --ch-ink:#1A2437; --ch-muted:#57647D; --ch-grid:#E9EDF4; --ch-axis:#DFE3EE;
+  --ch-surface:#FFFFFF;
+  --cs1:#4f5ce5; --cs2:#0ca38a; --cs3:#e8a020; --cs4:#8b5cf6;
+  --cs5:#d13438; --cs6:#2aa7d8; --cs7:#7c8a12; --cs8:#a62b52;
+  --co1:#a3aaf1; --co2:#8b93ee; --co3:#6f7ae9; --co4:#5462d8; --co5:#3a46c4;
+  --st-ok:#15803D; --st-warn:#B45309; --st-bad:#B91C1C; --st-idle:#8E97AE;
+}
+
+body.dark{
+  --bg:#0E1120; --panel:#171B2D; --well:#1E2338; --line:#2B3149; --line-2:#242A3F;
+  --nm-out:0 0 0 1px var(--line), 0 8px 22px rgba(0,0,0,.45);
+  --nm-out-sm:0 0 0 1px var(--line), 0 2px 6px rgba(0,0,0,.35);
+  --tx:#E6E9F2; --tx-2:#B3BACD; --tx-3:#8E97AE;
+  --pri:#9AA0F5; --pri-strong:#B4B8F9; --pri-2:#232748;
+  --teal:#3EC5AC; --teal-2:#10352F;
+  --blue:#89A9F7; --blue-2:#16244A; --seal:#7FD4A0;
+  --green:#5BD68A; --green-2:#123726; --amber:#E9A93C; --amber-2:#3A2A10;
+  --red:#F1737A; --red-2:#3B1A1E; --gold:#D9B25C; --violet:#A98BF2; --violet-2:#271B44;
+  --grade-b:#9BCB3A;
+  --pill-ok-ink:#A7F3C6; --pill-warn-ink:#F5CE8E; --pill-bad-ink:#FBB6BA; --pill-info-ink:#B9CDFA;
+  --row-hover:#1E2338; --row-hover-2:#262C42;
+  --grad-a:#6B78EA; --grad-b:#17A98F;
+  --ch-ink:#E6E9F2; --ch-muted:#9AA1B8; --ch-grid:#242A3F; --ch-axis:#2F3654;
+  --ch-surface:#171B2D;
+  --cs1:#6b78ea; --cs2:#17a98f; --cs3:#bf8718; --cs4:#8f6ff0;
+  --cs5:#d9484c; --cs6:#2f9fce; --cs7:#8a9a20; --cs8:#b8446a;
+  --co1:#3a46c4; --co2:#5866e0; --co3:#7b87ec; --co4:#a0a9f3; --co5:#c3c9f9;
+  --st-ok:#5BD68A; --st-warn:#E9A93C; --st-bad:#F1737A; --st-idle:#8B93AB;
+}
+
+/* ============================================================================
+   SHARED PRIMITIVES - identical in all ten mockups.
+   These are COMPONENTS, never layout. Every file below styles its own zones,
+   grid and navigation; none of them restyles a card, a pill or a table, so a
+   difference you can see between two mockups is a difference of layout.
+   ========================================================================== */
+
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{background:var(--bg);color:var(--tx);
+  font:var(--f-base)/var(--lh) var(--sans);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+a{color:var(--blue);text-decoration:none}
+:focus{outline:none}
+:focus-visible{outline:3px solid var(--pri);outline-offset:2px;border-radius:var(--r-sm)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- card ---------- */
+.card{background:var(--panel);border-radius:var(--r);box-shadow:var(--nm-out);min-width:0;
+  display:flex;flex-direction:column}
+.card>.hd{display:flex;align-items:center;gap:var(--s1);
+  padding:var(--s2) var(--s2) var(--s1);font-size:var(--f-base);font-weight:750;letter-spacing:-.01em}
+.card>.hd .r{margin-left:auto;font:500 var(--f-micro)/1 var(--mono);color:var(--tx-3);text-align:right}
+.card>.bd{padding:var(--s1) var(--s2) var(--s2);flex:1;min-height:0}
+.card.accent{border-top:3px solid var(--acc,var(--pri))}
+
+/* ---------- eyebrow ---------- */
+.eyebrow{font:750 var(--f-eyebrow)/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;
+  color:var(--tx-3)}
+
+/* ---------- KPI ---------- */
+.kpi{background:var(--panel);border-radius:var(--r);box-shadow:var(--nm-out);padding:var(--s2);
+  min-height:112px;display:flex;flex-direction:column;justify-content:center}
+.kpi .k{display:flex;align-items:center;gap:var(--s1);font-size:var(--f-small);font-weight:650;color:var(--tx-2)}
+.kpi .ic{margin-left:auto;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+  background:var(--pri-2);flex:none}
+.kpi .ic svg{width:18px;height:18px;fill:none;stroke:var(--pri);stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round}
+.kpi .v{font:750 var(--f-metric)/1.05 var(--mono);margin-top:var(--s1);letter-spacing:-.01em}
+.kpi .v small{font-size:var(--f-body);font-weight:650;color:var(--tx-3)}
+.kpi .foot{display:flex;align-items:center;gap:var(--s1);margin-top:7px;
+  font-size:var(--f-micro);color:var(--tx-3);line-height:1.4}
+.kpi.ok .ic{background:var(--green-2)} .kpi.ok .ic svg{stroke:var(--green)}
+.kpi.bad .ic{background:var(--red-2)} .kpi.bad .ic svg{stroke:var(--red)}
+.kpi.warn .ic{background:var(--amber-2)} .kpi.warn .ic svg{stroke:var(--amber)}
+.kpi.teal .ic{background:var(--teal-2)} .kpi.teal .ic svg{stroke:var(--teal)}
+.kpi.violet .ic{background:var(--violet-2)} .kpi.violet .ic svg{stroke:var(--violet)}
+.delta{font:750 var(--f-micro)/1 var(--mono);padding:3px 7px;border-radius:8px}
+.delta.up{color:var(--green);background:var(--green-2)}
+.delta.dn{color:var(--red);background:var(--red-2)}
+.delta.fl{color:var(--tx-3);background:var(--line-2)}
+
+/* ---------- pills, bars, grades ---------- */
+.pill{display:inline-block;font:var(--f-micro)/1.5 var(--mono);padding:1.5px 8px;border-radius:9px;
+  box-shadow:var(--nm-in-sm)}
+.pill.ok{color:var(--pill-ok-ink);background:var(--green-2)}
+.pill.warn{color:var(--pill-warn-ink);background:var(--amber-2)}
+.pill.bad{color:var(--pill-bad-ink);background:var(--red-2)}
+.pill.info{color:var(--pill-info-ink);background:var(--blue-2)}
+.pill.mut{color:var(--tx-2);background:var(--line-2)}
+.bar{height:7px;border-radius:4px;background:var(--line-2);overflow:hidden;min-width:72px}
+.bar i{display:block;height:100%}
+.gr{font:750 var(--f-small)/1 var(--mono)}
+.grA{color:var(--green)} .grB{color:var(--grade-b)} .grC{color:var(--amber)} .grD{color:var(--red)}
+.sev{flex:none;font:800 var(--f-eyebrow)/1.5 var(--mono);border-radius:6px;padding:3px 7px;
+  min-width:44px;text-align:center;box-shadow:var(--nm-in-sm);height:fit-content}
+.sev.p1{background:var(--red-2);color:var(--pill-bad-ink)}
+.sev.p2{background:var(--amber-2);color:var(--pill-warn-ink)}
+.sev.p3{background:var(--blue-2);color:var(--pill-info-ink)}
+
+/* ---------- controls ---------- */
+.btn{background:var(--panel);border-radius:12px;min-height:44px;padding:0 var(--s2);
+  font-size:var(--f-body);color:var(--tx-2);box-shadow:var(--nm-out-sm);display:inline-flex;
+  align-items:center;gap:7px}
+.btn:hover{color:var(--tx)}
+.btn.pri{background:linear-gradient(135deg,var(--grad-a),var(--grad-b));color:#fff;font-weight:700;
+  box-shadow:0 2px 8px rgba(74,64,206,.3)}
+.btn.pri:hover{color:#fff;filter:brightness(1.06)}
+.btn.sm{min-height:36px;padding:0 12px;font-size:var(--f-small)}
+.chip{border-radius:11px;min-height:36px;padding:0 13px;font-size:var(--f-small);color:var(--tx-2);
+  background:var(--panel);box-shadow:var(--nm-out-sm);display:inline-flex;align-items:center;gap:6px}
+.chip b{font-family:var(--mono);color:var(--tx)}
+.chip[aria-pressed=true]{box-shadow:var(--nm-in-sm);background:var(--pri-2);color:var(--pri);font-weight:700}
+select.sel,input.inp{min-height:40px;padding:0 12px;border:0;border-radius:11px;background:var(--panel);
+  box-shadow:var(--nm-out-sm);color:var(--tx);font:var(--f-body) var(--sans);max-width:100%}
+input.inp{background:var(--well);box-shadow:var(--nm-in-sm)}
+input.inp::placeholder{color:var(--tx-3)}
+.filters{display:flex;gap:var(--s1);align-items:center;flex-wrap:wrap}
+.filters label{display:inline-flex;align-items:center;gap:6px;font-size:var(--f-small);color:var(--tx-3)}
+
+/* ---------- tables ---------- */
+table{width:100%;border-collapse:collapse;font-size:var(--f-small)}
+th{font:750 var(--f-eyebrow)/1.4 var(--sans);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--tx-2);text-align:center;padding:9px 10px;border:1px solid var(--line);
+  position:sticky;top:0;background:var(--well);z-index:1}
+th:first-child{text-align:left}
+td{padding:8px 10px;border:1px solid var(--line-2);white-space:nowrap;text-align:center}
+td:first-child{text-align:left}
+td.num{font-family:var(--mono)}
+td.mut{color:var(--tx-2)}
+tbody tr:hover td{background:var(--row-hover)}
+tbody tr.sel td{background:var(--row-hover-2)}
+.twrap{overflow:auto;border-radius:var(--r);box-shadow:var(--nm-in-sm);background:var(--well)}
+
+/* ---------- list rows ---------- */
+.row{display:flex;gap:var(--s1);align-items:center;min-height:56px;padding:var(--s1) var(--s2);
+  border-radius:var(--r);background:var(--panel);box-shadow:var(--nm-out-sm);margin-bottom:var(--s1);
+  width:100%;text-align:left}
+.row:hover{box-shadow:var(--nm-out-sm),0 0 0 2px var(--pri-2)}
+.row .av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;flex:none;
+  font:750 var(--f-body)/1 var(--sans);background:var(--green-2);color:var(--green)}
+.row.warn .av{background:var(--amber-2);color:var(--amber)}
+.row.bad .av{background:var(--red-2);color:var(--red)}
+.row b{display:block;font-size:var(--f-body)}
+.row span{display:block;font-size:var(--f-micro);color:var(--tx-3)}
+.row .t{margin-left:auto;text-align:right;font:var(--f-small) var(--mono);color:var(--tx-2);flex:none}
+.feed{display:flex;gap:var(--s2);padding:var(--s2) 0;border-bottom:1px solid var(--line-2)}
+.feed:last-child{border-bottom:0}
+.feed .when{flex:none;width:58px;font:var(--f-micro) var(--mono);color:var(--tx-3);padding-top:2px}
+
+/* ---------- charts: HTML at exact pixel sizes, never a scaled viewBox ---- */
+.plot{position:relative}
+.plot svg{display:block}
+.axis{font:var(--f-eyebrow) var(--mono);fill:var(--ch-muted)}
+.gridln{stroke:var(--ch-grid);stroke-width:1}
+.legend{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s2);margin-top:var(--s1);
+  font-size:var(--f-micro);color:var(--tx-2)}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:6px;
+  vertical-align:-1px}
+/* small multiples: identical cells, identical scale, read as a block */
+/* the column count and the cell width are decided in charts.js off the
+   MEASURED container, so the cells are exact pixels and never stretched */
+.sparkgrid{display:grid;gap:var(--s1)}
+.spk{min-width:0;padding:7px 9px 3px;border-radius:var(--r-sm);box-shadow:var(--nm-in-sm)}
+.spkh{display:flex;align-items:baseline;gap:6px;margin-bottom:2px}
+.spkh b{font-size:var(--f-micro);font-weight:700;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;flex:1;min-width:0}
+.spkh span{font:750 var(--f-small)/1 var(--mono);flex:none}
+.spk svg{display:block}
+
+.hbar{display:flex;align-items:center;gap:var(--s1);margin:9px 0;font-size:var(--f-small)}
+.hbar b{width:118px;flex:none;font-weight:650;color:var(--tx);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+.hbar .bar{flex:1}
+.hbar .n{width:46px;flex:none;text-align:right;font-family:var(--mono);color:var(--tx-2)}
+
+/* ---------- the three states every widget owes the reader ---------- */
+.empty{margin:var(--s1) 0;padding:var(--s4) var(--s2);color:var(--tx-2);font-size:var(--f-body);
+  text-align:center;border-radius:var(--r);box-shadow:var(--nm-in-sm);background:var(--well)}
+.empty b{display:block;color:var(--tx);margin-bottom:5px}
+.skel{border-radius:var(--r);background:linear-gradient(90deg,var(--line-2) 25%,var(--well) 37%,var(--line-2) 63%);
+  background-size:400% 100%;animation:sh 1.4s ease infinite}
+@keyframes sh{0%{background-position:100% 50%}100%{background-position:0 50%}}
+.skel-line{height:12px;margin:10px 0;border-radius:6px}
+.err{margin:var(--s1) 0;padding:var(--s2);border-radius:var(--r);background:var(--red-2);
+  border-left:4px solid var(--red);font-size:var(--f-body);color:var(--tx)}
+.err b{display:block;color:var(--red);margin-bottom:4px;font-size:var(--f-small);
+  text-transform:uppercase;letter-spacing:.06em}
+.err .btn{margin-top:var(--s1)}
+
+/* ---------- the state switcher that every mockup carries ---------- */
+.states{display:inline-flex;gap:4px;padding:4px;border-radius:12px;background:var(--well);
+  box-shadow:var(--nm-in-sm)}
+.states button{font:650 var(--f-micro)/1 var(--sans);padding:7px 11px;border-radius:9px;color:var(--tx-3)}
+.states button[aria-pressed=true]{background:var(--panel);color:var(--pri);box-shadow:var(--nm-out-sm)}
+
+/* ---------- research banner (not part of the pattern) ---------- */
+.lab{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;
+  padding:7px var(--s3);background:var(--tx);color:#fff;font-size:var(--f-micro)}
+/* --tx is the INK, and in the dark theme the ink is near-white: the banner
+   was painting white text on a #E6E9F2 bar and reading as nothing at all.
+   The harness is not the design, but a harness you cannot read is a harness
+   that hides the thing it is there to drive. */
+body.dark .lab{background:#05070F;color:#E6E9F2}
+body.dark .lab a{color:#E6E9F2}
+.lab b{font-weight:750;letter-spacing:.02em}
+.lab .sp{flex:1}
+.lab a{color:#fff;text-decoration:underline;opacity:.85}
+.lab button{color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:8px;padding:4px 10px;
+  font-size:var(--f-micro)}
+
+/* ---------- tile map cell (used by CH.tilemap, shared so every pattern that
+     shows twelve mandals as a grid draws the identical cell) ---------- */
+.tile{border-radius:var(--r);padding:var(--s2) 12px;min-height:84px;display:flex;
+  flex-direction:column;justify-content:space-between;align-items:flex-start;text-align:left;
+  box-shadow:var(--nm-in-sm)}
+.tile b{font-size:var(--f-small);font-weight:700;line-height:1.3}
+.tile span{font:750 var(--f-h2)/1 var(--mono)}
+.tile:hover{box-shadow:var(--nm-out)}
+.tile[aria-pressed=true]{outline:3px solid var(--pri);outline-offset:2px}
+@media(max-width:760px){
+  .tile{min-height:66px;padding:10px}
+  .tile b{font-size:var(--f-micro)} .tile span{font-size:var(--f-base)}
+}
+
+/* FOUR ACROSS IS NOT A PHONE GRID. At 390 a four-column tile is 83px wide and
+   "Lingala Ghanpur" runs 19px past its own cell and the page with it. Two
+   across holds the longest mandal name in the district. */
+.tilemap{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s1)}
+@media(max-width:980px){.tilemap{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:620px){.tilemap{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.tile{min-width:0;overflow:hidden}
+.tile b{overflow-wrap:anywhere}
+
+/* ============ LAYOUT 02: NAVIGATION RAIL + CONTENT CANVAS ============ */
+/* ZONES: rail (grouped, collapsible) / app bar / canvas.
+   The pattern the console already uses — rebuilt to M3's own guidance, which
+   is 3-7 destinations in a collapsed rail and an EXPANDED rail above that.
+   Thirteen flat destinations is the defect; three groups of four is the cure.
+   On a phone the rail becomes a bottom navigation bar of five, with the rest
+   behind More — never a stacked list of thirteen above the content. */
+.shell{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
+/* THE RAIL IS A COLUMN, NOT A 100vh BOX. Sticky needs a height, so the
+   STICKY element is the inner one and the grid cell keeps the colour. With
+   height:100vh on the cell itself the rail stopped at the fold and the ground
+   showed underneath it for the rest of a 1700px page - invisible while the
+   ground was almost white, and the first thing you see on any ground that
+   is not. */
+.rail{background:var(--panel);border-right:1px solid var(--line);min-width:0}
+.railin{position:sticky;top:0;height:100vh;
+  display:flex;flex-direction:column;padding:var(--s3) 12px var(--s2)}
+.rail .brand{display:flex;align-items:center;gap:11px;padding:0 var(--s1) var(--s2);
+  border-bottom:1px solid var(--line-2);margin-bottom:var(--s2)}
+.rail .brand .lg{width:38px;height:38px;border-radius:10px;flex:none;
+  background:linear-gradient(135deg,var(--grad-a),var(--grad-b));display:grid;place-items:center;
+  color:#fff;font:800 15px var(--sans)}
+.rail .brand b{font-size:15px;letter-spacing:-.01em;display:block}
+.rail .brand span{font-size:var(--f-eyebrow);color:var(--tx-3);display:block}
+.nav{flex:1;overflow-y:auto;margin:0 -4px;padding:0 4px}
+.navgrp{margin-bottom:var(--s2)}
+.navgrp>.eyebrow{padding:0 var(--s1) 7px;display:block}
+.nav button{display:flex;align-items:center;gap:11px;width:100%;min-height:44px;padding:0 var(--s2);
+  border-radius:12px;font-size:var(--f-body);font-weight:650;color:var(--tx-2);margin-bottom:3px}
+.nav button svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round}
+.nav button:hover:not([aria-current]){background:var(--well)}
+.nav button[aria-current]{background:var(--pri-2);color:var(--pri);font-weight:750}
+.nav .bdg{margin-left:auto;font:750 var(--f-eyebrow)/1 var(--mono);padding:4px 7px;border-radius:7px;
+  background:var(--red-2);color:var(--pill-bad-ink)}
+.railfoot{border-top:1px solid var(--line-2);padding-top:12px;font-size:var(--f-micro);color:var(--tx-3)}
+.canvas{min-width:0;display:flex;flex-direction:column}
+.appbar{position:sticky;top:0;z-index:9;background:var(--bg);display:flex;align-items:center;
+  gap:var(--s2);flex-wrap:wrap;padding:var(--s3) var(--s3) var(--s2)}
+.appbar h1{font-size:var(--f-h1);letter-spacing:-.015em;line-height:var(--lh-tight)}
+.appbar .sub{font-size:var(--f-small);color:var(--tx-3);margin-top:2px}
+.appbar .sp{flex:1}
+.body{padding:0 var(--s3) var(--s6);min-width:0}
+.filters{padding-bottom:var(--s3)}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--s3)}
+.c3{grid-column:span 3} .c4{grid-column:span 4} .c6{grid-column:span 6}
+.c8{grid-column:span 8} .c12{grid-column:span 12}
+.bottomnav{display:none}
+@media(max-width:1180px){
+  .shell{grid-template-columns:76px 1fr}
+  .railin{padding:var(--s3) 10px var(--s2);align-items:center}
+  .rail .brand{border:0;margin-bottom:var(--s1);padding:0 0 var(--s2)}
+  .rail .brand .txt{display:none}
+  .navgrp>.eyebrow{display:none}
+  .nav button{justify-content:center;padding:0;width:52px;height:52px;flex-direction:column;gap:3px;
+    font-size:9.5px;letter-spacing:.01em}
+  .nav button .lbl{display:block;font-size:9px}
+  .nav .bdg{position:absolute;margin:0;transform:translate(16px,-14px)}
+  .nav button{position:relative}
+  .railfoot{display:none}
+  .c3,.c4{grid-column:span 6} .c6,.c8{grid-column:span 12}
+}
+@media(max-width:760px){
+  /* A STACKED LIST OF THIRTEEN IS NOT A PHONE LAYOUT. M3's answer below 600dp
+     is a navigation bar of up to five, and the rest behind More. */
+  .shell{grid-template-columns:1fr}
+  .rail{display:none}
+  .appbar{padding:var(--s2) var(--s2) var(--s1)}
+  .body{padding:0 var(--s2) 96px}
+  .grid{gap:var(--s2)}
+  .c3,.c4,.c6,.c8{grid-column:span 12}
+  .bottomnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--panel);
+    border-top:1px solid var(--line);padding:6px 4px env(safe-area-inset-bottom,6px)}
+  .bottomnav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    min-height:54px;justify-content:center;font-size:10px;font-weight:650;color:var(--tx-3);
+    border-radius:12px;position:relative}
+  .bottomnav button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;
+    stroke-linecap:round;stroke-linejoin:round}
+  .bottomnav button[aria-current]{color:var(--pri)}
+  .bottomnav .bdg{position:absolute;top:4px;left:50%;margin-left:4px;font:750 9px var(--mono);
+    background:var(--red);color:#fff;border-radius:7px;padding:1px 5px}
+}
+/* ============ LOOK D: OPERATIONS DESK ============ */
+/*@META {"n":"D","slug":"operations-desk","title":"Operations desk","dark":true,
+  "oneline":"Dark by default: a near-black ground, flat panels, and the KPI figures a size up.",
+  "feel":"Built to be read from across the room, the way Grafana and Datadog are. The console already carries a validated dark palette, so this is the cheapest of the four to ship, and the only one that is also a correct answer at ten at night."} */
+
+/* DARK IS NOT AN INVERSION AND THIS DOES NOT MAKE ONE. --panel stays
+   #171B2D and --ch-surface with it, because every dark series step was
+   validated against that exact card. What changes is the GROUND under the
+   panels and the weight of the chrome. */
+body.dark{
+  --bg:#070A14; --panel:#171B2D; --well:#1C2238; --line:#2F3758; --line-2:#272D45;
+  --nm-out:0 0 0 1px var(--line);
+  --nm-out-sm:0 0 0 1px var(--line);
+  --nm-in:inset 0 0 0 1px var(--line);
+  --nm-in-sm:inset 0 0 0 1px var(--line-2);
+  --ch-surface:#171B2D;
+}
+:root{ --r:10px; --r-sm:8px; }
+
+/* READ FROM A DISTANCE. The four figures across the top are the only thing
+   anybody reads from the doorway. */
+.kpi .v{font-size:var(--f-metric-lg)}
+.kpi{min-height:120px}
+
+/* The rail sits a shade below the panels, so the canvas reads as the lit area. */
+body.dark .rail{background:#10142A;box-shadow:1px 0 0 var(--line)}
+body.dark .appbar{background:var(--bg)}
+body.dark .nav button[aria-current]{background:#242A52;color:#C3C8FF}
+body.dark .card>.hd{border-bottom:1px solid var(--line-2);margin:0 var(--s2);
+  padding:var(--s2) 0 10px}
+body.dark .card>.bd{padding-top:var(--s2)}
+body.dark .btn.pri{box-shadow:0 2px 10px rgba(0,0,0,.5)}
+
+.nav button{border-radius:8px}
+.btn,.chip,select.sel,input.inp,.states,.states button{border-radius:8px}
+
+/* Switched to light this look is simply the live palette with squarer
+   corners. That is not a design, and the banner says which way round it is
+   meant to be read. */
+
+</style>
+</head>
+<body class="dark">
+<div class="lab">
+  <b>Look D &middot; Operations desk</b>
+  <span style="opacity:.72">layout 02, navigation rail &mdash; held still across all four</span>
+  <span class="sp"></span>
+  <span style="opacity:.72">one widget's states:</span>
+  <span class="states" id="labStates">
+    <button data-st="ready"   aria-pressed="true">Ready</button>
+    <button data-st="loading" aria-pressed="false">Loading</button>
+    <button data-st="empty"   aria-pressed="false">Empty</button>
+    <button data-st="error"   aria-pressed="false">Error</button>
+  </span>
+  <button id="labTheme">Light</button>
+  <span style="opacity:.72">other looks: <a href="look-1-tinted-canvas.html">A</a> <a href="look-2-warm-document.html">B</a> <a href="look-3-flat-sheet.html">C</a> <a href="look-5-high-contrast.html">E</a> <a href="look-6-dense-console.html">F</a> <a href="look-7-elevated.html">G</a> <a href="look-8-editorial.html">H</a></span>
+  <a href="index.html">All four</a>
+</div>
+<div class="shell">
+  <aside class="rail" aria-label="Sections">
+   <div class="railin">
+    <div class="brand"><span class="lg">SJ</span>
+      <span class="txt"><b>SJGP</b><span>Jangaon Collectorate</span></span></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="railfoot">District Operations Center<br>Build 6.9 · working copy</div>
+   </div>
+  </aside>
+  <main class="canvas">
+    <div class="appbar">
+      <div><h1>Overview</h1><div class="sub" id="sub"></div></div>
+      <span class="sp"></span>
+      <select class="sel"><option>Swachh Jangaon (SJGP)</option><option>Gram Palana</option><option>District HRMS</option></select>
+      <button class="btn pri">Write today's briefing</button>
+    </div>
+    <div class="body">
+      <div class="filters">
+        <label>Month <select class="sel"><option>October 2026 · 10 Oct – 9 Nov</option><option>September 2026</option></select></label>
+        <label>Mandal <select class="sel" id="fMandal"></select></label>
+        <input class="inp" placeholder="Find an officer or village">
+        <span class="chip" aria-pressed="true">Needs orders <b id="nIss"></b></span>
+      </div>
+      <div class="grid" id="grid"></div>
+    </div>
+  </main>
+</div>
+<nav class="bottomnav" id="bnav" aria-label="Sections"></nav>
+<script>
+/* ============================================================================
+   SJGP SAMPLE DATA - shared by all ten mockups.
+
+   WHAT IS REAL AND WHAT IS NOT.
+   Real: the twelve mandal names of Jangaon district, the metric names, the
+   grades A-D, the reporting-month window (10th to 9th), the five parts of the
+   district health index, the notice ladder's vocabulary, the five-kilometre
+   geo-fence and the three-kilometre place-of-duty threshold. Those are taken
+   from app/dashboard.html and backend/Code.gs.
+
+   NOT REAL: every officer name, every village name, every figure, every
+   coordinate. They are generated below from a fixed seed, exactly as
+   tests/fixture-dashboard.js does it, because THIS REPOSITORY IS PUBLIC and
+   the district's roster carries personal mobile numbers. No mockup may show a
+   real officer. A mockup that needs a believable name makes one up.
+   ========================================================================== */
+(function(){
+'use strict';
+
+/* deterministic: the same figures every run, or two screenshots of the same
+   pattern differ for a reason that has nothing to do with the pattern */
+let _s = 20261011;
+const rnd = () => (_s = (_s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+const pick = a => a[Math.floor(rnd() * a.length)];
+const int  = (a, b) => a + Math.floor(rnd() * (b - a + 1));
+
+const MANDALS = ['Jangaon','Chilpur','Devaruppula','Ghanpur (Stn)','Kodakandla',
+  'Lingala Ghanpur','Narmetta','Palakurthy','Raghunathpalle','Tharigoppula',
+  'Bachannapeta','Zaffergadh'];
+
+const FIRST = ['Anil','Bhavani','Chandra','Divya','Eshwar','Ganesh','Harika','Indra',
+  'Jyothi','Kavitha','Lakshmi','Mahesh','Naveen','Padma','Ramesh','Sunitha',
+  'Tarun','Usha','Venkat','Yadagiri','Srinivas','Manjula','Praveen','Sampath'];
+const LAST = ['Reddy','Rao','Kumar','Sharma','Goud','Naik','Yadav','Chary','Babu','Devi'];
+const VSTEM = ['Kistapur','Ananthasagar','Peddapalli','Mallampalli','Gudur','Nagaram',
+  'Cherlapalli','Yellapur','Thimmapur','Rayaparthi','Oglapur','Devareddypalli',
+  'Mustyala','Kothapalli','Bandanagaram','Sarvapur','Pembarthi','Edunuthula'];
+
+const name = () => pick(FIRST) + ' ' + pick(LAST);
+
+/* ---- the roll: 78 villages across 12 mandals ---- */
+const villages = [];
+MANDALS.forEach((m, mi) => {
+  const n = [8,6,7,8,5,6,7,8,5,6,7,5][mi];
+  for(let i = 0; i < n; i++){
+    const score = int(41, 94);
+    villages.push({
+      gp: pick(VSTEM) + ' ' + (i + 1),
+      mandal: m,
+      score: score,
+      grade: score >= 80 ? 'A' : score >= 65 ? 'B' : score >= 50 ? 'C' : 'D',
+      filed: rnd() < 0.5,
+      rf: score < 50 && rnd() < 0.6 ? int(1, 3) : 0,
+      officer: name(),
+      placed: rnd() > 0.03,
+      lat: 17.55 + rnd() * 0.42,
+      lng: 78.95 + rnd() * 0.55
+    });
+  }
+});
+const filed = villages.filter(v => v.filed);
+
+/* ---- the roll of officers ---- */
+const ROLES = ['PS','PS','PS','PS','PS','PS','MPO','MPDO','MSO'];
+const officers = [];
+for(let i = 0; i < 284; i++){
+  const m = pick(MANDALS), role = pick(ROLES);
+  const r = rnd();
+  officers.push({
+    id: 'O' + (1000 + i),
+    name: name(),
+    role: role,
+    mandal: m,
+    gp: role === 'PS' ? pick(VSTEM) + ' ' + int(1, 8) : '',
+    /* A WORKING DAY IN A DISTRICT THAT IS WORKING. The first cut put 24% of
+       the roll unmarked, which turned the status wall in pattern 05 red in
+       eight cells of twelve - and a wall that is two-thirds red is a wall
+       nobody triages, which is the pre-flight's cry-wolf lesson in a
+       different file. 88% marked is the shape of a real morning. */
+    status: r < 0.88 ? 'present' : r < 0.93 ? 'leave' : r < 0.955 ? 'refused' : 'missing',
+    at: String(int(8, 10)).padStart(2,'0') + ':' + String(int(0, 59)).padStart(2,'0'),
+    acc: int(8, 180),
+    dutyKm: +(rnd() * (rnd() < 0.12 ? 38 : 2.4)).toFixed(1),
+    misses: r > 0.955 ? int(1, 5) : 0
+  });
+}
+const by = s => officers.filter(o => o.status === s);
+
+/* ---- the fourteen-day trend ---- */
+const days = [];
+for(let d = 13; d >= 0; d--){
+  const dt = new Date(2026, 9, 9 - d);
+  const sun = dt.getDay() === 0;
+  days.push({
+    d: dt.getDate() + ' ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.getMonth()],
+    iso: dt.toISOString().slice(0, 10),
+    sun: sun,
+    present: sun ? 0 : int(243, 262),
+    leave:   sun ? 0 : int(3, 11),
+    missing: sun ? 0 : int(8, 22),
+    refused: sun ? 0 : int(0, 6),
+    filed:   sun ? 0 : int(1, 6)
+  });
+}
+
+/* ---- coverage by mandal ----
+   carries LAST month as well, because every question worth asking of a
+   mandal is a question about movement: 3 of 6 is a different fact when last
+   month was 1 and when last month was 5. */
+const coverage = MANDALS.map(m => {
+  const all = villages.filter(v => v.mandal === m);
+  const done = all.filter(v => v.filed).length;
+  const sc = all.filter(v => v.filed).map(v => v.score);
+  const avg = sc.length ? Math.round(sc.reduce((a,b) => a + b, 0) / sc.length) : null;
+  return { mandal:m, done:done, total:all.length,
+    pct: Math.round(done / all.length * 100),
+    /* what the schedule says should be filed by today, not by month end */
+    due: Math.round(all.length * 0.62),
+    prevPct: Math.max(4, Math.min(100, Math.round(done / all.length * 100) + int(-26, 22))),
+    avg: avg,
+    prevAvg: avg == null ? null : Math.max(38, Math.min(97, avg + int(-9, 7))),
+    officers: officers.filter(o => o.mandal === m).length,
+    present: officers.filter(o => o.mandal === m && o.status === 'present').length,
+    refused: officers.filter(o => o.mandal === m && o.status === 'refused').length,
+    /* the mandal's own fortnight, as a percentage of its roll marked */
+    series: days.map(d => d.sun ? null : int(72, 100)) };
+});
+
+/* ---- six reporting months, for the trend ----
+   The district adopted the register on 20.07.2026, so July is short at the
+   top and is marked as such rather than being drawn as a bad month. */
+const months = [
+  { ym:'May 2026',  avg:61, filed:48, of:78, part:false },
+  { ym:'Jun 2026',  avg:64, filed:55, of:78, part:false },
+  { ym:'Jul 2026',  avg:63, filed:31, of:78, part:true  },
+  { ym:'Aug 2026',  avg:66, filed:62, of:78, part:false },
+  { ym:'Sep 2026',  avg:69, filed:71, of:78, part:false },
+  { ym:'Oct 2026',  avg:null, filed:null, of:78, part:false, running:true }
+];
+
+/* ---- when the district marks in: thirteen hours of one morning ----
+   An ORDERED scale, so it is drawn in one hue light to dark and never in
+   thirteen identities. */
+const hours = [];
+for(let hh = 6; hh <= 18; hh++){
+  const peak = Math.exp(-Math.pow(hh - 9.4, 2) / 2.1);
+  hours.push({ h:hh, n: Math.round(peak * 96) + (hh >= 8 && hh <= 11 ? int(0, 14) : int(0, 3)) });
+}
+
+/* ---- the exception queue: what actually needs orders ---- */
+const issues = [
+  { p:1, t:'23 attendance marks cannot be trusted as proof of presence',
+    d:'Coarse fix, a phone not on Indian time, or coordinates outside the district.',
+    a:'Ask each officer to mark again with location switched on.', view:'attendance', n:23 },
+  { p:1, t:'4 officers refused by the geo-fence from the same distance every day',
+    d:'A steady distance is the office recorded in the wrong place, not a wandering officer.',
+    a:'Correct the village office before any notice is proposed.', view:'duty', n:4 },
+  { p:2, t:'12 villages at grade D without a red flag',
+    d:'Chilpur 5 (48), Pembarthi 7 (52), Kothapalli 1 (48), Gudur 3 (50).',
+    a:'Direct a fortnightly re-visit; deficiencies carry into next month.', view:'villages', n:12 },
+  { p:2, t:'3 leave applications waiting beyond 48 hours',
+    d:'The oldest has waited 51 hours.',
+    a:'Pass orders today - held days block fresh applications.', view:'leave', n:3 },
+  { p:3, t:'20 villages still to evaluate, 10 working days left',
+    d:'2 a day to close the month on the 9th.',
+    a:'Chase Lingala Ghanpur and Bachannapeta first.', view:'villages', n:20 }
+];
+
+/* ---- leave awaiting orders ---- */
+const leave = [];
+for(let i = 0; i < 7; i++) leave.push({
+  name: name(), role: pick(ROLES), mandal: pick(MANDALS),
+  type: pick(['Casual','Medical','Earned','Optional holiday']),
+  days: int(1, 6), from: int(12, 20) + ' Oct', waited: int(4, 51)
+});
+
+/* ---- the notice ladder ---- */
+const notices = [
+  { no:'—', name:name(), mandal:pick(MANDALS), misses:3, stage:'Proposed', day:'11 Oct' },
+  { no:'—', name:name(), mandal:pick(MANDALS), misses:3, stage:'Proposed', day:'11 Oct' },
+  { no:'SJSP-SCN/142', name:name(), mandal:pick(MANDALS), misses:5, stage:'Served', day:'08 Oct' },
+  { no:'SJSP-SCN/141', name:name(), mandal:pick(MANDALS), misses:4, stage:'Acknowledged', day:'06 Oct' },
+  { no:'SJSP-SCN/139', name:name(), mandal:pick(MANDALS), misses:6, stage:'Cured', day:'02 Oct' }
+];
+
+/* ---- the geo-fence screen ---- */
+/* DERIVED, NEVER TYPED. The first cut carried the real district's 273 of 280
+   beside a sample roll of 78 villages, so the same screen said both. Two
+   figures for one thing is the duplication this whole study is about. */
+const _unplaced = villages.filter(v => !v.placed).length;
+const fence = {
+  on: true, km: 5, total: villages.length,
+  placed: villages.length - _unplaced, unplaced: _unplaced,
+  refusedToday: by('refused').length,
+  steady: [
+    { name:name(), gp:'Mustyala 4', mandal:'Palakurthy', median:7.2, spread:0.4, days:9 },
+    { name:name(), gp:'Gudur 2', mandal:'Chilpur', median:11.8, spread:0.3, days:7 },
+    { name:name(), gp:'Nagaram 6', mandal:'Narmetta', median:6.1, spread:0.6, days:6 },
+    { name:name(), gp:'Oglapur 3', mandal:'Zaffergadh', median:9.4, spread:0.5, days:5 }
+  ],
+  scattered: [
+    { name:name(), gp:'Kistapur 1', mandal:'Jangaon', median:14.2, spread:22.6, days:4 },
+    { name:name(), gp:'Yellapur 5', mandal:'Kodakandla', median:8.8, spread:17.1, days:3 }
+  ]
+};
+
+/* ---- the filing schedule ---- */
+const schedule = { published:true, from:'21 Sept', to:'9 Oct', workingDays:15,
+  acknowledged:198, roll:247,
+  behind: MANDALS.slice(0, 6).map(m => ({ mandal:m, set:int(6,14), filed:int(2,9), by:pick(['MPDO','MPO','MSO','DPO']) })) };
+
+const present = by('present').length, onLeave = by('leave').length,
+      missing = by('missing').length, refused = by('refused').length;
+const grades = { A:filed.filter(v=>v.grade==='A').length, B:filed.filter(v=>v.grade==='B').length,
+                 C:filed.filter(v=>v.grade==='C').length, D:filed.filter(v=>v.grade==='D').length };
+const avg = Math.round(filed.reduce((a,v) => a + v.score, 0) / filed.length);
+
+window.SJ = {
+  district:'Jangaon', state:'Telangana',
+  /* A WORKING DAY, DELIBERATELY. The attendance gate does not open on a
+     Sunday, so a Sunday screen shows a roll of noughts and every layout below
+     would be judged on an empty day. 9 October 2026 is a Friday. */
+  today:'Friday, 9 October 2026',
+  ym:'October 2026', window:'10 Oct - 9 Nov',
+  prevWindow:'September 2026 · 10 Sept - 9 Oct',
+  mandals: MANDALS, villages, filed, officers, days, coverage, issues, leave,
+  notices, fence, schedule, grades, hours,
+  /* the running month carries the figure the rest of the screen is showing,
+     or the trend and the KPI beside it disagree about today */
+  months: months.map(m => m.running
+    ? Object.assign({}, m, { avg: avg, filed: filed.length }) : m),
+  totals:{
+    officers: officers.length, present, onLeave, missing, refused,
+    villages: villages.length, filedN: filed.length, avg, prevAvg: avg - 2,
+    rf: villages.filter(v => v.rf).length,
+    unplaced: villages.filter(v => !v.placed).length,
+    by10: Math.round(present * 0.82),
+    health: 77,
+    parts:[
+      { k:'Attendance', v:null, why:'Sunday - not counted' },
+      { k:'Coverage',   v:100,  why:'39 filed against 17 expected by now' },
+      { k:'Scores',     v:67,   why:'district average 67' },
+      { k:'Red flags',  v:100,  why:'0 of 39 filings flagged' },
+      { k:'Leave desk', v:0,    why:'oldest waiting 51 h' }
+    ]
+  },
+  fmt:{
+    pct:(a,b) => b ? Math.round(a / b * 100) : 0,
+    inits:n => String(n).split(/\s+/).map(w => w[0]).slice(0,2).join('').toUpperCase()
+  }
+};
+})();
+
+</script>
+<script>
+/* ============================================================================
+   CHART HELPERS - shared by all ten mockups, so a chart looks identical
+   whichever layout holds it.
+
+   TWO RULES CARRIED OVER FROM THE CONSOLE, both paid for:
+   1. Colours are TOKENS, never literals. A hardcoded hex is invisible on the
+      dark card and nobody notices until the console is opened in front of the
+      district. An SVG picks a token up through style="", because a
+      presentation attribute cannot resolve a var().
+   2. Charts are laid out at EXACT PIXEL SIZES, never in a scaled viewBox, so a
+      ten-row chart and a three-row chart line up side by side.
+   ========================================================================== */
+(function(){
+'use strict';
+
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- area / line over time ---------- */
+function area(rows, key, colour, w, h){
+  w = w || 640; h = h || 190;
+  const L = 34, R = 10, T = 12, B = 24;
+  const iw = w - L - R, ih = h - T - B;
+  const vals = rows.map(r => r[key]);
+  const max = Math.max(10, Math.ceil(Math.max.apply(null, vals) / 25) * 25);
+  const x = i => L + (rows.length < 2 ? iw / 2 : i * iw / (rows.length - 1));
+  const y = v => T + ih - (v / max) * ih;
+  const pts = rows.map((r, i) => x(i) + ',' + y(r[key]).toFixed(1));
+  let g = '';
+  for(let i = 0; i <= 4; i++){
+    const gy = (T + ih - i * ih / 4).toFixed(1);
+    g += `<line class="gridln" x1="${L}" y1="${gy}" x2="${w - R}" y2="${gy}"/>`
+       + `<text class="axis" x="${L - 7}" y="${+gy + 3.5}" text-anchor="end">${Math.round(max * i / 4)}</text>`;
+  }
+  let ax = '';
+  rows.forEach((r, i) => {
+    const last = i === rows.length - 1;
+    if(i % 3 !== 0 && !last) return;
+    /* and a modulo tick sitting within 46px of the last one is dropped, or
+       "8 Oct" and "9 Oct" print over each other at the right edge */
+    if(!last && x(rows.length - 1) - x(i) < 46) return;
+    /* the last tick is anchored to the end, or an eleven-character date is
+       clipped to "11 Oc" by the right edge of the SVG */
+    ax += `<text class="axis" x="${last ? w - R : x(i)}" y="${h - 7}"
+      text-anchor="${last ? 'end' : i === 0 ? 'start' : 'middle'}">${esc(r.d)}</text>`; });
+  const last = rows[rows.length - 1];
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img"
+    aria-label="${esc(key)} over the last ${rows.length} days">${g}
+    <polygon points="${L},${T + ih} ${pts.join(' ')} ${x(rows.length - 1)},${T + ih}"
+      style="fill:${colour};opacity:.13"/>
+    <polyline points="${pts.join(' ')}" style="fill:none;stroke:${colour};stroke-width:2.2;
+      stroke-linejoin:round;stroke-linecap:round"/>
+    ${rows.map((r, i) => `<circle cx="${x(i)}" cy="${y(r[key]).toFixed(1)}" r="${i === rows.length - 1 ? 4 : 2.4}"
+      style="fill:${colour}"/>`).join('')}
+    <text class="axis" x="${x(rows.length - 1)}" y="${y(last[key]) - 9}" text-anchor="end"
+      style="fill:var(--ch-ink);font-weight:700">${last[key]}</text>${ax}</svg>`;
+}
+
+/* ---------- grouped columns ---------- */
+function columns(rows, series, w, h){
+  w = w || 640; h = h || 210;
+  /* B is deep enough for a rotated twelve-character mandal name: at 35° a
+     90px label needs ~52px of vertical room, and the first build clipped
+     "Devaruppula" to "-avaruppula" at the foot of the SVG. */
+  const L = 34, R = 10, T = 12, B = 64;
+  const iw = w - L - R, ih = h - T - B;
+  const max = Math.max(1, Math.max.apply(null,
+    rows.map(r => Math.max.apply(null, series.map(s => r[s.k])))));
+  /* ONE SERIES IS A HISTOGRAM, NOT A GROUP. The 16px cap exists so that four
+     grouped bars fit inside one slot; applied to a single series it draws
+     thirteen pencils down the middle of a 1300px card and the shape of the
+     morning - which is the whole point - is lost in the gaps. */
+  const step = iw / rows.length;
+  const bw = Math.min(series.length === 1 ? 54 : 16, (step - 10) / series.length);
+  let g = '';
+  for(let i = 0; i <= 4; i++){
+    const gy = (T + ih - i * ih / 4).toFixed(1);
+    g += `<line class="gridln" x1="${L}" y1="${gy}" x2="${w - R}" y2="${gy}"/>`
+       + `<text class="axis" x="${L - 7}" y="${+gy + 3.5}" text-anchor="end">${Math.round(max * i / 4)}</text>`;
+  }
+  let b = '';
+  rows.forEach((r, i) => {
+    const cx = L + i * step + step / 2;
+    series.forEach((s, si) => {
+      const bh = (r[s.k] / max) * ih;
+      const bx = cx - (series.length * bw) / 2 + si * bw;
+      b += `<rect x="${bx.toFixed(1)}" y="${(T + ih - bh).toFixed(1)}" width="${(bw - 2).toFixed(1)}"
+        height="${Math.max(0, bh).toFixed(1)}" rx="2" style="fill:${s.c}"><title>${esc(r.label)} ${esc(s.n)}: ${r[s.k]}</title></rect>`;
+    });
+    b += `<text class="axis" x="${cx}" y="${h - B + 16}" text-anchor="end"
+      transform="rotate(-35 ${cx} ${h - B + 16})">${esc(r.label)}</text>`;
+  });
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img">${g}${b}</svg>`;
+}
+
+/* ---------- donut ---------- */
+function donut(parts, total, caption, size){
+  size = size || 150;
+  const r = size / 2 - 11, cx = size / 2, cy = size / 2, C = 2 * Math.PI * r;
+  const sum = parts.reduce((a, p) => a + p.v, 0) || 1;
+  let off = 0, seg = '';
+  parts.forEach(p => {
+    const len = p.v / sum * C;
+    seg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" style="stroke:${p.c}"
+      stroke-width="18" stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}"
+      stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"><title>${esc(p.k)}: ${p.v}</title></circle>`;
+    off += len;
+  });
+  return `<div style="display:flex;gap:var(--s3);align-items:center;flex-wrap:wrap">
+    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img"
+      aria-label="${esc(caption)}">${seg}
+      <text x="${cx}" y="${cy - 1}" text-anchor="middle" style="font:750 25px var(--mono);fill:var(--ch-ink)">${total}</text>
+      <text x="${cx}" y="${cy + 15}" text-anchor="middle" class="axis" style="letter-spacing:.08em">${esc(caption).toUpperCase()}</text>
+    </svg>
+    <div style="flex:1;min-width:132px">${parts.map(p =>
+      `<div style="display:flex;align-items:center;gap:7px;font-size:var(--f-small);margin:6px 0">
+        <i style="width:10px;height:10px;border-radius:3px;background:${p.c};flex:none"></i>
+        <span style="flex:1;color:var(--tx-2)">${esc(p.k)}</span>
+        <b style="font-family:var(--mono)">${p.v}</b>
+        <span style="width:36px;text-align:right;color:var(--tx-3);font-family:var(--mono)">${Math.round(p.v / sum * 100)}%</span>
+      </div>`).join('')}</div></div>`;
+}
+
+/* ---------- meter: a ratio against a limit is a METER, never a two-slice ring ---- */
+function meter(v, max, label, sub){
+  const p = Math.max(0, Math.min(100, v / max * 100));
+  const col = p >= 80 ? 'var(--st-ok)' : p >= 60 ? 'var(--st-warn)' : 'var(--st-bad)';
+  return `<div>
+    <div style="display:flex;align-items:baseline;gap:var(--s1)">
+      <b style="font:750 var(--f-metric-lg)/1 var(--mono)">${v}</b>
+      <span style="font-size:var(--f-small);color:var(--tx-3)">out of ${max} · ${esc(label)}</span></div>
+    <div class="bar" style="height:11px;margin-top:11px;border-radius:6px">
+      <i style="width:${p}%;background:${col}"></i></div>
+    ${sub ? `<div style="font-size:var(--f-micro);color:var(--tx-3);margin-top:7px">${esc(sub)}</div>` : ''}
+  </div>`;
+}
+
+/* ---------- sparkline, for a table cell ---------- */
+function spark(vals, colour, w, h){
+  w = w || 72; h = h || 22;
+  const max = Math.max.apply(null, vals) || 1, min = Math.min.apply(null, vals);
+  const rg = (max - min) || 1;
+  const pts = vals.map((v, i) => (i * w / (vals.length - 1)).toFixed(1) + ',' +
+    (h - 2 - ((v - min) / rg) * (h - 4)).toFixed(1));
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"
+    style="display:inline-block;vertical-align:middle"><polyline points="${pts.join(' ')}"
+    style="fill:none;stroke:${colour || 'var(--cs1)'};stroke-width:1.6;stroke-linejoin:round"/></svg>`;
+}
+
+/* ---------- ordered scale: ONE hue light to dark, never a rainbow ---------- */
+const ORD = ['var(--co1)','var(--co2)','var(--co3)','var(--co4)','var(--co5)'];
+function heat(rows, cols, get, rowLabel, colLabel){
+  let h = `<div class="twrap"><table><thead><tr><th>${esc(rowLabel)}</th>`
+    + cols.map(c => `<th>${esc(c)}</th>`).join('') + `</tr></thead><tbody>`;
+  rows.forEach(r => {
+    h += `<tr><td>${esc(r.label)}</td>` + cols.map((c, ci) => {
+      const v = get(r, c, ci);
+      const band = v == null ? -1 : Math.min(4, Math.floor(v / 25));
+      return `<td class="num" style="background:${v == null ? 'transparent' : ORD[band]};
+        color:${band >= 3 ? '#fff' : 'var(--tx)'}">${v == null ? '—' : v}</td>`;
+    }).join('') + `</tr>`;
+  });
+  return h + `</tbody></table></div>`;
+}
+
+/* ---------- a schematic district: twelve mandals, no tiles, no network ------
+   A real choropleth needs a boundary file this repository does not carry and
+   a tile server a district network blocks. A TILE MAP says the same thing
+   about twelve units and says it at any bandwidth: one cell per mandal,
+   shaded by the measure, named in full. */
+function tilemap(cells, caption){
+  return `<div>
+    <div class="tilemap">
+      ${cells.map(c => {
+        const band = Math.min(4, Math.floor(c.v / 25));
+        return `<button class="tile" style="background:${ORD[band]};color:${band >= 3 ? '#fff' : 'var(--tx)'}"
+          title="${esc(c.label)}: ${c.v}% · ${esc(c.sub || '')}">
+          <b>${esc(c.short || c.label)}</b><span style="color:${band >= 3 ? 'rgba(255,255,255,.82)' : 'var(--tx-2)'}">${c.v}%</span>
+        </button>`; }).join('')}
+    </div>
+    <div class="legend" style="justify-content:space-between">
+      <span>${esc(caption)}</span>
+      <span style="display:flex;align-items:center;gap:5px">0%
+        ${ORD.map(c => `<i style="background:${c};width:18px;height:10px;border-radius:2px;margin:0"></i>`).join('')}
+      100%</span></div></div>`;
+}
+
+
+/* ============================================================================
+   SIX MORE FORMS. Each is here because a question this register actually asks
+   is answered badly by the forms above, not because a chart library has them.
+   prompt/dashboard-charts-prompt.md carries the method; the short version is
+   that the form follows the data's job.
+   ========================================================================== */
+
+/* ---------- line: several series over time, AND the days the office shut ---
+   THE LIVE CONSOLE DRAWS FOURTEEN CALENDAR DAYS AND DRAWS THEM ALL THE SAME.
+   backend/Code.gs:4402 builds the window by counting back fourteen days, and
+   app/dashboard.html:2093 plots every one of them identically, so "District
+   activity - last 14 days" dives to nothing twice a fortnight and reads as a
+   collapse. The nought is TRUE - the attendance gate does not open on a
+   Sunday - but a chart that does not say which days were working days is
+   asking the reader to carry the calendar in his head, and on a week with a
+   General Holiday it is three cliffs, not two. The shut days are banded and
+   the line BREAKS across them: a line drawn through a day nobody worked
+   invents a reading, which is the same fault as the spline the console
+   already took out. */
+function line(rows, series, w, h, opts){
+  w = w || 640; h = h || 200; opts = opts || {};
+  const shut = opts.shut || (r => r.sun);
+  const L = 36, R = 12, T = 14, B = 30;
+  const iw = w - L - R, ih = h - T - B;
+  const all = [];
+  rows.forEach(r => series.forEach(s => { if(r[s.k] != null && !shut(r)) all.push(r[s.k]); }));
+  const max = opts.max || Math.max(10, Math.ceil(Math.max.apply(null, all.concat([1])) / 25) * 25);
+  const min = opts.min || 0;
+  const x = i => L + (rows.length < 2 ? iw / 2 : i * iw / (rows.length - 1));
+  const y = v => T + ih - ((v - min) / (max - min)) * ih;
+
+  let band = '';
+  rows.forEach((r, i) => {
+    if(!shut(r)) return;
+    const half = rows.length < 2 ? iw / 2 : iw / (rows.length - 1) / 2;
+    band += `<rect x="${(x(i) - half).toFixed(1)}" y="${T}" width="${(half * 2).toFixed(1)}"
+      height="${ih}" style="fill:var(--ch-grid);opacity:.55"><title>${esc(r.d)} - the office was shut</title></rect>`;
+  });
+  let g = '';
+  for(let i = 0; i <= 4; i++){
+    const gy = (T + ih - i * ih / 4).toFixed(1);
+    g += `<line class="gridln" x1="${L}" y1="${gy}" x2="${w - R}" y2="${gy}"/>`
+       + `<text class="axis" x="${L - 7}" y="${+gy + 3.5}" text-anchor="end">${Math.round(min + (max - min) * i / 4)}</text>`;
+  }
+  let pl = '';
+  series.forEach(s => {
+    /* BREAK the line rather than bridging a day nobody worked */
+    let run = [], segs = [];
+    rows.forEach((r, i) => {
+      if(shut(r) || r[s.k] == null){ if(run.length) segs.push(run); run = []; return; }
+      run.push(x(i) + ',' + y(r[s.k]).toFixed(1));
+    });
+    if(run.length) segs.push(run);
+    segs.forEach(sg => {
+      if(s.area && sg.length > 1){
+        const x0 = sg[0].split(',')[0], x1 = sg[sg.length - 1].split(',')[0];
+        pl += `<polygon points="${x0},${T + ih} ${sg.join(' ')} ${x1},${T + ih}"
+          style="fill:${s.c};opacity:.12"/>`;
+      }
+      pl += `<polyline points="${sg.join(' ')}" style="fill:none;stroke:${s.c};stroke-width:2.2;
+        stroke-linejoin:round;stroke-linecap:round"/>`;
+    });
+    rows.forEach((r, i) => {
+      if(shut(r) || r[s.k] == null) return;
+      pl += `<circle cx="${x(i)}" cy="${y(r[s.k]).toFixed(1)}" r="2.6" style="fill:${s.c}">
+        <title>${esc(r.d)} ${esc(s.n)}: ${r[s.k]}</title></circle>`;
+    });
+  });
+  /* EVERY POINT IS LABELLED WHEN THERE ARE FEW ENOUGH TO LABEL. The modulo
+     was written for a fortnight; applied to six reporting months it printed
+     May, Aug and Oct and left the reader counting the gaps. */
+  const every = rows.length <= 8 ? 1 : 3;
+  let ax = '';
+  rows.forEach((r, i) => {
+    const last = i === rows.length - 1;
+    if(i % every !== 0 && !last) return;
+    if(!last && every > 1 && x(rows.length - 1) - x(i) < 46) return;
+    ax += `<text class="axis" x="${last ? w - R : x(i)}" y="${h - 9}"
+      text-anchor="${last ? 'end' : i === 0 ? 'start' : 'middle'}">${esc(r.d)}</text>`; });
+  /* A BAND NOBODY EXPLAINED IS A SMUDGE. If any day is banded the key says
+     so, however few series there are - the band is the whole point of the
+     chart and it is the one mark on it a reader has never seen before. */
+  const anyShut = rows.some(shut);
+  const leg = (series.length > 1 || anyShut || opts.legend)
+    ? `<div class="legend">${series.map(s => `<span><i style="background:${s.c}"></i>${esc(s.n)}</span>`).join('')}
+       ${anyShut ? '<span><i style="background:var(--ch-grid)"></i>office shut, no mark due</span>' : ''}</div>` : '';
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img"
+    aria-label="${esc(series.map(s => s.n).join(', '))} over ${rows.length} days">
+    ${band}${g}${pl}${ax}</svg>${leg}`;
+}
+
+/* ---------- stacked columns: the COMPOSITION of a day ----------------------
+   Present, on leave and not marked are parts of one roll, not three
+   independent series. Three lines make the reader add them up; one column
+   per day shows the whole roll and the shape of the part that matters. */
+function stack(rows, series, w, h, opts){
+  w = w || 640; h = h || 200; opts = opts || {};
+  const L = 36, R = 12, T = 14, B = 30;
+  const iw = w - L - R, ih = h - T - B;
+  const tot = r => series.reduce((a, s) => a + (r[s.k] || 0), 0);
+  const max = Math.max(1, Math.ceil(Math.max.apply(null, rows.map(tot)) / 25) * 25);
+  const step = iw / rows.length, bw = Math.min(26, step - 5);
+  let g = '';
+  for(let i = 0; i <= 4; i++){
+    const gy = (T + ih - i * ih / 4).toFixed(1);
+    g += `<line class="gridln" x1="${L}" y1="${gy}" x2="${w - R}" y2="${gy}"/>`
+       + `<text class="axis" x="${L - 7}" y="${+gy + 3.5}" text-anchor="end">${Math.round(max * i / 4)}</text>`;
+  }
+  let b = '';
+  rows.forEach((r, i) => {
+    const cx = L + i * step + step / 2;
+    if(tot(r) === 0){
+      b += `<text class="axis" x="${cx}" y="${T + ih - 5}" text-anchor="middle"
+        style="opacity:.75">shut</text>`;
+    }
+    let acc = 0;
+    series.forEach(s => {
+      const v = r[s.k] || 0; if(!v) return;
+      const bh = v / max * ih;
+      b += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${(T + ih - acc - bh).toFixed(1)}"
+        width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" style="fill:${s.c}">
+        <title>${esc(r.d)} ${esc(s.n)}: ${v}</title></rect>`;
+      acc += bh;
+    });
+  });
+  let ax = '';
+  rows.forEach((r, i) => {
+    const last = i === rows.length - 1;
+    if(i % 3 !== 0 && !last) return;
+    const cx = L + i * step + step / 2;
+    if(!last && (L + (rows.length - 1) * step + step / 2) - cx < 46) return;
+    ax += `<text class="axis" x="${cx}" y="${h - 9}" text-anchor="middle">${esc(r.d)}</text>`; });
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img">${g}${b}${ax}</svg>
+    <div class="legend">${series.map(s =>
+      `<span><i style="background:${s.c}"></i>${esc(s.n)}</span>`).join('')}</div>`;
+}
+
+/* ---------- one stacked bar, laid ACROSS -----------------------------------
+   A single composition - four grades over one month - drawn as a vertical
+   stacked column is a 26px sliver standing in the middle of a 600px card,
+   and it reads worse than the ring it was meant to replace. Laid across, it
+   uses the width the card actually has, the segments share one baseline, and
+   the figures sit under them where they are read. */
+function stackbar(parts, w, opts){
+  opts = opts || {};
+  w = w || 520;
+  const H = opts.h || 44;
+  const sum = parts.reduce((a, p) => a + p.v, 0) || 1;
+  let x = 0, seg = '';
+  parts.forEach((p, i) => {
+    const pw = p.v / sum * w;
+    seg += `<rect x="${x.toFixed(1)}" y="0" width="${Math.max(0, pw - (i < parts.length - 1 ? 1.5 : 0)).toFixed(1)}"
+      height="${H}" style="fill:${p.c}"><title>${esc(p.k)}: ${p.v} (${Math.round(p.v / sum * 100)}%)</title></rect>`;
+    /* the figure goes INSIDE the segment when it fits, and the key carries it
+       when it does not - never half out over the next colour */
+    if(pw > 42) seg += `<text x="${(x + pw / 2).toFixed(1)}" y="${H / 2 + 5}" text-anchor="middle"
+      style="font:750 13px var(--mono);fill:#fff">${p.v}</text>`;
+    x += pw;
+  });
+  return `<svg width="${w}" height="${H}" viewBox="0 0 ${w} ${H}" role="img"
+    aria-label="${esc(opts.label || 'composition')}" style="border-radius:var(--r-sm)">${seg}</svg>
+    <div class="legend">${parts.map(p =>
+      `<span><i style="background:${p.c}"></i>${esc(p.k)} <b style="font-family:var(--mono)">${p.v}</b>
+       <span style="color:var(--tx-3)">${Math.round(p.v / sum * 100)}%</span></span>`).join('')}</div>`;
+}
+
+/* ---------- dumbbell: two readings of the same unit, and the gap -----------
+   "Chilpur is at 50%" is half a fact. A dumbbell puts last month and this
+   month on one row and makes the LENGTH of the connector the thing you read,
+   which is the question a review actually asks. Sorted by the movement, not
+   by the name: an alphabetical list of changes hides the changes. */
+function dumbbell(rows, w, h, opts){
+  opts = opts || {};
+  const lw = opts.labelW || 118, R = 44;
+  w = w || 520;
+  const rh = 26, T = 22;
+  h = h || (rows.length * rh + T + 14);
+  const iw = w - lw - R;
+  const max = opts.max || 100;
+  const x = v => lw + (v / max) * iw;
+  let g = '';
+  for(let i = 0; i <= 4; i++){
+    const gx = (lw + i * iw / 4).toFixed(1);
+    g += `<line class="gridln" x1="${gx}" y1="${T - 8}" x2="${gx}" y2="${T + rows.length * rh - 10}"/>`
+       + `<text class="axis" x="${gx}" y="${T - 12}" text-anchor="middle">${Math.round(max * i / 4)}</text>`;
+  }
+  let b = '';
+  rows.forEach((r, i) => {
+    const cy = T + i * rh + 4;
+    const up = r.b >= r.a;
+    const col = up ? 'var(--st-ok)' : 'var(--st-bad)';
+    b += `<text class="axis" x="${lw - 9}" y="${cy + 4}" text-anchor="end"
+        style="fill:var(--ch-ink);font-family:var(--sans);font-size:var(--f-small)">${esc(r.label)}</text>
+      <line x1="${x(r.a).toFixed(1)}" y1="${cy}" x2="${x(r.b).toFixed(1)}" y2="${cy}"
+        style="stroke:${col};stroke-width:3;stroke-linecap:round;opacity:.5"/>
+      <circle cx="${x(r.a).toFixed(1)}" cy="${cy}" r="4.5" style="fill:var(--ch-surface);
+        stroke:var(--st-idle);stroke-width:2"><title>${esc(r.label)} ${esc(opts.aName || 'before')}: ${r.a}</title></circle>
+      <circle cx="${x(r.b).toFixed(1)}" cy="${cy}" r="5" style="fill:${col}">
+        <title>${esc(r.label)} ${esc(opts.bName || 'now')}: ${r.b}</title></circle>
+      <text class="axis" x="${w - 7}" y="${cy + 4}" text-anchor="end"
+        style="fill:${col};font-weight:700">${up ? '+' : ''}${r.b - r.a}</text>`;
+  });
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img">${g}${b}</svg>
+    <div class="legend"><span><i style="background:var(--st-idle)"></i>${esc(opts.aName || 'before')}</span>
+      <span><i style="background:var(--st-ok)"></i>${esc(opts.bName || 'now')}, up</span>
+      <span><i style="background:var(--st-bad)"></i>${esc(opts.bName || 'now')}, down</span></div>`;
+}
+
+/* ---------- bullet: actual against WHAT WAS DUE, which is not the total ----
+   The house rule is that a ratio against a limit is a meter. A bullet is that
+   meter with the limit drawn on it: the bar is what is filed, the tick is
+   what the schedule says should be filed BY TODAY, and the pale track is the
+   whole mandal. Reading 3 of 6 against 6 says a mandal is halfway; reading it
+   against the 4 that were due says it is one behind, which is the fact the
+   Collector acts on. */
+function bullet(rows, w, h, opts){
+  opts = opts || {};
+  const lw = opts.labelW || 118, R = 54;
+  w = w || 520;
+  const rh = 26, T = 10;
+  h = h || (rows.length * rh + T + 8);
+  const iw = w - lw - R;
+  let b = '';
+  rows.forEach((r, i) => {
+    const cy = T + i * rh;
+    const mx = Math.max(r.total, r.due, r.v) || 1;
+    const bw = v => (v / mx) * iw;
+    const behind = r.v < r.due;
+    b += `<text class="axis" x="${lw - 9}" y="${cy + 12}" text-anchor="end"
+        style="fill:var(--ch-ink);font-family:var(--sans);font-size:var(--f-small)">${esc(r.label)}</text>
+      <rect x="${lw}" y="${cy + 3}" width="${bw(r.total).toFixed(1)}" height="14" rx="3"
+        style="fill:var(--ch-grid)"><title>${esc(r.label)}: ${r.total} villages in all</title></rect>
+      <rect x="${lw}" y="${cy + 3}" width="${bw(r.v).toFixed(1)}" height="14" rx="3"
+        style="fill:${behind ? 'var(--st-warn)' : 'var(--st-ok)'}">
+        <title>${esc(r.label)}: ${r.v} filed</title></rect>
+      <line x1="${(lw + bw(r.due)).toFixed(1)}" y1="${cy}" x2="${(lw + bw(r.due)).toFixed(1)}"
+        y2="${cy + 20}" style="stroke:var(--ch-ink);stroke-width:2.4">
+        <title>${r.due} due by today</title></line>
+      <text class="axis" x="${w - 7}" y="${cy + 14}" text-anchor="end"
+        style="fill:${behind ? 'var(--st-warn)' : 'var(--st-ok)'};font-weight:700">${r.v}/${r.due}</text>`;
+  });
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img">${b}</svg>
+    <div class="legend"><span><i style="background:var(--st-ok)"></i>filed and on pace</span>
+      <span><i style="background:var(--st-warn)"></i>filed but behind</span>
+      <span><i style="background:var(--ch-ink);width:3px;height:14px;border-radius:0"></i>due by today</span>
+      <span><i style="background:var(--ch-grid)"></i>the whole mandal</span></div>`;
+}
+
+/* ---------- small multiples: twelve mandals, one fortnight each ------------
+   Twelve lines on one axis is a plate of spaghetti and twelve tabs is twelve
+   clicks. Twelve SMALL charts on one identical scale is the comparison, and
+   the eye finds the odd one out without reading a single figure. The scale is
+   shared deliberately: a sparkline normalised to its own range makes a flat
+   mandal look as dramatic as a collapsing one. */
+function sparkgrid(cells, w, opts){
+  opts = opts || {};
+  /* EXACT PIXELS, NOT A STRETCHED viewBox. The first cut drew each cell at
+     132x40 with preserveAspectRatio="none" and let the grid stretch it, which
+     is precisely the scaled viewBox the house rule forbids: the horizontal
+     scale then differs from the vertical one and every slope on the screen is
+     a lie about its own steepness. The grid is measured, the cell width is
+     worked out from it, and each chart is drawn at that width. */
+  w = w || 960;
+  const gap = 8;
+  const cols = w >= 760 ? 4 : w >= 520 ? 3 : 2;
+  const CW = Math.max(96, Math.floor((w - gap * (cols - 1)) / cols));
+  const W = CW - 18, H = 40;
+  return `<div class="sparkgrid" style="grid-template-columns:repeat(${cols},${CW}px)">${cells.map(c => {
+    const vals = c.vals;
+    const seen = vals.filter(v => v != null);
+    const lastV = seen.length ? seen[seen.length - 1] : null;
+    const col = lastV == null ? 'var(--st-idle)'
+      : lastV >= (opts.ok != null ? opts.ok : 92) ? 'var(--st-ok)'
+      : lastV >= (opts.warn != null ? opts.warn : 82) ? 'var(--st-warn)' : 'var(--st-bad)';
+    const min = opts.min != null ? opts.min : 60, max = opts.max != null ? opts.max : 100;
+    let run = [], segs = [];
+    vals.forEach((v, i) => {
+      if(v == null){ if(run.length) segs.push(run); run = []; return; }
+      run.push((4 + i * (W - 8) / (vals.length - 1)).toFixed(1) + ',' +
+        (H - 5 - ((Math.max(min, Math.min(max, v)) - min) / (max - min)) * (H - 12)).toFixed(1));
+    });
+    if(run.length) segs.push(run);
+    return `<div class="spk">
+      <div class="spkh"><b>${esc(c.label)}</b><span style="color:${col}">${lastV == null ? '—' : lastV + '%'}</span></div>
+      <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">
+        <line class="gridln" x1="0" y1="${H - 5 - ((((opts.ok != null ? opts.ok : 92)) - min) / (max - min)) * (H - 12)}"
+          x2="${W}" y2="${H - 5 - ((((opts.ok != null ? opts.ok : 92)) - min) / (max - min)) * (H - 12)}"
+          style="stroke-dasharray:3 3"/>
+        ${segs.map(sg => `<polyline points="${sg.join(' ')}" style="fill:none;stroke:${col};
+          stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round"/>`).join('')}
+      </svg></div>`; }).join('')}</div>
+    <div class="legend"><span>one fortnight per mandal, all on the same ${opts.min != null ? opts.min : 60}&ndash;${opts.max != null ? opts.max : 100}% scale &middot; the dashed line is ${opts.ok != null ? opts.ok : 92}%</span></div>`;
+}
+
+/* ---------- lollipop: twelve ranked magnitudes ----------------------------
+   A ranked list of twelve is read down the LABELS, and a full bar puts a
+   great deal of ink between the name and the figure that ends it. A stem and
+   a dot carry the same length with a tenth of the ink, which is Tufte's point
+   and is also simply easier to scan on a weak monitor. */
+function lollipop(rows, w, h, opts){
+  opts = opts || {};
+  const lw = opts.labelW || 118, R = 46;
+  w = w || 520;
+  const rh = 24, T = 20;
+  h = h || (rows.length * rh + T + 10);
+  const iw = w - lw - R;
+  const max = opts.max || Math.max.apply(null, rows.map(r => r.v).concat([1]));
+  let g = '';
+  for(let i = 0; i <= 4; i++){
+    const gx = (lw + i * iw / 4).toFixed(1);
+    g += `<line class="gridln" x1="${gx}" y1="${T - 7}" x2="${gx}" y2="${T + rows.length * rh - 12}"/>`
+       + `<text class="axis" x="${gx}" y="${T - 11}" text-anchor="middle">${Math.round(max * i / 4)}</text>`;
+  }
+  let b = '';
+  rows.forEach((r, i) => {
+    const cy = T + i * rh + 3;
+    const cx = lw + (r.v / max) * iw;
+    const col = r.c || 'var(--cs1)';
+    b += `<text class="axis" x="${lw - 9}" y="${cy + 4}" text-anchor="end"
+        style="fill:var(--ch-ink);font-family:var(--sans);font-size:var(--f-small)">${esc(r.label)}</text>
+      <line x1="${lw}" y1="${cy}" x2="${cx.toFixed(1)}" y2="${cy}"
+        style="stroke:${col};stroke-width:2;opacity:.42"/>
+      <circle cx="${cx.toFixed(1)}" cy="${cy}" r="5" style="fill:${col}">
+        <title>${esc(r.label)}: ${r.v}${esc(opts.unit || '')}</title></circle>
+      <text class="axis" x="${w - 7}" y="${cy + 4}" text-anchor="end"
+        style="fill:var(--ch-ink);font-weight:700">${esc(r.right != null ? r.right : r.v + (opts.unit || ''))}</text>`;
+  });
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img">${g}${b}</svg>`;
+}
+
+/* ---------- fit: render a chart at the container's EXACT pixel width -------
+   The house rule is that charts are laid out at exact pixel sizes and never in
+   a scaled viewBox, so a ten-row chart and a three-row chart line up side by
+   side. A fixed pixel width is also how a 660px chart pushes a 390px phone
+   sideways by 302, which is what the render check caught on the first build.
+   Both are satisfied by MEASURING the container and drawing at that size:
+   still exact pixels, never a scale transform, and it survives a resize and a
+   theme switch. Charts registered here redraw on both. */
+const _fits = [];
+function fit(elOrId, draw, height){
+  const el = typeof elOrId === 'string' ? document.getElementById(elOrId) : elOrId;
+  if(!el) return;
+  _fits.push({ el, draw, height });
+  _paint({ el, draw, height });
+}
+function _paint(f){
+  const w = Math.max(240, Math.floor(f.el.clientWidth));
+  f.el.innerHTML = f.draw(w, f.height);
+}
+function redraw(){ _fits.forEach(_paint); }
+let _t;
+window.addEventListener('resize', () => { clearTimeout(_t); _t = setTimeout(redraw, 120); });
+
+window.CH = { area, columns, donut, meter, spark, heat, tilemap,
+  line, stack, stackbar, dumbbell, bullet, sparkgrid, lollipop,
+  esc, ORD, fit, redraw };
+})();
+
+</script>
+<script>
+const S = window.SJ, C = window.CH, T = S.totals;
+const I = {
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  user:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  home:'<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  chart:'<line x1="4" y1="20" x2="4" y2="10"/><line x1="10" y1="20" x2="10" y2="4"/><line x1="16" y1="20" x2="16" y2="13"/>',
+  cal:'<rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/>',
+  bell:'<path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/>',
+  pin:'<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
+  map:'<polygon points="1 6 8 3 16 6 23 3 23 18 16 21 8 18 1 21"/>',
+  doc:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+  mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2 7 12 13 22 7"/>',
+  cog:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9z"/>',
+  more:'<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>'
+};
+/* THREE GROUPS OF FOUR, not thirteen in a row. Material's rail guidance is
+   3-7 destinations; the console's own rail carries thirteen flat. */
+const GROUPS = [
+  { g:'Monitor', items:[['Overview', I.grid, 0], ['Attendance', I.user, 0],
+      ['Place of duty', I.pin, S.fence.refusedToday], ['Map', I.map, 0]] },
+  { g:'The month', items:[['Villages', I.home, 0], ['Analytics', I.chart, 0],
+      ['Schedule', I.cal, 0], ['GPDP', I.doc, 0]] },
+  { g:'Orders', items:[['Leave', I.mail, S.leave.length], ['Notices', I.bell, 2],
+      ['Advisory', I.doc, 0], ['Admin', I.cog, 0]] }
+];
+const sv = d => '<svg viewBox="0 0 24 24">' + d + '</svg>';
+document.getElementById('nav').innerHTML = GROUPS.map(G =>
+  `<div class="navgrp"><span class="eyebrow">${G.g}</span>` + G.items.map(([n, ic, b], i) =>
+    `<button ${G.g === 'Monitor' && i === 0 ? 'aria-current="page"' : ''}>${sv(ic)}
+      <span class="lbl">${n}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`).join('') +
+  `</div>`).join('');
+/* the phone gets five, and More */
+document.getElementById('bnav').innerHTML = [['Overview', I.grid, 0], ['Attendance', I.user, 0],
+  ['Villages', I.home, 0], ['Orders', I.bell, S.leave.length + 2], ['More', I.more, 0]]
+  .map(([n, ic, b], i) => `<button ${i === 0 ? 'aria-current="page"' : ''}>${sv(ic)}<span>${n}</span>
+    ${b ? `<span class="bdg">${b}</span>` : ''}</button>`).join('');
+
+document.getElementById('sub').textContent = S.today + ' · ' + S.ym + ' (' + S.window + ')';
+document.getElementById('nIss').textContent = S.issues.length;
+document.getElementById('fMandal').innerHTML = '<option>All 12 mandals</option>' +
+  S.mandals.map(m => '<option>' + m + '</option>').join('');
+
+const kp = (cls, l, v, u, f) => `<div class="kpi ${cls}"><div class="k">${l}</div>
+  <div class="v">${v}${u ? ' <small>' + u + '</small>' : ''}</div><div class="foot">${f}</div></div>`;
+
+document.getElementById('grid').innerHTML = `
+  <div class="c3">${kp('', 'Marked attendance', T.present, 'of ' + T.officers, S.fmt.pct(T.present, T.officers) + '% of the roll')}</div>
+  <div class="c3">${kp('bad', 'Not marked', T.missing, '', 'tap for the names')}</div>
+  <div class="c3">${kp('teal', 'Villages evaluated', T.filedN, 'of ' + T.villages, 'month closes 9 Nov')}</div>
+  <div class="c3">${kp('violet', 'District average', T.avg, '/ 100', 'against ' + T.prevAvg + ' last month')}</div>
+
+  <section class="card c8">
+    <div class="hd">Attendance · last 14 days<span class="r">received by the district</span></div>
+    <div class="bd"><div class="plot" id="pTrend"></div></div>
+  </section>
+  <section class="card c4">
+    <div class="hd">Evaluation outcomes<span class="r">${S.ym}</span></div>
+    <div class="bd">${C.donut([
+      { k:'Grade A', v:S.grades.A, c:'var(--st-ok)' }, { k:'Grade B', v:S.grades.B, c:'var(--grade-b)' },
+      { k:'Grade C', v:S.grades.C, c:'var(--st-warn)' }, { k:'Grade D', v:S.grades.D, c:'var(--st-bad)' }
+    ], T.filedN, 'filed', 146)}</div>
+  </section>
+
+  <!-- A FORTNIGHT SAYS WHAT IS HAPPENING; SIX MONTHS SAYS WHETHER IT IS
+       BETTER THAN IT WAS. The two questions are asked in the same breath and
+       are answered on the same screen, or the second one never gets asked. -->
+  <section class="card c6">
+    <div class="hd">District average · six months<span class="r">July is short</span></div>
+    <div class="bd"><div class="plot" id="pMonths"></div></div>
+  </section>
+  <section class="card c6">
+    <div class="hd">The whole roll, day by day<span class="r">present &middot; leave &middot; not marked</span></div>
+    <div class="bd"><div class="plot" id="pStack"></div></div>
+  </section>
+
+  <section class="card c6">
+    <div class="hd">Needs your orders<span class="r">${S.issues.length} items</span></div>
+    <div class="bd" id="wIssues"></div>
+  </section>
+  <!-- ALL TWELVE, NOT THE FIRST SEVEN, and against WHAT IS DUE rather than
+       against the whole mandal. Seven bars beside a five-item orders list
+       left 250px of empty card. And "3 of 6" read against 6 says a mandal is
+       halfway; read against the 4 the schedule says should be filed by today
+       it says the mandal is one behind, which is the fact orders are passed
+       on. The bar is filed, the tick is due by today, the pale track is the
+       whole mandal. -->
+  <section class="card c6">
+    <div class="hd">Filed against what is due<span class="r">${T.filedN} of ${T.villages} this month</span></div>
+    <div class="bd"><div class="plot" id="pBullet"></div></div>
+  </section>
+
+  <section class="card c12">
+    <div class="hd">Each mandal's own fortnight<span class="r">share of the mandal's roll marked</span></div>
+    <div class="bd"><div id="pSpark"></div></div>
+  </section>
+
+  <section class="card c12">
+    <div class="hd">Today's marks<span class="r">${T.present} present · ${T.onLeave} on leave · ${T.refused} refused</span></div>
+    <div class="bd"><div class="twrap" style="max-height:380px"><table>
+      <thead><tr><th>Officer</th><th>Role</th><th>Mandal</th><th>Marked</th><th>Accuracy</th>
+        <th>From the place of duty</th><th>Status</th></tr></thead>
+      <tbody>${S.officers.filter(o => o.status !== 'missing').slice(0, 14).map(o => `<tr>
+        <td>${o.name}</td><td class="mut">${o.role}</td><td class="mut">${o.mandal}</td>
+        <td class="num">${o.status === 'leave' ? '—' : o.at}</td>
+        <td class="num">${o.status === 'leave' ? '—' : '±' + o.acc + ' m'}</td>
+        <td class="num">${o.status === 'leave' ? '—' : o.dutyKm + ' km'}</td>
+        <td>${o.status === 'present' ? '<span class="pill ok">present</span>'
+          : o.status === 'leave' ? '<span class="pill info">sanctioned leave</span>'
+          : '<span class="pill warn">refused · outside 5 km</span>'}</td></tr>`).join('')}
+      </tbody></table></div></div>
+  </section>`;
+
+/* THE SUNDAYS ARE BANDED AND THE LINE BREAKS ACROSS THEM. The live console
+   plots fourteen calendar days undifferentiated, so the fortnight dives to
+   nothing twice and reads as a collapse. The nought is true; drawing it like
+   a working day is not. */
+C.fit('pTrend', w => C.line(S.days, [{ k:'present', n:'Marked', c:'var(--cs1)', area:true }],
+  w, 210, { max:280 }));
+C.fit('pMonths', w => C.line(S.months.map(m => ({ d:m.ym.slice(0, 3), avg:m.avg, part:m.part })),
+  [{ k:'avg', n:'District average', c:'var(--cs1)', area:true }],
+  w, 196, { min:40, max:100, shut: () => false, legend:false }));
+C.fit('pStack', w => C.stack(S.days,
+  [{ k:'present', n:'Present',    c:'var(--st-ok)' },
+   { k:'leave',   n:'On leave',   c:'var(--st-warn)' },
+   { k:'missing', n:'Not marked', c:'var(--st-bad)' }], w, 196));
+C.fit('pBullet', w => C.bullet(S.coverage.map(c => ({
+  label:c.mandal, v:c.done, due:c.due, total:c.total })), w));
+C.fit('pSpark', w => C.sparkgrid(S.coverage.map(c => ({
+  label:c.mandal, vals:c.series })), w));
+
+const READY = S.issues.map(x => `<div class="feed"><span class="sev p${x.p}">P${x.p}</span>
+  <div><b style="font-size:var(--f-body)">${x.t}</b>
+    <div style="font-size:var(--f-small);color:var(--tx-2);margin-top:3px">${x.d}</div>
+    <div style="font-size:var(--f-small);color:var(--seal);font-weight:600;margin-top:3px">→ ${x.a}</div>
+  </div></div>`).join('');
+window.setWidgetState = st => {
+  document.getElementById('wIssues').innerHTML =
+    st === 'loading' ? Array(4).fill(0).map((_, i) =>
+        `<div class="skel skel-line" style="width:${[72, 94, 61, 88][i]}%"></div>`).join('')
+  : st === 'empty'   ? `<div class="empty"><b>All clear</b>Nothing needs orders right now.</div>`
+  : st === 'error'   ? `<div class="err"><b>The district could not be reached</b>
+      These figures were read at 09:14 and are not today's.
+      <button class="btn sm" style="display:block">Try again</button></div>`
+  : READY;
+};
+window.setWidgetState('ready');
+window.onThemeChange = C.redraw;
+</script>
+<script>
+(function(){
+  var t = document.getElementById('labTheme');
+  if(t) t.onclick = function(){
+    document.body.classList.toggle('dark');
+    t.textContent = document.body.classList.contains('dark') ? 'Light' : 'Dark';
+    if(window.onThemeChange) window.onThemeChange();
+  };
+  var s = document.getElementById('labStates');
+  if(s) s.addEventListener('click', function(e){
+    var b = e.target.closest('button[data-st]'); if(!b) return;
+    [].forEach.call(s.querySelectorAll('button'), function(x){
+      x.setAttribute('aria-pressed', String(x === b)); });
+    if(window.setWidgetState) window.setWidgetState(b.dataset.st);
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,223 @@
+<!--@META {"n":"07","slug":"drilldown","title":"Drill-down hierarchy with breadcrumb","origin":"Power BI drillthrough / eGramSwaraj / Jal Jeevan Mission","family":"Hierarchical"} -->
+<!--@CSS-->
+/* ZONES: breadcrumb (the only navigation) / summary of the level you are on /
+   the children of that level as the table / one chart scoped to the level.
+   District > mandal > village > the officer who holds it. The SAME four zones
+   are redrawn at every level, so a reader learns one screen and uses it four
+   times, and the breadcrumb is the whole of the back button - Polaris's rule
+   that a reader must be able to return without the browser's own control.
+
+   This is also the report-dense family: at the leaf the table IS the content,
+   which is what a government reporting console actually looks like. */
+.page{max-width:1760px;margin:0 auto;padding:0 var(--s3) var(--s6)}
+.crumbs{position:sticky;top:0;z-index:9;background:var(--bg);display:flex;align-items:center;
+  gap:6px;flex-wrap:wrap;padding:var(--s3) 0 var(--s2)}
+.crumb{display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:0 13px;border-radius:11px;
+  font-size:var(--f-body);font-weight:650;color:var(--tx-2);background:var(--panel);
+  box-shadow:var(--nm-out-sm)}
+.crumb:hover{color:var(--tx)}
+.crumb[aria-current]{background:var(--pri-2);color:var(--pri);box-shadow:none}
+.crumbs .sep{color:var(--tx-3);font-size:var(--f-small)}
+.crumbs .sp{flex:1}
+.lvl{display:flex;align-items:flex-end;gap:var(--s2);flex-wrap:wrap;padding-bottom:var(--s2)}
+.lvl h1{font-size:var(--f-h1);letter-spacing:-.015em}
+.lvl .sub{font-size:var(--f-small);color:var(--tx-3);margin-top:2px}
+.lvl .sp{flex:1}
+.sum{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--s3);margin-bottom:var(--s3)}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--s3)}
+.c4{grid-column:span 4} .c5{grid-column:span 5} .c7{grid-column:span 7}
+.c8{grid-column:span 8} .c12{grid-column:span 12}
+.drill tbody tr{cursor:pointer}
+.drill tbody tr td:first-child{font-weight:650}
+.drill tbody tr td:first-child::after{content:' →';color:var(--tx-3);font-weight:400}
+.drill.leaf tbody tr{cursor:default}
+.drill.leaf tbody tr td:first-child::after{content:''}
+@media(max-width:1180px){
+  .sum{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .c4,.c5,.c7,.c8{grid-column:span 12}
+}
+@media(max-width:760px){
+  .page{padding:0 var(--s2) var(--s5)}
+  .crumbs{padding:var(--s2) 0 var(--s1);overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
+  .crumbs::-webkit-scrollbar{display:none}
+  .crumb{flex:none}
+  .sum{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s2)}
+  .grid{gap:var(--s2)}
+}
+<!--@HTML-->
+<div class="page">
+  <div class="crumbs" id="crumbs"></div>
+  <div class="lvl" id="lvl"></div>
+  <div class="filters" style="padding-bottom:var(--s3)">
+    <label>Month <select class="sel"><option>October 2026 · 10 Oct – 9 Nov</option><option>September 2026</option></select></label>
+    <label>Measure <select class="sel"><option>Coverage and attendance</option><option>Scores only</option><option>Attendance only</option></select></label>
+    <input class="inp" placeholder="Jump to a mandal, village or officer">
+  </div>
+  <div class="sum" id="sum"></div>
+  <div class="grid" id="grid"></div>
+</div>
+<!--@JS-->
+const S = window.SJ, C = window.CH, T = S.totals;
+let path = [];                      /* [] = district, [mandal], [mandal, village] */
+let state = 'ready';
+
+const kp = (cls, l, v, f) => `<div class="kpi ${cls}"><div class="k">${l}</div>
+  <div class="v">${v}</div><div class="foot">${f}</div></div>`;
+const pctCol = p => p >= 60 ? 'var(--st-ok)' : p >= 35 ? 'var(--st-warn)' : 'var(--st-bad)';
+const barCell = p => `<div style="display:flex;align-items:center;gap:9px">
+  <div class="bar" style="flex:1"><i style="width:${p}%;background:${pctCol(p)}"></i></div>
+  <span style="font-family:var(--mono);width:34px;text-align:right">${p}%</span></div>`;
+
+/* ---- each level answers the same four questions about a different subject -- */
+const LEVELS = {
+  0: () => {
+    const rows = S.coverage;
+    return {
+      title:'Jangaon district', sub:'12 mandals · ' + T.villages + ' villages · ' + T.officers + ' officers',
+      kind:'mandal',
+      sum:[kp('', 'Marked today', T.present + ' / ' + T.officers, S.fmt.pct(T.present, T.officers) + '% of the roll'),
+           kp('bad', 'Not marked', T.missing, 'across 12 mandals'),
+           kp('teal', 'Villages evaluated', T.filedN + ' / ' + T.villages, S.fmt.pct(T.filedN, T.villages) + '% of the month'),
+           kp('violet', 'District average', T.avg + ' / 100', 'against ' + T.prevAvg + ' last month'),
+           kp('warn', 'Refused by the fence', T.refused, 'a distance, not a default')],
+      head:['Mandal', 'Officers', 'Marked', 'Refused', 'Villages', 'Filed', 'Coverage', 'Average'],
+      body:rows.map((c, i) => `<tr data-i="${i}"><td>${c.mandal}</td>
+        <td class="num">${c.officers}</td><td class="num">${c.present}</td>
+        <td class="num">${c.refused || '—'}</td><td class="num">${c.total}</td>
+        <td class="num">${c.done}</td><td>${barCell(c.pct)}</td>
+        <td class="num">${c.avg == null ? '—' : c.avg}</td></tr>`).join(''),
+      pick:i => path = [rows[i].mandal],
+      chartTitle:'Attendance · the district · last 14 days',
+      chart:w => C.area(S.days, 'present', 'var(--cs1)', w, 200),
+      sideTitle:'Mandals ranked by coverage',
+      side:[...rows].sort((a, b) => b.pct - a.pct).map(c => `<div class="hbar">
+        <b>${c.mandal}</b><div class="bar"><i style="width:${c.pct}%;background:${pctCol(c.pct)}"></i></div>
+        <span class="n">${c.done}/${c.total}</span></div>`).join('')
+    };
+  },
+  1: () => {
+    const c = S.coverage.find(x => x.mandal === path[0]);
+    const rows = S.villages.filter(v => v.mandal === path[0]);
+    const offs = S.officers.filter(o => o.mandal === path[0]);
+    return {
+      title:c.mandal + ' mandal', sub:c.total + ' villages · ' + c.officers + ' officers · of Jangaon district',
+      kind:'village',
+      sum:[kp('', 'Marked today', c.present + ' / ' + c.officers, S.fmt.pct(c.present, c.officers) + '% of the mandal'),
+           kp('bad', 'Not marked', c.officers - c.present - c.refused, 'tap for the names'),
+           kp('teal', 'Villages evaluated', c.done + ' / ' + c.total, c.pct + '% of the mandal'),
+           kp('violet', 'Mandal average', (c.avg == null ? '—' : c.avg + ' / 100'), 'district is ' + T.avg),
+           kp('warn', 'Refused by the fence', c.refused || 0, 'check the office, not the man')],
+      head:['Village', 'Officer who holds it', 'Filed', 'Score', 'Grade', 'Red flag', 'Office placed'],
+      body:rows.map((v, i) => `<tr data-i="${i}"><td>${v.gp}</td>
+        <td class="mut">${v.officer}</td>
+        <td>${v.filed ? '<span class="pill ok">filed</span>' : '<span class="pill mut">pending</span>'}</td>
+        <td class="num">${v.filed ? v.score : '—'}</td>
+        <td class="num">${v.filed ? '<span class="gr gr' + v.grade + '">' + v.grade + '</span>' : '—'}</td>
+        <td class="num">${v.rf ? '<span class="pill bad">RF' + v.rf + '</span>' : '—'}</td>
+        <td>${v.placed ? '<span class="pill ok">placed</span>' : '<span class="pill warn">no office</span>'}</td></tr>`).join(''),
+      pick:i => path = [path[0], rows[i].gp],
+      chartTitle:'Attendance · ' + c.mandal + ' · last 14 days',
+      chart:w => C.area(S.days.map(d => ({ d:d.d, present:Math.round(d.present * c.officers / T.officers) })),
+        'present', 'var(--cs1)', w, 200),
+      sideTitle:'Officers of ' + c.mandal,
+      side:offs.slice(0, 8).map(o => `<div class="row ${o.status === 'present' ? '' :
+          o.status === 'refused' ? 'warn' : 'bad'}">
+        <span class="av">${S.fmt.inits(o.name)}</span>
+        <div><b>${o.name}</b><span>${o.role}${o.gp ? ' · ' + o.gp : ''}</span></div>
+        <span class="t">${o.status === 'present' ? o.at : o.status === 'leave' ? 'leave'
+          : o.status === 'refused' ? o.dutyKm + ' km' : '—'}</span></div>`).join('')
+    };
+  },
+  2: () => {
+    const v = S.villages.find(x => x.mandal === path[0] && x.gp === path[1]);
+    return {
+      title:v.gp, sub:v.mandal + ' mandal · held by ' + v.officer + ' · of Jangaon district',
+      kind:null, leaf:true,
+      sum:[kp(v.filed ? 'teal' : 'warn', 'This month', v.filed ? 'Filed' : 'Pending',
+             v.filed ? 'evaluated 3 Oct' : 'due by 9 Nov'),
+           kp('', 'Score', v.filed ? v.score + ' / 100' : '—', 'district average ' + T.avg),
+           kp(v.grade === 'A' ? 'ok' : v.grade === 'D' ? 'bad' : 'warn', 'Grade',
+             v.filed ? v.grade : '—', v.filed ? 'band ' + v.grade : 'not yet evaluated'),
+           kp(v.rf ? 'bad' : 'ok', 'Red flags', v.rf || 0, v.rf ? 'carries into next month' : 'none raised'),
+           kp('violet', 'Office placed', v.placed ? 'Yes' : 'No',
+             v.placed ? 'fenced at 5 km' : 'fences nobody — deliberate')],
+      head:['The 100-mark evaluation', 'Marks', 'Out of', 'Band'],
+      body:[['Household toilets and their use', 18, 20], ['Solid waste - collection and segregation', 14, 20],
+            ['Liquid waste and drains', 11, 20], ['Public and institutional sanitation', 16, 20],
+            ['Records, IEC and community action', v.score - 59, 20]]
+        .map(([k, m, o]) => `<tr><td>${k}</td><td class="num">${m}</td><td class="num">${o}</td>
+          <td>${barCell(Math.round(m / o * 100))}</td></tr>`).join(''),
+      chartTitle:v.gp + ' · score by month',
+      chart:w => C.area(['May','Jun','Jul','Aug','Sep','Oct'].map((m, i) =>
+        ({ d:m, present:[58, 61, 57, 66, 69, v.filed ? v.score : 69][i] })), 'present', 'var(--cs2)', w, 200),
+      sideTitle:'Who answers for it',
+      side:`<dl style="display:grid;grid-template-columns:140px 1fr;gap:9px var(--s2);font-size:var(--f-body)">
+        <dt style="color:var(--tx-3);font-size:var(--f-small)">Panchayat Secretary</dt><dd style="font-weight:600">${v.officer}</dd>
+        <dt style="color:var(--tx-3);font-size:var(--f-small)">Files the evaluation</dt><dd style="font-weight:600">MPDO, ${v.mandal}</dd>
+        <dt style="color:var(--tx-3);font-size:var(--f-small)">Set for</dt><dd style="font-weight:600">14 Oct, by the schedule of 21 Sept</dd>
+        <dt style="color:var(--tx-3);font-size:var(--f-small)">Place of duty</dt><dd style="font-weight:600">${
+          v.placed ? v.lat.toFixed(4) + ', ' + v.lng.toFixed(4) : 'not recorded'}</dd>
+      </dl>
+      <div style="font-size:var(--f-small);color:var(--tx-2);margin-top:var(--s2);line-height:var(--lh-prose)">
+        A Panchayat Secretary holds the village but does not file its evaluation.
+        The schedule names one officer per village, so a village filed by either
+        officer closes the line for both.</div>`
+    };
+  }
+};
+
+function draw(){
+  const L = LEVELS[path.length]();
+  const C_ = [['Jangaon district', 0]];
+  if(path[0]) C_.push([path[0], 1]);
+  if(path[1]) C_.push([path[1], 2]);
+  document.getElementById('crumbs').innerHTML = C_.map(([n, d], i) =>
+    `<button class="crumb" data-d="${d}" ${i === C_.length - 1 ? 'aria-current="page"' : ''}>${n}</button>` +
+    (i < C_.length - 1 ? '<span class="sep">›</span>' : '')).join('') +
+    `<span class="sp"></span><button class="btn sm">Export this level</button>`;
+  document.getElementById('lvl').innerHTML =
+    `<div><div class="eyebrow">${['District', 'Mandal', 'Village'][path.length]}</div>
+      <h1>${L.title}</h1><div class="sub">${L.sub}</div></div><span class="sp"></span>` +
+    (path.length ? `<button class="btn sm" data-up>Up one level</button>` : '');
+  document.getElementById('sum').innerHTML = L.sum.join('');
+  document.getElementById('grid').innerHTML = `
+    <section class="card c8"><div class="hd">${L.chartTitle}</div>
+      <div class="bd"><div class="plot" id="pA"></div></div></section>
+    <section class="card c4"><div class="hd">${L.sideTitle}</div>
+      <div class="bd" style="max-height:340px;overflow:auto">${L.side}</div></section>
+    <section class="card c12">
+      <div class="hd">${L.leaf ? 'The filing' : L.kind === 'mandal' ? 'Its mandals' : 'Its villages'}
+        <span class="r">${L.leaf ? 'the five parts of the hundred marks' : 'tap a row to go down a level'}</span></div>
+      <div class="bd" id="wTable"></div></section>`;
+  C.fit('pA', L.chart);
+  window.setWidgetState(state);
+}
+
+document.addEventListener('click', e => {
+  const c = e.target.closest('.crumb');
+  if(c){ path = path.slice(0, +c.dataset.d); draw(); return; }
+  if(e.target.closest('[data-up]')){ path = path.slice(0, -1); draw(); return; }
+  const tr = e.target.closest('#wTable tr[data-i]');
+  if(tr){ LEVELS[path.length]().pick(+tr.dataset.i); draw(); }
+});
+
+window.setWidgetState = st => {
+  state = st;
+  const L = LEVELS[path.length]();
+  document.getElementById('wTable').innerHTML =
+    st === 'loading' ? Array(7).fill(0).map(() =>
+        `<div class="skel skel-line" style="height:30px"></div>`).join('')
+  : st === 'empty'   ? `<div class="empty"><b>Nothing below this level yet</b>
+      ${path.length ? 'This mandal has no village on the roll.' :
+        'No mandal has reported in this window.'} A nought here is a level that
+      has not been asked, not a level doing nothing.</div>`
+  : st === 'error'   ? `<div class="err"><b>This level could not be read</b>
+      The level above is still good; only its children failed. Nothing is shown
+      rather than figures that may belong to another month.
+      <button class="btn sm" style="display:block">Try again</button></div>`
+  : `<div class="twrap" style="max-height:480px"><table class="drill ${L.leaf ? 'leaf' : ''}">
+      <thead><tr>${L.head.map(h => '<th>' + h + '</th>').join('')}</tr></thead>
+      <tbody>${L.body}</tbody></table></div>`;
+};
+draw();
+window.onThemeChange = C.redraw;

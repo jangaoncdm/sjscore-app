@@ -1,0 +1,13 @@
+# THE SCREENSHOTS ARE OUTPUT, NOT SOURCE. Fifty-nine PNGs come to 13.5 MB,
+# they are regenerated in one command, and this repository is public and
+# carries the field app 280 officers install from. Info/ is ignored for the
+# same reason. They stay on the machine that made them, so the galleries
+# work locally straight away; a fresh clone runs:
+#
+#   npm i playwright --no-save
+#   node build.js && node shoot.js && node gallery.js
+#   node looks/build-looks.js && node looks/build-charts.js
+#   node shoot.js --dir=looks --match='^(look-\d.*|charts|index)\.html$' --themes
+#   node looks/gallery-looks.js
+shots/
+looks/shots/

@@ -1,0 +1,208 @@
+<!--@META {"n":"04","slug":"geo-split","title":"Map-first geographic split","origin":"Swachh Bharat / Jal Jeevan Mission / Esri ArcGIS Dashboards","family":"Geographic"} -->
+<!--@CSS-->
+/* ZONES: filter bar / map canvas (the subject) / docked side panel (the
+   detail) / strip of measures beneath.
+   The Indian government monitoring convention: geography is the index. You
+   pick a place and the panel answers for that place.
+
+   AND IT IS A TILE MAP, NOT A CHOROPLETH. A true choropleth of Jangaon needs
+   a boundary file this repository does not carry and a tile server the
+   district's own network blocks - the console's live map already prints "the
+   map background is blocked on this network" in the field. Twelve mandals in
+   a twelve-cell grid says the same thing about rank and magnitude, reads at
+   any bandwidth, and cannot show a pin in the wrong place. */
+.page{max-width:1760px;margin:0 auto;padding:0 var(--s3) var(--s6)}
+.phead{display:flex;align-items:flex-end;gap:var(--s2);flex-wrap:wrap;padding:var(--s3) 0 var(--s2)}
+.phead h1{font-size:var(--f-h1);letter-spacing:-.015em}
+.phead .sub{font-size:var(--f-small);color:var(--tx-3);margin-top:2px}
+.phead .sp{flex:1}
+.fbar{position:sticky;top:0;z-index:9;background:var(--bg);padding:0 0 var(--s2)}
+.split{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:var(--s3);align-items:start}
+/* no min-height: an empty half-card below the tiles is the "margin instead
+   of content" the console's own render pass fails on */
+.mapcard .bd{display:flex;flex-direction:column;gap:var(--s2)}
+.tile{border-radius:var(--r);padding:var(--s2) 12px;min-height:84px;display:flex;flex-direction:column;
+  justify-content:space-between;align-items:flex-start;text-align:left;box-shadow:var(--nm-in-sm);
+  transition:transform .12s}
+.tile b{font-size:var(--f-small);font-weight:700;line-height:1.3}
+.tile span{font:750 var(--f-h2)/1 var(--mono)}
+.tile:hover{transform:translateY(-2px);box-shadow:var(--nm-out)}
+.tile[aria-pressed=true]{outline:3px solid var(--pri);outline-offset:2px}
+.measures{display:flex;gap:var(--s1);flex-wrap:wrap;padding-bottom:var(--s1)}
+.side{position:sticky;top:76px;display:flex;flex-direction:column;gap:var(--s3)}
+.strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s3);margin-top:var(--s3)}
+@media(max-width:1180px){
+  .split{grid-template-columns:1fr}
+  .side{position:static}
+  .strip{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:760px){
+  .page{padding:0 var(--s2) var(--s5)}
+  .split,.strip{gap:var(--s2)}
+  .strip{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .mapcard{min-height:0}
+  .tile{min-height:68px;padding:11px 10px}
+  .tile b{font-size:var(--f-micro)} .tile span{font-size:var(--f-base)}
+}
+<!--@HTML-->
+<div class="page">
+  <div class="phead">
+    <div><div class="eyebrow">Jangaon district · Telangana · 12 mandals · 78 villages</div>
+      <h1>Where the district stands</h1><div class="sub" id="sub"></div></div>
+    <span class="sp"></span>
+    <button class="btn">Export this view</button>
+  </div>
+  <div class="fbar"><div class="filters">
+    <label>Month <select class="sel"><option>October 2026 · 10 Oct – 9 Nov</option><option>September 2026</option></select></label>
+    <label>Measure <select class="sel" id="fMeasure">
+      <option value="pct">Coverage — villages evaluated</option>
+      <option value="att">Attendance — marked today</option>
+      <option value="avg">Average score out of 100</option>
+      <option value="ref">Refused by the geo-fence</option></select></label>
+    <input class="inp" placeholder="Find a village">
+    <span class="chip" aria-pressed="true">Unplaced villages <b id="nUn"></b></span>
+  </div></div>
+
+  <div class="split">
+    <section class="card mapcard">
+      <div class="hd" id="mapHd">Coverage by mandal<span class="r" id="mapR"></span></div>
+      <div class="bd">
+        <div class="measures" id="meas"></div>
+        <div id="tiles"></div>
+        <div id="wTiles"></div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <section class="card" id="detail"></section>
+      <section class="card">
+        <div class="hd">Villages the district has not placed<span class="r" id="nUn2"></span></div>
+        <div class="bd"><div style="font-size:var(--f-small);color:var(--tx-2);margin-bottom:var(--s1)">
+          A village with no office fences nobody. Until it is placed, its Secretary marks
+          exactly as he did before — which is deliberate, not a gap.</div>
+          <div id="unplaced"></div></div>
+      </section>
+    </aside>
+  </div>
+
+  <div class="strip" id="strip"></div>
+</div>
+<!--@JS-->
+const S = window.SJ, C = window.CH, T = S.totals;
+document.getElementById('sub').textContent = S.today + ' · ' + S.ym + ' (' + S.window + ')';
+document.getElementById('nUn').textContent = S.fence.unplaced;
+document.getElementById('nUn2').textContent = S.fence.unplaced + ' of ' + S.fence.total;
+
+const MEASURE = {
+  pct: { lbl:'Coverage — villages evaluated', v:c => c.pct,  unit:'%',
+         r:() => T.filedN + ' of ' + T.villages + ' villages filed' },
+  att: { lbl:'Attendance — marked today',     v:c => Math.round(c.present / c.officers * 100), unit:'%',
+         r:() => T.present + ' of ' + T.officers + ' officers marked' },
+  avg: { lbl:'Average score out of 100',      v:c => c.avg == null ? 0 : c.avg, unit:'',
+         r:() => 'district average ' + T.avg + ' / 100' },
+  ref: { lbl:'Refused by the geo-fence',      v:c => Math.min(100, c.refused * 25), unit:'',
+         r:() => T.refused + ' refusals today · ' + S.fence.km + ' km radius' }
+};
+let cur = 'pct', sel = S.coverage[0].mandal;
+
+/* NO ABBREVIATION. Shortening "Ghanpur (Stn)" to "Ghanpur" puts it one letter
+   from "Lingala Ghanpur", and CLAUDE.md records that those two are different
+   mandals and that a loose match would quietly merge them. A cell that cannot
+   hold the name wraps; it does not rename the place. */
+const short = m => m;
+
+function tiles(){
+  const M = MEASURE[cur];
+  document.getElementById('mapHd').firstChild.textContent = M.lbl;
+  document.getElementById('mapR').textContent = M.r();
+  document.getElementById('tiles').innerHTML = C.tilemap(S.coverage.map(c => {
+    const v = M.v(c);
+    return { label:c.mandal, short:short(c.mandal), v:v,
+             sub: c.done + ' of ' + c.total + ' filed · ' + c.present + ' of ' + c.officers + ' marked' };
+  }), 'One cell per mandal · tap a cell to read it');
+  /* mark the chosen mandal */
+  [].forEach.call(document.querySelectorAll('#tiles .tile'), (t, i) => {
+    t.setAttribute('aria-pressed', String(S.coverage[i].mandal === sel));
+    t.onclick = () => { sel = S.coverage[i].mandal; tiles(); detail(); };
+  });
+}
+
+function detail(){
+  const c = S.coverage.find(x => x.mandal === sel);
+  const vs = S.villages.filter(v => v.mandal === sel);
+  document.getElementById('detail').innerHTML = `
+    <div class="hd">${c.mandal}<span class="r">${c.officers} officers · ${c.total} villages</span></div>
+    <div class="bd">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--s1) var(--s2);margin-bottom:var(--s2)">
+        ${[['Marked today', c.present + ' of ' + c.officers],
+           ['Villages filed', c.done + ' of ' + c.total],
+           ['Average score', (c.avg == null ? '—' : c.avg + ' / 100')],
+           ['Refused by the fence', c.refused || '—']].map(([k, v]) =>
+          `<div><div class="eyebrow">${k}</div>
+            <div style="font:750 var(--f-h2)/1.2 var(--mono);margin-top:3px">${v}</div></div>`).join('')}
+      </div>
+      <div class="bar" style="height:9px"><i style="width:${c.pct}%;background:${
+        c.pct >= 60 ? 'var(--st-ok)' : c.pct >= 35 ? 'var(--st-warn)' : 'var(--st-bad)'}"></i></div>
+      <div style="font-size:var(--f-micro);color:var(--tx-3);margin-top:6px">${c.pct}% of the mandal evaluated this month</div>
+      <div class="eyebrow" style="margin:var(--s3) 0 var(--s1)">Its villages</div>
+      <div class="twrap" style="max-height:230px"><table>
+        <thead><tr><th>Village</th><th>Filed</th><th>Score</th><th>Grade</th></tr></thead>
+        <tbody>${vs.map(v => `<tr><td>${v.gp}</td>
+          <td>${v.filed ? '<span class="pill ok">filed</span>' : '<span class="pill mut">pending</span>'}</td>
+          <td class="num">${v.filed ? v.score : '—'}</td>
+          <td class="num">${v.filed ? '<span class="gr gr' + v.grade + '">' + v.grade + '</span>' : '—'}</td>
+        </tr>`).join('')}</tbody></table></div>
+      <button class="btn sm" style="margin-top:var(--s2)">Open ${c.mandal} in full</button>
+    </div>`;
+}
+
+document.getElementById('meas').innerHTML = Object.keys(MEASURE).map(k =>
+  `<button class="chip" data-m="${k}" aria-pressed="${k === cur}">${MEASURE[k].lbl.split(' — ')[0]}</button>`).join('');
+document.getElementById('meas').addEventListener('click', e => {
+  const b = e.target.closest('[data-m]'); if(!b) return;
+  cur = b.dataset.m;
+  document.getElementById('fMeasure').value = cur;
+  [].forEach.call(document.querySelectorAll('#meas .chip'),
+    x => x.setAttribute('aria-pressed', String(x.dataset.m === cur)));
+  tiles();
+});
+document.getElementById('fMeasure').onchange = e => {
+  cur = e.target.value;
+  [].forEach.call(document.querySelectorAll('#meas .chip'),
+    x => x.setAttribute('aria-pressed', String(x.dataset.m === cur)));
+  tiles();
+};
+
+document.getElementById('unplaced').innerHTML = S.villages.filter(v => !v.placed).length
+  ? S.villages.filter(v => !v.placed).map(v => `<div class="row warn">
+      <span class="av">!</span><div><b>${v.gp}</b><span>${v.mandal} · ${v.officer}</span></div>
+      <span class="t"><span class="pill warn">no office</span></span></div>`).join('')
+  : `<div class="empty"><b>Every village is placed</b>The order reaches the whole roll.</div>`;
+
+document.getElementById('strip').innerHTML = [
+  ['Officers marked today', T.present + ' / ' + T.officers, S.fmt.pct(T.present, T.officers) + '% of the roll', ''],
+  ['Villages evaluated', T.filedN + ' / ' + T.villages, S.fmt.pct(T.filedN, T.villages) + '% of the month', 'teal'],
+  ['Refused by the fence', String(T.refused), 'a distance, not a default', 'warn'],
+  ['Villages with an office', S.fence.placed + ' / ' + S.fence.total, 'the order reaches ' +
+    S.fmt.pct(S.fence.placed, S.fence.total) + '% of the roll', 'violet']
+].map(([l, v, f, cls]) => `<div class="kpi ${cls}"><div class="k">${l}</div>
+  <div class="v">${v}</div><div class="foot">${f}</div></div>`).join('');
+
+/* the four states, on the map card itself: a map that cannot draw is the one
+   widget on this pattern whose failure takes the whole screen with it */
+window.setWidgetState = st => {
+  const w = document.getElementById('wTiles'), t = document.getElementById('tiles');
+  t.style.display = st === 'ready' ? '' : 'none';
+  w.innerHTML =
+    st === 'loading' ? `<div class="skel" style="height:208px"></div>`
+  : st === 'empty'   ? `<div class="empty"><b>No mandal has reported this measure</b>
+      Nothing has been filed in this window yet. A nought here is a district that has
+      not been asked, not a district doing nothing.</div>`
+  : st === 'error'   ? `<div class="err"><b>The coverage read failed</b>
+      The district answered, but not with this measure. The tiles below would be
+      last hour's figures, so they are withheld rather than shown as today's.
+      <button class="btn sm" style="display:block">Try again</button></div>`
+  : '';
+};
+tiles(); detail(); window.setWidgetState('ready');
+window.onThemeChange = () => { tiles(); C.redraw(); };

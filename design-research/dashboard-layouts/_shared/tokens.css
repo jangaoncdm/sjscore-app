@@ -1,0 +1,88 @@
+/* ============================================================================
+   SJGP LAYOUT RESEARCH - SHARED TOKEN SET
+   ----------------------------------------------------------------------------
+   Lifted verbatim from app/dashboard.html so that the ten mockups differ in
+   LAYOUT ONLY. Nothing here is a new colour decision. The chart series were
+   computed and validated against the district's own console surfaces; the
+   record of that validation, including the palette that failed, is in
+   prompt/palette-validation.txt. Do not pick a chart colour by eye.
+
+   Spacing is the 8pt system already in the console (--s1..--s6).
+   The type scale below is the one measured off the console's existing rules;
+   it was implicit there and is named here so ten files can share it.
+   ========================================================================== */
+
+:root{
+  /* -------- 8pt spacing -------- */
+  --s1:8px; --s2:16px; --s3:24px; --s4:32px; --s5:40px; --s6:48px;
+
+  /* -------- type scale (named from the console's existing sizes) -------- */
+  --f-eyebrow:10.5px;   /* mono uppercase section labels */
+  --f-micro:11.5px;     /* card feet, deltas */
+  --f-small:12.5px;     /* table body, captions */
+  --f-body:13.5px;      /* default reading size */
+  --f-base:14px;        /* card headings */
+  --f-h2:17px;
+  --f-h1:21px;          /* page title */
+  --f-metric:29px;      /* KPI figure, mono */
+  --f-metric-lg:38px;
+  --lh-tight:1.25; --lh:1.45; --lh-prose:1.65;
+
+  /* -------- ground -------- */
+  --bg:#EEF1F7; --panel:#FFFFFF; --well:#F3F5FA; --line:#DFE3EE; --line-2:#E9EDF4;
+  --nm-out:0 0 0 1px var(--line), 0 8px 22px rgba(30,41,70,.07);
+  --nm-out-sm:0 0 0 1px var(--line), 0 2px 6px rgba(30,41,70,.06);
+  --nm-in:inset 0 0 0 1px var(--line);
+  --nm-in-sm:inset 0 0 0 1px var(--line-2);
+
+  /* -------- ink (contrast on white noted) -------- */
+  --tx:#1A2437;    /* 13.9:1 */
+  --tx-2:#46536B;  /* 6.9:1  */
+  --tx-3:#57647D;  /* 5.0:1 - smallest text never lighter than this */
+
+  /* -------- accents -------- */
+  --pri:#4A40CE; --pri-strong:#3A32A5; --pri-2:#E7E5F9;
+  --teal:#0F766E; --teal-2:#D8EEEB;
+  --blue:#1D4ED8; --blue-2:#DEE8FB; --seal:#14532D;
+  --green:#15803D; --green-2:#DCEFE2; --amber:#B45309; --amber-2:#F6E8D2;
+  --red:#B91C1C; --red-2:#F7DFDF; --gold:#8A6508; --violet:#6D28D9; --violet-2:#EAE2F8;
+  --grade-b:#65A30D;
+  --pill-ok-ink:#14532D; --pill-warn-ink:#7C3E06; --pill-bad-ink:#8F1D1D; --pill-info-ink:#1E3A8A;
+  --row-hover:#F8FAFC; --row-hover-2:#E9EDF6;
+  --scrim:rgba(23,35,59,.38);
+  --grad-a:#4A40CE; --grad-b:#0F766E;
+
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  --r:14px; --r-sm:10px;
+
+  /* -------- chart system: TOKENS, never literals -------- */
+  --ch-ink:#1A2437; --ch-muted:#57647D; --ch-grid:#E9EDF4; --ch-axis:#DFE3EE;
+  --ch-surface:#FFFFFF;
+  --cs1:#4f5ce5; --cs2:#0ca38a; --cs3:#e8a020; --cs4:#8b5cf6;
+  --cs5:#d13438; --cs6:#2aa7d8; --cs7:#7c8a12; --cs8:#a62b52;
+  --co1:#a3aaf1; --co2:#8b93ee; --co3:#6f7ae9; --co4:#5462d8; --co5:#3a46c4;
+  --st-ok:#15803D; --st-warn:#B45309; --st-bad:#B91C1C; --st-idle:#8E97AE;
+}
+
+body.dark{
+  --bg:#0E1120; --panel:#171B2D; --well:#1E2338; --line:#2B3149; --line-2:#242A3F;
+  --nm-out:0 0 0 1px var(--line), 0 8px 22px rgba(0,0,0,.45);
+  --nm-out-sm:0 0 0 1px var(--line), 0 2px 6px rgba(0,0,0,.35);
+  --tx:#E6E9F2; --tx-2:#B3BACD; --tx-3:#8E97AE;
+  --pri:#9AA0F5; --pri-strong:#B4B8F9; --pri-2:#232748;
+  --teal:#3EC5AC; --teal-2:#10352F;
+  --blue:#89A9F7; --blue-2:#16244A; --seal:#7FD4A0;
+  --green:#5BD68A; --green-2:#123726; --amber:#E9A93C; --amber-2:#3A2A10;
+  --red:#F1737A; --red-2:#3B1A1E; --gold:#D9B25C; --violet:#A98BF2; --violet-2:#271B44;
+  --grade-b:#9BCB3A;
+  --pill-ok-ink:#A7F3C6; --pill-warn-ink:#F5CE8E; --pill-bad-ink:#FBB6BA; --pill-info-ink:#B9CDFA;
+  --row-hover:#1E2338; --row-hover-2:#262C42;
+  --grad-a:#6B78EA; --grad-b:#17A98F;
+  --ch-ink:#E6E9F2; --ch-muted:#9AA1B8; --ch-grid:#242A3F; --ch-axis:#2F3654;
+  --ch-surface:#171B2D;
+  --cs1:#6b78ea; --cs2:#17a98f; --cs3:#bf8718; --cs4:#8f6ff0;
+  --cs5:#d9484c; --cs6:#2f9fce; --cs7:#8a9a20; --cs8:#b8446a;
+  --co1:#3a46c4; --co2:#5866e0; --co3:#7b87ec; --co4:#a0a9f3; --co5:#c3c9f9;
+  --st-ok:#5BD68A; --st-warn:#E9A93C; --st-bad:#F1737A; --st-idle:#8B93AB;
+}

@@ -1,0 +1,188 @@
+<!--@META {"n":"08","slug":"feed","title":"Work queue and activity feed","origin":"Atlassian / Gmail priority inbox / ServiceNow agent workspace","family":"Task-centric"} -->
+<!--@CSS-->
+/* ZONES: a counted header of what is owed / the queue, grouped by what the
+   reader must DO / a narrow context column / the day's stream underneath.
+   The only one of the ten that is not a dashboard at all. It asks "what does
+   the Collector have to decide today", and every row ends in a button that
+   decides it.
+
+   It exists in this study because the console's real traffic is decisions -
+   leave orders, show-cause approvals, a circular to retire - and a dashboard
+   that reports them as counts makes a man read a figure, go to another screen
+   and find the row again. */
+.page{max-width:1500px;margin:0 auto;padding:0 var(--s3) var(--s6)}
+.phead{display:flex;align-items:flex-end;gap:var(--s2);flex-wrap:wrap;padding:var(--s3) 0 var(--s2)}
+.phead h1{font-size:var(--f-h1);letter-spacing:-.015em}
+.phead .sub{font-size:var(--f-small);color:var(--tx-3);margin-top:2px}
+.phead .sp{flex:1}
+.owed{display:flex;gap:var(--s1);flex-wrap:wrap;padding-bottom:var(--s2)}
+.owed button{display:flex;align-items:baseline;gap:7px;padding:11px var(--s2);border-radius:var(--r);
+  background:var(--panel);box-shadow:var(--nm-out-sm);font-size:var(--f-small);color:var(--tx-2)}
+.owed button b{font:750 var(--f-h2)/1 var(--mono);color:var(--tx)}
+.owed button[aria-pressed=true]{background:var(--pri-2);color:var(--pri);box-shadow:none}
+.owed button[aria-pressed=true] b{color:var(--pri)}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:var(--s3);align-items:start}
+.qgrp{margin-bottom:var(--s3)}
+.qgrp>.eyebrow{display:flex;align-items:center;gap:var(--s1);padding-bottom:var(--s1)}
+.qgrp>.eyebrow i{flex:1;height:1px;background:var(--line);font-style:normal}
+.item{display:flex;gap:var(--s2);align-items:flex-start;padding:var(--s2);border-radius:var(--r);
+  background:var(--panel);box-shadow:var(--nm-out-sm);margin-bottom:var(--s1);
+  border-left:4px solid var(--c,var(--st-idle))}
+.item.p1{--c:var(--st-bad)} .item.p2{--c:var(--st-warn)} .item.p3{--c:var(--blue)}
+.item .mid{flex:1;min-width:0}
+.item b{display:block;font-size:var(--f-body);line-height:1.35}
+.item .why{font-size:var(--f-small);color:var(--tx-2);margin-top:4px;line-height:var(--lh)}
+.item .meta{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:7px;font:var(--f-micro) var(--mono);
+  color:var(--tx-3)}
+.item .acts{display:flex;gap:7px;flex-wrap:wrap;flex:none;align-items:center}
+.item.done{opacity:.52}
+.item.done .acts{display:none}
+.ctx{position:sticky;top:var(--s2);display:flex;flex-direction:column;gap:var(--s2)}
+.stream .feed:first-child{padding-top:0}
+@media(max-width:1180px){.cols{grid-template-columns:1fr}.ctx{position:static}}
+@media(max-width:760px){
+  .page{padding:0 var(--s2) var(--s5)}
+  .cols{gap:var(--s2)}
+  .item{flex-direction:column;gap:11px;padding:var(--s2) 13px}
+  .item .acts{width:100%}
+  .item .acts .btn{flex:1;justify-content:center}
+  .owed button{flex:1 1 calc(50% - var(--s1));min-width:0}
+}
+<!--@HTML-->
+<div class="page">
+  <div class="phead">
+    <div><div class="eyebrow">Jangaon district · Telangana</div>
+      <h1>Your desk</h1><div class="sub" id="sub"></div></div>
+    <span class="sp"></span>
+    <select class="sel"><option>Swachh Jangaon (SJGP)</option><option>Gram Palana</option><option>District HRMS</option></select>
+  </div>
+  <div class="owed" id="owed"></div>
+  <div class="filters" style="padding-bottom:var(--s3)">
+    <label>Mandal <select class="sel" id="fMandal"></select></label>
+    <label>Older than <select class="sel"><option>Any age</option><option>24 hours</option><option>48 hours</option></select></label>
+    <input class="inp" placeholder="Find an officer or a village">
+    <span class="chip" aria-pressed="true">Hide what I have settled</span>
+  </div>
+  <div class="cols">
+    <div id="queue"></div>
+    <aside class="ctx">
+      <section class="card">
+        <div class="hd">The day in one line<span class="r">11:42</span></div>
+        <div class="bd" id="oneline"></div>
+      </section>
+      <section class="card">
+        <div class="hd">As it happens<span class="r">last 90 minutes</span></div>
+        <div class="bd stream" id="wStream"></div>
+      </section>
+    </aside>
+  </div>
+</div>
+<!--@JS-->
+const S = window.SJ, C = window.CH, T = S.totals;
+document.getElementById('sub').textContent =
+  S.today + ' · ' + S.ym + ' (' + S.window + ') · nothing here is passed until you pass it';
+document.getElementById('fMandal').innerHTML = '<option>All 12 mandals</option>' +
+  S.mandals.map(m => '<option>' + m + '</option>').join('');
+
+/* ---- the queue: grouped by the ACT, not by the module it came from ---- */
+const QUEUE = [
+  { g:'Orders to pass', note:'nothing on this list is decided until you decide it', items:
+    S.leave.slice(0, 4).map((l, i) => ({
+      p: l.waited > 48 ? 1 : 2,
+      t: l.name + ' · ' + l.type.toLowerCase() + ' leave, ' + l.days + (l.days === 1 ? ' day' : ' days'),
+      why: l.role + ', ' + l.mandal + ' · from ' + l.from +
+           (l.waited > 48 ? ' · waiting ' + l.waited + ' hours, past the 48 the district allows itself'
+                          : ' · waiting ' + l.waited + ' hours'),
+      meta:['application ' + (4820 + i), l.waited + 'h old'],
+      acts:[['pri', 'Sanction'], ['', 'Refuse with reasons'], ['', 'Open']] }))
+    .concat([{ p:1, t:'2 show-cause notices proposed on the third unmarked day',
+      why:'Proposed by the trigger this morning. Nothing is served and no number is assigned until you approve. Approval locks the app and sends the email.',
+      meta:['Rule 3, Conduct Rules 1964', 'proposed 06:05'],
+      acts:[['pri', 'Approve and serve'], ['', 'Hold'], ['', 'Read both']] }]) },
+
+  { g:'The register is wrong and it is accusing somebody', note:'these cost an honest officer a notice', items:[
+    { p:1, t:'4 officers refused by the fence from the same distance every day',
+      why:'A median of 7.2 km with a spread of 0.4 km over nine days is the village office recorded in the wrong place, not a wandering officer. Each refused day walks him one step up a ladder that ends in a show-cause notice.',
+      meta:['since 1 Oct', '9 days'], acts:[['pri', 'Open the four points'], ['', 'Stand the fence down']] },
+    { p:2, t:'23 marks cannot be trusted as proof of presence',
+      why:'A coarse fix, a phone not on Indian time, or coordinates outside the district. The mark stands and accuses nobody; it simply cannot be read as the place.',
+      meta:['today'], acts:[['', 'List them'], ['', 'Message the 23']] },
+    { p:2, t:S.fence.unplaced + ' villages have no office on the roll',
+      why:'A village the district has not placed fences nobody, which is deliberate. It also means the order reaches ' +
+           S.fmt.pct(S.fence.placed, S.fence.total) + '% of the roll and not all of it.',
+      meta:['since the order of 10.10.2026'], acts:[['', 'Paste the office table']] }
+  ] },
+
+  { g:'Falling behind · a plan, not a charge', note:'no notice, no debit, no lock arises from any of these', items:[
+    { p:3, t:'20 villages still to evaluate, 10 working days left',
+      why:'Two a day closes the month on the 9th. Lingala Ghanpur and Bachannapeta are furthest behind.',
+      meta:['month closes 9 Nov'], acts:[['', 'Open the schedule'], ['', 'Send the reminder']] },
+    { p:3, t:'49 officers have not acknowledged the standing circular',
+      why:'An acknowledgement is receipt, not compliance. It records that the officer saw it, never that he acted on it.',
+      meta:['published 06 Oct', '198 of 247 read'], acts:[['', 'Open the register'], ['', 'Retire it']] }
+  ] }
+];
+
+function queue(){
+  document.getElementById('queue').innerHTML = QUEUE.map(G => `
+    <div class="qgrp"><span class="eyebrow">${G.g}<i></i>
+      <span style="text-transform:none;letter-spacing:0;font-family:var(--sans);font-weight:400">${G.note}</span></span>
+      ${G.items.map((x, i) => `<div class="item p${x.p}" data-g="${G.g}" data-i="${i}">
+        <span class="sev p${x.p}">P${x.p}</span>
+        <div class="mid"><b>${x.t}</b><div class="why">${x.why}</div>
+          <div class="meta">${x.meta.map(m => '<span>' + m + '</span>').join('')}</div></div>
+        <div class="acts">${x.acts.map(([c, n]) =>
+          `<button class="btn sm ${c}">${n}</button>`).join('')}</div>
+      </div>`).join('')}</div>`).join('');
+}
+/* pressing an action settles the row in place: a queue that makes you leave it
+   to act is the thing this pattern exists to avoid */
+document.getElementById('queue').addEventListener('click', e => {
+  const b = e.target.closest('.acts .btn'); if(!b) return;
+  const it = b.closest('.item');
+  it.classList.add('done');
+  it.querySelector('.mid').insertAdjacentHTML('beforeend',
+    `<div style="margin-top:7px;font-size:var(--f-small);color:var(--seal);font-weight:650">
+      ✓ ${b.textContent} — passed at 11:4${(Date.now() / 1000 | 0) % 9}, on the register and on Audit</div>`);
+  count();
+});
+
+function count(){
+  const open = document.querySelectorAll('.item:not(.done)').length;
+  const p1 = document.querySelectorAll('.item.p1:not(.done)').length;
+  document.getElementById('owed').innerHTML = [
+    ['All on your desk', open, true], ['Needs you first', p1, false],
+    ['Leave orders', S.leave.length, false], ['Notices to approve', 2, false],
+    ['Points to correct', 4, false]
+  ].map(([l, n, on]) => `<button aria-pressed="${on}"><b>${n}</b>${l}</button>`).join('');
+}
+
+document.getElementById('oneline').innerHTML = `
+  <div style="font-size:var(--f-body);line-height:var(--lh-prose)">
+    <b>${T.present} of ${T.officers}</b> officers marked, <b>${T.missing}</b> did not and
+    <b>${T.refused}</b> were refused by the fence. <b>${T.filedN} of ${T.villages}</b> villages
+    are evaluated this month, averaging <b>${T.avg}</b>.</div>
+  <div style="margin-top:var(--s2)">${C.meter(T.health, 100, 'district health', 'five weighted parts · attendance is counted')}</div>
+  <div style="font-size:var(--f-micro);color:var(--tx-3);margin-top:11px;line-height:var(--lh)">
+    Written from the figures on this screen alone. Read it as a draft, not as orders.</div>`;
+
+const STREAM = S.officers.filter(o => o.status !== 'missing').slice(0, 8).map(o =>
+  `<div class="feed"><span class="when">${o.at}</span>
+    <div><b style="font-size:var(--f-small);font-weight:650">${o.name}</b>
+      <span style="font-size:var(--f-micro);color:var(--tx-3)">${o.role} · ${o.mandal}</span></div>
+    <span style="margin-left:auto;flex:none">${o.status === 'present'
+      ? '<span class="pill ok">marked</span>' : o.status === 'leave'
+      ? '<span class="pill info">leave</span>' : '<span class="pill warn">refused</span>'}</span></div>`).join('');
+window.setWidgetState = st => {
+  document.getElementById('wStream').innerHTML =
+    st === 'loading' ? Array(5).fill(0).map(() =>
+        `<div class="skel skel-line" style="height:26px"></div>`).join('')
+  : st === 'empty'   ? `<div class="empty"><b>Nothing in 90 minutes</b>
+      Ordinary after the 11:00 cut-off. It is not a fault of the feed.</div>`
+  : st === 'error'   ? `<div class="err"><b>The stream stopped at 11:08</b>
+      Marks may have arrived since and are not shown.
+      <button class="btn sm" style="display:block">Reconnect</button></div>`
+  : STREAM;
+};
+queue(); count(); window.setWidgetState('ready');
+window.onThemeChange = C.redraw;

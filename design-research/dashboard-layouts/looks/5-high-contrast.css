@@ -1,0 +1,52 @@
+/*@META {"n":"E","slug":"high-contrast","title":"High contrast","dark":false,
+  "oneline":"Black ink, 2px rules, no shadows, and every size up a step. Built for a projector and for a reader who is not twenty-five.",
+  "feel":"The console as it has to look in the review room, thrown on a wall by a projector that washes out everything under 7:1. Nothing here is decoration: every rule is structural and every type size went up one step. It is the least pretty of the eight and the only one that survives bad light."} */
+
+/* WCAG AA IS A FLOOR, NOT A TARGET, AND A PROJECTOR EATS THE MARGIN. The
+   live tokens measure 13.9:1, 6.9:1 and 5.0:1 against white, which is right
+   for a monitor. Thrown on a wall in a lit room the 5.0:1 tier is the first
+   thing to go, and the smallest text is the thing that most needs reading.
+   So the three ink steps all move up and the lightest one lands near 9:1. */
+:root{
+  --bg:#FFFFFF; --panel:#FFFFFF; --well:#EEF1F6; --line:#1A2437; --line-2:#98A1B4;
+  --tx:#000000; --tx-2:#141C2C; --tx-3:#323C52;
+  --nm-out:0 0 0 2px var(--line);
+  --nm-out-sm:0 0 0 2px var(--line);
+  --nm-in:inset 0 0 0 2px var(--line);
+  --nm-in-sm:inset 0 0 0 1px var(--line-2);
+  --r:0px; --r-sm:0px;
+  --ch-ink:#000000; --ch-muted:#323C52; --ch-grid:#C3C9D6; --ch-axis:#1A2437;
+  /* one step up, everywhere */
+  --f-eyebrow:11.5px; --f-micro:12.5px; --f-small:13.5px; --f-body:15px;
+  --f-base:16px; --f-h2:20px; --f-h1:26px; --f-metric:34px; --f-metric-lg:44px;
+}
+body.dark{
+  --bg:#000000; --panel:#0C0F1C; --well:#161B2C; --line:#E6E9F2; --line-2:#6C7792;
+  --tx:#FFFFFF; --tx-2:#E6E9F2; --tx-3:#C3C9D6;
+  --nm-out:0 0 0 2px var(--line);
+  --nm-out-sm:0 0 0 2px var(--line);
+  --ch-ink:#FFFFFF; --ch-muted:#C3C9D6; --ch-grid:#3A4158; --ch-axis:#E6E9F2;
+}
+
+.btn,.chip,select.sel,input.inp,.states,.states button,.nav button,
+.bottomnav button,.pill,.sev,.delta,.twrap,.empty,.err,.kpi .ic,.row .av,.spk{border-radius:0}
+.btn.pri{background:var(--pri);box-shadow:none}
+.rail .brand .lg{border-radius:0}
+
+/* a 2px rule under every panel heading, because at distance the gap between
+   a heading and its contents is the first thing that stops reading as a gap */
+.card>.hd{border-bottom:2px solid var(--line);margin:0 var(--s2);padding:var(--s2) 0 10px}
+.card>.bd{padding-top:var(--s2)}
+.appbar{background:var(--tx);padding:var(--s2) var(--s3)}
+.appbar h1{color:#fff} .appbar .sub{color:#fff;opacity:.88}
+.appbar select.sel{background:transparent;color:#fff;box-shadow:inset 0 0 0 2px #fff}
+.appbar select.sel option{color:var(--tx)}
+.appbar .btn.pri{background:#fff;color:#000;box-shadow:none;font-weight:800}
+.appbar .btn.pri:hover{color:#000;filter:none}
+.body{padding-top:var(--s3)}
+
+.rail{border-right:2px solid var(--line)}
+.nav button{border-left:4px solid transparent;padding-left:12px;font-weight:700}
+.nav button[aria-current]{background:var(--pri-2);border-left-color:var(--pri);color:var(--pri-strong)}
+th{border:2px solid var(--line)}
+td{border:1px solid var(--line-2)}

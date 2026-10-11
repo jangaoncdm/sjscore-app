@@ -1,0 +1,175 @@
+<!--@META {"n":"05","slug":"status-wall","title":"Operations status wall","origin":"Grafana / Datadog / NOC video wall","family":"Operational"} -->
+<!--@CSS-->
+/* ZONES: banner (one sentence on the whole district) / status wall of twelve
+   mandal tiles, each a traffic light / alert queue down the right / SLA clocks.
+   Built to be READ ACROSS A ROOM and to answer one question: what is wrong
+   right now. It does not explain; it points. Everything here is live-of-today;
+   nothing on this screen is about the month.
+
+   The colour rule is strict: --st-ok / --st-warn / --st-bad and nothing else.
+   A status wall that uses eight series colours is a wall nobody can triage. */
+.page{max-width:1920px;margin:0 auto;padding:0 var(--s3) var(--s6)}
+.banner{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;margin:var(--s3) 0;
+  padding:var(--s3);border-radius:var(--r);background:var(--panel);box-shadow:var(--nm-out);
+  border-left:8px solid var(--st-warn)}
+.banner .big{font:750 42px/1 var(--mono);letter-spacing:-.02em}
+.banner .say{font-size:var(--f-h2);font-weight:650;line-height:1.35;flex:1;min-width:260px}
+.banner .say span{display:block;font-size:var(--f-small);font-weight:400;color:var(--tx-3);margin-top:4px}
+.clock{text-align:right}
+.clock b{display:block;font:750 var(--f-h2)/1 var(--mono)}
+.clock span{font-size:var(--f-micro);color:var(--tx-3)}
+.wall{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:var(--s3);align-items:start}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s2)}
+.st{border-radius:var(--r);padding:var(--s2);text-align:left;min-height:124px;
+  display:flex;flex-direction:column;gap:6px;box-shadow:var(--nm-out);background:var(--panel);
+  border-top:4px solid var(--c)}
+.st .n{font-size:var(--f-body);font-weight:750;line-height:1.25}
+.st .v{font:750 30px/1 var(--mono);color:var(--c)}
+.st .d{font-size:var(--f-micro);color:var(--tx-3);line-height:1.45;margin-top:auto}
+.st .tag{font:750 var(--f-eyebrow)/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;
+  color:var(--c)}
+.st.ok{--c:var(--st-ok)} .st.warn{--c:var(--st-warn)} .st.bad{--c:var(--st-bad)} .st.idle{--c:var(--st-idle)}
+.queue{position:sticky;top:var(--s2);display:flex;flex-direction:column;gap:var(--s2)}
+.al{display:flex;gap:11px;padding:11px var(--s2);border-radius:var(--r-sm);background:var(--panel);
+  box-shadow:var(--nm-out-sm);border-left:4px solid var(--c);text-align:left;width:100%;align-items:flex-start}
+.al.p1{--c:var(--st-bad)} .al.p2{--c:var(--st-warn)} .al.p3{--c:var(--blue)}
+.al b{display:block;font-size:var(--f-body);line-height:1.35}
+.al span{display:block;font-size:var(--f-micro);color:var(--tx-2);margin-top:3px;line-height:1.5}
+.al .age{margin-left:auto;flex:none;font:var(--f-eyebrow) var(--mono);color:var(--tx-3);padding-top:2px}
+.sla{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s2)}
+.sla>div{padding:var(--s2);border-radius:var(--r);background:var(--panel);box-shadow:var(--nm-out-sm);
+  text-align:center}
+.sla b{display:block;font:750 23px/1 var(--mono);margin-bottom:4px}
+.sla span{font-size:var(--f-eyebrow);color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em}
+.feedcard{max-height:380px;overflow:auto}
+@media(max-width:1400px){.tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1180px){
+  .wall{grid-template-columns:1fr}.queue{position:static}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:760px){
+  .page{padding:0 var(--s2) var(--s5)}
+  .banner{padding:var(--s2);gap:var(--s2)}.banner .big{font-size:32px}
+  .banner .say{font-size:var(--f-base)}
+  .clock{text-align:left}
+  .wall{gap:var(--s2)}.tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s1)}
+  .st{min-height:104px;padding:11px}.st .v{font-size:24px}
+  .sla{grid-template-columns:1fr}
+}
+<!--@HTML-->
+<div class="page">
+  <div class="banner" id="banner"></div>
+  <div class="wall">
+    <div>
+      <div class="filters" style="padding-bottom:var(--s2)">
+        <label>Register <select class="sel"><option>Swachh Jangaon (SJGP)</option><option>Gram Palana</option></select></label>
+        <label>Show <select class="sel" id="fShow">
+          <option value="att">Attendance — marked of due</option>
+          <option value="fen">Geo-fence — refusals today</option>
+          <option value="fil">Filing — behind schedule</option></select></label>
+        <span class="chip" aria-pressed="true">Auto-refresh 60s</span>
+        <span class="chip">Sound on a P1</span>
+      </div>
+      <div class="tiles" id="tiles"></div>
+      <section class="card" style="margin-top:var(--s3)">
+        <div class="hd">Marks as they arrive<span class="r">last 90 minutes</span></div>
+        <div class="bd feedcard" id="wFeed"></div>
+      </section>
+    </div>
+    <aside class="queue">
+      <div class="sla" id="sla"></div>
+      <section class="card">
+        <div class="hd">Alert queue<span class="r" id="qN"></span></div>
+        <div class="bd" id="alerts"></div>
+      </section>
+      <section class="card">
+        <div class="hd">Attendance · today against the fortnight<span class="r">district</span></div>
+        <div class="bd"><div class="plot" id="pA"></div></div>
+      </section>
+    </aside>
+  </div>
+</div>
+<!--@JS-->
+const S = window.SJ, C = window.CH, T = S.totals;
+
+document.getElementById('banner').innerHTML = `
+  <div><div class="eyebrow">Marked of due · ${S.today.split(',')[0]} 11:42</div>
+    <div class="big">${S.fmt.pct(T.present, T.officers)}%</div></div>
+  <div class="say">${T.missing} officers have not marked and ${T.refused} were refused by the fence.
+    <span>Four of the ${T.refused} were refused from the same distance as yesterday — that is an office
+    recorded in the wrong place, not an officer out of station. Correct the point before any notice.</span></div>
+  <div class="clock"><b>18:00</b><span>the day is read at</span></div>
+  <div class="clock"><b>${T.by10}</b><span>marked before 10:00</span></div>`;
+
+const SHOW = {
+  att: { lbl:'marked of due',
+    v:c => ({ n:c.present, d:c.officers, pct:Math.round(c.present / c.officers * 100) }),
+    tag:p => p >= 92 ? 'ok' : p >= 82 ? 'warn' : 'bad',
+    say:(c, x) => (c.officers - c.present) + ' not marked · ' + c.refused + ' refused' },
+  fen: { lbl:'refusals today',
+    v:c => ({ n:c.refused, d:c.officers, pct:c.refused ? 100 - Math.min(100, c.refused * 30) : 100 }),
+    tag:p => p >= 95 ? 'ok' : p >= 70 ? 'warn' : 'bad',
+    say:c => c.refused ? c.refused + ' of ' + c.officers + ' outside 5 km' : 'nobody refused' },
+  fil: { lbl:'villages filed',
+    v:c => ({ n:c.done, d:c.total, pct:c.pct }),
+    tag:p => p >= 60 ? 'ok' : p >= 35 ? 'warn' : 'bad',
+    say:c => (c.total - c.done) + ' still to evaluate' }
+};
+let cur = 'att';
+
+function wall(){
+  const M = SHOW[cur];
+  /* WORST FIRST. A status wall sorted alphabetically makes the reader hunt for
+     the fault; sorted by severity, the top-left cell is the answer. */
+  const rows = S.coverage.map(c => ({ c, x:M.v(c) }))
+    .sort((a, b) => a.x.pct - b.x.pct);
+  document.getElementById('tiles').innerHTML = rows.map(({ c, x }) => {
+    const t = M.tag(x.pct);
+    return `<button class="st ${t}">
+      <span class="tag">${t === 'ok' ? 'normal' : t === 'warn' ? 'watch' : 'act now'}</span>
+      <span class="n">${c.mandal}</span>
+      <span class="v">${x.n}<span style="font-size:var(--f-body);color:var(--tx-3)"> / ${x.d}</span></span>
+      <span class="d">${M.say(c, x)}</span></button>`;
+  }).join('');
+}
+document.getElementById('fShow').onchange = e => { cur = e.target.value; wall(); };
+
+document.getElementById('sla').innerHTML = [
+  ['11:00', 'cut-off', 'var(--tx)'],
+  [S.leave.filter(l => l.waited > 48).length + '', 'leave past 48h', 'var(--st-bad)'],
+  ['2', 'notices to pass', 'var(--st-warn)']
+].map(([b, s, c]) => `<div><b style="color:${c}">${b}</b><span>${s}</span></div>`).join('');
+
+const ALERTS = S.issues.map((x, i) => `<button class="al p${x.p}">
+  <div><b>${x.t}</b><span>${x.d}</span>
+    <span style="color:var(--seal);font-weight:650">→ ${x.a}</span></div>
+  <span class="age">${[6, 18, 41, 51, 96][i]}m</span></button>`).join('');
+document.getElementById('qN').textContent = S.issues.length + ' open';
+document.getElementById('alerts').innerHTML = ALERTS;
+
+C.fit('pA', w => C.area(S.days, 'present', 'var(--cs1)', w, 170));
+
+/* the four states ride on the live feed, which is the one panel on an
+   operations wall whose silence is ambiguous: nothing arriving and nothing
+   working look identical */
+const FEED = S.officers.filter(o => o.status !== 'missing').slice(0, 11).map(o =>
+  `<div class="feed"><span class="when">${o.at}</span>
+    <div style="flex:1"><b style="font-size:var(--f-body)">${o.name}</b>
+      <span style="font-size:var(--f-micro);color:var(--tx-3)">${o.role} · ${o.mandal}${o.gp ? ' · ' + o.gp : ''}</span></div>
+    <span style="flex:none;text-align:right">
+      ${o.status === 'present' ? '<span class="pill ok">±' + o.acc + ' m · ' + o.dutyKm + ' km</span>'
+       : o.status === 'leave' ? '<span class="pill info">sanctioned leave</span>'
+       : '<span class="pill warn">refused · ' + o.dutyKm + ' km out</span>'}</span></div>`).join('');
+window.setWidgetState = st => {
+  document.getElementById('wFeed').innerHTML =
+    st === 'loading' ? Array(5).fill(0).map((_, i) =>
+        `<div class="skel skel-line" style="width:${[88, 72, 94, 65, 81][i]}%;height:24px"></div>`).join('')
+  : st === 'empty'   ? `<div class="empty"><b>No mark in the last 90 minutes</b>
+      That is ordinary after 11:00 — the cut-off has passed. It is not a fault of the feed.</div>`
+  : st === 'error'   ? `<div class="err"><b>The feed stopped at 11:08</b>
+      Thirty-four minutes of marks may have arrived and not be shown. Do not read
+      this panel as the day. <button class="btn sm" style="display:block">Reconnect</button></div>`
+  : FEED;
+};
+wall(); window.setWidgetState('ready');
+window.onThemeChange = C.redraw;

@@ -1,0 +1,258 @@
+<!--@META {"n":"06","slug":"master-detail","title":"Index table + detail drawer","origin":"Shopify Polaris resource index / Carbon data table / Salesforce","family":"Record-centric"} -->
+<!--@CSS-->
+/* ZONES: saved views as tabs / filter and search bar / index table (the
+   subject) / detail drawer over it / bulk action bar when rows are selected.
+   The record is the unit. This is the pattern for the questions that are
+   actually asked of a register - "what about THIS officer", "what about THIS
+   village" - and the only one of the ten in which a reader can act on forty
+   rows at once without leaving the list he found them in. */
+.page{display:flex;flex-direction:column;min-height:100vh}
+.phead{display:flex;align-items:flex-end;gap:var(--s2);flex-wrap:wrap;
+  padding:var(--s3) var(--s3) var(--s2);max-width:1760px;width:100%;margin:0 auto}
+.phead h1{font-size:var(--f-h1);letter-spacing:-.015em}
+.phead .sub{font-size:var(--f-small);color:var(--tx-3);margin-top:2px}
+.phead .sp{flex:1}
+.wrap{max-width:1760px;width:100%;margin:0 auto;padding:0 var(--s3) var(--s6);flex:1;min-width:0}
+.views{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.views::-webkit-scrollbar{display:none}
+.vt{min-height:44px;padding:0 var(--s2);border-bottom:2px solid transparent;margin-bottom:-1px;
+  font-size:var(--f-body);font-weight:650;color:var(--tx-3);white-space:nowrap;border-radius:10px 10px 0 0}
+.vt[aria-selected=true]{color:var(--pri);border-color:var(--pri);background:var(--panel)}
+.vt .c{font-family:var(--mono);font-size:var(--f-micro);color:var(--tx-3);margin-left:6px}
+.toolbar{display:flex;gap:var(--s1);align-items:center;flex-wrap:wrap;padding:var(--s2) 0}
+.toolbar .sp{flex:1}
+.bulk{display:none;align-items:center;gap:var(--s2);flex-wrap:wrap;padding:11px var(--s2);
+  border-radius:var(--r);background:var(--pri-2);color:var(--pri);font-size:var(--f-body);
+  font-weight:650;margin-bottom:var(--s2)}
+.bulk.on{display:flex}
+.bulk .sp{flex:1}
+.idx th:first-child,.idx td:first-child{width:38px;text-align:center;padding-left:var(--s1)}
+.idx td:nth-child(2){text-align:left;font-weight:650;white-space:normal;min-width:170px}
+.idx tbody tr{cursor:pointer}
+.idx tbody tr.sel td{background:var(--pri-2)}
+.pager{display:flex;align-items:center;gap:var(--s2);padding:var(--s2) 0;font-size:var(--f-small);
+  color:var(--tx-3);flex-wrap:wrap}
+.pager .sp{flex:1}
+/* the drawer */
+.scrim{position:fixed;inset:0;background:var(--scrim);opacity:0;pointer-events:none;
+  transition:opacity .16s;z-index:30}
+.scrim.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100%);background:var(--panel);
+  box-shadow:-14px 0 34px rgba(100,116,139,.4);z-index:31;transform:translateX(100%);
+  transition:transform .18s;display:flex;flex-direction:column}
+.drawer.on{transform:none}
+.drawer .dh{display:flex;align-items:flex-start;gap:var(--s2);padding:var(--s3) var(--s3) var(--s2);
+  border-bottom:1px solid var(--line)}
+.drawer .dh h2{font-size:var(--f-h2);letter-spacing:-.01em}
+.drawer .dh .sub{font-size:var(--f-small);color:var(--tx-3);margin-top:3px}
+.drawer .db{flex:1;overflow:auto;padding:var(--s3)}
+.drawer .df{border-top:1px solid var(--line);padding:var(--s2) var(--s3);display:flex;gap:var(--s1);
+  flex-wrap:wrap}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:9px var(--s2);font-size:var(--f-body)}
+.kv dt{color:var(--tx-3);font-size:var(--f-small)}
+.kv dd{color:var(--tx);font-weight:600}
+@media(max-width:760px){
+  .phead{padding:var(--s2) var(--s2) var(--s1)}
+  .wrap{padding:0 var(--s2) var(--s5)}
+  .drawer{width:100%}
+  /* a nine-column index on a 390px screen is a sideways scroll nobody
+     performs: the row becomes a card and the columns become its lines */
+  .idx thead{display:none}
+  .idx,.idx tbody,.idx tr,.idx td{display:block;width:100%}
+  .idx tbody tr{background:var(--panel);border-radius:var(--r);box-shadow:var(--nm-out-sm);
+    margin-bottom:var(--s1);padding:11px var(--s2);border:0}
+  .idx td{border:0;text-align:left!important;padding:3px 0;white-space:normal;
+    display:flex;justify-content:space-between;gap:var(--s2);font-size:var(--f-small)}
+  .idx td::before{content:attr(data-l);color:var(--tx-3);font-size:var(--f-micro);flex:none}
+  .idx td:first-child{width:auto;justify-content:flex-start}
+  .idx td:nth-child(2){font-size:var(--f-base);padding-bottom:7px}
+  .idx td:nth-child(2)::before{display:none}
+  .twrap{background:transparent;box-shadow:none;overflow:visible}
+}
+<!--@HTML-->
+<div class="page">
+  <div class="phead">
+    <div><div class="eyebrow">Jangaon district · Telangana</div>
+      <h1>Officers</h1><div class="sub" id="sub"></div></div>
+    <span class="sp"></span>
+    <button class="btn">Export CSV</button>
+    <button class="btn pri">Add an officer</button>
+  </div>
+  <div class="wrap">
+    <div class="views" id="views" role="tablist"></div>
+    <div class="toolbar">
+      <input class="inp" id="q" placeholder="Find by name, village or mandal" style="min-width:230px">
+      <label class="chip">Mandal <select class="sel" id="fMandal" style="min-height:30px;box-shadow:none;background:transparent"></select></label>
+      <label class="chip">Role <select class="sel" id="fRole" style="min-height:30px;box-shadow:none;background:transparent"></select></label>
+      <span class="sp"></span>
+      <button class="btn sm">Sort: mandal</button>
+      <button class="btn sm">Columns</button>
+    </div>
+    <div class="bulk" id="bulk">
+      <span id="bulkN"></span><span class="sp"></span>
+      <button class="btn sm">Send a message</button>
+      <button class="btn sm">Reset the PIN</button>
+      <button class="btn sm">Export the selection</button>
+      <button class="btn sm" id="bulkX">Clear</button>
+    </div>
+    <div id="wTable"></div>
+    <div class="pager" id="pager"></div>
+  </div>
+</div>
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true"></aside>
+<!--@JS-->
+const S = window.SJ, C = window.CH, T = S.totals;
+document.getElementById('sub').textContent =
+  T.officers + ' on the roll · ' + S.today + ' · ' + S.ym + ' (' + S.window + ')';
+
+const VIEWS = [
+  { k:'all',     n:'All officers', f:() => S.officers },
+  { k:'missing', n:'Not marked today', f:() => S.officers.filter(o => o.status === 'missing') },
+  { k:'refused', n:'Refused by the fence', f:() => S.officers.filter(o => o.status === 'refused') },
+  { k:'ladder',  n:'On the notice ladder', f:() => S.officers.filter(o => o.misses >= 2) },
+  { k:'leave',   n:'On sanctioned leave', f:() => S.officers.filter(o => o.status === 'leave') }
+];
+let view = 'all', picked = {}, state = 'ready';
+
+document.getElementById('views').innerHTML = VIEWS.map(v =>
+  `<button class="vt" role="tab" data-v="${v.k}" aria-selected="${v.k === view}">${v.n}
+     <span class="c">${v.f().length}</span></button>`).join('');
+document.getElementById('fMandal').innerHTML = '<option>All 12</option>' +
+  S.mandals.map(m => '<option>' + m + '</option>').join('');
+document.getElementById('fRole').innerHTML =
+  ['All', 'Panchayat Secretary', 'MPO', 'MPDO', 'MSO'].map(r => '<option>' + r + '</option>').join('');
+
+const STATUS = o => o.status === 'present' ? '<span class="pill ok">present</span>'
+  : o.status === 'leave' ? '<span class="pill info">leave</span>'
+  : o.status === 'refused' ? '<span class="pill warn">refused</span>'
+  : '<span class="pill bad">not marked</span>';
+
+function rows(){ return VIEWS.find(v => v.k === view).f().slice(0, 25); }
+
+function table(){
+  const rs = rows();
+  if(!rs.length) return `<div class="empty"><b>No officer is in this view</b>
+    Nothing matches. On this view that is good news, not an empty table.</div>`;
+  return `<div class="twrap" style="max-height:620px"><table class="idx">
+    <thead><tr><th><input type="checkbox" id="all" aria-label="Select every row"></th>
+      <th>Officer</th><th>Role</th><th>Mandal</th><th>Village held</th><th>Marked</th>
+      <th>Accuracy</th><th>From duty</th><th>Misses this month</th><th>Status</th></tr></thead>
+    <tbody>${rs.map((o, i) => `<tr data-i="${i}" class="${picked[o.id] ? 'sel' : ''}">
+      <td><input type="checkbox" data-pick="${o.id}" ${picked[o.id] ? 'checked' : ''}
+        aria-label="Select ${o.name}"></td>
+      <td data-l="Officer">${o.name}</td>
+      <td data-l="Role" class="mut">${o.role}</td>
+      <td data-l="Mandal" class="mut">${o.mandal}</td>
+      <td data-l="Village held" class="mut">${o.gp || '—'}</td>
+      <td data-l="Marked" class="num">${o.status === 'present' || o.status === 'refused' ? o.at : '—'}</td>
+      <td data-l="Accuracy" class="num">${o.status === 'missing' || o.status === 'leave' ? '—' : '±' + o.acc + ' m'}</td>
+      <td data-l="From duty" class="num">${o.status === 'missing' || o.status === 'leave' ? '—' : o.dutyKm + ' km'}</td>
+      <td data-l="Misses" class="num">${o.misses || '—'}</td>
+      <td data-l="Status">${STATUS(o)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function paint(){
+  window.setWidgetState(state);
+  const n = Object.keys(picked).filter(k => picked[k]).length;
+  const b = document.getElementById('bulk');
+  b.classList.toggle('on', n > 0);
+  document.getElementById('bulkN').textContent = n + (n === 1 ? ' officer selected' : ' officers selected');
+  const rs = rows();
+  document.getElementById('pager').innerHTML = state !== 'ready' ? '' :
+    `<span>Showing ${rs.length} of ${VIEWS.find(v => v.k === view).f().length}</span>
+     <span class="sp"></span><button class="btn sm">Previous</button>
+     <button class="btn sm">Next</button>`;
+}
+
+document.getElementById('views').addEventListener('click', e => {
+  const b = e.target.closest('.vt'); if(!b) return;
+  view = b.dataset.v; picked = {};
+  [].forEach.call(document.querySelectorAll('.vt'),
+    t => t.setAttribute('aria-selected', String(t.dataset.v === view)));
+  paint();
+});
+document.getElementById('wTable').addEventListener('click', e => {
+  const cb = e.target.closest('[data-pick]');
+  if(cb){ picked[cb.dataset.pick] = cb.checked; paint(); return; }
+  if(e.target.id === 'all'){
+    rows().forEach(o => picked[o.id] = e.target.checked); paint(); return; }
+  const tr = e.target.closest('tr[data-i]'); if(!tr) return;
+  open(rows()[+tr.dataset.i]);
+});
+document.getElementById('bulkX').onclick = () => { picked = {}; paint(); };
+
+function open(o){
+  const d = document.getElementById('drawer');
+  d.innerHTML = `
+    <div class="dh">
+      <div style="flex:1"><div class="eyebrow">${o.role} · ${o.mandal}</div>
+        <h2>${o.name}</h2><div class="sub">${o.gp ? 'holds ' + o.gp : 'holds no village — answers for the mandal'}</div></div>
+      <button class="btn sm" id="dx" aria-label="Close">Close</button></div>
+    <div class="db">
+      <div style="display:flex;gap:var(--s1);flex-wrap:wrap;margin-bottom:var(--s3)">${STATUS(o)}
+        ${o.misses ? `<span class="pill bad">${o.misses} misses this month</span>` : ''}
+        ${o.status === 'refused' ? `<span class="pill warn">${o.dutyKm} km from the place of duty</span>` : ''}</div>
+      ${o.status === 'refused' ? `<div class="err" style="margin-bottom:var(--s3)">
+        <b>Refused on each of the last 6 days from 7.2 km</b>
+        A steady distance is the village office recorded in the wrong place, not an
+        officer out of station. Correct the point before a notice is proposed.
+        <button class="btn sm" style="display:block">Open the village office</button></div>` : ''}
+      <div class="eyebrow" style="margin-bottom:var(--s1)">Today</div>
+      <dl class="kv" style="margin-bottom:var(--s3)">
+        <dt>Marked at</dt><dd>${o.status === 'missing' ? 'not marked' : o.at + ' · received 11:4' + (o.acc % 9)}</dd>
+        <dt>Accuracy of the fix</dt><dd>±${o.acc} m${o.acc > 250 ? ' — too coarse to place him' : ''}</dd>
+        <dt>From the place of duty</dt><dd>${o.dutyKm} km${o.dutyKm > 5 ? ' — outside the 5 km radius' : ''}</dd>
+        <dt>Marked out</dt><dd>${o.status === 'present' ? 'not yet — opens 16:4' + (o.acc % 9) : '—'}</dd>
+      </dl>
+      <div class="eyebrow" style="margin-bottom:var(--s1)">This month</div>
+      <dl class="kv" style="margin-bottom:var(--s3)">
+        <dt>Working days</dt><dd>22</dd>
+        <dt>Marked</dt><dd>${22 - (o.misses || 0)}</dd>
+        <dt>On the ladder</dt><dd>${o.misses >= 3 ? 'show-cause proposed — awaiting your orders'
+          : o.misses >= 1 ? 'reminder sent on miss ' + o.misses + ' — no sanction arises' : 'nothing stands'}</dd>
+        <dt>Casual leave left</dt><dd>${11 - (o.misses || 0)} of 15</dd>
+      </dl>
+      <div class="eyebrow" style="margin-bottom:var(--s1)">Attendance · last 14 days</div>
+      <div class="plot" id="dPlot"></div>
+    </div>
+    <div class="df">
+      <button class="btn pri">Send a message</button>
+      <button class="btn">Reset the PIN</button>
+      <button class="btn">Open the full record</button></div>`;
+  d.classList.add('on'); d.setAttribute('aria-hidden', 'false');
+  document.getElementById('scrim').classList.add('on');
+  C.fit('dPlot', w => C.area(S.days, 'present', 'var(--cs1)', w, 150));
+  document.getElementById('dx').onclick = close;
+  document.getElementById('dx').focus();
+}
+function close(){
+  document.getElementById('drawer').classList.remove('on');
+  document.getElementById('drawer').setAttribute('aria-hidden', 'true');
+  document.getElementById('scrim').classList.remove('on');
+}
+document.getElementById('scrim').onclick = close;
+document.addEventListener('keydown', e => { if(e.key === 'Escape') close(); });
+
+window.setWidgetState = st => {
+  state = st;
+  document.getElementById('wTable').innerHTML =
+    st === 'loading' ? `<div class="twrap" style="padding:var(--s2)">` +
+        Array(8).fill(0).map(() => `<div class="skel skel-line" style="height:30px"></div>`).join('') + `</div>`
+  : st === 'empty'   ? `<div class="empty"><b>No officer is in this view</b>
+      Nothing matches these filters. Clear the mandal and the role to widen it.</div>`
+  : st === 'error'   ? `<div class="err"><b>The roll could not be read</b>
+      The district answered, but not with the roll. Nothing is shown rather than
+      a list that may be yesterday's.
+      <button class="btn sm" style="display:block">Try again</button></div>`
+  : table();
+  if(st !== 'ready'){
+    document.getElementById('bulk').classList.remove('on');
+    document.getElementById('pager').innerHTML = '';
+  }
+};
+paint();
+/* the drawer is the whole point of this pattern, so the camera opens it */
+window.labDemo = () => open(rows()[2]);
+
+window.onThemeChange = C.redraw;

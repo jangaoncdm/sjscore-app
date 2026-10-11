@@ -1,0 +1,74 @@
+[
+  {
+    "n": "A",
+    "slug": "tinted-canvas",
+    "title": "Tinted canvas",
+    "out": "look-1-tinted-canvas.html",
+    "dark": false,
+    "oneline": "Deeper cool ground, white panels, a hairline ring instead of a drop shadow, and the house indigo as a command bar across the top.",
+    "feel": "A modern administrative console. Closest to what is live, but the ground is darker so the panels read as paper laid on a desk rather than as faint boxes."
+  },
+  {
+    "n": "B",
+    "slug": "warm-document",
+    "title": "Warm document",
+    "out": "look-2-warm-document.html",
+    "dark": false,
+    "oneline": "Warm paper ground, no shadows anywhere, near-square corners, and mono uppercase panel headings.",
+    "feel": "A district return rather than a web app. Nothing floats and nothing glows; every division on the screen is a printed rule. Calm on a long afternoon, and it photographs well in a review slide."
+  },
+  {
+    "n": "C",
+    "slug": "flat-sheet",
+    "title": "Flat sheet",
+    "out": "look-3-flat-sheet.html",
+    "dark": false,
+    "oneline": "White page, no cards at all. Sections are divided by a rule and by whitespace, under a near-black service bar.",
+    "feel": "GOV.UK and USWDS take this line: a card is chrome, and chrome costs reading. The figures sit directly on the page, so a weak monitor and a weak connection both render it faithfully. The least decorated of the four and the fastest to read."
+  },
+  {
+    "n": "D",
+    "slug": "operations-desk",
+    "title": "Operations desk",
+    "out": "look-4-operations-desk.html",
+    "dark": true,
+    "oneline": "Dark by default: a near-black ground, flat panels, and the KPI figures a size up.",
+    "feel": "Built to be read from across the room, the way Grafana and Datadog are. The console already carries a validated dark palette, so this is the cheapest of the four to ship, and the only one that is also a correct answer at ten at night."
+  },
+  {
+    "n": "E",
+    "slug": "high-contrast",
+    "title": "High contrast",
+    "out": "look-5-high-contrast.html",
+    "dark": false,
+    "oneline": "Black ink, 2px rules, no shadows, and every size up a step. Built for a projector and for a reader who is not twenty-five.",
+    "feel": "The console as it has to look in the review room, thrown on a wall by a projector that washes out everything under 7:1. Nothing here is decoration: every rule is structural and every type size went up one step. It is the least pretty of the eight and the only one that survives bad light."
+  },
+  {
+    "n": "F",
+    "slug": "dense-console",
+    "title": "Dense console",
+    "out": "look-6-dense-console.html",
+    "dark": false,
+    "oneline": "The 8pt grid run at 6pt and every type size down a step, so appreciably more of the district fits on one screen.",
+    "feel": "For the reader who wants the whole morning in one view and will not scroll for it. It buys about a fifth of the page height back. What it costs is reading comfort and, on a phone, touch targets, which is why the phone keeps the full sizes."
+  },
+  {
+    "n": "G",
+    "slug": "elevated",
+    "title": "Elevated",
+    "out": "look-7-elevated.html",
+    "dark": false,
+    "oneline": "Material 3 proper: a tonal indigo ground, 20px panels on real elevation, and fully rounded controls.",
+    "feel": "The most conventionally modern of the eight, and the one a visitor would call finished. Elevation does the grouping that rules do elsewhere. The cost is that soft shadows are the first thing a cheap monitor renders as mud, which is the ground the console already walked away from once."
+  },
+  {
+    "n": "H",
+    "slug": "editorial",
+    "title": "Editorial",
+    "out": "look-8-editorial.html",
+    "dark": false,
+    "oneline": "Serif headings, hairline rules, one accent and a great deal of air. The register as a published document.",
+    "feel": "The only one of the eight that does not look like software. Headings are set in Georgia, which is on every machine already and is not a webfont, so the app still opens with no signal. It reads slowly and deliberately, which suits a screen that issues notices and does not suit one somebody scans at eight in the morning."
+  }
+]

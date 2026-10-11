@@ -1,0 +1,177 @@
+<!--@META {"n":"01","slug":"kpi-grid","title":"KPI strip + chart grid","origin":"Few / Power BI / Grafana","family":"Analytical"} -->
+<!--@CSS-->
+/* ZONES: filter bar (sticky) / KPI strip / 12-col chart grid / detail table.
+   The canonical analytical dashboard. Everything on one plane, read left to
+   right and top to bottom, with the summary above the explanation. */
+.page{max-width:1760px;margin:0 auto;padding:0 var(--s3) var(--s6)}
+.phead{display:flex;align-items:flex-end;gap:var(--s3);flex-wrap:wrap;padding:var(--s3) 0 var(--s2)}
+.phead h1{font-size:var(--f-h1);letter-spacing:-.015em;line-height:var(--lh-tight)}
+.phead .meta{font-size:var(--f-small);color:var(--tx-3);margin-top:3px}
+.phead .sp{flex:1}
+.fbar{position:sticky;top:0;z-index:9;background:var(--bg);padding:var(--s1) 0 var(--s2);
+  box-shadow:0 10px 10px -10px rgba(30,41,70,.10)}
+.strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--s3);margin-bottom:var(--s3)}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--s3)}
+.c3{grid-column:span 3} .c4{grid-column:span 4} .c5{grid-column:span 5}
+.c6{grid-column:span 6} .c7{grid-column:span 7} .c8{grid-column:span 8} .c12{grid-column:span 12}
+/* every row of the grid sums to twelve, and cards in one row share a height */
+.grid>.card{align-self:stretch}
+@media(max-width:1180px){
+  .strip{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .c3,.c4,.c5{grid-column:span 6} .c6,.c7,.c8{grid-column:span 12}
+}
+@media(max-width:760px){
+  .page{padding:0 var(--s2) var(--s5)}
+  .strip{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s2)}
+  .grid{gap:var(--s2)}
+  .c3,.c4,.c5,.c6,.c7,.c8{grid-column:span 12}
+  .fbar{padding-bottom:var(--s1)}
+}
+<!--@HTML-->
+<div class="page">
+  <div class="phead">
+    <div>
+      <div class="eyebrow">Jangaon district · Telangana</div>
+      <h1>Swachh Jangaon · district monitoring</h1>
+      <div class="meta" id="meta"></div>
+    </div>
+    <span class="sp"></span>
+    <button class="btn">Export CSV</button>
+    <button class="btn pri">Write today's briefing</button>
+  </div>
+
+  <div class="fbar">
+    <div class="filters">
+      <label>Register <select class="sel"><option>Swachh Jangaon (SJGP)</option><option>Gram Palana</option><option>District HRMS</option></select></label>
+      <label>Month <select class="sel"><option>October 2026 · 10 Oct – 9 Nov</option><option>September 2026 · 10 Sept – 9 Oct</option></select></label>
+      <label>Mandal <select class="sel" id="fMandal"><option>All 12 mandals</option></select></label>
+      <label>Role <select class="sel"><option>All roles</option><option>Panchayat Secretary</option><option>MPO</option><option>MPDO</option><option>MSO</option></select></label>
+      <input class="inp" placeholder="Find an officer or village" style="flex:1;min-width:180px">
+    </div>
+  </div>
+
+  <div class="strip" id="strip"></div>
+  <div class="grid" id="grid"></div>
+</div>
+<!--@JS-->
+const S = window.SJ, C = window.CH, T = S.totals;
+const el = id => document.getElementById(id);
+const IC = {
+  user:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  home:'<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  star:'<polygon points="12 2 15 9 22 9.3 17 14 18.5 21 12 17.3 5.5 21 7 14 2 9.3 9 9"/>',
+  flag:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>',
+  pin:'<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>'
+};
+const ico = d => '<span class="ic"><svg viewBox="0 0 24 24">' + d + '</svg></span>';
+const kpi = (cls, label, icon, value, unit, foot, delta) =>
+  `<div class="kpi ${cls}"><div class="k">${label}${ico(icon)}</div>
+   <div class="v">${value}${unit ? ' <small>' + unit + '</small>' : ''}</div>
+   <div class="foot">${delta || ''}<span>${foot}</span></div></div>`;
+
+el('meta').textContent = S.today + ' · reporting month ' + S.ym + ' (' + S.window + ') · ' +
+  T.officers + ' officers on the roll · ' + T.villages + ' villages';
+el('fMandal').innerHTML = '<option>All 12 mandals</option>' +
+  S.mandals.map(m => '<option>' + m + '</option>').join('');
+
+el('strip').innerHTML =
+  kpi('', 'Marked attendance', IC.user, T.present, 'of ' + T.officers, 'vs yesterday',
+      '<span class="delta up">+6</span>') +
+  kpi('bad', 'Not marked', IC.user, T.missing, '', 'tap for the names') +
+  kpi('teal', 'Villages evaluated', IC.home, T.filedN, 'of ' + T.villages,
+      S.fmt.pct(T.filedN, T.villages) + '% of the month') +
+  kpi('violet', 'District average', IC.star, T.avg, '/ 100', 'against ' + T.prevAvg + ' last month',
+      '<span class="delta up">+2</span>') +
+  kpi('warn', 'Refused by the fence', IC.pin, T.refused, '', 'a distance, not a default');
+
+const grades = C.donut([
+  { k:'Grade A', v:S.grades.A, c:'var(--st-ok)' }, { k:'Grade B', v:S.grades.B, c:'var(--grade-b)' },
+  { k:'Grade C', v:S.grades.C, c:'var(--st-warn)' }, { k:'Grade D', v:S.grades.D, c:'var(--st-bad)' }
+], T.filedN, 'filed', 148);
+
+el('grid').innerHTML = `
+  <section class="card c8" id="wTrend">
+    <div class="hd">Attendance · last 14 days<span class="r">marks received by the district</span></div>
+    <div class="bd"><div class="plot" id="pTrend"></div>
+      <div class="legend"><span><i style="background:var(--cs1)"></i>Present</span>
+      <span style="color:var(--tx-3)">Sundays read nought — the gate does not open</span></div></div>
+  </section>
+
+  <section class="card c4">
+    <div class="hd">Evaluation outcomes<span class="r">${S.ym}</span></div>
+    <div class="bd">${grades}</div>
+  </section>
+
+  <section class="card c12">
+    <div class="hd">Coverage by mandal<span class="r">${T.filedN} of ${T.villages} villages</span></div>
+    <div class="bd"><div style="overflow-x:auto"><div class="plot" id="pCov"></div></div>
+      <div class="legend"><span><i style="background:var(--cs2)"></i>Filed</span>
+        <span><i style="background:var(--st-idle)"></i>Still to file</span></div></div>
+  </section>
+
+  <section class="card c5">
+    <div class="hd">District health<span class="r">five weighted parts</span></div>
+    <div class="bd">${C.meter(T.health, 100, 'needs watching', 'Attendance is not counted on a Sunday')}
+      <div style="margin-top:var(--s2)">${T.parts.map(p => `
+        <div class="hbar"><b>${p.k}</b>
+          <div class="bar"><i style="width:${p.v == null ? 0 : p.v}%;background:${
+            p.v == null ? 'var(--line)' : p.v >= 80 ? 'var(--st-ok)' : p.v >= 60 ? 'var(--st-warn)' : 'var(--st-bad)'}"></i></div>
+          <span class="n">${p.v == null ? 'n/a' : p.v}</span></div>
+        <div style="font-size:var(--f-micro);color:var(--tx-3);margin:-5px 0 9px 126px">${p.why}</div>`).join('')}
+      </div></div>
+  </section>
+
+  <section class="card c7">
+    <div class="hd">Needs your orders<span class="r">${S.issues.length} items</span></div>
+    <div class="bd" id="wIssues"></div>
+  </section>
+
+  <section class="card c12">
+    <div class="hd">Mandal detail<span class="r">tap a row to drill into its villages</span></div>
+    <div class="bd"><div class="twrap" style="max-height:420px">
+      <table><thead><tr><th>Mandal</th><th>Officers</th><th>Present</th><th>Refused</th>
+        <th>Villages</th><th>Filed</th><th>Coverage</th><th>Average</th><th>14-day trend</th></tr></thead>
+      <tbody>${S.coverage.map(c => `<tr>
+        <td>${c.mandal}</td><td class="num">${c.officers}</td><td class="num">${c.present}</td>
+        <td class="num">${c.refused ? '<span class="pill warn">' + c.refused + '</span>' : '—'}</td>
+        <td class="num">${c.total}</td><td class="num">${c.done}</td>
+        <td><div style="display:flex;align-items:center;gap:9px"><div class="bar" style="flex:1">
+          <i style="width:${c.pct}%;background:${c.pct >= 60 ? 'var(--st-ok)' : c.pct >= 35 ? 'var(--st-warn)' : 'var(--st-bad)'}"></i></div>
+          <span style="font-family:var(--mono);width:34px;text-align:right">${c.pct}%</span></div></td>
+        <td class="num">${c.avg == null ? '—' : c.avg}</td>
+        <td>${C.spark(S.days.map(d => d.present), 'var(--cs1)')}</td></tr>`).join('')}
+      </tbody></table></div></div>
+  </section>`;
+
+/* ---- the four states, on the exceptions card ---- */
+/* NO max-height HERE. The console's own version of this card caps the list
+   at 262px and cuts the fifth item through the middle of a sentence, which
+   reads as broken rather than as scrollable. Whitespace in the card beside
+   it is the cheaper fault. */
+const READY = `<div>` + S.issues.map(x =>
+  `<div style="display:flex;gap:var(--s2);padding:var(--s1) 0;border-bottom:1px solid var(--line-2)">
+     <span class="sev p${x.p}">P${x.p}</span>
+     <div><b style="font-size:var(--f-body)">${x.t}</b>
+       <div style="font-size:var(--f-small);color:var(--tx-2);margin-top:3px">${x.d}</div>
+       <div style="font-size:var(--f-small);color:var(--seal);font-weight:600;margin-top:3px">→ ${x.a}</div>
+     </div></div>`).join('') + `</div>`;
+window.setWidgetState = st => {
+  const b = document.getElementById('wIssues');
+  b.innerHTML =
+    st === 'loading' ? `<div class="skel skel-line" style="width:70%"></div>
+        <div class="skel skel-line" style="width:92%"></div><div class="skel skel-line" style="width:84%"></div>
+        <div class="skel skel-line" style="width:61%"></div><div class="skel skel-line" style="width:88%"></div>`
+  : st === 'empty' ? `<div class="empty"><b>All clear</b>Nothing needs orders right now.</div>`
+  : st === 'error' ? `<div class="err"><b>The district could not be reached</b>
+      The last figures on this screen were read at 09:14. They are not today's.
+      <button class="btn sm" style="display:block">Try again</button></div>`
+  : READY;
+};
+window.setWidgetState('ready');
+/* measured, not fixed: exact pixels at whatever width the card actually is */
+C.fit('pTrend', w => C.area(S.days, 'present', 'var(--cs1)', w, 200));
+C.fit('pCov',   w => C.columns(
+  S.coverage.map(c => ({ label:c.mandal, done:c.done, left:c.total - c.done })),
+  [{ k:'done', n:'Filed', c:'var(--cs2)' }, { k:'left', n:'Still to file', c:'var(--st-idle)' }],
+  Math.max(w, 720), 220));
+window.onThemeChange = C.redraw;

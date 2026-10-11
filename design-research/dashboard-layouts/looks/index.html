@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="description" content="One layout, four looks: the recommended navigation-rail layout for the SJGP console rendered in four different grounds and chrome languages.">
+<title>SJGP console &middot; one layout, four looks</title>
+<style>
+/* ============================================================================
+   SJGP LAYOUT RESEARCH - SHARED TOKEN SET
+   ----------------------------------------------------------------------------
+   Lifted verbatim from app/dashboard.html so that the ten mockups differ in
+   LAYOUT ONLY. Nothing here is a new colour decision. The chart series were
+   computed and validated against the district's own console surfaces; the
+   record of that validation, including the palette that failed, is in
+   prompt/palette-validation.txt. Do not pick a chart colour by eye.
+
+   Spacing is the 8pt system already in the console (--s1..--s6).
+   The type scale below is the one measured off the console's existing rules;
+   it was implicit there and is named here so ten files can share it.
+   ========================================================================== */
+
+:root{
+  /* -------- 8pt spacing -------- */
+  --s1:8px; --s2:16px; --s3:24px; --s4:32px; --s5:40px; --s6:48px;
+
+  /* -------- type scale (named from the console's existing sizes) -------- */
+  --f-eyebrow:10.5px;   /* mono uppercase section labels */
+  --f-micro:11.5px;     /* card feet, deltas */
+  --f-small:12.5px;     /* table body, captions */
+  --f-body:13.5px;      /* default reading size */
+  --f-base:14px;        /* card headings */
+  --f-h2:17px;
+  --f-h1:21px;          /* page title */
+  --f-metric:29px;      /* KPI figure, mono */
+  --f-metric-lg:38px;
+  --lh-tight:1.25; --lh:1.45; --lh-prose:1.65;
+
+  /* -------- ground -------- */
+  --bg:#EEF1F7; --panel:#FFFFFF; --well:#F3F5FA; --line:#DFE3EE; --line-2:#E9EDF4;
+  --nm-out:0 0 0 1px var(--line), 0 8px 22px rgba(30,41,70,.07);
+  --nm-out-sm:0 0 0 1px var(--line), 0 2px 6px rgba(30,41,70,.06);
+  --nm-in:inset 0 0 0 1px var(--line);
+  --nm-in-sm:inset 0 0 0 1px var(--line-2);
+
+  /* -------- ink (contrast on white noted) -------- */
+  --tx:#1A2437;    /* 13.9:1 */
+  --tx-2:#46536B;  /* 6.9:1  */
+  --tx-3:#57647D;  /* 5.0:1 - smallest text never lighter than this */
+
+  /* -------- accents -------- */
+  --pri:#4A40CE; --pri-strong:#3A32A5; --pri-2:#E7E5F9;
+  --teal:#0F766E; --teal-2:#D8EEEB;
+  --blue:#1D4ED8; --blue-2:#DEE8FB; --seal:#14532D;
+  --green:#15803D; --green-2:#DCEFE2; --amber:#B45309; --amber-2:#F6E8D2;
+  --red:#B91C1C; --red-2:#F7DFDF; --gold:#8A6508; --violet:#6D28D9; --violet-2:#EAE2F8;
+  --grade-b:#65A30D;
+  --pill-ok-ink:#14532D; --pill-warn-ink:#7C3E06; --pill-bad-ink:#8F1D1D; --pill-info-ink:#1E3A8A;
+  --row-hover:#F8FAFC; --row-hover-2:#E9EDF6;
+  --scrim:rgba(23,35,59,.38);
+  --grad-a:#4A40CE; --grad-b:#0F766E;
+
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  --r:14px; --r-sm:10px;
+
+  /* -------- chart system: TOKENS, never literals -------- */
+  --ch-ink:#1A2437; --ch-muted:#57647D; --ch-grid:#E9EDF4; --ch-axis:#DFE3EE;
+  --ch-surface:#FFFFFF;
+  --cs1:#4f5ce5; --cs2:#0ca38a; --cs3:#e8a020; --cs4:#8b5cf6;
+  --cs5:#d13438; --cs6:#2aa7d8; --cs7:#7c8a12; --cs8:#a62b52;
+  --co1:#a3aaf1; --co2:#8b93ee; --co3:#6f7ae9; --co4:#5462d8; --co5:#3a46c4;
+  --st-ok:#15803D; --st-warn:#B45309; --st-bad:#B91C1C; --st-idle:#8E97AE;
+}
+
+body.dark{
+  --bg:#0E1120; --panel:#171B2D; --well:#1E2338; --line:#2B3149; --line-2:#242A3F;
+  --nm-out:0 0 0 1px var(--line), 0 8px 22px rgba(0,0,0,.45);
+  --nm-out-sm:0 0 0 1px var(--line), 0 2px 6px rgba(0,0,0,.35);
+  --tx:#E6E9F2; --tx-2:#B3BACD; --tx-3:#8E97AE;
+  --pri:#9AA0F5; --pri-strong:#B4B8F9; --pri-2:#232748;
+  --teal:#3EC5AC; --teal-2:#10352F;
+  --blue:#89A9F7; --blue-2:#16244A; --seal:#7FD4A0;
+  --green:#5BD68A; --green-2:#123726; --amber:#E9A93C; --amber-2:#3A2A10;
+  --red:#F1737A; --red-2:#3B1A1E; --gold:#D9B25C; --violet:#A98BF2; --violet-2:#271B44;
+  --grade-b:#9BCB3A;
+  --pill-ok-ink:#A7F3C6; --pill-warn-ink:#F5CE8E; --pill-bad-ink:#FBB6BA; --pill-info-ink:#B9CDFA;
+  --row-hover:#1E2338; --row-hover-2:#262C42;
+  --grad-a:#6B78EA; --grad-b:#17A98F;
+  --ch-ink:#E6E9F2; --ch-muted:#9AA1B8; --ch-grid:#242A3F; --ch-axis:#2F3654;
+  --ch-surface:#171B2D;
+  --cs1:#6b78ea; --cs2:#17a98f; --cs3:#bf8718; --cs4:#8f6ff0;
+  --cs5:#d9484c; --cs6:#2f9fce; --cs7:#8a9a20; --cs8:#b8446a;
+  --co1:#3a46c4; --co2:#5866e0; --co3:#7b87ec; --co4:#a0a9f3; --co5:#c3c9f9;
+  --st-ok:#5BD68A; --st-warn:#E9A93C; --st-bad:#F1737A; --st-idle:#8B93AB;
+}
+
+/* ============================================================================
+   SHARED PRIMITIVES - identical in all ten mockups.
+   These are COMPONENTS, never layout. Every file below styles its own zones,
+   grid and navigation; none of them restyles a card, a pill or a table, so a
+   difference you can see between two mockups is a difference of layout.
+   ========================================================================== */
+
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{background:var(--bg);color:var(--tx);
+  font:var(--f-base)/var(--lh) var(--sans);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+a{color:var(--blue);text-decoration:none}
+:focus{outline:none}
+:focus-visible{outline:3px solid var(--pri);outline-offset:2px;border-radius:var(--r-sm)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- card ---------- */
+.card{background:var(--panel);border-radius:var(--r);box-shadow:var(--nm-out);min-width:0;
+  display:flex;flex-direction:column}
+.card>.hd{display:flex;align-items:center;gap:var(--s1);
+  padding:var(--s2) var(--s2) var(--s1);font-size:var(--f-base);font-weight:750;letter-spacing:-.01em}
+.card>.hd .r{margin-left:auto;font:500 var(--f-micro)/1 var(--mono);color:var(--tx-3);text-align:right}
+.card>.bd{padding:var(--s1) var(--s2) var(--s2);flex:1;min-height:0}
+.card.accent{border-top:3px solid var(--acc,var(--pri))}
+
+/* ---------- eyebrow ---------- */
+.eyebrow{font:750 var(--f-eyebrow)/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;
+  color:var(--tx-3)}
+
+/* ---------- KPI ---------- */
+.kpi{background:var(--panel);border-radius:var(--r);box-shadow:var(--nm-out);padding:var(--s2);
+  min-height:112px;display:flex;flex-direction:column;justify-content:center}
+.kpi .k{display:flex;align-items:center;gap:var(--s1);font-size:var(--f-small);font-weight:650;color:var(--tx-2)}
+.kpi .ic{margin-left:auto;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+  background:var(--pri-2);flex:none}
+.kpi .ic svg{width:18px;height:18px;fill:none;stroke:var(--pri);stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round}
+.kpi .v{font:750 var(--f-metric)/1.05 var(--mono);margin-top:var(--s1);letter-spacing:-.01em}
+.kpi .v small{font-size:var(--f-body);font-weight:650;color:var(--tx-3)}
+.kpi .foot{display:flex;align-items:center;gap:var(--s1);margin-top:7px;
+  font-size:var(--f-micro);color:var(--tx-3);line-height:1.4}
+.kpi.ok .ic{background:var(--green-2)} .kpi.ok .ic svg{stroke:var(--green)}
+.kpi.bad .ic{background:var(--red-2)} .kpi.bad .ic svg{stroke:var(--red)}
+.kpi.warn .ic{background:var(--amber-2)} .kpi.warn .ic svg{stroke:var(--amber)}
+.kpi.teal .ic{background:var(--teal-2)} .kpi.teal .ic svg{stroke:var(--teal)}
+.kpi.violet .ic{background:var(--violet-2)} .kpi.violet .ic svg{stroke:var(--violet)}
+.delta{font:750 var(--f-micro)/1 var(--mono);padding:3px 7px;border-radius:8px}
+.delta.up{color:var(--green);background:var(--green-2)}
+.delta.dn{color:var(--red);background:var(--red-2)}
+.delta.fl{color:var(--tx-3);background:var(--line-2)}
+
+/* ---------- pills, bars, grades ---------- */
+.pill{display:inline-block;font:var(--f-micro)/1.5 var(--mono);padding:1.5px 8px;border-radius:9px;
+  box-shadow:var(--nm-in-sm)}
+.pill.ok{color:var(--pill-ok-ink);background:var(--green-2)}
+.pill.warn{color:var(--pill-warn-ink);background:var(--amber-2)}
+.pill.bad{color:var(--pill-bad-ink);background:var(--red-2)}
+.pill.info{color:var(--pill-info-ink);background:var(--blue-2)}
+.pill.mut{color:var(--tx-2);background:var(--line-2)}
+.bar{height:7px;border-radius:4px;background:var(--line-2);overflow:hidden;min-width:72px}
+.bar i{display:block;height:100%}
+.gr{font:750 var(--f-small)/1 var(--mono)}
+.grA{color:var(--green)} .grB{color:var(--grade-b)} .grC{color:var(--amber)} .grD{color:var(--red)}
+.sev{flex:none;font:800 var(--f-eyebrow)/1.5 var(--mono);border-radius:6px;padding:3px 7px;
+  min-width:44px;text-align:center;box-shadow:var(--nm-in-sm);height:fit-content}
+.sev.p1{background:var(--red-2);color:var(--pill-bad-ink)}
+.sev.p2{background:var(--amber-2);color:var(--pill-warn-ink)}
+.sev.p3{background:var(--blue-2);color:var(--pill-info-ink)}
+
+/* ---------- controls ---------- */
+.btn{background:var(--panel);border-radius:12px;min-height:44px;padding:0 var(--s2);
+  font-size:var(--f-body);color:var(--tx-2);box-shadow:var(--nm-out-sm);display:inline-flex;
+  align-items:center;gap:7px}
+.btn:hover{color:var(--tx)}
+.btn.pri{background:linear-gradient(135deg,var(--grad-a),var(--grad-b));color:#fff;font-weight:700;
+  box-shadow:0 2px 8px rgba(74,64,206,.3)}
+.btn.pri:hover{color:#fff;filter:brightness(1.06)}
+.btn.sm{min-height:36px;padding:0 12px;font-size:var(--f-small)}
+.chip{border-radius:11px;min-height:36px;padding:0 13px;font-size:var(--f-small);color:var(--tx-2);
+  background:var(--panel);box-shadow:var(--nm-out-sm);display:inline-flex;align-items:center;gap:6px}
+.chip b{font-family:var(--mono);color:var(--tx)}
+.chip[aria-pressed=true]{box-shadow:var(--nm-in-sm);background:var(--pri-2);color:var(--pri);font-weight:700}
+select.sel,input.inp{min-height:40px;padding:0 12px;border:0;border-radius:11px;background:var(--panel);
+  box-shadow:var(--nm-out-sm);color:var(--tx);font:var(--f-body) var(--sans);max-width:100%}
+input.inp{background:var(--well);box-shadow:var(--nm-in-sm)}
+input.inp::placeholder{color:var(--tx-3)}
+.filters{display:flex;gap:var(--s1);align-items:center;flex-wrap:wrap}
+.filters label{display:inline-flex;align-items:center;gap:6px;font-size:var(--f-small);color:var(--tx-3)}
+
+/* ---------- tables ---------- */
+table{width:100%;border-collapse:collapse;font-size:var(--f-small)}
+th{font:750 var(--f-eyebrow)/1.4 var(--sans);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--tx-2);text-align:center;padding:9px 10px;border:1px solid var(--line);
+  position:sticky;top:0;background:var(--well);z-index:1}
+th:first-child{text-align:left}
+td{padding:8px 10px;border:1px solid var(--line-2);white-space:nowrap;text-align:center}
+td:first-child{text-align:left}
+td.num{font-family:var(--mono)}
+td.mut{color:var(--tx-2)}
+tbody tr:hover td{background:var(--row-hover)}
+tbody tr.sel td{background:var(--row-hover-2)}
+.twrap{overflow:auto;border-radius:var(--r);box-shadow:var(--nm-in-sm);background:var(--well)}
+
+/* ---------- list rows ---------- */
+.row{display:flex;gap:var(--s1);align-items:center;min-height:56px;padding:var(--s1) var(--s2);
+  border-radius:var(--r);background:var(--panel);box-shadow:var(--nm-out-sm);margin-bottom:var(--s1);
+  width:100%;text-align:left}
+.row:hover{box-shadow:var(--nm-out-sm),0 0 0 2px var(--pri-2)}
+.row .av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;flex:none;
+  font:750 var(--f-body)/1 var(--sans);background:var(--green-2);color:var(--green)}
+.row.warn .av{background:var(--amber-2);color:var(--amber)}
+.row.bad .av{background:var(--red-2);color:var(--red)}
+.row b{display:block;font-size:var(--f-body)}
+.row span{display:block;font-size:var(--f-micro);color:var(--tx-3)}
+.row .t{margin-left:auto;text-align:right;font:var(--f-small) var(--mono);color:var(--tx-2);flex:none}
+.feed{display:flex;gap:var(--s2);padding:var(--s2) 0;border-bottom:1px solid var(--line-2)}
+.feed:last-child{border-bottom:0}
+.feed .when{flex:none;width:58px;font:var(--f-micro) var(--mono);color:var(--tx-3);padding-top:2px}
+
+/* ---------- charts: HTML at exact pixel sizes, never a scaled viewBox ---- */
+.plot{position:relative}
+.plot svg{display:block}
+.axis{font:var(--f-eyebrow) var(--mono);fill:var(--ch-muted)}
+.gridln{stroke:var(--ch-grid);stroke-width:1}
+.legend{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s2);margin-top:var(--s1);
+  font-size:var(--f-micro);color:var(--tx-2)}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:6px;
+  vertical-align:-1px}
+/* small multiples: identical cells, identical scale, read as a block */
+/* the column count and the cell width are decided in charts.js off the
+   MEASURED container, so the cells are exact pixels and never stretched */
+.sparkgrid{display:grid;gap:var(--s1)}
+.spk{min-width:0;padding:7px 9px 3px;border-radius:var(--r-sm);box-shadow:var(--nm-in-sm)}
+.spkh{display:flex;align-items:baseline;gap:6px;margin-bottom:2px}
+.spkh b{font-size:var(--f-micro);font-weight:700;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;flex:1;min-width:0}
+.spkh span{font:750 var(--f-small)/1 var(--mono);flex:none}
+.spk svg{display:block}
+
+.hbar{display:flex;align-items:center;gap:var(--s1);margin:9px 0;font-size:var(--f-small)}
+.hbar b{width:118px;flex:none;font-weight:650;color:var(--tx);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+.hbar .bar{flex:1}
+.hbar .n{width:46px;flex:none;text-align:right;font-family:var(--mono);color:var(--tx-2)}
+
+/* ---------- the three states every widget owes the reader ---------- */
+.empty{margin:var(--s1) 0;padding:var(--s4) var(--s2);color:var(--tx-2);font-size:var(--f-body);
+  text-align:center;border-radius:var(--r);box-shadow:var(--nm-in-sm);background:var(--well)}
+.empty b{display:block;color:var(--tx);margin-bottom:5px}
+.skel{border-radius:var(--r);background:linear-gradient(90deg,var(--line-2) 25%,var(--well) 37%,var(--line-2) 63%);
+  background-size:400% 100%;animation:sh 1.4s ease infinite}
+@keyframes sh{0%{background-position:100% 50%}100%{background-position:0 50%}}
+.skel-line{height:12px;margin:10px 0;border-radius:6px}
+.err{margin:var(--s1) 0;padding:var(--s2);border-radius:var(--r);background:var(--red-2);
+  border-left:4px solid var(--red);font-size:var(--f-body);color:var(--tx)}
+.err b{display:block;color:var(--red);margin-bottom:4px;font-size:var(--f-small);
+  text-transform:uppercase;letter-spacing:.06em}
+.err .btn{margin-top:var(--s1)}
+
+/* ---------- the state switcher that every mockup carries ---------- */
+.states{display:inline-flex;gap:4px;padding:4px;border-radius:12px;background:var(--well);
+  box-shadow:var(--nm-in-sm)}
+.states button{font:650 var(--f-micro)/1 var(--sans);padding:7px 11px;border-radius:9px;color:var(--tx-3)}
+.states button[aria-pressed=true]{background:var(--panel);color:var(--pri);box-shadow:var(--nm-out-sm)}
+
+/* ---------- research banner (not part of the pattern) ---------- */
+.lab{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;
+  padding:7px var(--s3);background:var(--tx);color:#fff;font-size:var(--f-micro)}
+/* --tx is the INK, and in the dark theme the ink is near-white: the banner
+   was painting white text on a #E6E9F2 bar and reading as nothing at all.
+   The harness is not the design, but a harness you cannot read is a harness
+   that hides the thing it is there to drive. */
+body.dark .lab{background:#05070F;color:#E6E9F2}
+body.dark .lab a{color:#E6E9F2}
+.lab b{font-weight:750;letter-spacing:.02em}
+.lab .sp{flex:1}
+.lab a{color:#fff;text-decoration:underline;opacity:.85}
+.lab button{color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:8px;padding:4px 10px;
+  font-size:var(--f-micro)}
+
+/* ---------- tile map cell (used by CH.tilemap, shared so every pattern that
+     shows twelve mandals as a grid draws the identical cell) ---------- */
+.tile{border-radius:var(--r);padding:var(--s2) 12px;min-height:84px;display:flex;
+  flex-direction:column;justify-content:space-between;align-items:flex-start;text-align:left;
+  box-shadow:var(--nm-in-sm)}
+.tile b{font-size:var(--f-small);font-weight:700;line-height:1.3}
+.tile span{font:750 var(--f-h2)/1 var(--mono)}
+.tile:hover{box-shadow:var(--nm-out)}
+.tile[aria-pressed=true]{outline:3px solid var(--pri);outline-offset:2px}
+@media(max-width:760px){
+  .tile{min-height:66px;padding:10px}
+  .tile b{font-size:var(--f-micro)} .tile span{font-size:var(--f-base)}
+}
+
+/* FOUR ACROSS IS NOT A PHONE GRID. At 390 a four-column tile is 83px wide and
+   "Lingala Ghanpur" runs 19px past its own cell and the page with it. Two
+   across holds the longest mandal name in the district. */
+.tilemap{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s1)}
+@media(max-width:980px){.tilemap{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:620px){.tilemap{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.tile{min-width:0;overflow:hidden}
+.tile b{overflow-wrap:anywhere}
+
+.wrap{max-width:1800px;margin:0 auto;padding:0 var(--s3) var(--s6)}
+.head{padding:var(--s4) 0 var(--s3)}
+.head h1{font-size:30px;letter-spacing:-.02em;line-height:1.15}
+.head p{max-width:76ch;font-size:var(--f-body);color:var(--tx-2);line-height:var(--lh-prose);
+  margin-top:11px}
+.head .headbar{display:flex;gap:var(--s1);flex-wrap:wrap;margin-top:var(--s3);align-items:center}
+.note{margin-top:var(--s3);padding:var(--s2);border-radius:var(--r);background:var(--well);
+  box-shadow:var(--nm-in-sm);font-size:var(--f-small);color:var(--tx-2);line-height:var(--lh-prose);
+  max-width:84ch}
+.note b{color:var(--tx)}
+.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:var(--s3);
+  margin-top:var(--s3)}
+.g{background:var(--panel);border-radius:var(--r);box-shadow:var(--nm-out);overflow:hidden;
+  display:flex;flex-direction:column}
+.frame{display:block;height:300px;overflow:hidden;background:var(--bg);
+  border-bottom:1px solid var(--line-2)}
+.frame img{width:100%;display:block}
+.g:hover .frame img{opacity:.93}
+.cap{display:flex;gap:var(--s2);align-items:flex-start;padding:var(--s2) var(--s2) var(--s1)}
+.cap .n{font:750 24px/1 var(--mono);color:var(--pri);flex:none;width:28px}
+.cap .t b{display:block;font-size:var(--f-h2);line-height:1.25;letter-spacing:-.01em}
+.cap .t span{display:block;font-size:var(--f-small);color:var(--tx-2);margin-top:4px;
+  line-height:var(--lh)}
+.feel{padding:0 var(--s2) var(--s2);font-size:var(--f-small);color:var(--tx-3);
+  line-height:var(--lh-prose)}
+.meta{display:flex;gap:var(--s1);align-items:center;flex-wrap:wrap;padding:0 var(--s2) var(--s1)}
+.meta .h{font:var(--f-micro) var(--mono);color:var(--tx-3)}
+.links{display:flex;gap:6px;flex-wrap:wrap;padding:0 var(--s2) var(--s2);margin-top:auto}
+.bench{position:fixed;inset:0;z-index:40;background:var(--bg);display:none;flex-direction:column}
+.bench.on{display:flex}
+.bench .bh{display:flex;gap:var(--s1);align-items:center;flex-wrap:wrap;padding:11px var(--s3);
+  background:var(--panel);border-bottom:1px solid var(--line)}
+.bench .bh .sp{flex:1}
+.bench .bb{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
+  min-height:0}
+.bench .pane{background:var(--bg);display:flex;flex-direction:column;min-width:0}
+.bench .pane .lbl{font:750 var(--f-eyebrow)/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;
+  color:var(--tx-3);padding:7px var(--s2);background:var(--panel);border-bottom:1px solid var(--line-2)}
+.bench .pane .hold{flex:1;overflow:auto;display:flex;justify-content:center;min-height:0}
+.bench iframe{border:0;flex:none}
+@media(max-width:980px){.bench .bb{grid-template-columns:1fr;grid-template-rows:1fr 1fr}}
+@media(max-width:760px){
+  .wrap{padding:0 var(--s2) var(--s5)}
+  .gal{grid-template-columns:1fr}
+  .head h1{font-size:23px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div class="eyebrow">SJGP &middot; district monitoring console &middot; look and feel</div>
+    <h1>One layout, four looks</h1>
+    <p>Every page below is the same layout: pattern 02, the navigation rail the study
+      recommended, with the same sample district, the same filters, the same charts and the
+      same twelve mandals. The <b>only</b> thing that differs between any two of them is the
+      look file appended last, so a difference you can see is a difference of ground, rule,
+      radius and weight, and nothing else. Officer names, village names and all figures are
+      invented: this repository is public.</p>
+    <div class="headbar">
+      <button class="btn pri" id="openBench">Compare two side by side</button>
+      <a class="btn" href="../index.html">The ten layouts</a>
+      <a class="btn" href="../REPORT.md">The written report</a>
+      <button class="btn" id="theme">Dark</button>
+    </div>
+    <div class="note"><b>What none of them changes.</b> The eight chart series, the five-step
+      ordinal ramp and the four status colours are untouched in all four. They were computed
+      and validated against card surfaces #FFFFFF and #171B2D, the record including the
+      palette that failed is in <code>prompt/palette-validation.txt</code>, and the validator
+      script is not installed in this working copy, so no look moves a series colour or a card
+      surface away from those two. What changes is the ground under the panels, the rules, the
+      corner radius, the shadows and the command bar.</div>
+  </div>
+  <div class="gal">
+  <article class="g">
+    <a class="frame" href="look-1-tinted-canvas.html" aria-label="Open Tinted canvas"><img
+      src="shots/look-1-tinted-canvas-desk.png" alt="Tinted canvas at 1440px"></a>
+    <div class="cap">
+      <div class="n">A</div>
+      <div class="t"><b>Tinted canvas</b><span>Deeper cool ground, white panels, a hairline ring instead of a drop shadow, and the house indigo as a command bar across the top.</span></div>
+    </div>
+    <p class="feel">A modern administrative console. Closest to what is live, but the ground is darker so the panels read as paper laid on a desk rather than as faint boxes.</p>
+    <div class="meta">
+      <span class="pill mut">light by default</span>
+      <span class="h">?px at 1440 &middot; ?px at 390</span>
+    </div>
+    <div class="links">
+      <a class="btn sm" href="look-1-tinted-canvas.html">Open</a>
+      <a class="btn sm" href="shots/look-1-tinted-canvas-desk.png">1440</a>
+      <a class="btn sm" href="shots/look-1-tinted-canvas-phone.png">390</a>
+      <a class="btn sm" href="shots/look-1-tinted-canvas-desk-dark.png">in dark</a>
+      <button class="btn sm" data-bench="look-1-tinted-canvas.html">Compare</button>
+    </div>
+  </article>
+  <article class="g">
+    <a class="frame" href="look-2-warm-document.html" aria-label="Open Warm document"><img
+      src="shots/look-2-warm-document-desk.png" alt="Warm document at 1440px"></a>
+    <div class="cap">
+      <div class="n">B</div>
+      <div class="t"><b>Warm document</b><span>Warm paper ground, no shadows anywhere, near-square corners, and mono uppercase panel headings.</span></div>
+    </div>
+    <p class="feel">A district return rather than a web app. Nothing floats and nothing glows; every division on the screen is a printed rule. Calm on a long afternoon, and it photographs well in a review slide.</p>
+    <div class="meta">
+      <span class="pill mut">light by default</span>
+      <span class="h">?px at 1440 &middot; ?px at 390</span>
+    </div>
+    <div class="links">
+      <a class="btn sm" href="look-2-warm-document.html">Open</a>
+      <a class="btn sm" href="shots/look-2-warm-document-desk.png">1440</a>
+      <a class="btn sm" href="shots/look-2-warm-document-phone.png">390</a>
+      <a class="btn sm" href="shots/look-2-warm-document-desk-dark.png">in dark</a>
+      <button class="btn sm" data-bench="look-2-warm-document.html">Compare</button>
+    </div>
+  </article>
+  <article class="g">
+    <a class="frame" href="look-3-flat-sheet.html" aria-label="Open Flat sheet"><img
+      src="shots/look-3-flat-sheet-desk.png" alt="Flat sheet at 1440px"></a>
+    <div class="cap">
+      <div class="n">C</div>
+      <div class="t"><b>Flat sheet</b><span>White page, no cards at all. Sections are divided by a rule and by whitespace, under a near-black service bar.</span></div>
+    </div>
+    <p class="feel">GOV.UK and USWDS take this line: a card is chrome, and chrome costs reading. The figures sit directly on the page, so a weak monitor and a weak connection both render it faithfully. The least decorated of the four and the fastest to read.</p>
+    <div class="meta">
+      <span class="pill mut">light by default</span>
+      <span class="h">?px at 1440 &middot; ?px at 390</span>
+    </div>
+    <div class="links">
+      <a class="btn sm" href="look-3-flat-sheet.html">Open</a>
+      <a class="btn sm" href="shots/look-3-flat-sheet-desk.png">1440</a>
+      <a class="btn sm" href="shots/look-3-flat-sheet-phone.png">390</a>
+      <a class="btn sm" href="shots/look-3-flat-sheet-desk-dark.png">in dark</a>
+      <button class="btn sm" data-bench="look-3-flat-sheet.html">Compare</button>
+    </div>
+  </article>
+  <article class="g">
+    <a class="frame" href="look-4-operations-desk.html" aria-label="Open Operations desk"><img
+      src="shots/look-4-operations-desk-desk.png" alt="Operations desk at 1440px"></a>
+    <div class="cap">
+      <div class="n">D</div>
+      <div class="t"><b>Operations desk</b><span>Dark by default: a near-black ground, flat panels, and the KPI figures a size up.</span></div>
+    </div>
+    <p class="feel">Built to be read from across the room, the way Grafana and Datadog are. The console already carries a validated dark palette, so this is the cheapest of the four to ship, and the only one that is also a correct answer at ten at night.</p>
+    <div class="meta">
+      <span class="pill info">dark by default</span>
+      <span class="h">?px at 1440 &middot; ?px at 390</span>
+    </div>
+    <div class="links">
+      <a class="btn sm" href="look-4-operations-desk.html">Open</a>
+      <a class="btn sm" href="shots/look-4-operations-desk-desk.png">1440</a>
+      <a class="btn sm" href="shots/look-4-operations-desk-phone.png">390</a>
+      <a class="btn sm" href="shots/look-4-operations-desk-desk-light.png">in light</a>
+      <button class="btn sm" data-bench="look-4-operations-desk.html">Compare</button>
+    </div>
+  </article>
+  <article class="g">
+    <a class="frame" href="look-5-high-contrast.html" aria-label="Open High contrast"><img
+      src="shots/look-5-high-contrast-desk.png" alt="High contrast at 1440px"></a>
+    <div class="cap">
+      <div class="n">E</div>
+      <div class="t"><b>High contrast</b><span>Black ink, 2px rules, no shadows, and every size up a step. Built for a projector and for a reader who is not twenty-five.</span></div>
+    </div>
+    <p class="feel">The console as it has to look in the review room, thrown on a wall by a projector that washes out everything under 7:1. Nothing here is decoration: every rule is structural and every type size went up one step. It is the least pretty of the eight and the only one that survives bad light.</p>
+    <div class="meta">
+      <span class="pill mut">light by default</span>
+      <span class="h">?px at 1440 &middot; ?px at 390</span>
+    </div>
+    <div class="links">
+      <a class="btn sm" href="look-5-high-contrast.html">Open</a>
+      <a class="btn sm" href="shots/look-5-high-contrast-desk.png">1440</a>
+      <a class="btn sm" href="shots/look-5-high-contrast-phone.png">390</a>
+      <a class="btn sm" href="shots/look-5-high-contrast-desk-dark.png">in dark</a>
+      <button class="btn sm" data-bench="look-5-high-contrast.html">Compare</button>
+    </div>
+  </article>
+  <article class="g">
+    <a class="frame" href="look-6-dense-console.html" aria-label="Open Dense console"><img
+      src="shots/look-6-dense-console-desk.png" alt="Dense console at 1440px"></a>
+    <div class="cap">
+      <div class="n">F</div>
+      <div class="t"><b>Dense console</b><span>The 8pt grid run at 6pt and every type size down a step, so appreciably more of the district fits on one screen.</span></div>
+    </div>
+    <p class="feel">For the reader who wants the whole morning in one view and will not scroll for it. It buys about a fifth of the page height back. What it costs is reading comfort and, on a phone, touch targets, which is why the phone keeps the full sizes.</p>
+    <div class="meta">
+      <span class="pill mut">light by default</span>
+      <span class="h">?px at 1440 &middot; ?px at 390</span>
+    </div>
+    <div class="links">
+      <a class="btn sm" href="look-6-dense-console.html">Open</a>
+      <a class="btn sm" href="shots/look-6-dense-console-desk.png">1440</a>
+      <a class="btn sm" href="shots/look-6-dense-console-phone.png">390</a>
+      <a class="btn sm" href="shots/look-6-dense-console-desk-dark.png">in dark</a>
+      <button class="btn sm" data-bench="look-6-dense-console.html">Compare</button>
+    </div>
+  </article>
+  <article class="g">
+    <a class="frame" href="look-7-elevated.html" aria-label="Open Elevated"><img
+      src="shots/look-7-elevated-desk.png" alt="Elevated at 1440px"></a>
+    <div class="cap">
+      <div class="n">G</div>
+      <div class="t"><b>Elevated</b><span>Material 3 proper: a tonal indigo ground, 20px panels on real elevation, and fully rounded controls.</span></div>
+    </div>
+    <p class="feel">The most conventionally modern of the eight, and the one a visitor would call finished. Elevation does the grouping that rules do elsewhere. The cost is that soft shadows are the first thing a cheap monitor renders as mud, which is the ground the console already walked away from once.</p>
+    <div class="meta">
+      <span class="pill mut">light by default</span>
+      <span class="h">?px at 1440 &middot; ?px at 390</span>
+    </div>
+    <div class="links">
+      <a class="btn sm" href="look-7-elevated.html">Open</a>
+      <a class="btn sm" href="shots/look-7-elevated-desk.png">1440</a>
+      <a class="btn sm" href="shots/look-7-elevated-phone.png">390</a>
+      <a class="btn sm" href="shots/look-7-elevated-desk-dark.png">in dark</a>
+      <button class="btn sm" data-bench="look-7-elevated.html">Compare</button>
+    </div>
+  </article>
+  <article class="g">
+    <a class="frame" href="look-8-editorial.html" aria-label="Open Editorial"><img
+      src="shots/look-8-editorial-desk.png" alt="Editorial at 1440px"></a>
+    <div class="cap">
+      <div class="n">H</div>
+      <div class="t"><b>Editorial</b><span>Serif headings, hairline rules, one accent and a great deal of air. The register as a published document.</span></div>
+    </div>
+    <p class="feel">The only one of the eight that does not look like software. Headings are set in Georgia, which is on every machine already and is not a webfont, so the app still opens with no signal. It reads slowly and deliberately, which suits a screen that issues notices and does not suit one somebody scans at eight in the morning.</p>
+    <div class="meta">
+      <span class="pill mut">light by default</span>
+      <span class="h">?px at 1440 &middot; ?px at 390</span>
+    </div>
+    <div class="links">
+      <a class="btn sm" href="look-8-editorial.html">Open</a>
+      <a class="btn sm" href="shots/look-8-editorial-desk.png">1440</a>
+      <a class="btn sm" href="shots/look-8-editorial-phone.png">390</a>
+      <a class="btn sm" href="shots/look-8-editorial-desk-dark.png">in dark</a>
+      <button class="btn sm" data-bench="look-8-editorial.html">Compare</button>
+    </div>
+  </article></div>
+</div>
+
+<div class="bench" id="bench">
+  <div class="bh">
+    <b style="font-size:var(--f-body)">Side by side</b>
+    <select class="sel" id="selA"><option value="look-1-tinted-canvas.html">A &middot; Tinted canvas</option><option value="look-2-warm-document.html">B &middot; Warm document</option><option value="look-3-flat-sheet.html">C &middot; Flat sheet</option><option value="look-4-operations-desk.html">D &middot; Operations desk</option><option value="look-5-high-contrast.html">E &middot; High contrast</option><option value="look-6-dense-console.html">F &middot; Dense console</option><option value="look-7-elevated.html">G &middot; Elevated</option><option value="look-8-editorial.html">H &middot; Editorial</option></select>
+    <select class="sel" id="selB"><option value="look-1-tinted-canvas.html">A &middot; Tinted canvas</option><option value="look-2-warm-document.html">B &middot; Warm document</option><option value="look-3-flat-sheet.html">C &middot; Flat sheet</option><option value="look-4-operations-desk.html">D &middot; Operations desk</option><option value="look-5-high-contrast.html">E &middot; High contrast</option><option value="look-6-dense-console.html">F &middot; Dense console</option><option value="look-7-elevated.html">G &middot; Elevated</option><option value="look-8-editorial.html">H &middot; Editorial</option></select>
+    <label>Width <select class="sel" id="selW">
+      <option value="1440">1440 &mdash; desktop</option>
+      <option value="1280">1280 &mdash; laptop</option>
+      <option value="768">768 &mdash; tablet</option>
+      <option value="390">390 &mdash; phone</option></select></label>
+    <span class="sp"></span>
+    <button class="btn sm" id="closeBench">Close</button>
+  </div>
+  <div class="bb">
+    <div class="pane"><span class="lbl" id="lblA"></span><div class="hold"><iframe id="fA"></iframe></div></div>
+    <div class="pane"><span class="lbl" id="lblB"></span><div class="hold"><iframe id="fB"></iframe></div></div>
+  </div>
+</div>
+
+<script>
+var LOOKS = [{"out":"look-1-tinted-canvas.html","n":"A","title":"Tinted canvas"},{"out":"look-2-warm-document.html","n":"B","title":"Warm document"},{"out":"look-3-flat-sheet.html","n":"C","title":"Flat sheet"},{"out":"look-4-operations-desk.html","n":"D","title":"Operations desk"},{"out":"look-5-high-contrast.html","n":"E","title":"High contrast"},{"out":"look-6-dense-console.html","n":"F","title":"Dense console"},{"out":"look-7-elevated.html","n":"G","title":"Elevated"},{"out":"look-8-editorial.html","n":"H","title":"Editorial"}];
+var bench = document.getElementById('bench');
+var selA = document.getElementById('selA'), selB = document.getElementById('selB'),
+    selW = document.getElementById('selW');
+selB.selectedIndex = 1;
+
+function paint(){
+  var w = +selW.value;
+  [['A', selA], ['B', selB]].forEach(function(pair){
+    var f = document.getElementById('f' + pair[0]);
+    var L = LOOKS.filter(function(x){ return x.out === pair[1].value; })[0];
+    document.getElementById('lbl' + pair[0]).textContent = L.n + ' \u00b7 ' + L.title + ' \u00b7 ' + w + 'px';
+    f.style.width = w + 'px';
+    /* real width, scrolled - never scaled down. A look judged at 0.4 scale is
+       a look judged on nothing, and the whole point is to read the type. */
+    f.style.height = '3000px';
+    if(f.getAttribute('src') !== L.out) f.setAttribute('src', L.out);
+  });
+}
+selA.onchange = selB.onchange = selW.onchange = paint;
+document.getElementById('openBench').onclick = function(){ bench.classList.add('on'); paint(); };
+document.getElementById('closeBench').onclick = function(){ bench.classList.remove('on'); };
+document.addEventListener('keydown', function(e){ if(e.key === 'Escape') bench.classList.remove('on'); });
+document.addEventListener('click', function(e){
+  var b = e.target.closest('[data-bench]'); if(!b) return;
+  selA.value = b.dataset.bench;
+  if(selB.value === selA.value) selB.selectedIndex = (selA.selectedIndex + 1) % LOOKS.length;
+  bench.classList.add('on'); paint();
+});
+var t = document.getElementById('theme');
+t.onclick = function(){
+  document.body.classList.toggle('dark');
+  t.textContent = document.body.classList.contains('dark') ? 'Light' : 'Dark';
+};
+</script>
+</body>
+</html>

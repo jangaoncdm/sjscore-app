@@ -1,0 +1,41 @@
+/*@META {"n":"A","slug":"tinted-canvas","title":"Tinted canvas","dark":false,
+  "oneline":"Deeper cool ground, white panels, a hairline ring instead of a drop shadow, and the house indigo as a command bar across the top.",
+  "feel":"A modern administrative console. Closest to what is live, but the ground is darker so the panels read as paper laid on a desk rather than as faint boxes."} */
+
+/* The ground does the work. Today's #EEF1F7 is so close to white that the
+   cards have to carry a drop shadow to be seen at all; drop the ground two
+   steps and a 1px ring is enough, which is cheaper to paint and crisper on a
+   district monitor that is not colour-calibrated. */
+:root{
+  --bg:#DFE4F0; --panel:#FFFFFF; --well:#F2F4FA; --line:#CDD4E7; --line-2:#E3E8F3;
+  --nm-out:0 0 0 1px var(--line);
+  --nm-out-sm:0 0 0 1px var(--line);
+  --nm-in:inset 0 0 0 1px var(--line);
+  --nm-in-sm:inset 0 0 0 1px var(--line-2);
+  --r:10px; --r-sm:8px;
+}
+body.dark{
+  --bg:#0A0D1A; --line:#2E3550; --line-2:#262C42;
+  --nm-out:0 0 0 1px var(--line);
+  --nm-out-sm:0 0 0 1px var(--line);
+}
+
+/* A COMMAND BAR, NOT A HEADING ON THE WALLPAPER. The page title currently
+   sits on the same colour as everything else, so the one permanent strip of
+   the screen has no edge. */
+.appbar{background:var(--pri);padding:var(--s2) var(--s3);align-items:center;
+  box-shadow:inset 0 -1px 0 rgba(255,255,255,.18)}
+.appbar h1{color:#fff}
+.appbar .sub{color:rgba(255,255,255,.80)}
+.appbar select.sel{background:rgba(255,255,255,.14);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.3)}
+.appbar select.sel option{color:var(--tx)}
+/* white on indigo: the gradient goes muddy against its own hue */
+.appbar .btn.pri{background:#fff;color:var(--pri);box-shadow:none;font-weight:750}
+.appbar .btn.pri:hover{color:var(--pri-strong);filter:none}
+.body{padding-top:var(--s3)}
+
+.rail{box-shadow:1px 0 0 var(--line)}
+.rail .brand .lg{border-radius:8px}
+.nav button{border-radius:8px}
+.btn,.chip,select.sel,input.inp,.states,.states button{border-radius:8px}
+.kpi{border-radius:10px}

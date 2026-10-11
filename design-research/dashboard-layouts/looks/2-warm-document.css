@@ -1,0 +1,47 @@
+/*@META {"n":"B","slug":"warm-document","title":"Warm document","dark":false,
+  "oneline":"Warm paper ground, no shadows anywhere, near-square corners, and mono uppercase panel headings.",
+  "feel":"A district return rather than a web app. Nothing floats and nothing glows; every division on the screen is a printed rule. Calm on a long afternoon, and it photographs well in a review slide."} */
+
+/* WARM PAPER, WHITE PANELS. The panels stay #FFFFFF because the chart series
+   were validated against that surface and the validator is not installed in
+   this working copy. The warmth is in the GROUND and in the rules, which the
+   charts never touch. */
+:root{
+  --bg:#F2EFE8; --panel:#FFFFFF; --well:#FAF8F2; --line:#D9D2C2; --line-2:#EAE5D9;
+  --nm-out:0 0 0 1px var(--line);
+  --nm-out-sm:0 0 0 1px var(--line);
+  --nm-in:inset 0 0 0 1px var(--line);
+  --nm-in-sm:inset 0 0 0 1px var(--line-2);
+  --r:5px; --r-sm:4px;
+  --row-hover:#FBF9F4; --row-hover-2:#F3EFE4;
+  --ch-grid:#EAE5D9; --ch-axis:#D9D2C2;
+}
+body.dark{
+  --bg:#13110E; --well:#1E1B16; --line:#36312A; --line-2:#2A2621;
+  --nm-out:0 0 0 1px var(--line);
+  --nm-out-sm:0 0 0 1px var(--line);
+  --row-hover:#1E1B16; --row-hover-2:#262219;
+  --ch-grid:#2A2621; --ch-axis:#36312A;
+}
+
+/* Every radius in the shared primitives is written as a literal 11 or 12px,
+   so the tokens alone cannot square the corners. */
+.btn,.chip,select.sel,input.inp,.states,.states button,.nav button,
+.bottomnav button,.pill,.sev,.delta,.kpi .ic{border-radius:4px}
+.row .av{border-radius:4px}
+
+/* A PANEL HEADING IS A SECTION LABEL, NOT A SENTENCE. Mono uppercase is the
+   house eyebrow already; on this ground it carries the whole hierarchy, so
+   the heading weight can come down and the figures below it come forward. */
+.card>.hd{font:750 var(--f-small)/1.3 var(--mono);letter-spacing:.055em;text-transform:uppercase;
+  color:var(--tx-2);border-bottom:1px solid var(--line-2);margin:0 var(--s2);
+  padding:var(--s2) 0 10px}
+.card>.bd{padding-top:var(--s2)}
+.card>.hd .r{text-transform:none;letter-spacing:0}
+
+/* flat, no gradient: one printed ink */
+.btn.pri{background:var(--pri);box-shadow:none}
+.rail .brand .lg{background:var(--pri);border-radius:4px}
+.nav button[aria-current]{background:var(--pri-2);box-shadow:inset 2px 0 0 var(--pri)}
+.rail{box-shadow:1px 0 0 var(--line)}
+th{text-transform:uppercase;letter-spacing:.07em}

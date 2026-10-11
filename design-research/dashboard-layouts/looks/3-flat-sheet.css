@@ -1,0 +1,65 @@
+/*@META {"n":"C","slug":"flat-sheet","title":"Flat sheet","dark":false,
+  "oneline":"White page, no cards at all. Sections are divided by a rule and by whitespace, under a near-black service bar.",
+  "feel":"GOV.UK and USWDS take this line: a card is chrome, and chrome costs reading. The figures sit directly on the page, so a weak monitor and a weak connection both render it faithfully. The least decorated of the four and the fastest to read."} */
+
+/* THE PAGE IS THE SURFACE. White everywhere means the chart surface is
+   exactly the #FFFFFF the palette was validated against, so this is the one
+   look that needs no caveat about it. */
+:root{
+  --bg:#FFFFFF; --panel:#FFFFFF; --well:#F4F6F9; --line:#C2C8D6; --line-2:#DDE2EC;
+  --nm-out:none; --nm-out-sm:none;
+  --nm-in:inset 0 0 0 1px var(--line);
+  --nm-in-sm:inset 0 0 0 1px var(--line-2);
+  --r:0px; --r-sm:0px;
+  --ch-grid:#DDE2EC; --ch-axis:#C2C8D6;
+}
+body.dark{
+  --bg:#12162A; --panel:#12162A; --well:#1C2238; --line:#333A56; --line-2:#272E47;
+  --nm-out:none; --nm-out-sm:none;
+  --ch-surface:#12162A; --ch-grid:#272E47; --ch-axis:#333A56;
+}
+
+/* A SECTION, NOT A CARD. The heading rule is the only division, and it is
+   2px of ink rather than a 22px blur. */
+.card{box-shadow:none;background:none;border-top:2px solid var(--tx)}
+.card>.hd{padding:11px 0 var(--s1);font-size:var(--f-h2);letter-spacing:-.015em}
+.card>.bd{padding:0 0 var(--s2)}
+.kpi{box-shadow:none;background:none;border-top:2px solid var(--pri);border-radius:0;
+  padding:12px 0 0;min-height:98px;justify-content:flex-start}
+.kpi .v{font-size:var(--f-metric-lg);margin-top:6px}
+.kpi.bad{border-top-color:var(--red)} .kpi.teal{border-top-color:var(--teal)}
+.kpi.violet{border-top-color:var(--violet)} .kpi.ok{border-top-color:var(--green)}
+.kpi.warn{border-top-color:var(--amber)}
+
+/* Controls keep an outline. With no shadow and no fill, a button and a
+   sentence look the same thing. */
+.btn,.chip,select.sel{border-radius:0;box-shadow:inset 0 0 0 1px var(--line)}
+input.inp{border-radius:0;box-shadow:inset 0 0 0 1px var(--line);background:var(--panel)}
+.states{border-radius:0;background:none;box-shadow:inset 0 0 0 1px var(--line)}
+.states button{border-radius:0}
+.states button[aria-pressed=true]{background:var(--pri-2);box-shadow:none}
+.btn.pri{background:var(--pri);box-shadow:none;border-radius:0}
+.twrap{border-radius:0;box-shadow:none;background:none;border:1px solid var(--line)}
+.empty,.err{border-radius:0}
+.pill,.sev,.delta{border-radius:0}
+
+/* A SERVICE BAR. Near-black, full width, and the only heavy element on the
+   page, which is what makes everything under it legible. */
+.appbar{background:var(--tx);padding:var(--s2) var(--s3)}
+.appbar h1{color:#fff} .appbar .sub{color:rgba(255,255,255,.76)}
+.appbar select.sel{background:transparent;color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.4)}
+.appbar select.sel option{color:var(--tx)}
+.appbar .btn.pri{background:#fff;color:var(--tx);font-weight:750}
+.appbar .btn.pri:hover{color:#000;filter:none}
+.body{padding-top:var(--s3)}
+
+/* The rail loses its pills: 3px of ink says current. */
+.rail{border-right:1px solid var(--line)}
+.nav button{border-radius:0;border-left:3px solid transparent;padding-left:13px}
+.nav button[aria-current]{background:none;border-left-color:var(--pri);color:var(--pri)}
+.nav button:hover:not([aria-current]){background:var(--well)}
+.rail .brand .lg{border-radius:0;background:var(--pri)}
+@media(max-width:1180px){
+  .nav button{border-left:0;border-bottom:3px solid transparent;padding:0}
+  .nav button[aria-current]{border-bottom-color:var(--pri)}
+}

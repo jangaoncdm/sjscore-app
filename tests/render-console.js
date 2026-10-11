@@ -155,8 +155,23 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
       await page.waitForSelector('#app:not([hidden])', { timeout: 20000 });
       await page.waitForTimeout(700);
 
-      for(const v of VIEWS){
+      /* THE PASS DRIVES WHAT A PERSON WOULD ACTUALLY TOUCH. Below 760 the
+         rail is a drawer behind More and the destinations are in the bottom
+         bar, so clicking the rail here was clicking something no reader can
+         see. Four destinations are in the bar; the rest are reached the way
+         a reader reaches them, by opening the drawer first. */
+      const phone = size.w <= 760;
+      const go = async v => {
+        if(!phone) return page.click('#nav [data-v="' + v + '"]');
+        const inBar = await page.$('#bnav [data-v="' + v + '"]');
+        if(inBar && await inBar.isVisible()) return inBar.click();
+        await page.click('#navMore');
+        await page.waitForTimeout(120);
         await page.click('#nav [data-v="' + v + '"]');
+      };
+
+      for(const v of VIEWS){
+        await go(v);
         await page.waitForTimeout(450);
         await page.screenshot({ path: path.join(OUT, size.n + '-' + theme + '-' + v + '.png'),
           fullPage: size.w > 500 });
@@ -178,7 +193,16 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
                         level with a card that has none, and padding the other card
                         with 75px of nothing would be the worse of the two designs.
                         Named here so the exception is on the record, not hidden. */
-                     furniture: !!p.querySelector('.mtabs') };
+                     furniture: !!p.querySelector('.mtabs'),
+                     /* NAME THE CARD. Two bare offsets say a row is wrong and
+                        leave you to find out which card and why; the heading
+                        and the measured height of the heading block say it
+                        outright. The lesson is the pre-flight's: a message
+                        true of a thousand faults is not a message. */
+                     title: ((p.querySelector('.hd') || {}).textContent || '(no heading)')
+                       .trim().slice(0, 38),
+                     hdH: p.querySelector('.hd')
+                       ? Math.round(p.querySelector('.hd').getBoundingClientRect().height) : 0 };
           }));
         const rows = {};
         geo.forEach(g => { (rows[g.rowTop] = rows[g.rowTop] || []).push(g); });
@@ -190,7 +214,8 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
           const os = [...new Set(plain.map(x => x.plotTop))];
           const label = size.n + '/' + theme + '/' + v + ' row@' + k;
           if(hs.length > 1) problems.push(label + ': cards in one row differ in height ' + JSON.stringify(hs));
-          if(os.length > 1) problems.push(label + ': plots in one row start at different offsets ' + JSON.stringify(os));
+          if(os.length > 1) problems.push(label + ': plots in one row start at different offsets — ' +
+            plain.map(x => '"' + x.title + '" plot at ' + x.plotTop + ' (heading ' + x.hdH + 'px)').join(' vs '));
           if(r.length !== plain.length) console.log('    (' + label + ': one card carries a tab strip above its plot — offset exempt)');
         });
         if(geo.length) console.log('  ' + size.n + '/' + theme + '/' + v + ' — ' + geo.length +
@@ -207,6 +232,64 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
           els => els.slice(0, 6).map(e => e.tagName + ' ' + (e.getAttribute('style') || '').slice(0, 60)));
         if(hard.length) problems.push(size.n + '/' + theme + '/' + v + ': hardcoded colour in a chart — ' + JSON.stringify(hard));
       }
+      /* ================= THE PHONE'S NAVIGATION =================
+         THE DEFECT THIS REPLACED: below 760 the rail went static and laid
+         thirteen full-width buttons down the page, so the first figure was
+         roughly 840px below the top and a supervisor scrolled a screen and a
+         half of menu to reach it. Asserted by the numbers, because "it looks
+         better" is not a measurement. */
+      if(size.w <= 760){
+        const lbl = size.n + '/' + theme + '/phone-nav';
+        await go('overview');
+        await page.waitForTimeout(300);
+        const nav = await page.evaluate(() => {
+          const r = document.querySelector('.rail'), b = document.getElementById('bnav');
+          const k = document.querySelector('.kpi') || document.querySelector('.panel');
+          const br = b ? b.getBoundingClientRect() : null;
+          return {
+            railShown: r ? getComputedStyle(r).display !== 'none' : true,
+            barShown: b ? getComputedStyle(b).display !== 'none' : false,
+            barFixed: b ? getComputedStyle(b).position === 'fixed' : false,
+            barBottom: br ? Math.round(br.bottom) : -1,
+            viewportH: window.innerHeight,
+            dests: b ? [...b.querySelectorAll('button')].filter(x => !x.hidden).length : 0,
+            tap: b ? Math.min(...[...b.querySelectorAll('button')]
+              .filter(x => !x.hidden).map(x => Math.round(x.getBoundingClientRect().height))) : 0,
+            firstFigureTop: k ? Math.round(k.getBoundingClientRect().top + window.scrollY) : -1
+          };
+        });
+        if(nav.railShown) problems.push(lbl + ': the rail is on screen at ' + size.w +
+          'px — it must be a drawer behind More, not a stack of buttons above the content');
+        if(!nav.barShown || !nav.barFixed) problems.push(lbl + ': no fixed navigation bar at the foot');
+        if(nav.barBottom !== nav.viewportH) problems.push(lbl + ': the bar is not at the foot of the screen (' +
+          nav.barBottom + ' of ' + nav.viewportH + ')');
+        if(nav.dests < 4 || nav.dests > 5) problems.push(lbl + ': the bar carries ' + nav.dests +
+          ' destinations; Material allows three to five');
+        if(nav.tap < 44) problems.push(lbl + ': a bar destination is ' + nav.tap + 'px tall, under the 44px floor');
+        /* the whole point of the change, as a number */
+        if(nav.firstFigureTop > 320) problems.push(lbl + ': the first figure is ' + nav.firstFigureTop +
+          'px down the page — the menu is still in front of the content');
+        console.log('  ' + lbl + ' — rail hidden, ' + nav.dests + ' destinations at ' + nav.tap +
+          'px, first figure ' + nav.firstFigureTop + 'px down');
+
+        /* AND More MUST OPEN THE REST. A bar of five that cannot reach the
+           other eight destinations is not navigation, it is a shortcut. */
+        await page.click('#navMore');
+        await page.waitForTimeout(220);
+        const open = await page.evaluate(() => {
+          const r = document.querySelector('.rail');
+          return { shown: getComputedStyle(r).display !== 'none',
+            reach: [...document.querySelectorAll('#nav [data-v]')].filter(b => !b.hidden).length };
+        });
+        if(!open.shown) problems.push(lbl + ': More does not open the rail');
+        if(open.reach < 8) problems.push(lbl + ': the drawer reaches only ' + open.reach + ' destinations');
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(180);
+        const shut = await page.evaluate(() =>
+          getComputedStyle(document.querySelector('.rail')).display !== 'none');
+        if(shut) problems.push(lbl + ': Escape does not shut the drawer');
+      }
+
       /* ================= THE TENANT SWITCH =================
          Only at the desktop widths and once per theme: it is one control and
          two payloads, not a layout to measure at every size. */

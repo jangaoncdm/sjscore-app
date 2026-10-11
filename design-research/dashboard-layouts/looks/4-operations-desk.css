@@ -1,0 +1,38 @@
+/*@META {"n":"D","slug":"operations-desk","title":"Operations desk","dark":true,
+  "oneline":"Dark by default: a near-black ground, flat panels, and the KPI figures a size up.",
+  "feel":"Built to be read from across the room, the way Grafana and Datadog are. The console already carries a validated dark palette, so this is the cheapest of the four to ship, and the only one that is also a correct answer at ten at night."} */
+
+/* DARK IS NOT AN INVERSION AND THIS DOES NOT MAKE ONE. --panel stays
+   #171B2D and --ch-surface with it, because every dark series step was
+   validated against that exact card. What changes is the GROUND under the
+   panels and the weight of the chrome. */
+body.dark{
+  --bg:#070A14; --panel:#171B2D; --well:#1C2238; --line:#2F3758; --line-2:#272D45;
+  --nm-out:0 0 0 1px var(--line);
+  --nm-out-sm:0 0 0 1px var(--line);
+  --nm-in:inset 0 0 0 1px var(--line);
+  --nm-in-sm:inset 0 0 0 1px var(--line-2);
+  --ch-surface:#171B2D;
+}
+:root{ --r:10px; --r-sm:8px; }
+
+/* READ FROM A DISTANCE. The four figures across the top are the only thing
+   anybody reads from the doorway. */
+.kpi .v{font-size:var(--f-metric-lg)}
+.kpi{min-height:120px}
+
+/* The rail sits a shade below the panels, so the canvas reads as the lit area. */
+body.dark .rail{background:#10142A;box-shadow:1px 0 0 var(--line)}
+body.dark .appbar{background:var(--bg)}
+body.dark .nav button[aria-current]{background:#242A52;color:#C3C8FF}
+body.dark .card>.hd{border-bottom:1px solid var(--line-2);margin:0 var(--s2);
+  padding:var(--s2) 0 10px}
+body.dark .card>.bd{padding-top:var(--s2)}
+body.dark .btn.pri{box-shadow:0 2px 10px rgba(0,0,0,.5)}
+
+.nav button{border-radius:8px}
+.btn,.chip,select.sel,input.inp,.states,.states button{border-radius:8px}
+
+/* Switched to light this look is simply the live palette with squarer
+   corners. That is not a design, and the banner says which way round it is
+   meant to be read. */
