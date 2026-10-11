@@ -1427,7 +1427,7 @@ function initTheme(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = 'bfd1695 - 10 Oct 20:43';
+const BUILD_STAMP = 'fa4c12b - 11 Oct 10:50';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -4580,12 +4580,20 @@ function wireAdmin(){
        came back as a name the roll does not carry, and most of those the roll
        carries under another spelling — a sentence in a prose column is read,
        but a column beside his own name is COMPARED, which is the act. */
+    /* AND THE FIGURE THE REGISTER THINKS WAS MEANT TRAVELS THE SAME WAY, for
+       the same reason. Every bad figure on the district's table of 09.10.2026
+       kept its decimals and lost the two digits in front of the point, and
+       "check the figure" sends a man to read eight decimals. It is a
+       SUGGESTION and the column says so: the mandal confirms its own
+       coordinate, and nothing here is written from this file. */
     const rows=[['Mandal (as sent)','Village (as sent)','The roll spells it','Latitude sent',
-                 'Longitude sent','What the register says','What is needed']];
+                 'Longitude sent','The figure it looks like','What the register says','What is needed']];
     stuck.forEach(p=>rows.push([p.mandal||'',p.gp||'',(p.near||[]).join(' / '),
       String(p.lat==null?'':p.lat),
-      String(p.lng==null?'':p.lng), p.why||'',
-      /not in this district/.test(p.why||'') ? 'Check the figure and send the office coordinate again'
+      String(p.lng==null?'':p.lng),
+      p.fix ? (p.fix.lat+', '+p.fix.lng) : '', p.why||'',
+      p.fix ? 'Confirm this figure with the mandal — then send it again'
+        : /not in this district/.test(p.why||'') ? 'Check the figure and send the office coordinate again'
         : ((p.near&&p.near.length) ? (p.near.length>1
               ? 'Two names on the roll are this close — say which village this office is'
               : 'Settle the spelling: send it as "'+p.near[0]+'", or correct the roll')
