@@ -1407,6 +1407,61 @@ dangerous shape: nothing refuses them, and they would refuse their Secretary
 every morning. A coordinate is checked against the box **and** against the
 middle of its own mandal before it is trusted.
 
+**AND THE NINE THAT WERE LEFT ARE NOT NINE PROBLEMS.** Nine rows came back
+from the third dry run of that table, and read one by one there are two
+faults under seven of them.
+
+**The decimals are the survey and the degrees are the typing.** Every bad
+figure keeps its decimals perfectly and loses the two digits in front of the
+point: `7979.1198397` for `79.1198397`, the degrees typed twice;
+`17.475855` for `79.475855`, the latitude's degrees in the longitude's cell;
+`70.256598` for `79.256598`; `78.2364803` for `79.2364803`. Nobody invents
+seven decimal places. So the decimals are kept and every degree of this
+district is tried in front of them — the repair a single substitution cannot
+reach when two digits went at once — and **where that answer exists it is the
+only one**, by arithmetic and not by luck: a degree is a hundred kilometres
+here and a mandal is twenty-five across, so at most one pair of degrees can
+put a given set of decimals anywhere near a given mandal. **And the three
+rows whose figure was WORST wrong were the three told nothing at all**,
+because the refusal for a point outside the district happened before any
+mandal had a middle to measure against. The worse mistake got the less help.
+One sentence now, both places, and `vpFixSay_` is the only thing that writes
+it. **Named and written nowhere**: the verdict stands and the mandal confirms
+its own figure.
+
+**One Telugu name in two English spellings is not a typing mistake and cannot
+be measured as one.** The district's table and the register's roll are typed
+in different offices, so one village arrives as "Goprajpally" against
+"Goparajupalle" and another as "Laxminarayanapuram" against
+"Lakshminarayanapur" — three and five letters apart, further than any cap
+this file can carry, because a cap of five pairs Basireddypally with
+Nagireddypally and that is a different village and an honest Secretary
+refused every morning. **The distance was in the wrong units.**
+Transliteration moves the vowels and leaves the consonants standing —
+"gopa-raju-palle" and "gop-raj-pally" are one skeleton, g-p-r-j-p-l — and it
+swaps a small closed set of consonants for one another: x for ksh, w for v,
+and every aspirate for its plain form, which is the whole of why Pembarthi
+and Pembarthy are one place. `vsound_` takes that skeleton and `vnear_`
+compares it **beside** the spelling, never instead of it.
+
+**Measured on the district's own 280 names before it was believed.** Not one
+village of a mandal shares a skeleton with a *different* village of that
+mandal; the number of candidates is identical for all 280 lines; and not one
+line that paired under the letter cap finds a second candidate and turns
+ambiguous. It costs nothing inside a mandal and reaches only across the two
+tabs, which is where the fault actually was. A skeleton is **four consonants
+before it is trusted at all and eight before one of them may differ** —
+"Konne" and "Kanne" both come down to "kn", and one consonant out of two is
+not a resemblance. The pairs that must not be guessed are still both named,
+so the caller refuses rather than choosing: **two weak agreements still have
+to be two.**
+
+**And two of the nine genuinely need the mandal, which is the answer and not
+a fault.** Vishnupuram is on no roll and its officer holds Harijana Colony, a
+different place; Srimannarayanapuram resolves to nothing at all. Neither is
+reached by any of this, and suite 35 asserts they are still refused — a rule
+that cured them would be a rule that invents villages.
+
 **And it is watched from a screen of its own — "Place of duty" on the rail.**
 A distance that decides something has to be monitored, and three questions
 that are not the same question have to be answerable from one place.
@@ -1447,12 +1502,26 @@ dispatch — `ReferenceError: vDuty is not defined`, on all six renders. The
 same shape as the first cut of `parsePostings`, and the render pass is what
 caught it. Indentation is not scope; brace-count before believing a comment.
 
-**Held by** suite 35 (`tests/suites/35-fence.js`, 140 assertions) and
+**Held by** suite 35 (`tests/suites/35-fence.js`, 215 assertions) and
 `tests/render-fence.js`, which stands a real browser 40 km away and asserts the
 pop-up, the held camera, the officer the district has not placed, and the mark
 taken off the phone. `tests/render-admin.js` presses the paste button and
 asserts what went on the wire, because a parser declared inside the function
 that draws its panel leaves the button bound, enabled and doing nothing.
+
+**AND A BROWSER PASS MUST NOT DEPEND ON THE DAY IT IS RUN ON.** The
+attendance gate does not open on a Sunday, which is right and is the whole
+doctrine — so run on a Sunday `tests/render-fence.js` failed EVERY check at
+once, the gate never drew, `#stepGeo` did not exist, and nothing in the
+output said why: ten failures and a timeout that read exactly like a broken
+fence, on an app whose bytes had not changed since the pass was last green.
+A pass that cries wolf one day in seven is a pass that stops being read,
+which is the lesson the pre-flight already cost an afternoon. The handset's
+clock is pinned to the most recent working day and the district's mocked
+answers are dated from the same day — the two must agree, or the app judges
+today's mark against yesterday. It is a **fixed Date and not a fake timer**:
+the app's debounced save and its wait for the satellite both run on
+`setTimeout` and have to keep running.
 
 **And a sheet must sit above the gates.** The pop-up is shown from the
 attendance gate, which is `z-index:78` and opaque; `.sheet` was 70, so it was

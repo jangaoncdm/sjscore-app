@@ -72,10 +72,23 @@ const ck = (ok, what, detail) => {
   if(ok){ pass++; console.log('  PASS  ' + what + (detail ? '   — ' + detail : '')); }
   else  { fail++; console.log('  FAIL  ' + what + (detail ? '   — ' + detail : '')); }
 };
-const today = () => {
-  const d = new Date();
-  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-};
+/* THE PASS MUST NOT DEPEND ON THE DAY IT IS RUN ON.
+   The attendance gate does not open on a Sunday, which is right and is the
+   whole doctrine — so run on a Sunday this pass failed EVERY check at once,
+   the gate never drew, #stepGeo did not exist, and nothing in the output said
+   why. Ten failures and a timeout that read exactly like a broken fence. A
+   browser pass that cries wolf one day in seven is a pass that stops being
+   read, which is the lesson the pre-flight already cost us. So the handset's
+   clock is pinned to the most recent working day, and the district's mocked
+   answers are dated from the same day — the two must agree or the app judges
+   today's mark against yesterday. */
+const WORKDAY = (function(){
+  const d = new Date(); d.setHours(9, 30, 0, 0);
+  while(d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+  return d;
+})();
+const today = () => WORKDAY.getFullYear() + '-' + String(WORKDAY.getMonth()+1).padStart(2,'0')
+                  + '-' + String(WORKDAY.getDate()).padStart(2,'0');
 const BASE = { url:'https://mock.district/exec', cache:[], master:[], leave:[], out:{},
                prefs:{ sun:0, big:0 }, who:'9000000014',
                session:{ token:'T1', user:{ name:'D. AtKonne', role:'PS', phone:'9000000014',
@@ -98,6 +111,9 @@ const SANCTION = /show.?cause|casual leave|debit|loss of pay|default|disciplin|p
   async function open_(o){
     const ctx = await br.newContext({ viewport:{ width:390, height:844 },
       permissions:['geolocation'], geolocation:o.at || HOME });
+    /* a fixed Date, not a fake timer: the app's own debounced save and its
+       wait for the satellite both run on setTimeout and must keep running */
+    await ctx.clock.setFixedTime(WORKDAY);
     const p = await ctx.newPage();
     const errs = []; p.on('pageerror', e => errs.push(String(e)));
     const posted = [];

@@ -857,6 +857,151 @@ module.exports = {
         'and it names what he does hold, so the disagreement is readable');
     }
 
+    /* ---- 21. THE NINE THAT WERE LEFT, and the one shape under seven of
+            them. Read one by one off the third dry run of the district's own
+            table, they are not nine problems:
+
+            FIVE ARE A FIGURE WRONG IN THE DEGREES AND RIGHT IN THE DECIMALS,
+            and three of those five were told nothing at all — the refusal
+            for a point outside the district happened before any mandal had a
+            middle to measure against, so the rows whose figure was WORST
+            wrong got the least help.
+
+            TWO ARE ONE VILLAGE SPELT TWO WAYS BY TWO OFFICES, three and five
+            letters apart, which no cap this file can carry will reach: a cap
+            of five pairs Basireddypally with Nagireddypally. They are one
+            skeleton of consonants, and the officer named on the line already
+            holds them.
+
+            AND TWO GENUINELY NEED THE MANDAL, which is the answer and not a
+            fault. Those two must still be refused at the end of this. */
+    {
+      const env = world();
+      const cdm = tok(env, '9000000001');
+
+      /* three mandals with real middles — six placed villages each, because
+         three points is the minimum the code takes and three is not a mandal
+         to measure a hundred kilometres with */
+      const seat = { Jangaon:[17.7663, 79.1399], Palakurthy:[17.6547, 79.4309],
+                     Raghunathpalle:[17.7742, 79.2420] };
+      Object.keys(seat).forEach(function(m){
+        [[0.005, 0.004], [-0.004, 0.006], [0.007, -0.003],
+         [-0.006, -0.005], [0.002, 0.008], [-0.002, -0.007]].forEach(function(o, n){
+          env.sheets['GPs'].rows.push([m, m + ' Village ' + n,
+            seat[m][0] + o[0], seat[m][1] + o[1]]);
+        });
+      });
+      /* the villages this section is about, on the roll with no point yet —
+         each under the spelling the ROLL carries, which is not the district
+         table's spelling for the first two */
+      [['Jangaon', 'Goparajupalle'], ['Palakurthy', 'Lakshminarayanapur'],
+       ['Palakurthy', 'Harijana Colony'], ['Jangaon', 'Pasarmadla'],
+       ['Palakurthy', 'Kondapur'], ['Raghunathpalle', 'Veldhi']]
+        .forEach(function(r){ env.sheets['GPs'].rows.push([r[0], r[1], '', '']); });
+      /* and Vishnupuram and Srimannarayanapuram are on NO roll, which is why
+         they are refused and must stay refused */
+
+      [['9000000111', 'Sandeep Gunti',      'Jangaon',        'Goparajupalle'],
+       ['9000000112', 'Babburi Nagaraju',   'Palakurthy',     'Lakshminarayanapur'],
+       ['9000000113', 'Talla Naresh kumar', 'Palakurthy',     'Harijana Colony'],
+       ['9000000114', 'Veldhi Secretary',   'Raghunathpalle', 'Veldhi'],
+       ['9000000115', 'Kondapur Secretary', 'Palakurthy',     'Kondapur'],
+       ['9000000116', 'Pasarmadla Sec',     'Jangaon',        'Pasarmadla']]
+        .forEach(function(r){ env.sheets['Users'].rows.push([r[0], r[1], 'PS',
+          r[2], r[3], '', '', env.ctx.hash_(r[0], '1111'), 'TRUE']); });
+
+      const ln = (m, gp, who, y, x) => ({ mandal:m, gp:gp, phone:'',
+        words:[m, gp, who, 'Panchayat Secretary', 'Gr-IV', 'Regular'], lat:y, lng:x });
+
+      const d = env.post({ kind:'villagePoints', token:cdm, dry:true, rows:[
+        /* THE DEGREES TYPED TWICE */
+        ln('Jangaon', 'Pasarmadla', 'Pasarmadla Sec', 17.7415325, 7979.1198397),
+        /* THE LATITUDE'S DEGREES IN THE LONGITUDE'S CELL */
+        ln('Palakurthy', 'Kondapur', 'Kondapur Secretary', 17.684296, 17.475855),
+        /* AND ONE DIGIT OF THE DEGREES, which also leaves the district */
+        ln('Raghunathpalle', 'Veldhi', 'Veldhi Secretary', 17.784822, 70.256598),
+        /* ONE VILLAGE, TWO TRANSLITERATIONS — the vowels moved */
+        ln('Jangaon', 'Goprajpally', 'Sandeep Gunti', 17.793919, 79.085615),
+        /* and again, x for ksh and a suffix one syllable shorter */
+        ln('Palakurthy', 'Laxminarayanapuram', 'Babburi Nagaraju', 17.65245, 79.4012149),
+        /* AND THE ONE THAT MUST STILL BE REFUSED: a village on no roll, whose
+           officer holds a DIFFERENT place. Nothing here resembles anything. */
+        ln('Palakurthy', 'Vishnupuram', 'Talla Naresh kumar', 17.637652, 79.415095)
+      ] });
+
+      const by = {}; (d.plans || []).forEach(function(z){ by[z.gp] = z; });
+
+      /* A POINT OUTSIDE THE DISTRICT IS STILL NOT WRITTEN — that is rule 10's
+         own guard and this section does not touch it. What changes is that it
+         now says what the figure was meant to be. */
+      const ps = by['Pasarmadla'];
+      t.eq(ps && ps.verdict, 'refused',
+        'A POINT OUTSIDE THE DISTRICT IS STILL REFUSED, not corrected');
+      t.contains(ps.why, 'not in this district', 'and says so first, as it always did');
+      t.contains(ps.why, 'The decimals are right and the degrees are not',
+        'AND THEN NAMES THE FIGURE — until now this shape was told nothing at all');
+      t.ok(ps.fix && Math.abs(ps.fix.lng - 79.1198397) < 1e-7,
+        'the degrees typed twice: 7979.1198397 reads 79.1198397', JSON.stringify(ps.fix));
+      t.eq(ps.fix && ps.fix.was, 'deg', 'and it says which kind of mistake it was');
+      t.ok(ps.fix && ps.fix.km < 10, 'which puts it inside its own mandal',
+        String(ps.fix && ps.fix.km));
+      t.contains(ps.why, 'written nowhere',
+        'NAMED AND WRITTEN NOWHERE — the mandal confirms its own figure');
+
+      const kd = by['Kondapur'];
+      t.eq(kd && kd.verdict, 'refused', 'the latitude in the longitude’s cell is refused');
+      t.ok(kd.fix && Math.abs(kd.fix.lng - 79.475855) < 1e-6,
+        'and named: 17.475855 reads 79.475855 — the decimals were never wrong',
+        JSON.stringify(kd.fix));
+
+      const vl = by['Veldhi'];
+      t.eq(vl && vl.verdict, 'refused', 'and one wrong digit of the degrees is refused');
+      t.ok(vl.fix && Math.abs(vl.fix.lng - 79.256598) < 1e-6,
+        '70.256598 reads 79.256598', JSON.stringify(vl.fix));
+      t.contains(vl.why, 'One digit of the longitude',
+        'and where ONE digit does it, that is what is said — the plainer reading wins');
+
+      /* ONE VILLAGE SPELT TWO WAYS BY TWO OFFICES */
+      const gj = by['Goparajupalle'];
+      t.eq(gj && gj.verdict, 'placed',
+        'GOPRAJPALLY AND GOPARAJUPALLE ARE ONE VILLAGE — three letters apart, '
+        + 'one skeleton of consonants, and the register says it is his');
+      t.contains(gj.why, 'Sandeep Gunti', 'and it names the second reading that carried it');
+      const lx = by['Lakshminarayanapur'];
+      t.eq(lx && lx.verdict, 'placed',
+        'and so are Laxminarayanapuram and Lakshminarayanapur — x for ksh');
+      t.contains(lx.why, 'Babburi Nagaraju', 'named the same way');
+
+      /* AND THE TWO THAT GENUINELY NEED THE MANDAL ARE STILL REFUSED */
+      const vp = by['Vishnupuram'];
+      t.eq(vp && vp.verdict, 'refused',
+        'A VILLAGE ON NO ROLL WHOSE OFFICER HOLDS A DIFFERENT PLACE IS STILL '
+        + 'REFUSED — the wider reach must not reach this far');
+      t.contains(vp.why, 'Harijana Colony',
+        'and it names what he does hold, so the mandal can answer');
+
+      /* ---- and the guards on the skeleton itself, measured on the real
+              names the district's own roll carries ---- */
+      const V = env.ctx;
+      t.eq(V.vsound_('Goprajpally'), V.vsound_('Goparajupalle'),
+        'the vowels move and the consonants stand: one skeleton');
+      t.eq(V.vsound_('Pembarthi'), V.vsound_('Pembarthy'),
+        'and a trailing i for a y is not a different village');
+      t.eq(V.vnear_(['Harijana Colony'], 'Vishnupuram').length, 0,
+        'two unlike names stay unlike, however they are measured');
+      t.eq(V.vnear_(['Nagireddypally', 'Basireddypalle'], 'Basireddypally').length, 2,
+        'AND THE PAIRS THAT MUST NOT BE GUESSED ARE STILL BOTH NAMED, so the '
+        + 'caller refuses rather than choosing between them');
+      /* A SKELETON IS FOUR CONSONANTS BEFORE IT IS TRUSTED AT ALL. Konne and
+         Kanne both come down to "kn", and one consonant out of two is not a
+         resemblance — those two are told apart by letters, as they always
+         were, and never by sound. */
+      t.eq(V.vsound_('Konne'), V.vsound_('Kanne'),
+        'two short names can share a skeleton that means nothing');
+      t.eq(V.vnear_(['Nedu'], 'Nandi').length, 0,
+        'so a skeleton under four consonants never reaches on its own');
+    }
+
     /* ---- 13. AND THE SANITATION REGISTER IS, which is the order ---- */
     {
       const env = world();

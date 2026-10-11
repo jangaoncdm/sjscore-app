@@ -6132,41 +6132,105 @@ function vpWho_(officers, words, mandal, gp){
   return best.map(function(z){ return z.o; });
 }
 
+/* ONE TELUGU NAME IN TWO ENGLISH SPELLINGS IS NOT A TYPING MISTAKE, AND IT
+   CANNOT BE MEASURED AS ONE.
+   The district's table and the register's own roll are typed in different
+   offices, so one village reaches this function as "Goprajpally" against
+   "Goparajupalle" and another as "Laxminarayanapuram" against
+   "Lakshminarayanapur". Counted in letters those are three and five apart —
+   further than any cap this file can safely carry, because a cap of five
+   pairs Basireddypally with Nagireddypally, and that is a different village
+   and an honest Secretary refused every morning.
+
+   The distance was in the wrong units. Transliteration moves the VOWELS and
+   leaves the consonants standing: "gopa-raju-palle" and "gop-raj-pally" are
+   one skeleton, g-p-r-j-p-l. And it swaps a small closed set of consonants
+   for one another — x for ksh, w for v, and every aspirate for its plain
+   form, which is the whole of why Pembarthi and Pembarthy are one place. So
+   the skeleton is compared, beside the spelling and not instead of it.
+
+   MEASURED ON THE DISTRICT'S OWN 280 NAMES BEFORE IT WAS BELIEVED. Not one
+   village of a mandal shares a skeleton with a DIFFERENT village of that
+   mandal; the number of candidates is identical for all 280 lines; and not
+   one line that paired under the letter cap finds a second candidate and
+   turns ambiguous. It costs nothing inside a mandal and reaches only across
+   the two tabs, which is where the fault actually was.
+
+   A SKELETON IS FOUR CONSONANTS BEFORE IT IS TRUSTED AT ALL AND EIGHT
+   BEFORE ONE OF THEM MAY DIFFER. "Konne" and "Kanne" both come down to
+   "kn", and one consonant out of two is not a resemblance. */
+function vsound_(s){
+  var k = mkey2_(s).replace(/[0-9]/g, '');
+  k = k.replace(/x/g, 'ks').replace(/w/g, 'v');
+  k = k.replace(/(kh|gh|ch|jh|th|dh|ph|bh|sh)/g, function(m){ return m.charAt(0); });
+  k = k.charAt(0) + k.slice(1).replace(/[aeiouyh]/g, '');
+  return k.replace(/(.)\1+/g, '$1');
+}
+
 /* THE NAMES ON THE ROLL THAT ARE CLOSE TO THIS ONE, nearest first.
    The cap grows with the name because one letter wrong in "Mondrai" is a
    different proposition from one letter wrong in "Thummasamudramkunta
    Thanda", and it is compared on the mkey2_ form so punctuation and case are
-   already out of the way. It NAMES and never pairs — see the caller. */
+   already out of the way. A shared skeleton reaches where letters cannot —
+   see above. It NAMES and never pairs: what may be done with a single
+   candidate is the caller's, and the caller asks for a second reading. */
 function vnear_(names, gp){
   var want = mkey2_(gp);
   if(want.length < 4) return [];
   var cap = want.length < 6 ? 1 : (want.length < 12 ? 2 : 3);
+  var sw = vsound_(gp);
   var hits = [];
   (names || []).forEach(function(n){
-    var d = vedit_(mkey2_(n), want, cap);
-    if(d <= cap) hits.push({ gp:n, d:d });
+    var d = vedit_(mkey2_(n), want, cap), sn = vsound_(n), sd = 9;
+    if(sw.length >= 4 && sn === sw) sd = 0;
+    else if(sw.length >= 8 && sn.length >= 8) sd = vedit_(sn, sw, 1);
+    if(d <= cap || sd <= 1) hits.push({ gp:n, d:d, sd:sd });
   });
-  hits.sort(function(a, b){ return a.d - b.d; });
+  /* the same skeleton is the stronger reading of the two, so it is named
+     first where a refusal lists what it nearly matched */
+  hits.sort(function(a, b){ return (a.sd - b.sd) || (a.d - b.d); });
   return hits.slice(0, 4).map(function(h){ return h.gp; });
 }
 
-/* A POINT A LONG WAY FROM ITS OWN MANDAL IS USUALLY ONE WRONG DIGIT, AND
-   SAYING WHICH ONE IS WORTH MORE THAN SAYING IT IS WRONG.
+/* A FIGURE THAT CANNOT BE BELIEVED IS USUALLY ONE KEYSTROKE FROM THE TRUTH,
+   AND SAYING WHICH ONE IS WORTH MORE THAN SAYING IT IS WRONG.
    Konne came in at 79.955163 where Bachannapeta sits on 79.05: a 9 typed for
-   a 0. Madharam at 78.2364803 where Raghunathpalle sits on 79.23: a 78 for a
-   79. Both pass every automatic check — they are inside the district's box —
-   and both would refuse their own Secretary every morning, which is the one
-   shape this whole paste exists to catch.
+   a 0. Madharam at 78.2364803 where Raghunathpalle sits on 79.23. Both pass
+   every automatic check — they are inside the district's box — and both would
+   refuse their own Secretary every morning, which is the one shape this whole
+   paste exists to catch. So every single digit of the latitude and the
+   longitude is tried in turn, each replaced by each of the other nine.
 
-   So every single digit of the latitude and the longitude is tried in turn,
-   each replaced by each of the other nine, and the substitutions that bring
-   the point inside its own mandal are collected. ONE candidate is named as a
-   likely correction; several, or none, and it says only that the point is
-   wrong. NOTHING IS WRITTEN EITHER WAY — the verdict stays ambiguous and the
-   office confirms the figure. A register that corrected the district's
-   coordinates by itself would be guessing with a man's attendance. */
-function vpDigitFix_(y, x, c, limit){
+   AND THE DECIMALS ARE THE SURVEY WHILE THE DEGREES ARE THE TYPING. Read one
+   by one, every bad figure on the district's table of 09.10.2026 keeps its
+   decimals perfectly and loses the two digits in front of the point:
+   7979.1198397 for 79.1198397, the degrees typed twice; 17.475855 for
+   79.475855, the latitude's degrees in the longitude's cell; 70.256598 for
+   79.256598; 78.2364803 for 79.2364803. Nobody invents seven decimal places
+   — two digits in front of the point are what a copy-paste mangles. So the
+   decimals are kept and every degree of this district is tried in front of
+   them, which is the repair a single substitution cannot reach when two
+   digits went at once.
+
+   AND WHERE THAT ANSWER EXISTS IT IS THE ONLY ONE, by arithmetic rather than
+   by luck: a degree is a hundred kilometres here and a mandal is twenty-five
+   across, so at most one pair of degrees can put a given set of decimals
+   anywhere near a given mandal.
+
+   ONE candidate is named, the nearest; the others are counted so the reader
+   knows there were others. NOTHING IS WRITTEN EITHER WAY — the verdict stands
+   and the mandal confirms the figure. A register that corrected the
+   district's coordinates by itself would be guessing with a man's
+   attendance. */
+function vpFigFix_(y, x, c, limit){
   var out = [];
+  var keep = function(yy, xx, was){
+    if(!isFinite(yy) || !isFinite(xx)) return;
+    if(!(yy > 16.4 && yy < 19.2 && xx > 77.6 && xx < 80.9)) return;
+    var d = distKm_(yy, xx, c.lat, c.lng);
+    if(d == null || d > limit) return;
+    out.push({ lat:yy, lng:xx, km:d, was:was });
+  };
   var tryOne = function(which, text){
     for(var i = 0; i < text.length; i++){
       if(!/[0-9]/.test(text.charAt(i))) continue;
@@ -6174,25 +6238,48 @@ function vpDigitFix_(y, x, c, limit){
         var ch = String(dg);
         if(ch === text.charAt(i)) continue;
         var alt = Number(text.slice(0, i) + ch + text.slice(i + 1));
-        if(!isFinite(alt)) continue;
-        var yy = which === 'lat' ? alt : y, xx = which === 'lat' ? x : alt;
-        if(!(yy > 16.4 && yy < 19.2 && xx > 77.6 && xx < 80.9)) continue;
-        var d = distKm_(yy, xx, c.lat, c.lng);
-        if(d == null || d > limit) continue;
-        out.push({ lat:yy, lng:xx, km:d, was:which });
+        keep(which === 'lat' ? alt : y, which === 'lat' ? x : alt, which);
       }
     }
   };
   tryOne('lat', String(y));
   tryOne('lng', String(x));
-  /* the same point reached two ways is one correction */
+  /* the decimals kept, the degrees tried. A figure with no decimal point at
+     all has no survey in it to keep, and nothing is offered for it. */
+  var dec = function(t){ var z = String(t), i = z.indexOf('.'); return i < 0 ? '' : z.slice(i); };
+  var dy = dec(y), dx = dec(x), a, b;
+  if(dy && dx) for(a = 16; a <= 19; a++) for(b = 77; b <= 80; b++)
+    keep(Number(a + dy), Number(b + dx), 'deg');
+  /* the same point reached two ways is one correction, and the plainer
+     reading of it is the one already in the list */
   var seen = {}, uniq = [];
   out.forEach(function(o){
     var k = o.lat.toFixed(6) + ',' + o.lng.toFixed(6);
     if(seen[k]) return; seen[k] = 1; uniq.push(o);
   });
-  uniq.sort(function(a, b){ return a.km - b.km; });
+  uniq.sort(function(a2, b2){ return a2.km - b2.km; });
   return uniq;
+}
+
+/* AND IT IS SAID IN THE SAME WORDS WHEREVER THE FIGURE IS DOUBTED — a point
+   a long way from its own mandal, and a point outside the district
+   altogether. Those were two different refusals and only the first of them
+   ever named a figure, so the three rows whose damage was BAD enough to
+   leave the district were the three told nothing at all. The worse mistake
+   got the less help. One sentence, both places. */
+function vpFixSay_(p, c){
+  var fix = vpFigFix_(p.lat, p.lng, c, VP_FIX_KM_);
+  if(!fix.length) return '';
+  p.fix = fix[0];
+  return (fix[0].was === 'deg'
+      ? ' The decimals are right and the degrees are not: '
+      : ' One digit of the ' + (fix[0].was === 'lat' ? 'latitude' : 'longitude') +
+        ' would do it: ') +
+    fix[0].lat + ', ' + fix[0].lng + ' is ' + fix[0].km +
+    ' km from the middle of ' + p.mandal + '.' +
+    (fix.length > 1 ? ' (' + (fix.length - 1) + ' other reading' +
+       (fix.length > 2 ? 's would' : ' would') + ' also land inside the mandal.)' : '') +
+    ' Confirm it with the mandal \— it is named here and written nowhere.';
 }
 
 /* two points this close are the same office, however the figure was typed */
@@ -6305,9 +6392,11 @@ function villagePoints_(b, u){
     const words = (r.words && r.words.length) ? r.words : [p.mandal, p.gp];
     if(!isFinite(y) || !isFinite(x) || !y || !x)
       return Object.assign(p, { verdict:'refused', why:'no coordinate on the line' });
-    /* A COORDINATE THAT CANNOT BE BELIEVED IS NOT A COORDINATE */
+    /* A COORDINATE THAT CANNOT BE BELIEVED IS NOT A COORDINATE. It is
+       marked rather than merely refused, because the figure it was meant to
+       be is named further down, where the middle of every mandal is known. */
     if(!(y > 16.4 && y < 19.2 && x > 77.6 && x < 80.9))
-      return Object.assign(p, { verdict:'refused',
+      return Object.assign(p, { verdict:'refused', offBox:true,
         why:'that point is not in this district — it is refused rather than believed' });
 
     /* the village, named or resolved through the officer who holds it */
@@ -6532,6 +6621,16 @@ function villagePoints_(b, u){
                  lng:median_(pts[k].map(function(a){ return a[1]; })) };
     });
     plans.forEach(function(p){
+      /* A POINT OUTSIDE THE DISTRICT IS A FIGURE TO BE NAMED TOO, and until
+         now it was the one shape that got no help: the refusal happened up
+         in the plan loop before any mandal had a middle, so the rows whose
+         figure was worst wrong were the rows told least. Three of the five
+         bad figures on the district's table were in exactly that state. */
+      if(p.offBox){
+        const cb = mid[mkeyM_(p.mandal)]; if(!cb) return;
+        p.why += '.' + vpFixSay_(p, cb);
+        return;
+      }
       if(p.verdict !== 'placed' && p.verdict !== 'moved') return;
       const c = mid[mkeyM_(p.mandal)]; if(!c) return;
       const d = distKm_(p.lat, p.lng, c.lat, c.lng);
@@ -6558,22 +6657,13 @@ function villagePoints_(b, u){
       p.why = 'that point is ' + d + ' km from the middle of ' + p.mandal +
               ' — inside the district, but not where that mandal is. Check the figure before it ' +
               'is written: a wrong point refuses this officer every morning.';
-      /* AND NAME THE DIGIT, because "check the figure" sends a man to read
-         eight decimals and one changed digit is almost always the whole of
-         it. Named, never written. */
-      /* VP_FIX_KM_ and not the mandal's whole width: at twenty-five
+      /* AND NAME THE FIGURE, because "check the figure" sends a man to read
+         eight decimals and one keystroke is almost always the whole of it.
+         Named, never written.
+         VP_FIX_KM_ and not the mandal's whole width: at twenty-five
          kilometres a dozen different digits "fit" and the answer is noise.
          Ten kilometres of the middle of a mandal is a village in it. */
-      const fix = vpDigitFix_(p.lat, p.lng, c, VP_FIX_KM_);
-      if(fix.length){
-        p.fix = fix[0];
-        p.why += ' One digit of the ' + (fix[0].was === 'lat' ? 'latitude' : 'longitude') +
-                 ' would do it: ' + fix[0].lat + ', ' + fix[0].lng + ' is ' + fix[0].km +
-                 ' km from the middle of ' + p.mandal + '.' +
-                 (fix.length > 1 ? ' (' + (fix.length - 1) + ' other single-digit change' +
-                    (fix.length > 2 ? 's would' : ' would') + ' also land inside the mandal.)' : '') +
-                 ' Confirm it with the mandal — it is named here and written nowhere.';
-      }
+      p.why += vpFixSay_(p, c);
     });
   })();
 
