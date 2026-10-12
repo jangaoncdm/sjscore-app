@@ -779,6 +779,150 @@ body.dark .msg.q{color:#0E1120}
    the map from glaring out of a dark console; the pins are drawn by us and
    are deliberately left at full strength on top. */
 body.dark .leaflet-tile-pane{filter:brightness(.72) contrast(1.06) saturate(.85)}
+
+/* ================= THE DENSE GROUND — 11.10.2026 =========================
+   The Collector chose this of eight looks rendered side by side; the study
+   is in design-research/dashboard-layouts/looks/. Two things change.
+
+   THE 8pt GRID IS RUN AT 6pt, AND IT IS STILL A GRID. 6/12/18/24/30/36 keeps
+   every step in the proportion it had. That is what makes a spacing system a
+   system; nudging individual paddings one at a time is how a layout stops
+   having one. It buys back about a fifth of the page height, which on a
+   screen that is already two screens tall is the difference between reading
+   the morning and scrolling it.
+
+   AND THE DROP SHADOW GOES. The ground drops two steps so that a 1px ring is
+   enough to lift a card off it. A 22px blur under every panel is the first
+   thing an uncalibrated district monitor renders as mud, and it is drawn on
+   every repaint of a page that repaints every sixty seconds.
+
+   IT IS A CLASS AND NOT A REWRITE, for the reason FENCE_OFF is a property
+   and not a deploy. If the district finds it too small it comes off from the
+   header in one press, on the device, with nothing to republish. The default
+   is in the markup, so a page whose script never ran still renders dense.
+
+   NOTHING HERE TOUCHES A SERIES COLOUR. --cs*, --co* and --st-* are the
+   validated palette and are not in this block; the card surface stays
+   #FFFFFF and #171B2D, which is what they were measured against. The record
+   is prompt/palette-validation.txt. */
+body.dense{
+  --s1:6px; --s2:12px; --s3:18px; --s4:24px; --s5:30px; --s6:36px;
+  --bg:#E7EBF4; --well:#F1F4FA; --line:#D1D8E7; --line-2:#E5E9F3;
+  --nm-out:0 0 0 1px var(--line);
+  --nm-out-sm:0 0 0 1px var(--line);
+  --r:7px;
+  background:var(--bg);
+}
+body.dense.dark{
+  --bg:#0A0D1A; --well:#1C2238; --line:#2E3550; --line-2:#262C42;
+  --nm-out:0 0 0 1px var(--line);
+  --nm-out-sm:0 0 0 1px var(--line);
+}
+/* Every type size one step down. The console writes its sizes as literals
+   rather than through a scale, so the rules that carry one are named here
+   instead of being hunted through four thousand lines. */
+body.dense .main{padding:0 18px 32px}
+body.dense .top h1{font-size:19px}
+body.dense .top .sub{font-size:11.5px}
+body.dense .panel{border-top-width:2px}
+body.dense .panel .hd{font-size:13px;padding:11px 12px 5px}
+body.dense .panel .hd .r{font-size:10.5px}
+body.dense .panel .bd{padding:5px 12px 12px}
+body.dense .kpi{min-height:78px;padding:11px 12px}
+body.dense .kpi .hd{font-size:11.5px}
+body.dense .kpi .ic{width:32px;height:32px;border-radius:8px}
+body.dense .kpi .ic svg{width:15px;height:15px}
+body.dense .kpi .v{font-size:25px;margin-top:5px}
+body.dense .kpi .foot{font-size:10.5px;margin-top:4px}
+body.dense table{font-size:11.5px}
+body.dense th{font-size:9.5px;padding:6px 8px}
+body.dense td{padding:5px 8px}
+body.dense .rail{padding:var(--s3) 12px}
+body.dense .rail .brand{padding:2px 6px 13px;margin-bottom:11px}
+body.dense .rail .brand b{font-size:14px}
+body.dense .rail .brand img{width:32px;height:32px;border-radius:7px}
+body.dense .nav button{min-height:36px;font-size:12.5px;border-radius:6px;margin-bottom:2px}
+body.dense .nav button svg{width:16px;height:16px}
+body.dense .railfoot{font-size:10px}
+body.dense .rsel,body.dense .tbtn{min-height:34px;border-radius:6px;font-size:12px;padding:0 11px}
+
+/* A DENSE DESK IS NOT A DENSE HANDSET. Thirty-four pixels is a comfortable
+   target for a mouse and a miss for a thumb, and 9.5px of table heading read
+   at arm's length on a monitor is not the same text read on a bus. The
+   density is bought on the Collector's monitor and given back below 760,
+   where the console keeps the sizes it has always had. */
+/* ============ THE RAIL ON A SMALL SCREEN — 11.10.2026 ====================
+   THIRTEEN STACKED FULL-WIDTH BUTTONS IS NOT A PHONE LAYOUT. Below 760 the
+   rail went static and laid its destinations out down the page, so a
+   supervisor opening the console on a handset scrolled roughly 840px of menu
+   before the first figure. It is in the district's own render pass:
+   Info/console-render/390-light-overview.png is a screen of nothing but
+   menu. Material's answer below 600dp is a navigation BAR of up to five with
+   the rest behind More, and that is what this is.
+
+   Between 760 and 1180 the rail keeps its destinations and loses its words:
+   an icon column, which is the same pattern at the width where a 232px rail
+   is a quarter of the screen. */
+@media(max-width:1180px) and (min-width:761px){
+  .shell{grid-template-columns:76px 1fr}
+  .rail{padding:var(--s3) 8px}
+  .rail .brand{justify-content:center;padding:2px 0 13px}
+  .rail .brand div{display:none}
+  .nav button{flex-direction:column;justify-content:center;gap:3px;padding:0;
+    width:58px;height:54px;font-size:9.5px;letter-spacing:0;margin:0 auto var(--s1);
+    text-align:center;line-height:1.1}
+  .nav button svg{width:19px;height:19px}
+  .railfoot{display:none}
+}
+/* BOTH OF THESE ARE CHILDREN OF .shell, WHICH IS A TWO-COLUMN GRID, so
+   display:none here is not tidiness — it is what keeps them out of the grid.
+   Declared only inside the 760 query, the scrim took column two at every
+   desktop width and pushed .main onto the next row into the 232px rail
+   column: every card about 200px wide, every heading wrapped to six lines.
+   The page did not scroll sideways and nothing threw, so only the render
+   pass's row-alignment check saw it. */
+.bottomnav,.navscrim{display:none}
+@media(max-width:760px){
+  /* the rail becomes a drawer, opened from More, and is shut by default */
+  .shell{grid-template-columns:1fr}
+  .rail{display:none;position:fixed;left:0;top:0;bottom:58px;width:min(290px,84vw);
+    z-index:61;overflow:auto;height:auto;box-shadow:2px 0 22px rgba(23,35,59,.3)}
+  body.navopen .rail{display:block}
+  body.navopen .navscrim{display:block;position:fixed;inset:0;z-index:60;background:var(--scrim)}
+  .bottomnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:62;
+    background:var(--panel);border-top:1px solid var(--line);
+    padding:4px 2px env(safe-area-inset-bottom,4px)}
+  .bottomnav button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:3px;min-height:54px;font-size:10px;font-weight:650;
+    color:var(--tx-3);border-radius:9px;background:none;border:0;padding:0}
+  .bottomnav button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;
+    stroke-linecap:round;stroke-linejoin:round}
+  .bottomnav button[aria-current]{color:var(--pri)}
+  /* THE SAME LESSON AS .nav button[hidden] ABOVE. [hidden]{display:none} is
+     beaten by any author display rule, and the rule two lines up sets
+     display:flex on every button in this bar, so a destination the register
+     does not have would stay on screen while every check that read the
+     PROPERTY passed. */
+  .bottomnav button[hidden]{display:none}
+  /* the bar is fixed over the page, so the page owes it its own height */
+  .main{padding-bottom:84px}
+  body.dense .main{padding-bottom:84px}
+}
+
+@media(max-width:760px){
+  body.dense{--s1:8px; --s2:16px; --s3:24px; --s4:32px; --s5:40px; --s6:48px}
+  body.dense .main{padding:0 14px 32px}
+  body.dense .rsel,body.dense .tbtn{min-height:40px;font-size:13px;padding:0 12px}
+  body.dense table{font-size:12.5px}
+  body.dense th{font-size:10.5px;padding:9px 10px}
+  body.dense td{padding:7.5px 10px}
+  body.dense .kpi{min-height:96px;padding:var(--s2)}
+  body.dense .kpi .v{font-size:27px}
+  body.dense .kpi .hd{font-size:12.5px}
+  body.dense .panel .hd{font-size:14px;padding:var(--s2) var(--s2) var(--s1)}
+  body.dense .panel .bd{padding:var(--s1) var(--s2) var(--s2)}
+  body.dense .nav button{min-height:44px;font-size:13.5px}
+}
 /* one focus language everywhere: visible ring, never removed */
 :focus{outline:none}
 :focus-visible{outline:3px solid var(--pri);outline-offset:2px;border-radius:10px}
@@ -1162,7 +1306,7 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
 .tbtn.thm svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;display:inline-block}
 </style>
 </head>
-<body>
+<body class="dense">
 
 <div id="gate" class="gate"><div class="card">
   <img src="icons/icon-192.png" alt="">
@@ -1189,6 +1333,18 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
     </nav>
     <div class="railfoot">District Operations Center<br><a href="./">Open the field app</a><br><span id="buildTag" style="opacity:.62;font-family:var(--mono);font-size:10.5px"></span></div>
   </aside>
+  <div class="navscrim" id="navScrim"></div>
+  <!-- FIVE DESTINATIONS AND A WAY TO THE REST. Shown below 760 only; the
+       sixth button opens the rail itself as a drawer rather than duplicating
+       its other eight here, so there is one list of destinations and not two
+       that can disagree. -->
+  <nav class="bottomnav" id="bnav" aria-label="Sections">
+    <button data-v="overview" aria-current="page"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Overview</button>
+    <button data-v="attendance"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M4.5 20c1.2-3.6 4-5.4 7.5-5.4s6.3 1.8 7.5 5.4"/></svg>Attendance</button>
+    <button data-v="villages"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V9l7-5 7 5v12M9.5 21v-6h5v6"/></svg>Villages</button>
+    <button data-v="leave"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>Leave</button>
+    <button id="navMore" type="button"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>More</button>
+  </nav>
   <div class="main">
     <div class="top">
       <div><h1 id="hi">Welcome back</h1><div class="sub" id="hisub"></div>
@@ -1199,6 +1355,7 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
       <select class="rsel" id="monPick" title="Month under review"></select>
       <select class="rsel" id="every"><option value="30000">30s</option><option value="60000" selected>1m</option><option value="300000">5m</option></select>
       <button class="tbtn thm" id="thm" title="Light or dark" aria-label="Switch between light and dark"></button>
+      <button class="tbtn thm" id="dns" title="Dense or comfortable" aria-label="Switch between a dense and a comfortable layout"></button>
       <button class="tbtn" id="now">Refresh</button>
       <a class="tbtn pri" href="./">Open the app</a>
     </div>
@@ -1390,14 +1547,17 @@ function paintTenant(){
      village evaluation and carries no filing schedule; its server refuses both
      at the door, so a rail item for either could only lead to an empty screen. */
   const off = (TENANCY[TVIEW]||{}).off || [];
-  document.querySelectorAll('#nav [data-v]').forEach(b=>{
+  /* the bottom bar is the same rail and answers to the same list, or a
+     register that does not take village evaluations would still offer
+     Villages to a reader on a handset */
+  document.querySelectorAll('#nav [data-v],#bnav [data-v]').forEach(b=>{
     b.hidden = off.indexOf(b.dataset.v)>=0;
   });
   if(off.indexOf(VIEW)>=0){
     /* AND IT FALLS BACK TO A VIEW THIS REGISTER HAS. Overview is off on the
        HRMS register, so falling back to it would land on a hidden screen. */
     VIEW=(TENANCY[TVIEW]||{}).home||'overview';
-    document.querySelectorAll('#nav [data-v]').forEach(x=>x.toggleAttribute('aria-current',x.dataset.v===VIEW));
+    markView();
   }
 }
 let ST=null,TIMER=null,LASTOK=0,EVERY=60000,NEXT=0,INFLIGHT=false,DOWN=false,DATA=null,VIEW='overview',MET='present',MONTH='',SORTD=true;
@@ -1422,12 +1582,32 @@ function initTheme(){
   document.body.classList.toggle('dark', t==='dark');
   paintTheme();
 }
+/* DENSE OR COMFORTABLE, remembered on the device exactly as the theme is.
+   The markup carries class="dense", so the default survives a script that
+   never ran and a device with storage switched off; only a stored
+   'comfortable' takes it off. The pair of glyphs is the state you would get
+   by pressing, the same way the sun and the moon are. */
+const DENSE='<svg viewBox="0 0 24 24"><path d="M3 5h18M3 9h18M3 13h18M3 17h18M3 21h18"/></svg>';
+const ROOMY='<svg viewBox="0 0 24 24"><path d="M3 5h18M3 12h18M3 19h18"/></svg>';
+function paintDensity(){
+  const d=document.body.classList.contains('dense');
+  const b=$('#dns'); if(b) b.innerHTML=d?ROOMY:DENSE;
+  /* Leaflet measures its container once; both maps are inside panels whose
+     padding just changed under them. */
+  if(MAP) setTimeout(()=>{try{MAP.invalidateSize();}catch(e){}},60);
+  if(MAP2) setTimeout(()=>{try{MAP2.invalidateSize();}catch(e){}},60);
+}
+function initDensity(){
+  let d=null; try{ d=localStorage.getItem('sjgp-density'); }catch(e){}
+  if(d==='comfortable') document.body.classList.remove('dense');
+  paintDensity();
+}
 /* WHICH BUILD THIS IS, where a person can read it.
    “I cannot see the update” was asked three times and could not be
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = 'fa4c12b - 11 Oct 10:50';
+const BUILD_STAMP = '44008d6 - 12 Oct 08:37';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -1435,12 +1615,20 @@ function paintBuild(){
 function boot(){
   paintBuild();
   initTheme();
+  initDensity();
   const tb=$('#thm');
   if(tb) tb.onclick=()=>{
     const dark=!document.body.classList.contains('dark');
     document.body.classList.toggle('dark',dark);
     try{ localStorage.setItem('sjgp-theme',dark?'dark':'light'); }catch(e){}
     paintTheme();
+  };
+  const db=$('#dns');
+  if(db) db.onclick=()=>{
+    const dense=!document.body.classList.contains('dense');
+    document.body.classList.toggle('dense',dense);
+    try{ localStorage.setItem('sjgp-density',dense?'dense':'comfortable'); }catch(e){}
+    paintDensity();
   };
   let d=null; try{ d=JSON.parse(localStorage.getItem('sjf5')||'null'); }catch(e){}
   if(!d||!d.session||!d.session.token||!d.url){ gate('Sign in once in the SJGP app on this device, then open this page again. The console uses that sign-in.',true); return; }
@@ -1477,9 +1665,26 @@ function boot(){
   pull(); TIMER=setInterval(tick,1000);
   $('#every').onchange=()=>{EVERY=+$('#every').value;NEXT=Date.now()+EVERY;};
   $('#now').onclick=()=>pull();
+  /* ONE LIST OF DESTINATIONS, TWO PLACES IT IS DRAWN. The rail and the
+     bottom bar both carry data-v, so a view chosen in either has to be
+     marked current in both or the bar says Overview while the page shows
+     Leave. markView is the single place that decides. */
+  const pickView=v=>{ VIEW=v; markView(); document.body.classList.remove('navopen');
+    if(DATA) render(DATA); };
   $('#nav').addEventListener('click',e=>{const b=e.target.closest('[data-v]'); if(!b) return;
-    VIEW=b.dataset.v; document.querySelectorAll('#nav [data-v]').forEach(x=>x.toggleAttribute('aria-current',x===b));
-    if(DATA) render(DATA);});
+    pickView(b.dataset.v);});
+  $('#bnav').addEventListener('click',e=>{const b=e.target.closest('[data-v]'); if(!b) return;
+    pickView(b.dataset.v);});
+  $('#navMore').onclick=()=>document.body.classList.toggle('navopen');
+  $('#navScrim').onclick=()=>document.body.classList.remove('navopen');
+  /* a drawer with no way out is a trap, and Escape is the way out everywhere
+     else on this page */
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape') document.body.classList.remove('navopen'); });
+}
+function markView(){
+  document.querySelectorAll('#nav [data-v],#bnav [data-v]')
+    .forEach(x=>x.toggleAttribute('aria-current',x.dataset.v===VIEW));
 }
 function gate(m,l){ $('#gateMsg').innerHTML=m+(l?'<br><a class="tbtn" href="./">Open the SJGP app</a>':''); }
 
@@ -1988,6 +2193,22 @@ const Charts = (() => {
     const x = i => PL + (n === 1 ? 0 : (i / (n - 1)) * (W - PL - 16));
     const y = v => PT + (1 - v / max) * (H - PB - PT);
     let s = '', defs = '';
+    /* DAYS THE OFFICE WAS SHUT ARE BANDED. opts.shut is one boolean per
+       label; the caller also passes null for those days, and the path
+       builder above already breaks on a null rather than bridging it. A line
+       drawn THROUGH a day nobody worked invents a reading, which is the same
+       objection that took the spline out of this chart. */
+    if(opts.shut && opts.shut.length === n){
+      const half = n > 1 ? (W - PL - 16) / (n - 1) / 2 : (W - PL - 16) / 2;
+      opts.shut.forEach((isOff, i) => {
+        if(!isOff) return;
+        const bx = Math.max(PL, x(i) - half), bw = Math.min(W - 8, x(i) + half) - bx;
+        if(bw <= 0) return;
+        s += '<rect x="' + bx.toFixed(1) + '" y="' + PT + '" width="' + bw.toFixed(1) +
+          '" height="' + (H - PB - PT).toFixed(1) + '" style="fill:var(--ch-grid)" opacity=".7"><title>' +
+          esc(labels[i] + ' — the office was shut') + '</title></rect>';
+      });
+    }
     [0, .25, .5, .75, 1].forEach(f => {
       const vy = PT + f * (H - PB - PT);
       /* solid, hairline, recessive — a DASHED gridline reads as a threshold */
@@ -2003,16 +2224,30 @@ const Charts = (() => {
         d += (open ? ' L' : ' M') + x(i).toFixed(1) + ',' + y(v).toFixed(1); open = true;
       });
       if(sr.area){
-        let firstI = sr.values.findIndex(v => v != null), lastI = -1;
-        sr.values.forEach((v, i) => { if(v != null) lastI = i; });
-        if(firstI >= 0){
+        /* ONE FILL PER UNBROKEN RUN, NOT ONE FILL ACROSS THE WHOLE SERIES.
+           The old form took the single path d — which already breaks at a
+           null — and closed it from the last point to the first. With no
+           nulls that is right. With a null in the middle the closure joins
+           two separate runs into one polygon and the fill cuts a diagonal
+           wedge straight through the gap, which is worse than the cliff it
+           replaced: it draws a slope over days nobody worked. */
+        const runs = [];
+        let run = [];
+        sr.values.forEach((v, i) => {
+          if(v == null){ if(run.length) runs.push(run); run = []; return; }
+          run.push(i);
+        });
+        if(run.length) runs.push(run);
+        runs.forEach(idx => {
+          if(idx.length < 2) return;   /* a lone point has no area */
           const gid = nextId();
           defs += '<linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
             '<stop offset="0%" style="stop-color:' + col + ';stop-opacity:.30"/>' +
             '<stop offset="100%" style="stop-color:' + col + ';stop-opacity:0"/></linearGradient>';
-          s += '<path d="' + d + ' L' + x(lastI).toFixed(1) + ',' + y(0).toFixed(1) + ' L' +
-            x(firstI).toFixed(1) + ',' + y(0).toFixed(1) + ' Z" fill="url(#' + gid + ')"/>';
-        }
+          const dd = idx.map((i, k) => (k ? ' L' : 'M') + x(i).toFixed(1) + ',' + y(sr.values[i]).toFixed(1)).join('');
+          s += '<path d="' + dd + ' L' + x(idx[idx.length - 1]).toFixed(1) + ',' + y(0).toFixed(1) +
+            ' L' + x(idx[0]).toFixed(1) + ',' + y(0).toFixed(1) + ' Z" fill="url(#' + gid + ')"/>';
+        });
       }
       s += '<path d="' + d + '" fill="none" style="stroke:' + col + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
       sr.values.forEach((v, i) => {
@@ -2098,9 +2333,21 @@ function areaChart(rows, key, color){
     : (r.filedN || 0);
   const name = key === 'present' ? 'Present' : key === 'leave' ? 'On leave'
     : key === 'absent' ? 'Not marked' : 'Villages filed';
+  /* THE FORTNIGHT IS FOURTEEN CALENDAR DAYS AND TWO OF THEM ARE SUNDAYS.
+     att14 is built by counting back fourteen days (Code.gs), and this chart
+     drew every one of them the same, so the line fell to nothing twice and
+     read as the district collapsing — three times in a week carrying a
+     General Holiday. The nought is TRUE: the attendance gate does not open
+     on a Sunday and nobody is counted absent for it. Drawing it like a
+     working day is what was wrong. The day is now banded and the series
+     carries null across it, by exactly the rule the attendance export has
+     always used (matrixData: a Sunday by the date, or a date on the
+     Holidays tab, which rides along as attm.off). */
+  const hol = {}; (((DATA || {}).attm || {}).off || []).forEach(d => hol[d] = true);
+  const shutDay = r => new Date(String(r.date) + 'T00:00:00').getDay() === 0 || !!hol[r.date];
   return Charts.line(rows.map(r => dm(r.date)),
-    [{name: name, values: rows.map(val), color: color, area: true}],
-    {emptyMsg: 'No days on record yet.'});
+    [{name: name, values: rows.map(r => shutDay(r) ? null : val(r)), color: color, area: true}],
+    {emptyMsg: 'No days on record yet.', shut: rows.map(shutDay)});
 }
 
 /* Grades and the like: part-to-whole, four parts, total in the hole. */
