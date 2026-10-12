@@ -570,7 +570,7 @@ function refineAttFix(){
         step.className = 'step done'; $('#geoN').innerHTML = ICON.tick;
         $('#geoTxt').innerHTML = geoSay(f, 'again');
       }
-      if(!had){ drawAttendance(); sendSeenPing(); }   /* the photograph step unlocks */
+      if(!had){ drawAttendance(); sendSeenPing(); sampleReads(1); }   /* the photograph step unlocks */
     }
     if(f.acc <= 50 || Date.now() - t0 > 150000) stopAttWatch();
   }, ()=>{}, {enableHighAccuracy:true, maximumAge:0});
@@ -597,6 +597,104 @@ const fixText = f => f ? `${f.lat.toFixed(5)}, ${f.lng.toFixed(5)} · \u00b1${Ma
    every phone that has a line. An officer the office has not placed yet marks
    exactly as he always did.
    ============================================================ */
+/* ============================================================
+   A LOCATION THAT WAS NOT MEASURED — ordered 12.10.2026
+
+   Thirty-four Secretaries' morning coordinates repeated to six decimals
+   across days, pinned to the surveyed point of their own office at a claimed
+   one metre: a mock-location app, and the fence looks straight at it and
+   sees a man at his desk. The phones are private and cannot be inspected,
+   so the app has to tell a receiver from an app by itself, and there is one
+   thing to go on: A RECEIVER'S READINGS ALWAYS DIFFER. Asked four times in a
+   minute, a handset answers with four points a few metres apart and four
+   accuracies that move with the sky. An app answers with the one point it
+   was given, byte for byte, every time.
+
+   So while the photograph is taken the location is read STILL_N times, a
+   couple of seconds apart, and every reading goes to the district with the
+   mark. If they are all identical the officer is told so on the spot and
+   asked to walk ten or twenty metres and read again: a receiver re-acquires
+   and the readings differ; an app repeats itself however far he walks. The
+   server asks the same question of every mark that lands (rule 6).
+
+   A coarse reading — the network's guess at twenty metres or two kilometres
+   — repeats honestly for a phone that has not moved and is never held
+   against anyone. Fewer than three readings is not a verdict. And the
+   reading waits for nothing: the photograph is taken as before, and the
+   question is asked at the moment of marking.
+   ============================================================ */
+const STILL_FINE = 15, STILL_N = 4, STILL_GAP = 1800;
+async function sampleReads(round){
+  if(!ATT || !navigator.geolocation) return;
+  if(ATT.sampling) return;                              /* one round at a time */
+  const key = round === 2 ? 'reads2' : 'reads1';
+  if(round === 1 && (ATT.reads1 || []).length) return;  /* the first round is taken once */
+  ATT[key] = []; ATT.sampling = key;
+  const token = ATT.id;
+  for(let i = 0; i < STILL_N; i++){
+    try{
+      const f = await getFix({ timeout:9000, maximumAge:0 });
+      if(!ATT || ATT.id !== token) return;
+      ATT[key].push([f.lat, f.lng, f.acc, Date.now()]);
+      /* a better reading than the one standing is taken, as the watch takes it */
+      if(ATT.fix && f.acc < ATT.fix.acc){ ATT.fix = f; const s = $('#geoTxt'); if(s) s.innerHTML = geoSay(f, 'again'); }
+    }catch(e){}
+    if(i < STILL_N - 1) await new Promise(r => setTimeout(r, STILL_GAP));
+  }
+  if(ATT && ATT.id === token){
+    ATT.sampling = '';
+    const ss = stillState();
+    const s = $('#geoTxt');
+    if(ss.block && s) s.innerHTML += '<br><b>The phone reported exactly the same point ' + ss.n + ' times, which a receiver never does. Walk ten or twenty metres and read again when you mark.</b>';
+  }
+}
+/* one round's verdict: true = identical and fine, false = measured, null = no verdict */
+function roundStill(r){
+  if(!r || r.length < 3) return null;
+  const k0 = r[0][0].toFixed(7) + ',' + r[0][1].toFixed(7), a0 = r[0][2];
+  const same = r.every(x => x[0].toFixed(7) + ',' + x[1].toFixed(7) === k0 && x[2] === a0);
+  return same && a0 != null && a0 <= STILL_FINE;
+}
+function stillState(){
+  if(!ATT) return { block:false };
+  const r1 = ATT.reads1 || [], r2 = ATT.reads2 || [];
+  const s1 = roundStill(r1), s2 = roundStill(r2);
+  if(r2.length >= 3){ return s2 ? { block:true, round:2, n:r2.length } : { block:false }; }
+  if(s1) return { block:true, round:1, n:r1.length };
+  return { block:false };
+}
+/* the round in hand is allowed to finish, briefly, so a quick press cannot
+   skip the question — nine seconds at most, and then whatever stands is judged */
+async function stillReady(){
+  const t0 = Date.now();
+  while(ATT && ATT.sampling && Date.now() - t0 < 9000) await new Promise(r => setTimeout(r, 250));
+  return stillState();
+}
+function stillWords(ss, out){
+  if(ss.round === 1) return { title:'The location was not measured',
+    body:'Your phone reported exactly the same point ' + ss.n + ' times in a row, and a receiver never does that. Walk ten or twenty metres into the open and read the location again.' };
+  return { title:'The location is still not being measured',
+    body:'The readings are identical again. Switch off any location app on this phone, step into the open, and read the location again. ' +
+         (out ? 'Marking out' : 'Attendance') + ' is not taken from a location that was not measured.' };
+}
+function stillPopup(ss, out){
+  const w = stillWords(ss, out);
+  showSheet(`<div style="padding:6px 20px 4px"><h2>${esc(w.title)}</h2>
+    <p style="font-size:15px;color:var(--ink-2);margin-top:9px;line-height:1.5">${esc(w.body)}</p></div>
+    <div style="padding:16px 20px 4px">
+      <button class="btn" id="stAgain">Read the location again</button>
+      <button class="btn quiet" id="stClose">Close</button></div>`);
+  $('#stAgain').addEventListener('click', () => {
+    hideSheet();
+    if(!ATT) return;
+    ATT.reads2 = []; ATT.sampling = '';
+    const s = $('#geoTxt'); if(s) s.innerHTML = 'Reading the location again. Walk ten or twenty metres, in the open, while it reads.';
+    sampleReads(2);
+  });
+  $('#stClose').addEventListener('click', hideSheet);
+}
+const readsOf = () => ATT ? { r1:ATT.reads1 || [], r2:ATT.reads2 || [] } : null;
+
 const FENCE_STALE_MS = 14 * 24 * 3600 * 1000;
 function kmBetween(aLat, aLng, bLat, bLng){
   const R = 6371, rad = Math.PI / 180;
@@ -889,8 +987,8 @@ let attTries = 0;
    same thing with the one word changed — and it still says plainly that the
    app holds no background location, because that is the question an
    officer actually has. */
-const ATT_PRIVACY = '<b>What is recorded.</b> One photograph, one set of coordinates and the time, at the moment you press <b>Mark attendance</b> — nothing else, and nothing at any other time. The app does not follow your movements during the day and holds no background location. Attendance can be marked without a network; it is kept on the phone and goes to the district when signal returns.';
-const OUT_PRIVACY = '<b>What is recorded.</b> One photograph, one set of coordinates and the time, at the moment you press <b>Mark out</b> — nothing else, and nothing at any other time. The app does not follow your movements during the day and holds no background location. No hours are worked out from it and nothing is counted against you: marking out is a record of the end of your day, and the district reads it as that. It can be marked without a network and goes up when signal returns.';
+const ATT_PRIVACY = '<b>What is recorded.</b> One photograph, the location and the time, at the moment you press <b>Mark attendance</b> — the location is read a few times over that minute, so that a real receiver can be told from a location app — and nothing else, at no other time. The app does not follow your movements during the day and holds no background location. Attendance can be marked without a network; it is kept on the phone and goes to the district when signal returns.';
+const OUT_PRIVACY = '<b>What is recorded.</b> One photograph, the location and the time, at the moment you press <b>Mark out</b> — the location is read a few times over that minute, so that a real receiver can be told from a location app — and nothing else, at no other time. The app does not follow your movements during the day and holds no background location. No hours are worked out from it and nothing is counted against you: marking out is a record of the end of your day, and the district reads it as that. It can be marked without a network and goes up when signal returns.';
 
 const ATT_STEPS = `
   <div class="step" id="stepGeo">
@@ -992,6 +1090,7 @@ async function startAttFix(){
     step.className = 'step done'; $('#geoN').innerHTML = ICON.tick;
     $('#geoTxt').innerHTML = geoSay(ATT.fix, 'first');
     if(ATT.fix.acc > 100) refineAttFix();        /* the satellite may still improve on the network's guess */
+    sampleReads(1);                              /* and it is read again, a few times, while he takes the photograph */
     sendSeenPing();                              /* the district is told the app was opened here */
   }catch(e){
     attTries++;
@@ -1127,6 +1226,13 @@ async function markAttendance(){
     const st = fenceState(ATT.fix);
     if(st.gated && !st.ok){ FENCE_SHOWN = ''; fenceTell(st, false); drawAttendance(); return; }
   }
+  /* AND WHETHER THE LOCATION WAS MEASURED AT ALL. Asked here, at the moment
+     of marking, after the readings have had their minute. */
+  {
+    const ss = await stillReady();
+    if(!ATT) return;
+    if(ss.block){ stillPopup(ss, false); return; }
+  }
   stopAttWatch();                              /* whatever fix stands now is the one filed */
   const btn = $('#attMark'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Marking';
   const u = user(), key = todayStr();
@@ -1134,6 +1240,7 @@ async function markAttendance(){
   await BLOBS.put(pid, ATT.b64);
   DB.att[key] = {
     id: ATT.id, date: key, ts: ATT.ts || new Date().toISOString(),
+    reads: readsOf(),
     lat: ATT.fix ? ATT.fix.lat : null, lng: ATT.fix ? ATT.fix.lng : null,
     /* A fix good to 2 kilometres is the phone guessing from the network, not
        the satellite telling us where the officer is. It is recorded, but it
@@ -1168,6 +1275,11 @@ async function markOut(){
     const st = fenceState(ATT && ATT.fix);
     if(st.gated && !st.ok){ FENCE_SHOWN = ''; fenceTell(st, true); drawAttendance(); return; }
   }
+  {
+    const ss = await stillReady();
+    if(!ATT) return;
+    if(ss.block){ stillPopup(ss, true); return; }
+  }
   const btn = $('#attMark'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Marking out';
   stopAttWatch();
   const u = user(), key = todayStr();
@@ -1175,6 +1287,7 @@ async function markOut(){
   await BLOBS.put(pid, ATT.b64);
   DB.out[key] = {
     id: ATT.id, date: key, ts: ATT.ts || new Date().toISOString(),
+    reads: readsOf(),
     lat: ATT.fix ? ATT.fix.lat : null, lng: ATT.fix ? ATT.fix.lng : null,
     acc: ATT.fix ? ATT.fix.acc : null,
     verified: !!ATT.fix && Number(ATT.fix.acc) <= ACC_LIMIT,
@@ -1202,7 +1315,8 @@ async function _syncOut(){
       /* the same id every time, so a re-send is a retry and not a second
          mark (rule 5) — the server answers already:true and nothing doubles */
       const r = await post({kind:'attendanceOut', token:DB.session.token, att:{
-        id:o.id, ts:o.ts, lat:o.lat, lng:o.lng, acc:o.acc, verified:o.verified, tz:o.tz
+        id:o.id, ts:o.ts, lat:o.lat, lng:o.lng, acc:o.acc, verified:o.verified, tz:o.tz,
+        reads:o.reads || null
       }, photo: b64 ? {name:`OUT_${o.phone}_${o.date}.jpg`, b64} : null});
       if(r && r.ok){ o.sync = 'synced'; if(o.photoId) BLOBS.del(o.photoId); done++; }
       else if(r && r.early){
@@ -1261,7 +1375,8 @@ async function _syncAttendance(){
       const b64 = await BLOBS.get(a.photoId);
       const r = await post({kind:'attendance', token:DB.session.token, att:{
         id:a.id, date:a.date, ts:a.ts, lat:a.lat, lng:a.lng, acc:a.acc, verified:a.verified, tz:a.tz,
-        status:a.status || 'PRESENT', leaveId:a.leaveId || '', leaveType:a.leaveType || ''
+        status:a.status || 'PRESENT', leaveId:a.leaveId || '', leaveType:a.leaveType || '',
+        reads:a.reads || null
       }, photo: b64 ? {name:`ATT_${a.phone}_${a.date}.jpg`, b64} : null});
       if(r && r.ok){
         a.sync='synced'; a.url=r.url||''; if(a.photoId) BLOBS.del(a.photoId); done++;
