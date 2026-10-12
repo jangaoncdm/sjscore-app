@@ -1462,6 +1462,40 @@ different place; Srimannarayanapuram resolves to nothing at all. Neither is
 reached by any of this, and suite 35 asserts they are still refused — a rule
 that cured them would be a rule that invents villages.
 
+**The MPO and the MPDO are fenced too — ordered 12.10.2026.** A mandal
+officer holds no village, so his place of duty is the **mandal office**,
+which the roster paste writes to the `Mandals` tab; `dutyPoints_` had
+measured him from it since the first day of the fence. What the order
+needed was the mandals whose office was never written: `mandalDuty_` lets the
+**headquarters village** stand in — the village on the `GPs` roll carrying
+the mandal's own name, placed by the same survey as every other, because a
+mandal office is at the mandal headquarters by definition. It is a
+derivation and is named as one everywhere it appears: `which:'hq'` to the
+app, *"Lingalaghanpur, the mandal headquarters, your place of duty"* in the
+refusal, and a pill of its own on the Place of duty screen, so a point the
+roster wrote is never confused with one the roll implied. An office written
+on the `Mandals` tab takes precedence the moment it is there. A mandal with
+neither — Jangaon's headquarters is a municipality and sits on no Gram
+Panchayat roll — **fences nobody and is named** on the screen, which is rule
+10's own restraint: no coordinate is not a fence. Suite 35 section 7a holds
+all three states and the report's count of officers reached.
+
+**The figure shown is the figure that decided the mark.** The sanitation
+console printed only the distance from the **middle of the mandal** — rule
+10's measure, from before the roll had coordinates — and against a Secretary
+standing at Cheeturu, the easternmost village of Lingala Ghanpur, it read
+*17.3 km* while his mark had passed the fence by a wide margin, and asked
+from the district in those words. The place-of-duty distance is drawn on
+the sanitation console now, officer by officer, beside the mandal one, and it
+is read through `dutyPoints_` — alias, transliteration, mandal office and
+all — never through a second exact-key lookup of the same tabs, or an
+officer the fence had placed would stand on the screen as *not placed*. The
+amber line is the fence radius where one is in force (`dutyLim()`), not the
+Gram Palana register's three kilometres, because a four-kilometre mark the
+order has already passed is not a warning. `tests/render-console.js` asserts
+both columns on the sanitation attendance screen and all three mandal states
+on the Place of duty screen.
+
 **And it is watched from a screen of its own — "Place of duty" on the rail.**
 A distance that decides something has to be monitored, and three questions
 that are not the same question have to be answerable from one place.

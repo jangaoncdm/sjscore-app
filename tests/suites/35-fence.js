@@ -231,6 +231,66 @@ module.exports = {
       t.eq(env.get('duty', { token:tok(env, '9000000056') }).on, false, 'and is told so');
     }
 
+    /* ---- 7a. AND WHERE THE ROSTER NEVER WROTE THE OFFICE, THE HEADQUARTERS
+            VILLAGE STANDS IN — ordered for the MPO and the MPDO on 12.10.2026.
+            A mandal office is at the mandal headquarters, and the headquarters
+            village is on the roll under the mandal's own name, placed by the
+            same survey as every other village. It is a derivation, so it is
+            NAMED as one everywhere it appears: to the app, in the refusal,
+            and on the Collector's screen. ---- */
+    {
+      const env = world();
+      env.mkSheet('Mandals', ['Mandal', 'Office', 'Lat', 'Lng'], []);
+      const d = env.get('duty', { token:tok(env, '9000000055') });
+      t.eq(d.on, true, 'WITH NO OFFICE ON THE MANDALS TAB THE MPO IS STILL FENCED');
+      t.eq(d.which, 'hq', 'at the headquarters village, and the app is told it is a derivation');
+      t.ok(/^Devaruppula, the mandal headquarters$/.test((d.duty[0] || {}).name),
+        'named as the headquarters, never as the office', (d.duty[0] || {}).name);
+      t.eq(mark(env, tok(env, '9000000055'), OFFICE).ok, true,
+        'the MPO at his own office, three kilometres from the headquarters village, is taken');
+      const r = mark(env, tok(env, '9000000055'), FAR);
+      t.eq(r.ok, false, 'and forty kilometres out is not');
+      t.ok(/Devaruppula, the mandal headquarters, your place of duty/.test(r.error),
+        'the refusal says what it measured from', r.error);
+
+      const rep = env.ctx.fenceReport_();
+      const dm = rep.mandals.filter(m => m.mandal === 'Devaruppula')[0];
+      t.ok(!!dm, 'the report carries the mandal');
+      t.eq(dm && dm.source, 'hq', 'AND SAYS THE POINT IS THE HEADQUARTERS VILLAGE, not the roster');
+      t.eq(dm && dm.officers, 1, 'with the one mandal officer it reaches');
+      t.eq(rep.offices.fromHq, 1, 'counted as a derivation');
+      t.eq(rep.offices.fromTab, 0, 'and not as an office the roster wrote');
+      t.eq(rep.offices.fenced, 1, 'one mandal officer fenced');
+      t.eq(rep.offices.officers, 1, 'of one on the roll');
+    }
+    /* THE ROSTER'S OWN OFFICE WINS, and a mandal with neither fences nobody. */
+    {
+      const env = world();
+      const first = env.ctx.fenceReport_().mandals.filter(m => m.mandal === 'Devaruppula')[0];
+      t.eq(first && first.source, 'mandal',
+        'where the office is written on the Mandals tab, that is the point and not the village');
+      t.ok(/MPDO Office/.test(first && first.office), 'and it is named by its own name', first && first.office);
+
+      /* Narmetta: an MPO, villages on the roll, but none named after the
+         mandal and no office written — the shape of Jangaon, whose
+         headquarters is a municipality and sits on no Gram Panchayat roll. */
+      env.sheets['Users'].rows.push(['9000000057', 'G. NarmettaMpo', 'MPO', 'Narmetta', '', '', '',
+                                     env.ctx.hash_('9000000057', '1111'), 'TRUE']);
+      env.sheets['GPs'].rows.push(['Narmetta', 'Kodavatoor', 17.75, 79.10]);
+      const d = env.get('duty', { token:tok(env, '9000000057') });
+      t.eq(d.on, false,
+        'A MANDAL WITH NO OFFICE AND NO HEADQUARTERS VILLAGE ON THE ROLL FENCES ITS MPO NOT AT ALL');
+      t.eq(mark(env, tok(env, '9000000057'), FAR).ok, true,
+        'and his mark is taken wherever it is made — no coordinate is not a fence');
+      const rep = env.ctx.fenceReport_();
+      const nm = rep.mandals.filter(m => m.mandal === 'Narmetta')[0];
+      t.eq(nm && nm.source, 'none', 'AND IT IS NAMED ON THE REPORT rather than quietly unfenced');
+      t.eq(nm && nm.officers, 1, 'with the officer the order does not reach');
+      t.eq(rep.offices.total, 2, 'two mandals on the roll');
+      t.eq(rep.offices.unplaced, 1, 'one of them unplaced');
+      t.eq(rep.mandals[0].mandal, 'Narmetta', 'and the unfenced mandal is listed first, worst first');
+    }
+
     /* ---- 8. op=duty IS WHAT LETS THE APP REFUSE ON A VILLAGE ROAD ----
        Attendance is marked with no signal and sent later, so the app cannot
        ask at the moment of marking: it carries his own places and the radius

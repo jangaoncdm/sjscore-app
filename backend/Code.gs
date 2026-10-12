@@ -2114,13 +2114,16 @@ function fenceRule_(){
    The MPO, the MPDO and the MSO hold no village: they answer for a mandal, so
    their place is the mandal office, which the roster paste already writes.
    The district officers hold neither and are not fenced at all. */
-function dutyPoints_(u){
+function dutyPoints_(u, ctx){
   var out = [], seen = {};
   var gps = (u && u.gps) || [], mandals = (u && u.mandals) || [];
   if(u && u.mandal && mandals.indexOf(u.mandal) < 0) mandals = mandals.concat([u.mandal]);
 
   if(gps.length){
-    var places = gpPlaces_(), keys = Object.keys(places);
+    /* `ctx` carries the two tabs already read, for the console, which asks
+       this for 280 officers in one breath and must not read the sheet 280
+       times; a mark on its own reads them here. */
+    var places = (ctx && ctx.places) || gpPlaces_(), keys = Object.keys(places);
     /* AND THE TWO TABS NEED NOT SPELL THE MANDAL THE SAME WAY. Users carries
        the mandal against the officer and GPs carries it against the village,
        and the district writes "Bachannapet" in one place and "Bachannapeta"
@@ -2161,17 +2164,54 @@ function dutyPoints_(u){
 
   /* no village of his is placed — the mandal office, if he answers for one */
   if(mandalRole_(u && u.role) || gps.length === 0){
-    var offs = mandalOffices_();
+    var offs = (ctx && ctx.offs) || mandalOffices_(), pl = (ctx && ctx.places) || gpPlaces_();
     mandals.forEach(function(m){
-      var o = offs[String(m).toLowerCase().trim()];
+      var o = mandalDuty_(m, offs, pl);
       if(o && !seen['m' + o.lat + ',' + o.lng]){
         seen['m' + o.lat + ',' + o.lng] = 1;
-        out.push({ name:o.office || (o.mandal + ' mandal office'), mandal:o.mandal,
-                   lat:o.lat, lng:o.lng, which:'mandal' });
+        out.push(o);
       }
     });
   }
   return out;
+}
+
+/* WHERE A MANDAL OFFICER IS FENCED — ordered for the MPO and the MPDO on
+   12.10.2026, the Secretaries having been fenced two days before.
+
+   The MPO, the MPDO and the MSO answer for a mandal and hold no village, so
+   their place of duty is the mandal office. The roster paste writes it to the
+   Mandals tab, and where it has, that is the point and nothing else is asked.
+
+   AND WHERE IT HAS NOT, THE HEADQUARTERS VILLAGE STANDS IN. A mandal office
+   is at the mandal headquarters — that is what the word means — and the
+   headquarters village is on the GPs tab under the mandal's own name, placed
+   by the same survey that placed every other village. So "Lingalaghanpur" in
+   Lingalaghanpur mandal is where that mandal's MPO is fenced until the
+   office itself is written down, and five kilometres is wider than any
+   village. It is a derivation and it says so: `which:'hq'`, named as the
+   headquarters in the sentence the officer reads and on the Collector's
+   screen, so a point written from the roster is never confused with one
+   inferred from the roll. A mandal with neither — Jangaon's headquarters is a
+   municipality and has no row on a Gram Panchayat roll — fences nobody and
+   is named as such on the Place of duty screen, which is rule 10's own
+   restraint: no coordinate is not a fence. The mandal name goes through the
+   alias, because the two tabs spell Bachannapeta two ways and a bracket must
+   not cost a mandal its office. */
+function mandalDuty_(m, offs, places){
+  var mk = mkeyM_(m), hit = null;
+  if(!mk) return null;
+  var o = (offs || {})[String(m || '').toLowerCase().trim()];
+  if(!o) Object.keys(offs || {}).forEach(function(k){ if(!o && mkeyM_(offs[k].mandal) === mk) o = offs[k]; });
+  if(o) return { name:o.office || (o.mandal + ' mandal office'), mandal:o.mandal,
+                 lat:o.lat, lng:o.lng, which:'mandal' };
+  Object.keys(places || {}).forEach(function(k){
+    var p = places[k];
+    if(!hit && mkeyM_(p.mandal) === mk && mkeyM_(p.gp) === mk) hit = p;
+  });
+  if(hit) return { name:hit.gp + ', the mandal headquarters', mandal:hit.mandal,
+                   lat:hit.lat, lng:hit.lng, which:'hq' };
+  return null;
 }
 
 /* IS THIS MARK INSIDE THE FENCE — the one derivation, read by the mark in,
@@ -2262,7 +2302,9 @@ function fenceSay_(km){
 function fenceReport_(){
   var rule = fenceRule_();
   var out = { km:rule.off ? 0 : rule.km, on:!rule.off, today:[], days:[], repeat:[],
-              villages:{ total:0, placed:0, unplaced:0 }, byMandal:[], unplaced:[] };
+              villages:{ total:0, placed:0, unplaced:0 }, byMandal:[], unplaced:[],
+              offices:{ total:0, placed:0, fromTab:0, fromHq:0, unplaced:0, officers:0, fenced:0 },
+              mandals:[] };
   try{
     var sh = sheet_('GPs', GPS_HEAD()), v = sh.getDataRange().getValues();
     var head = (v[0] || []).map(function(h){ return String(h).toLowerCase().trim(); });
@@ -2292,6 +2334,36 @@ function fenceReport_(){
     out.byMandal = Object.keys(byM).map(function(k){ return byM[k]; })
       .sort(function(a, b){ return (a.placed / a.total) - (b.placed / b.total) ||
                                    String(a.mandal).localeCompare(String(b.mandal)); });
+
+    /* AND WHERE THE MANDAL OFFICERS ARE FENCED (ordered 12.10.2026). The MPO
+       and the MPDO are measured from the mandal office — written by the
+       roster paste, or standing in as the headquarters village until it is —
+       and a mandal with neither fences them not at all. The Collector has to
+       be able to read which of the three each mandal is, because an order
+       that reaches ten mandals of twelve reaches ten, and the two it does not
+       reach are named here rather than quietly unfenced. The officers it
+       reaches are counted off the roll so the figure is men, not mandals. */
+    var offs = mandalOffices_(), pl = gpPlaces_(), who = {};
+    try{
+      var dt = uidx_(), dv = dt.sh.getDataRange().getValues();
+      for(var q = 1; q < dv.length; q++){
+        if(dt.ix.active >= 0 && String(dv[q][dt.ix.active]).toUpperCase() === 'FALSE') continue;
+        if(!mandalRole_(cell_(dv[q], dt.ix.role))) continue;
+        var mm = mkeyM_(cell_(dv[q], dt.ix.mandal));
+        if(mm) who[mm] = (who[mm] || 0) + 1;
+      }
+    }catch(e2){}
+    out.mandals = Object.keys(byM).map(function(k){
+      var d = mandalDuty_(k, offs, pl), n = who[mkeyM_(k)] || 0;
+      out.offices.total++; out.offices.officers += n;
+      if(d){ out.offices.placed++; out.offices.fenced += n;
+             if(d.which === 'hq') out.offices.fromHq++; else out.offices.fromTab++; }
+      else out.offices.unplaced++;
+      return { mandal:k, source:d ? d.which : 'none', office:d ? d.name : '', officers:n };
+    }).sort(function(a, b){
+      var o = { none:0, hq:1, mandal:2 };
+      return (o[a.source] - o[b.source]) || String(a.mandal).localeCompare(String(b.mandal));
+    });
   }catch(e){}
 
   try{
@@ -4360,14 +4432,27 @@ function doGet(e){
     /* the village offices, and which of them each officer holds — empty on a
        register whose roll carries no coordinates, which is SJGP's */
     const places = tenant_().placeOfDuty ? gpPlaces_() : null;
-    const dutyGps = {};
+    /* THE FIGURE SHOWN IS THE FIGURE THAT DECIDED THE MARK. The officer's
+       points are read through dutyPoints_ — the one derivation the fence
+       refuses him with, alias, transliteration and mandal office included —
+       and not through a second lookup of the same tabs by exact key. The
+       first cut here matched mandal|gp exactly, so a Secretary the fence had
+       placed through the alias stood on this screen as "not placed", and the
+       distance that had passed or refused his mark was still shown nowhere.
+       The two tabs are read once and handed in, because this runs for every
+       officer who marked today. */
+    const dutyCtx = places ? { places:places, offs:mandalOffices_() } : null;
+    const dutyU = {}, dutyPts = {};
     if(places){
       const dt = uidx_(), dv = dt.sh.getDataRange().getValues();
       for(let i = 1; i < dv.length; i++){
         const ph2 = phone10_(dv[i][dt.ix.phone]); if(!ph2) continue;
-        const mn = cell_(dv[i], dt.ix.mandal).toLowerCase();
+        if(dt.ix.active >= 0 && String(dv[i][dt.ix.active]).toUpperCase() === 'FALSE') continue;
+        const mn = cell_(dv[i], dt.ix.mandal);
+        const uo = dutyU[ph2] = dutyU[ph2] || { role:cell_(dv[i], dt.ix.role), mandal:mn, mandals:[], gps:[] };
+        if(mn && uo.mandals.indexOf(mn) < 0) uo.mandals.push(mn);
         String(dv[i][dt.ix.gp] || '').split(',').map(x => x.trim()).filter(String)
-          .forEach(g => { (dutyGps[ph2] = dutyGps[ph2] || []).push(mn + '|' + g.toLowerCase()); });
+          .forEach(g => { if(uo.gps.indexOf(g) < 0) uo.gps.push(g); });
       }
     }
     todayRows.forEach(r => {
@@ -4386,8 +4471,20 @@ function doGet(e){
          same restraint applies to it: measured off a trustworthy reading only,
          printed, and accusing nobody. */
       if(places && r.lat && r.lng && !suspectMark_(r.lat, r.lng, r.acc, r.tz)){
-        const dd = dutyDistance_(places, dutyGps[r.phone] || [], r.lat, r.lng);
-        if(dd){ r.dutyKm = dd.km; r.dutyGp = dd.gp; }
+        if(!(r.phone in dutyPts)){
+          const uo = dutyU[r.phone];
+          let pts = [];
+          try{ pts = (uo && !districtRole_(uo.role)) ? dutyPoints_(uo, dutyCtx) : []; }catch(e){ pts = []; }
+          dutyPts[r.phone] = pts;
+        }
+        /* the nearest of his own places — a man is at his place of duty at
+           any village he holds, and the MPO and the MPDO at the mandal office */
+        let best = null;
+        dutyPts[r.phone].forEach(p => {
+          const d = distKm_(r.lat, r.lng, p.lat, p.lng);
+          if(d != null && (best === null || d < best.km)) best = { km:d, gp:p.name };
+        });
+        if(best){ r.dutyKm = best.km; r.dutyGp = best.gp; }
       }
     });
 

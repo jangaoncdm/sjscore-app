@@ -176,6 +176,44 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
         await page.screenshot({ path: path.join(OUT, size.n + '-' + theme + '-' + v + '.png'),
           fullPage: size.w > 500 });
 
+        /* ---- THE SANITATION REGISTER IS FENCED (10.10.2026), SO THE FIGURE
+           THE FENCE DECIDED ON IS THE FIGURE SHOWN. The console printed only
+           the distance from the middle of the mandal, and a Secretary at his
+           own office on the far edge of Lingala Ghanpur read "17.3 km"
+           against his name while his mark had passed the fence. Both
+           distances are drawn now, officer by officer, and the mandal one is
+           kept because a village the roll has not placed has nothing else. */
+        if(v === 'attendance'){
+          const lbl = size.n + '/' + theme + '/attendance';
+          const txt = await page.$eval('#g', e => e.innerText);
+          if(!/from place of duty/i.test(txt))
+            problems.push(lbl + ': the attendance screen does not carry the distance from the place of duty, which is what the fence decides on');
+          if(!/from mandal/i.test(txt))
+            problems.push(lbl + ': the distance from the mandal was dropped, and an unplaced village has nothing else');
+          if(!/place of duty/i.test(txt))
+            problems.push(lbl + ': the officer-by-officer table has no place-of-duty column');
+        }
+        /* ---- AND THE MPO AND THE MPDO (12.10.2026): the screen says, mandal
+           by mandal, whether they are fenced off the roster's office, off the
+           headquarters village standing in for it, or not at all. The fixture
+           seeds all three states on purpose; a screen that has never been
+           drawn with an unfenced mandal has never shown the Collector the one
+           line he has to act on. */
+        if(v === 'duty'){
+          const lbl = size.n + '/' + theme + '/duty';
+          const txt = await page.$eval('#g', e => e.innerText);
+          if(!/Where the MPO and the MPDO are fenced/i.test(txt))
+            problems.push(lbl + ': the Place of duty screen says nothing about the mandal officers');
+          if(!/the headquarters village/i.test(txt))
+            problems.push(lbl + ': a mandal fenced off the headquarters village is not named as a derivation');
+          if(!/the mandal office/i.test(txt))
+            problems.push(lbl + ': a mandal fenced off the roster’s own office is not shown as such');
+          if(!/not placed — not fenced/i.test(txt))
+            problems.push(lbl + ': the mandal that fences nobody is not named');
+          if(!/Mandal offices placed/i.test(txt))
+            problems.push(lbl + ': no tile says how much of the mandal-officer order is in force');
+        }
+
         /* ---- THE MEASUREMENT.
            Cards that sit in the SAME ROW must line up: same panel height, and
            their plots starting at the same offset from the top of the card.

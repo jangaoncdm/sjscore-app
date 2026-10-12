@@ -54,7 +54,11 @@ function build(){
   MANDALS.forEach((m, mi) => {
     const n = 5 + (mi % 4);                       /* 5–8 villages a mandal */
     for(let i = 0; i < n; i++){
-      const gp = m.replace(/[^A-Za-z]/g, '').slice(0, 5) + 'pally ' + (i + 1);
+      /* every third mandal has its headquarters village on the roll under
+         its own name, which is where its MPO is fenced when the office
+         itself was never written down (12.10.2026) */
+      const gp = (i === 0 && mi % 3 === 1) ? m
+        : m.replace(/[^A-Za-z]/g, '').slice(0, 5) + 'pally ' + (i + 1);
       gps.push({ Mandal: m, GP: gp });
       users.push({ Phone: String(++ph), Name: pick(FIRST) + ' ' + pick(LAST), Role: 'PS',
                    Mandal: m, GP: gp, Email: '', Active: 'TRUE' });
@@ -80,6 +84,15 @@ function build(){
     return (i % 11 === 5) ? { Mandal:g.Mandal, GP:g.GP, Lat:'', Lng:'' }
       : { Mandal:g.Mandal, GP:g.GP, Lat:+(hm.lat + ((i % 7) - 3) * 0.012).toFixed(6),
           Lng:+(hm.lng + ((i % 5) - 2) * 0.013).toFixed(6) };
+  }));
+  /* THE MANDAL OFFICES, where the MPO and the MPDO are fenced (12.10.2026):
+     a third of the mandals have the office written on the Mandals tab, a
+     third have only the headquarters village standing in, and a third have
+     neither — so the Place of duty screen is drawn with every state the
+     order actually leaves a mandal in, including the one that fences nobody. */
+  env.mkSheet('Mandals', ['Mandal','Office','Lat','Lng'], MANDALS.filter((m, mi) => mi % 3 === 2).map(m => {
+    const hm = HOME[m] || { lat:17.72, lng:79.14 };
+    return { Mandal:m, Office:'MPDO Office, ' + m, Lat:hm.lat, Lng:hm.lng };
   }));
   env.mkSheet('Holidays', ['Date','Occasion'], [{ Date:'2026-08-15', Occasion:'Independence Day' }]);
 

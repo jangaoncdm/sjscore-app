@@ -1416,6 +1416,17 @@ const $=s=>document.querySelector(s);
    raised by it, and the officer may be at a mandal meeting, at the
    Collectorate or on tour (rule 10). */
 const FAR_DUTY_KM = 3;
+/* AND WHERE A FENCE IS IN FORCE, THE FENCE IS THE LINE. On the sanitation
+   register a mark more than five kilometres out was not taken at all, so
+   painting a four-kilometre mark amber against a three-kilometre habit from
+   the other register would warn the Collector about a mark his own order
+   had already passed. Read off the payload being drawn; three where there
+   is no fence, which is the Gram Palana register's measure and accuses
+   nobody. */
+function dutyLim(){
+  const f=(typeof PAY!=='undefined'&&PAY&&PAY.fence)||null;
+  return (f&&f.on&&f.km>0)?f.km:FAR_DUTY_KM;
+}
 const TENANCY = {
   /* THE AUDIENCE OF A CIRCULAR IS THE REGISTER'S OWN ROLES. The composer
      offered Panchayat Secretaries, MPDOs, MPOs and MSOs on BOTH registers —
@@ -1939,11 +1950,11 @@ function analyse(j){
      of duty its roll can measure. */
   const gpNow = (typeof TVIEW !== 'undefined' && TVIEW === 'GP');
   const duty = j.today.present.filter(r=>r.dutyKm!=null);
-  const dutyNear = duty.filter(r=>r.dutyKm<=FAR_DUTY_KM).length;
+  const dutyNear = duty.filter(r=>r.dutyKm<=dutyLim()).length;
   const parts = gpNow ? [
     {k:'Attendance',w:45,v:off?null:attPct,why:off?off+' — not counted':accounted+' of '+officersDue+' accounted'},
     {k:'At the place of duty',w:25,v:duty.length?clamp(Math.round(dutyNear*100/duty.length),0,100):null,
-      why:duty.length?dutyNear+' of '+duty.length+' measured within '+FAR_DUTY_KM+' km':'no located marks yet'},
+      why:duty.length?dutyNear+' of '+duty.length+' measured within '+dutyLim()+' km':'no located marks yet'},
     {k:'Leave desk',w:15,v:clamp(Math.round(100-Math.max(0,oldestH-24)*2),0,100),
       why:j.leave.pending.length?'oldest waiting '+Math.round(oldestH)+' h':'nothing waiting'}]
   : [
@@ -2592,10 +2603,10 @@ function vOverview(j,A){
        other has not is the place of duty, so that is what its third tile says.
        It names a distance and it accuses nobody (rule 10). */
     const marks=(j.today.present||[]).filter(r=>r.dutyKm!=null);
-    const far=marks.filter(r=>r.dutyKm>FAR_DUTY_KM).length;
+    const far=marks.filter(r=>r.dutyKm>dutyLim()).length;
     const near=marks.length-far;
     h+=kpi('Marked at the village office',IC.h,near,'',
-      marks.length?near+' of '+marks.length+' measured · within '+FAR_DUTY_KM+' km':'no located marks yet');
+      marks.length?near+' of '+marks.length+' measured · within '+dutyLim()+' km':'no located marks yet');
     h+=kpi('Marked away from it',IC.f,far,'',
       far?'a distance, not a default — read on the facts':'none today','view:attendance');
     h+=kpi('Revenue villages',IC.h,(j.totals&&j.totals.gps)||0,'','on the Gram Palana roll');
@@ -3350,9 +3361,14 @@ function vAttendance(j,A){
      marks place it. The Gram Palana roll carries each revenue village's
      office, so it measures from the place the officer is actually posted to,
      which is the real question and a far better answer. */
+  /* AN OFFICER THE ROLL HAS NOT PLACED IS STILL MEASURED FROM HIS MANDAL.
+     The place-of-duty figure exists only where there is an office to measure
+     from; dropping the unplaced from this list would hide exactly the marks
+     the mandal figure was kept for. */
+  const farKm = r => r.dutyKm!=null ? r.dutyKm : (r.km!=null ? r.km : 0);
   const farRows = DUTY()
-    ? (j.today.present||[]).filter(r=>r.dutyKm!=null && r.dutyKm>FAR_DUTY_KM)
-        .sort((a,b)=>b.dutyKm-a.dutyKm)
+    ? (j.today.present||[]).filter(r=>r.dutyKm!=null ? r.dutyKm>dutyLim() : !!r.far)
+        .sort((a,b)=>farKm(b)-farKm(a))
     : (j.today.present||[]).filter(r=>r.far).sort((a,b)=>b.km-a.km);
   h+='</div>';
 
@@ -3392,23 +3408,34 @@ function vAttendance(j,A){
      it, and a distant mark is still a mark. An officer may be at a mandal
      meeting, at the Collectorate or on tour; the register cannot know which,
      and a table must not decide it. */
-  const farLim = DUTY() ? FAR_DUTY_KM : 15;
+  const farLim = DUTY() ? dutyLim() : 15;
+  /* THE TWO DISTANCES ARE TWO DIFFERENT FACTS AND BOTH ARE PRINTED. The one
+     from the place of duty is what the fence decided on; the one from the
+     middle of the mandal is what this panel always carried, and read alone
+     it put 17.3 km against a Secretary standing at his own office on the far
+     edge of his mandal. A fenced register that showed only the second was
+     showing the Collector a figure the order does not use. */
+  const fenced = DUTY() && TVIEW!=='GP' && !!(((j.fence||{}).on));
   h+=panel('c12', DUTY()?'Marked away from the place of duty':'Marked away from the mandal',
     farRows.length?farRows.length+' of '+A.present+' present · over '+farLim+' km':'nothing over '+farLim+' km today',
-    `<div class="twrap"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th>${DUTY()?'<th>Posted to</th>':''}<th>Marked</th><th>Distance</th><th>Reading</th><th></th></tr></thead><tbody>`+
+    `<div class="twrap"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th>${DUTY()?'<th>Place of duty</th><th>From place of duty</th><th>From mandal</th>':'<th>Distance</th>'}<th>Marked</th><th>Reading</th><th></th></tr></thead><tbody>`+
     farRows.map(r=>`<tr>
        <td>${esc(r.name||'—')}</td><td class="mut">${esc(r.role||'')}</td>
        <td class="mut">${esc(r.mandal||'—')}</td>
-       ${DUTY()?`<td class="mut">${esc(r.dutyGp||'—')}</td>`:''}
+       ${DUTY()?`<td class="mut">${esc(r.dutyGp||'—')}</td>
+       <td class="num"><b>${r.dutyKm==null?'—':r.dutyKm.toFixed(1)+' km'}</b></td>
+       <td class="num mut">${r.km==null?'—':r.km.toFixed(1)+' km'}</td>`
+       :`<td class="num"><b>${r.km==null?'—':r.km.toFixed(1)+' km'}</b></td>`}
        <td class="num mut">${esc(hm(r.at))}</td>
-       <td class="num"><b>${DUTY()?r.dutyKm:r.km} km</b></td>
        <td class="mut">±${Math.round(r.acc||0)} m</td>
        <td>${r.lat!=null?`<a href="https://maps.google.com/?q=${r.lat},${r.lng}" target="_blank" rel="noopener">Open in Maps</a>`:''}</td></tr>`).join('')+
-    (farRows.length?'':`<tr><td colspan="${DUTY()?8:7}" class="empty">${DUTY()?'Every trustworthy mark today was made at the officer’s own village office.':'Every trustworthy mark today was made inside the officer’s own mandal.'}</td></tr>`)+
+    (farRows.length?'':`<tr><td colspan="${DUTY()?9:7}" class="empty">${DUTY()?'Every trustworthy mark today was made at the officer’s own place of duty.':'Every trustworthy mark today was made inside the officer’s own mandal.'}</td></tr>`)+
     `</tbody></table></div>
      <div class="expnote" style="margin-top:8px">${DUTY()
-       ? 'Measured from the office of the revenue village the officer holds — the nearest of them, where he holds more than one, because a man is at his place of duty at any of his own villages.'
-       : 'Measured from the middle of the officer’s own mandal, as the district’s own attendance marks place it — the register holds no village coordinates.'} A distance is a fact for you to read, not a default: nothing here raises a reminder, a notice or a debit, and the mark stands.</div>`);
+       ? '<b>From place of duty</b> is measured from the office of the village the officer holds — the nearest of them, where he holds more than one, because a man is at his place of duty at any of his own villages — and from the mandal office for the MPO, the MPDO and the MSO. <b>From mandal</b> is measured from the middle of the mandal as the district’s own marks place it, which is a different thing: a village on the edge of its mandal is fifteen kilometres from the middle and nought from its own office.'
+       : 'Measured from the middle of the officer’s own mandal, as the district’s own attendance marks place it — the register holds no village coordinates.'} ${fenced
+       ? 'The fence is in force at '+esc(String((j.fence||{}).km||5))+' km from the place of duty, so every mark on this screen was taken inside it or is unplaced; a mark refused is on the <b>Place of duty</b> screen, not here. Nothing else here raises a reminder, a notice or a debit.'
+       : 'A distance is a fact for you to read, not a default: nothing here raises a reminder, a notice or a debit, and the mark stands.'}</div>`);
   h+=panel('c12','Export the attendance record','opens in Excel · names, gaps and the fortnight compared',
     `<div class="expbar">
       <button class="tbtn pri" data-exp="xlsx">Excel workbook (.xlsx)</button>
@@ -3443,19 +3470,32 @@ function vAttendance(j,A){
   return h;
 }
 /* DOES THIS REGISTER HAVE A PLACE OF DUTY TO MEASURE AGAINST?
-   The sanitation roll is Mandal + GP and carries no coordinates, so there is
-   nothing to measure and the column is not drawn. The Gram Palana roll carries
-   every revenue village's own office, so for the first time a mark can be put
-   against the place the officer is posted to — and it is shown officer by
-   officer, not only as two tiles, because "where is the geo-tagging" is a
-   question about a man and a morning, not about a percentage.
+   The Gram Palana roll has carried every revenue village's own office since
+   18.09.2026, so a mark is put against the place the officer is posted to —
+   officer by officer, not only as two tiles, because "where is the geo-tagging"
+   is a question about a man and a morning, not about a percentage.
+
+   AND SINCE 10.10.2026 SO HAS THE SANITATION ROLL — and there the distance
+   DECIDES something. The fence refuses a mark more than five kilometres from
+   the officer's own office, and the console went on printing only the
+   distance from the middle of the mandal, which is a different measurement:
+   a Secretary standing at Cheeturu, the easternmost village of Lingala
+   Ghanpur, read "17.3 km" against his name while his mark had passed the
+   fence by a wide margin, and the figure that had actually decided it was
+   shown nowhere. So the column is drawn wherever the register has placed a
+   village, read off the fence report that rides the same payload.
    IT ACCUSES NOBODY (rule 10). The distance is printed and the mark stands. */
-function DUTY(){ return TVIEW==='GP'; }
+let PAY=null;   /* the payload being drawn, for the questions below */
+function DUTY(){
+  if(TVIEW==='GP') return true;
+  const f=PAY&&PAY.fence;
+  return !!(f && f.villages && f.villages.placed>0);
+}
 function dutyCell(r){
   if(!DUTY()) return '';
   if(r._s!=='P') return '<td class="mut">—</td>';
-  if(r.dutyKm==null) return '<td class="mut">no fix to measure</td>';
-  const km=r.dutyKm, near=km<=FAR_DUTY_KM;
+  if(r.dutyKm==null) return '<td class="mut">'+(r.lat&&r.lng?'not placed':'no fix to measure')+'</td>';
+  const km=r.dutyKm, near=km<=dutyLim();
   const txt = km<1 ? Math.round(km*1000)+' m' : km.toFixed(km<10?1:0)+' km';
   return '<td><span class="pill '+(near?'ok':'warn')+'">'+esc(txt)+'</span>'+
     (r.dutyGp?' <span class="mut">'+esc(r.dutyGp)+'</span>':'')+'</td>';
@@ -5698,7 +5738,34 @@ function vDuty(j,A){
   h+=kpi('Refused on more than one day',IC.u,rep.length,'','in the last 14 days');
   h+=kpi('Probably a wrong point',IC.u,rep.filter(r=>r.steady).length,'',
          'same distance, every time');
+  /* THE MANDAL OFFICERS, ordered 12.10.2026: the MPO and the MPDO are fenced
+     at the mandal office, and this is how much of that order is in force. */
+  const of=f.offices||{total:0,placed:0,fromTab:0,fromHq:0,unplaced:0,officers:0,fenced:0};
+  if(of.total) h+=kpi('Mandal offices placed',IC.u,of.placed+'/'+of.total,'',
+         of.officers?of.fenced+' of '+of.officers+' mandal officers fenced':'no mandal officer on the roll');
   h+='</div>';
+
+  /* ---- the mandal office, mandal by mandal ---- */
+  if((f.mandals||[]).length){
+    const say={mandal:'<span class="pill ok">the mandal office</span>',
+               hq:'<span class="pill ok">the headquarters village</span>',
+               none:'<span class="pill bad">not placed — not fenced</span>'};
+    h+=panel('c12','Where the MPO and the MPDO are fenced','the mandal office, or the headquarters village standing in for it',
+      `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
+        A mandal officer holds no village, so he is fenced at the <b>mandal office</b> — the point the
+        roster paste writes. Where the office has never been written down, the <b>headquarters
+        village</b> stands in for it: the village on the roll that carries the mandal's own name, placed
+        by the same survey as every other. That is a derivation and it is named as one, here and in the
+        sentence the officer reads. A mandal with neither — a headquarters that is a municipality and
+        not a Gram Panchayat — <b>fences nobody</b>, and is named below rather than quietly left out.
+        Writing the office itself on the Admin screen takes precedence the moment it is there.</div>
+      <div class="twrap" data-k="dmo"><table>
+        <thead><tr><th>Mandal</th><th>Fenced at</th><th>The point</th><th>Officers</th></tr></thead>
+        <tbody>${f.mandals.map(m=>'<tr><td>'+esc(m.mandal)+'</td><td>'+(say[m.source]||say.none)+'</td>'+
+          '<td class="mut">'+esc(m.office||'—')+'</td>'+
+          '<td class="num'+(m.officers?'':' mut')+'">'+(m.officers||'—')+'</td></tr>').join('')}
+        </tbody></table></div>`);
+  }
 
   /* ---- THE ONE THAT MATTERS ---- */
   if(rep.length){
@@ -5968,6 +6035,7 @@ function vAdvisory(j,A){
 
 /* ---------------- render ---------------- */
 function render(j){
+  PAY=j;
   /* the accent follows the view — panels and nav answer in its colour */
   $('#g').dataset.view=VIEW;
   /* AND THE HEADER SAYS WHICH REGISTER THESE FIGURES ARE. Only once there are
