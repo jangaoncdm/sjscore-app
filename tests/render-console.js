@@ -44,7 +44,9 @@ function serve(){
   });
 }
 
-const VIEWS = ['overview', 'attendance', 'villages', 'schedule', 'leave', 'notices', 'map', 'duty', 'admin'];
+const VIEWS = ['overview', 'attendance', 'villages', 'schedule', 'leave', 'notices', 'map', 'duty', 'mock', 'admin'];
+/* the Not-measured reading is its own call, like the schedule */
+const MOCKFIX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-mockloc.json'), 'utf8'));
 /* the filing schedule is fetched by its own call, so it needs its own fixture —
    built by fixture-dashboard.js off the same real backend run */
 const SCHEDFIX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-schedule.json'), 'utf8'));
@@ -135,6 +137,7 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
           body: JSON.stringify(gp ? GPFIX
                              : /op=roll/.test(u) ? ROLLFIX
                              : /op=schedule/.test(u) ? SCHEDFIX
+                             : /op=mockloc/.test(u) ? MOCKFIX
                              : /op=outday/.test(u) ? OUTFIX : payload) });
       });
       await page.route('**/gp.district/**', r =>
@@ -199,6 +202,29 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
            seeds all three states on purpose; a screen that has never been
            drawn with an unfenced mandal has never shown the Collector the one
            line he has to act on. */
+        /* ---- NOT MEASURED (12.10.2026): the screen the fence cannot be. The
+           fixture plants a point pinned to the village office at one metre,
+           a metre at points that move, and two officers on one point; the
+           screen must show the first as a finding, the second as a lead and
+           not a finding, the third as a shared morning — and must say, in
+           words, that it accuses nobody. ---- */
+        if(v === 'mock'){
+          const lbl = size.n + '/' + theme + '/mock';
+          await page.waitForTimeout(600);
+          const txt = await page.$eval('#g', e => e.innerText);
+          const nF = await page.$$eval('#mkFind tbody tr', rs => rs.filter(r => !r.querySelector('.empty')).length).catch(() => 0);
+          const nL = await page.$$eval('#mkLead tbody tr', rs => rs.filter(r => !r.querySelector('.empty')).length).catch(() => 0);
+          if(nF < 1) problems.push(lbl + ': the pinned officer is not shown as a finding');
+          if(nL < 1) problems.push(lbl + ': the moving-metre officer is not shown as a lead');
+          if(!/a typed point/i.test(txt)) problems.push(lbl + ': the identical-point verdict is not drawn');
+          if(!/the point moves/i.test(txt)) problems.push(lbl + ': a metre at moving points is not told apart from a pinned one');
+          if(!/One point, two officers/i.test(txt)) problems.push(lbl + ': the shared mornings are not shown');
+          if(!/refuses a mark|accuses nobody|Evidence, not a charge|evidence, not a charge/i.test(txt))
+            problems.push(lbl + ': the screen does not say that it accuses nobody');
+          if(!/CSV/.test(txt)) problems.push(lbl + ': no way to download the reading');
+          const opened = await page.$$eval('#mkFind details', ds => ds.length);
+          if(opened < 1) problems.push(lbl + ': a finding does not open to its mornings');
+        }
         if(v === 'duty'){
           const lbl = size.n + '/' + theme + '/duty';
           const txt = await page.$eval('#g', e => e.innerText);

@@ -137,10 +137,18 @@ function build(){
      it or the amber segment is never drawn on any screenshot. */
   const onLeaveToday = marking.slice(3, 9).map(u => u.Phone);
   const TODAY = days[days.length - 1];
+  /* FOUR OFFICERS WHOSE LOCATION WAS NEVER MEASURED (12.10.2026), written
+     apart from the honest loop so the Not-measured screen is drawn with every
+     shape it has to show: a point pinned to the village office at one metre
+     (a finding), a metre at points that move (a lead, and a good phone most
+     likely), and two officers sharing one fine point on three mornings. */
+  const PLANT = { pinned:marking[10], moving:marking[11], twinA:marking[12], twinB:marking[13] };
+  const PLANT_PH = {}; Object.values(PLANT).forEach(u => { if(u) PLANT_PH[u.Phone] = true; });
   days.forEach(day => {
     const dow = new Date(day + 'T12:00:00+05:30').getDay();
     if(dow === 0) return;
     marking.forEach((u, i) => {
+      if(PLANT_PH[u.Phone]) return;
       if(day === TODAY && onLeaveToday.indexOf(u.Phone) >= 0) return;
       if(rnd() < 0.12) return;                    /* the day's absentees */
       const hour = 8 + (rnd() < 0.75 ? int(0,2) : int(3,6));
@@ -166,6 +174,27 @@ function build(){
       });
     });
   });
+
+  /* the planted shapes, over the same fortnight */
+  {
+    const gsheet = env.sheets['GPs'], gh = gsheet.rows[0].map(String);
+    const officeOf = u => { const r = gsheet.rows.slice(1).find(x => String(x[gh.indexOf('GP')]) === u.GP);
+      const la = r ? Number(r[gh.indexOf('Lat')]) : NaN, ln = r ? Number(r[gh.indexOf('Lng')]) : NaN;
+      return (isFinite(la) && la) ? { lat:la, lng:ln } : (HOME[u.Mandal] || { lat:17.72, lng:79.14 }); };
+    const working = days.filter(d => new Date(d + 'T12:00:00+05:30').getDay() !== 0);
+    const plant = (u, day, lat, lng, acc, hhmm) => env.mark(u.Phone, day, day + 'T' + hhmm + ':00+05:30', day + 'T' + hhmm + ':00+05:30',
+      { name:u.Name, role:u.Role, mandal:u.Mandal, lat:lat, lng:lng, accuracy:acc, verified:'true', timezone:'Asia/Calcutta', skew:0 });
+    if(PLANT.pinned){ const o = officeOf(PLANT.pinned);
+      working.forEach((day, k) => plant(PLANT.pinned, day, +o.lat.toFixed(6), +o.lng.toFixed(6), k % 4 === 3 ? 9 : 1, '09:1' + (k % 10))); }
+    if(PLANT.moving){ const o = officeOf(PLANT.moving);
+      working.forEach((day, k) => plant(PLANT.moving, day, +(o.lat + (k - 5) * 0.00007).toFixed(7), +(o.lng + (k % 3) * 0.00009).toFixed(7), 1, '09:2' + (k % 10))); }
+    if(PLANT.twinA && PLANT.twinB){ const o = officeOf(PLANT.twinA);
+      working.forEach((day, k) => {
+        const same = k % 4 === 1, la = +(o.lat + (same ? 0.0002 : (k - 3) * 0.0003)).toFixed(6), ln = +(o.lng + 0.0001).toFixed(6);
+        plant(PLANT.twinA, day, la, ln, 8, '09:3' + (k % 10));
+        plant(PLANT.twinB, day, same ? la : +(o.lat + 0.004 + k * 0.0002).toFixed(6), same ? ln : +(o.lng - 0.003).toFixed(6), 8, '09:4' + (k % 10));
+      }); }
+  }
 
   const lv = [];
   onLeaveToday.forEach((phone, i) => {
@@ -319,8 +348,12 @@ function build(){
   env.ctx.scheduleReminders();
   const s = env.get('schedule', { token: token, all: '1' });
   if(s.ok === false) throw new Error('the schedule register refused: ' + s.error);
+  /* the Not-measured reading, off the same world, for the console's own screen */
+  const mk = env.get('mockloc', { token: token, days: '30' });
+  if(mk.ok === false) throw new Error('the not-measured reading refused: ' + mk.error);
+  console.log('not measured         : ' + mk.findings.length + ' findings · ' + mk.leads.length + ' leads · ' + mk.shared.length + ' shared mornings');
 
-  return { dash: d, sched: s, pub: pub };
+  return { dash: d, sched: s, pub: pub, mock: mk };
 }
 
 const out = process.argv[2] || path.join(__dirname, 'fixture-dashboard.json');
@@ -330,6 +363,9 @@ fs.writeFileSync(out, JSON.stringify(data));
 const sout = out.replace(/fixture-dashboard\.json$/, 'fixture-schedule.json');
 fs.writeFileSync(sout === out ? path.join(__dirname, 'fixture-schedule.json') : sout,
                  JSON.stringify(built.sched));
+const mout = out.replace(/fixture-dashboard\.json$/, 'fixture-mockloc.json');
+fs.writeFileSync(mout === out ? path.join(__dirname, 'fixture-mockloc.json') : mout,
+                 JSON.stringify(built.mock));
 console.log('officers on the roll : ' + data.totals.officers);
 console.log('present today        : ' + data.today.present.length);
 console.log('on leave / not marked: ' + data.today.onLeave.length + ' / ' + data.today.absent.length);

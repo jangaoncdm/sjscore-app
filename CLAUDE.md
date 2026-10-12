@@ -1496,6 +1496,36 @@ order has already passed is not a warning. `tests/render-console.js` asserts
 both columns on the sanitation attendance screen and all three mandal states
 on the Place of duty screen.
 
+**The fence cannot see a point pinned to the office — "Not measured" is the
+screen that can.** Ordered 12.10.2026, off the register's own thirty days:
+34 Secretaries whose morning coordinate repeated **to six decimals across
+days**, most of them pinned to the surveyed coordinate of their own village
+office, claiming **one metre** — the shape of a mock-location app and of
+nothing a receiver measures (honest officers scatter by a median of 25 m
+from morning to morning). The fence looks straight at them and sees a man at
+his desk. `backend/FeatureMockLocation.gs` (`op=mockloc`, Collector-only,
+read-only, one line in `FEATURE_MODULES`) reads the Attendance tab for three
+shapes: the same fine coordinate on two mornings, a claimed accuracy of 0 or
+1 m, and one fine point under two officers on one morning. **Three honest
+shapes are not counted, and that is most of the file**: Google's network
+positioning hands every phone in a building the same point, claiming 20 m
+from wifi or 2 km from a cell tower, so only a fix claiming `MOCK_FINE_M`
+(15 m) or better is read at all — the MPDO offices produce identical
+coordinates for half their staff every morning; **a metre at points that
+move is a good dual-band phone and is a lead, never a finding** — the one
+rule that would have caught the apps automatically, refusing any fix better
+than two metres, would have refused 24 honest officers for owning a good
+phone, and was rejected on the day; and a mark that reached the district
+days late is printed and not weighed. **It accuses nobody** (rule 10):
+nothing refuses a mark, writes a tab or walks the ladder. The cure is the
+phone — Developer options, the mock-location setting — asked for by the
+mandal after the Collector has read the screen. Suite 37 plants every shape
+and asserts which side of the line each falls; `tests/render-console.js`
+asserts the screen tells a finding from a lead and says in words that it is
+evidence and not a charge. The offline reader of the same thing, for a copy
+of the register taken off Drive, is `tests/mock-location-report.js`; its
+output carries names and numbers and lives in `Info/`, which is ignored.
+
 **And it is watched from a screen of its own — "Place of duty" on the rail.**
 A distance that decides something has to be monitored, and three questions
 that are not the same question have to be answerable from one place.
