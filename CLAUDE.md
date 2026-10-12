@@ -1526,6 +1526,39 @@ evidence and not a charge. The offline reader of the same thing, for a copy
 of the register taken off Drive, is `tests/mock-location-report.js`; its
 output carries names and numbers and lives in `Info/`, which is ignored.
 
+**And the mark itself asks whether the location was measured** (ordered
+12.10.2026, the same afternoon: the phones are private and cannot be
+inspected, so the register has to bind it by itself). There is one thing a
+web page can go on: **a receiver's readings always differ.** Asked four
+times in a minute, a handset answers with four points a few metres apart
+and four accuracies that move with the sky; an app answers with the one
+point it was given, byte for byte, every time. So `sampleReads` reads the
+location `STILL_N` times while the photograph is taken and every reading
+travels with the mark (`att.reads`, rounds `r1` and `r2`). If a round is
+identical throughout, the officer is told so at the moment of marking and
+asked to **walk ten or twenty metres and read again** — a receiver
+re-acquires and the readings differ; an app repeats itself however far he
+walks, and if he types a new point into it the new readings are identical
+among themselves again. `stillCheck_` in Code.gs asks the same question of
+every mark that lands (rule 6), the mark-out included, and a mark whose last
+round never moved is **refused and recorded on the `Outside` tab as "not
+measured"** (rule 9), in the shape the app already takes a refused mark off
+the phone by. The row that is taken carries `readings` and `spread`, so the
+console can read later how the district's phones actually behave. **What is
+not refused**, each held by suite 35 section 7b: a coarse reading that
+repeats (the network's guess for a phone that has not moved,
+`STILL_FINE_M_` 15 m); fewer than three readings; a mark with no readings
+at all, which is an older app; a sanctioned-leave row; and anything while
+`STILL_OFF` is set, which stands it down with no deploy. **What it cannot
+catch**, said plainly: an app set to jitter its point. The Not-measured
+screen still reads the identical coordinate across days for the pinned
+ones; the wandering ones are beyond a web page, and only a native wrapper
+that asks Android whether a fix was mocked can see them.
+`tests/render-fence.js` cases 8 and 9 drive the real app with a pinned
+location and then with a receiver; the harness gives every honest case a
+few metres of jitter, because Playwright's pinned location never moves and
+is therefore exactly what an app looks like.
+
 **And it is watched from a screen of its own — "Place of duty" on the rail.**
 A distance that decides something has to be monitored, and three questions
 that are not the same question have to be answerable from one place.

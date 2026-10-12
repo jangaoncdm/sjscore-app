@@ -221,7 +221,10 @@ const HEADERS = ['id','ym','mandal','gp','date','score','grade','rf','psScore','
                  'evidence','attId','updatedAt','payload'];
 const A_HEAD = ['id','date','phone','name','role','mandal','markedAt','lat','lng','accuracy',
                 'verified','photo','timezone','receivedAt','status','leaveId','leaveType',
-                'markCount','firstMarkAt','skew'];
+                'markCount','firstMarkAt','skew',
+                /* how many times the handset read the location in the minute
+                   of marking, and how far those readings moved (12.10.2026) */
+                'readings','spread'];
 const L_HEAD = ['id','appliedAt','phone','name','role','mandal','type','fromDate','toDate','days',
                 'reason','address','leaveHq','certificate','status','decidedBy','decidedAt','remarks','receivedAt'];
 /* Show-cause notices for unmarked attendance. The register continues the
@@ -2276,6 +2279,99 @@ function fenceSay_(km){
   if(km == null) return 'an unknown distance';
   if(km < 1) return Math.round(km * 1000) + ' m';
   return (Math.round(km * 10) / 10) + ' km';
+}
+
+/* ==========================================================================
+ * A LOCATION THAT WAS NOT MEASURED — ordered 12.10.2026
+ *
+ * The register's own thirty days held thirty-four Secretaries whose morning
+ * coordinate repeated to six decimals across days, pinned to the surveyed
+ * coordinate of their own village office at a claimed one metre: a
+ * mock-location app, feeding the fence the very point it looks for. The
+ * phones are private and cannot be inspected, so the register has to tell a
+ * receiver from an app by itself, and there is exactly one thing it can go
+ * on: A RECEIVER'S READINGS ALWAYS DIFFER. Asked for its position four
+ * times in a minute, a handset answers with four points a few metres
+ * apart and four accuracies that move with the sky. An app answers with
+ * the one point it was given, byte for byte, every time.
+ *
+ * So the app reads the location several times while the photograph is
+ * taken and sends every reading with the mark. If they are all identical
+ * the officer is told so on the spot and asked to walk ten or twenty
+ * metres and read again — a real receiver re-acquires and the readings
+ * differ; an app repeats itself, however far he walks, unless he types a
+ * new point into it, and then the new readings are identical among
+ * themselves again. The server asks the same question of every mark that
+ * lands (rule 6) and a mark whose last round of readings never moved is not
+ * taken, and is recorded on the Outside tab as "not measured" so the
+ * district can see it (rule 9).
+ *
+ * WHAT IS NOT CAUGHT, said plainly: an app set to jitter its point, which
+ * some offer. The console's Not-measured screen still reads the identical
+ * coordinate across DAYS for the pinned ones; the jittering, wandering ones
+ * are beyond a web page, and only a native wrapper that asks Android
+ * whether a fix was mocked can see them.
+ *
+ * WHAT IS NOT REFUSED. A coarse reading — the network's guess at twenty
+ * metres or two kilometres — repeats honestly for a phone that has not
+ * moved, and is never held against anyone (STILL_FINE_M_). Fewer than three
+ * readings is not a verdict. A mark with no readings at all is an older app
+ * and passes as it always did. And STILL_OFF stands the whole thing down
+ * with no deploy, as FENCE_OFF does the fence. Suite 35 holds every one.
+ * ========================================================================== */
+var STILL_FINE_M_ = 15;   /* a satellite claim; a network fix does not claim this */
+var STILL_MIN_N_  = 3;    /* fewer readings than this is not a verdict */
+function stillRule_(){
+  var off = false, fine = STILL_FINE_M_;
+  try{
+    var p = PropertiesService.getScriptProperties();
+    if(String(p.getProperty('STILL_OFF') || '').trim()) off = true;
+    var s = String(p.getProperty('STILL_FINE_M') || '').trim();
+    if(s !== '' && isFinite(Number(s)) && Number(s) > 0) fine = Number(s);
+  }catch(e){}
+  return { off:off, fine:fine };
+}
+/* the readings as the handset sends them: [[lat,lng,acc,t],...] or {r1,r2} */
+function stillRounds_(reads){
+  var rounds = [];
+  if(!reads) return rounds;
+  if(Array.isArray(reads)) rounds = [reads];
+  else { ['r1', 'r2', 'r3'].forEach(function(k){ if(Array.isArray(reads[k]) && reads[k].length) rounds.push(reads[k]); }); }
+  return rounds.map(function(r){
+    return r.map(function(x){
+      var la = Array.isArray(x) ? x[0] : x && x.lat, lo = Array.isArray(x) ? x[1] : x && x.lng, ac = Array.isArray(x) ? x[2] : x && x.acc;
+      la = Number(la); lo = Number(lo); ac = (ac === '' || ac == null) ? null : Number(ac);
+      return (isFinite(la) && isFinite(lo) && la && lo) ? { lat:la, lng:lo, acc:isFinite(ac) ? ac : null } : null;
+    }).filter(Boolean);
+  }).filter(function(r){ return r.length; });
+}
+function stillCheck_(a){
+  var rule = stillRule_();
+  if(rule.off) return { gated:false, ok:true, why:'stood down' };
+  var rounds = stillRounds_(a && a.reads);
+  if(!rounds.length) return { gated:false, ok:true, why:'no readings' };
+  var last = rounds[rounds.length - 1];
+  if(last.length < STILL_MIN_N_) return { gated:false, ok:true, n:last.length, why:'too few readings' };
+  var k0 = last[0].lat.toFixed(7) + ',' + last[0].lng.toFixed(7), a0 = last[0].acc;
+  var same = last.every(function(p){ return p.lat.toFixed(7) + ',' + p.lng.toFixed(7) === k0 && p.acc === a0; });
+  var spread = 0;
+  last.forEach(function(p){ last.forEach(function(q){
+    var d = distKm_(p.lat, p.lng, q.lat, q.lng);
+    var dm = (d == null) ? 0 : d * 1000;
+    /* distKm_ rounds to a tenth of a kilometre; the fine grain is done here */
+    var R = 6371000, rad = Math.PI / 180, dLa = (q.lat - p.lat) * rad, dLn = (q.lng - p.lng) * rad;
+    var h = Math.sin(dLa / 2) * Math.sin(dLa / 2) + Math.cos(p.lat * rad) * Math.cos(q.lat * rad) * Math.sin(dLn / 2) * Math.sin(dLn / 2);
+    dm = 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+    if(dm > spread) spread = dm;
+  }); });
+  var fine = a0 != null && a0 <= rule.fine;
+  var out = { gated:true, ok:true, n:last.length, rounds:rounds.length, spreadM:Math.round(spread * 10) / 10, acc:a0, same:same };
+  if(same && fine){
+    out.ok = false;
+    out.error = 'The location was not measured: the phone reported exactly the same point ' + last.length +
+      ' times in a row, which a receiver never does. Switch off any location app, walk ten or twenty metres into the open, and read the location again.';
+  }
+  return out;
 }
 
 /* WHAT THE FENCE IS ACTUALLY DOING, in one read, for the console's own
@@ -7494,6 +7590,7 @@ function saveAttendance_(b, u){
      A DAY OF SANCTIONED LEAVE IS NOT A MARK AND IS NEVER FENCED. The officer
      whose leave the Collector approved is rightly at home, and that row is
      the register recording the order, not a claim to have been anywhere. */
+  let sc = { gated:false };
   if(String(a.status || 'PRESENT') !== 'LEAVE'){
     const fx = fenceCheck_(u, a.lat, a.lng, a.acc);
     if(fx.gated && !fx.ok){
@@ -7501,6 +7598,17 @@ function saveAttendance_(b, u){
       return json_({ ok:false, outside:true, km:fx.km == null ? null : fx.km,
                      place:fx.place || '', limit:fx.limit, nofix:!!fx.nofix,
                      coarse:!!fx.coarse, error:fx.error });
+    }
+    /* AND WHETHER THE LOCATION WAS MEASURED AT ALL (12.10.2026). A point
+       pinned to the office by an app passes the fence by construction; the
+       readings the handset took in the minute of marking are the one thing
+       that tells a receiver from an app, and the server asks it again. A
+       refused mark is recorded where the fence's are, so the district can
+       see it and the ladder cannot read it as absence (rule 9). */
+    sc = stillCheck_(a);
+    if(sc.gated && !sc.ok){
+      fenceRefused_(u, { place:'not measured', km:null }, 'IN', a.lat, a.lng, a.acc, String(a.ts || ''));
+      return json_({ ok:false, outside:true, notMeasured:true, readings:sc.n, error:sc.error });
     }
   }
 
@@ -7562,6 +7670,8 @@ function saveAttendance_(b, u){
   put('leaveType', String(a.leaveType || ''));
   put('receivedAt', new Date().toISOString());
   put('skew', clockSkew_(String(a.ts || ''), new Date().toISOString()));
+  put('readings', sc.n == null ? '' : sc.n);
+  put('spread', sc.spreadM == null ? '' : sc.spreadM);
   put('markCount', at ? (sameMark ? Math.max(1, prevCount) : prevCount + 1) : 1);
   put('firstMarkAt', at ? firstAt : String(a.ts || new Date().toISOString()));
 

@@ -291,6 +291,61 @@ module.exports = {
       t.eq(rep.mandals[0].mandal, 'Narmetta', 'and the unfenced mandal is listed first, worst first');
     }
 
+    /* ---- 7b. A LOCATION THAT WAS NOT MEASURED (12.10.2026). The app reads
+            the location several times while the photograph is taken and
+            sends every reading; a receiver's readings always differ, an
+            app's never do. The server asks the question again of every mark
+            that lands, and says plainly what it does not refuse. ---- */
+    {
+      const env = world();
+      const same = [[HOME.lat, HOME.lng, 1, 1], [HOME.lat, HOME.lng, 1, 2], [HOME.lat, HOME.lng, 1, 3], [HOME.lat, HOME.lng, 1, 4]];
+      const jit  = [[HOME.lat, HOME.lng, 5, 1], [HOME.lat + 0.00003, HOME.lng - 0.00002, 7, 2], [HOME.lat - 0.00002, HOME.lng + 0.00004, 6, 3]];
+      /* the suite's mark() helper lays `extra` over the whole body, so a
+         reading is sent with a helper of its own that keeps the fix */
+      const post = (envx, extra) => envx.post({ kind:'attendance', token:tok(envx, '9000000051'),
+        att:Object.assign({ id:'M' + Math.random().toString(36).slice(2, 8), date:envx.ctx.today_(),
+          ts:envx.ctx.today_() + 'T10:02:00+05:30', lat:HOME.lat, lng:HOME.lng, acc:1, verified:true, tz:'Asia/Calcutta' }, extra || {}) });
+      const r = post(env, { reads:{ r1:same } });
+      t.eq(r.ok, false, 'FOUR IDENTICAL READINGS AT ONE METRE ARE NOT A MEASUREMENT, and the mark is not taken');
+      t.eq(r.notMeasured, true, 'and it says so by name');
+      t.eq(r.outside, true, 'in the shape the app already takes a refused mark off the phone by');
+      t.ok(/exactly the same point 4 times/.test(r.error), 'the words say how many times', r.error);
+      t.ok(/walk ten or twenty metres/i.test(r.error), 'and ask for the walk', r.error);
+      t.ok(!/show.?cause|casual leave|debit|absent/i.test(r.error), 'with no word of sanction');
+      t.eq(attRows(env).length, 0, 'NOTHING IS WRITTEN TO THE ATTENDANCE REGISTER');
+      const o = outRows(env), h = env.sheets['Outside'].rows[0].map(String);
+      t.eq(o.length, 1, 'but the refusal IS recorded, so the district can see it and silence is not read as absence');
+      t.eq(String(o[0][h.indexOf('place')]), 'not measured', 'as what it is');
+
+      /* THE WALK: a second round that differs is measured, and the mark goes */
+      const r2 = post(env, { acc:5, reads:{ r1:same, r2:jit } });
+      t.eq(r2.ok, true, 'a second round whose readings differ is a measurement', r2.error || '');
+      const ah = env.sheets['Attendance'].rows[0].map(String), row = attRows(env)[0];
+      t.eq(Number(row[ah.indexOf('readings')]), 3, 'the row carries how many readings the handset took');
+      t.ok(Number(row[ah.indexOf('spread')]) > 2, 'and how far they moved', String(row[ah.indexOf('spread')]));
+
+      /* WHAT IS NOT REFUSED */
+      const env2 = world();
+      const wifi = [[HOME.lat, HOME.lng, 20, 1], [HOME.lat, HOME.lng, 20, 2], [HOME.lat, HOME.lng, 20, 3]];
+      t.eq(post(env2, { acc:20, reads:{ r1:wifi } }).ok, true,
+        'A COARSE READING THAT REPEATS IS HONEST — the network guesses the same point for a phone that has not moved');
+      const env3 = world();
+      t.eq(post(env3, { acc:5 }).ok, true, 'a mark with no readings at all is an older app, and passes as it always did');
+      const env4 = world();
+      t.eq(post(env4, { reads:{ r1:same.slice(0, 2) } }).ok, true, 'two readings are not a verdict');
+      const env5 = world();
+      env5.props.STILL_OFF = '1';
+      t.eq(post(env5, { reads:{ r1:same } }).ok, true, 'AND STILL_OFF STANDS IT DOWN WITH NO DEPLOY, as FENCE_OFF does the fence');
+      t.eq(outRows(env5).length, 0, 'recording nothing');
+      /* the readings may also come as a plain list, which is one round */
+      const env6 = world();
+      t.eq(post(env6, { reads:same }).ok, false, 'a plain list of identical readings is one round, and is refused');
+      /* a sanctioned-leave day is never asked */
+      const env7 = world();
+      t.eq(post(env7, { status:'LEAVE', leaveId:'LV2', leaveType:'CL', reads:{ r1:same } }).ok, true,
+        'a sanctioned-leave row is not a mark and is not asked');
+    }
+
     /* ---- 8. op=duty IS WHAT LETS THE APP REFUSE ON A VILLAGE ROAD ----
        Attendance is marked with no signal and sent later, so the app cannot
        ask at the moment of marking: it carries his own places and the radius

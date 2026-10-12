@@ -114,7 +114,7 @@ module.exports = {
       lat: 17.790000, lng: 79.250000, acc: 4
     })));
 
-    env.mkSheet('Attendance', A, rows);
+    env.mkSheet('Attendance', env.eval('A_HEAD'), rows);   /* the register's own header, so a column added since is not read as a touch */
 
     const before = JSON.stringify(env.sheets['Attendance'].rows);
     const sheetsBefore = Object.keys(env.sheets).sort().join(',');
@@ -199,7 +199,7 @@ module.exports = {
 
     /* ---- a window with nothing in it is not a pass mark ---- */
     const env2 = mock.load({ admin: true, now: '2026-10-12T12:00:00+05:30' });
-    env2.mkSheet('Attendance', A, []);
+    env2.mkSheet('Attendance', env2.eval('A_HEAD'), []);
     const empty = env2.ctx.showMockLocations();
     t.contains(empty, 'NOTHING STANDS OUT', 'an empty register reports nothing standing out');
     t.contains(empty, 'not proof nobody is doing it',

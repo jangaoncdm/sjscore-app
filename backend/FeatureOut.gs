@@ -193,6 +193,15 @@ function feature_out(){
                          place:fx.place || '', limit:fx.limit, nofix:!!fx.nofix,
                          coarse:!!fx.coarse, error:fx.error });
         }
+        /* and whether the location was measured at all, exactly as the IN
+           is asked (12.10.2026) */
+        if(typeof stillCheck_ === 'function'){
+          const sc = stillCheck_(a);
+          if(sc.gated && !sc.ok){
+            fenceRefused_(u, { place:'not measured', km:null }, 'OUT', a.lat, a.lng, a.acc, claim);
+            return json_({ ok:false, outside:true, notMeasured:true, readings:sc.n, error:sc.error });
+          }
+        }
 
         /* the photograph goes to Drive BEFORE the lock, exactly as the IN's
            does — that rule was paid for during the Drive outage of 19.08.2026,

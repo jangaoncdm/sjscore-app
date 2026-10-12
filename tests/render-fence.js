@@ -111,6 +111,24 @@ const SANCTION = /show.?cause|casual leave|debit|loss of pay|default|disciplin|p
   async function open_(o){
     const ctx = await br.newContext({ viewport:{ width:390, height:844 },
       permissions:['geolocation'], geolocation:o.at || HOME });
+    /* A RECEIVER'S READINGS ALWAYS DIFFER, and Playwright's pinned location
+       never does — which is exactly what a mock-location app looks like. So
+       the honest cases are given a receiver: a few metres of jitter and an
+       accuracy that moves, on every read. A case marked `still` keeps the
+       pinned point byte for byte, which is the app; and a page may set
+       window.__walk to turn the receiver back on mid-case, which is the
+       officer walking away from the app and switching it off. */
+    await ctx.addInitScript(({ still }) => {
+      const g = navigator.geolocation; if(!g) return;
+      const orig = g.getCurrentPosition.bind(g); let n = 0;
+      g.getCurrentPosition = (ok, err, opts) => orig(p => {
+        if(still && !window.__walk) return ok(p);
+        n++; const j = ((n % 7) + 1) * 0.000011;
+        ok({ coords:{ latitude:p.coords.latitude + j, longitude:p.coords.longitude - j,
+                      accuracy:(p.coords.accuracy || 0) + 6 + (n % 5), altitude:null, altitudeAccuracy:null, heading:null, speed:null },
+             timestamp:Date.now() });
+      }, err, opts);
+    }, { still: !!o.still });
     /* a fixed Date, not a fake timer: the app's own debounced save and its
        wait for the satellite both run on setTimeout and must keep running */
     await ctx.clock.setFixedTime(WORKDAY);
@@ -274,6 +292,71 @@ const SANCTION = /show.?cause|casual leave|debit|loss of pay|default|disciplin|p
     ck(r.errs.length === 0, 'no script error', r.errs[0] || '');
     await r.shot('7-refused-at-sync');
     await r.ctx.close();
+  }
+
+  console.log('\n8. A LOCATION THAT WAS NOT MEASURED — the same point every time is an app');
+  {
+    const r = await open_({ at:HOME, still:true, wait:6000 });
+    /* four readings a couple of seconds apart take a while; the step is
+       given its minute rather than read against the clock */
+    const sheetUp = () => r.p.waitForFunction(() => document.getElementById('sheet').classList.contains('on'), null, { timeout:15000 }).catch(() => {});
+    await r.p.waitForFunction(() => /same point/i.test(document.getElementById('stepGeo').innerText), null, { timeout:25000 }).catch(() => {});
+    const geo = await r.read('#stepGeo');
+    ck(/same point/i.test(geo), 'THE STEP SAYS THE READINGS WERE IDENTICAL, before he has even pressed Mark',
+       geo.replace(/\s+/g, ' ').slice(-110));
+    const shoot = await r.p.$('#attShoot');
+    ck(!!shoot && !(await shoot.isDisabled()), 'the camera is still offered — the question is asked at the moment of marking');
+    /* the photograph is taken */
+    await r.p.evaluate(() => { ATT.b64 = 'x'; ATT.ts = new Date().toISOString(); drawAttendance(); });
+    await r.p.click('#attMark'); await sheetUp();
+    ck(await r.sheetOn(), 'PRESSING MARK BRINGS THE POP-UP');
+    let sh = await r.sheet();
+    ck(/not measured/i.test(sh), 'headed as what it is', sh.slice(0, 40));
+    /* three or four: one of the four reads may still be in flight when the
+       first round is judged, and three identical is the rule's own floor */
+    ck(/same point [34] times/i.test(sh), 'IT SAYS HOW MANY TIMES THE PHONE REPEATED ITSELF', (sh.match(/same point[^.]*/i) || [''])[0]);
+    ck(/walk ten or twenty metres/i.test(sh), 'and asks him to walk and read again');
+    ck(!SANCTION.test(sh), 'with no word of sanction', (sh.match(SANCTION) || ['clean'])[0]);
+    ck(!r.posted.filter(x => x.kind === 'attendance').length, 'NOTHING WAS SENT');
+    let st = await r.store();
+    ck(Object.keys((st && st.att) || {}).length === 0, 'and nothing is marked on the phone');
+    await r.shot('8-still');
+    /* he reads again without walking — the app repeats itself */
+    await r.p.click('#stAgain'); await r.p.waitForTimeout(2000);
+    await r.p.click('#attMark'); await sheetUp();
+    sh = await r.sheet();
+    ck(await r.sheetOn() && /still not being measured/i.test(sh), 'READ AGAIN, STILL IDENTICAL: the second pop-up', sh.slice(0, 50));
+    ck(/switch off any location app/i.test(sh), 'and it names the cure', (sh.match(/switch off[^.]*/i) || [''])[0]);
+    ck(!r.posted.filter(x => x.kind === 'attendance').length, 'still nothing sent');
+    await r.shot('8-still-again');
+    ck(r.errs.length === 0, 'no script error', r.errs[0] || '');
+    await r.ctx.close();
+  }
+
+  console.log('\n9. and the walk: a receiver re-acquires, the readings differ, the mark goes');
+  {
+    const r = await open_({ at:HOME, still:true, wait:6000 });
+    const sheetUp = () => r.p.waitForFunction(() => document.getElementById('sheet').classList.contains('on'), null, { timeout:15000 }).catch(() => {});
+    await r.p.waitForFunction(() => /same point/i.test(document.getElementById('stepGeo').innerText), null, { timeout:25000 }).catch(() => {});
+    await r.p.evaluate(() => { ATT.b64 = 'x'; ATT.ts = new Date().toISOString(); drawAttendance(); });
+    await r.p.click('#attMark'); await sheetUp();
+    ck(await r.sheetOn(), 'the first press is refused as before');
+    /* the officer walks, the app is off, the receiver answers */
+    await r.p.evaluate(() => { window.__walk = true; });
+    await r.p.click('#stAgain'); await r.p.waitForTimeout(2000);
+    await r.p.click('#attMark');
+    await r.p.waitForFunction(() => !!document.querySelector('#attend') && !document.querySelector('#attend').classList.contains('on'), null, { timeout:20000 }).catch(() => {});
+    await r.p.waitForTimeout(1500);
+    const sent = r.posted.filter(x => x.kind === 'attendance');
+    ck(sent.length === 1, 'THE MARK IS SENT ONCE THE READINGS DIFFER');
+    const reads = sent[0] && sent[0].att && sent[0].att.reads;
+    ck(!!reads && (reads.r1 || []).length >= 3, 'with the first round of readings, identical', String(reads && reads.r1 && reads.r1.length));
+    ck(!!reads && (reads.r2 || []).length >= 3, 'and the second round, measured', String(reads && reads.r2 && reads.r2.length));
+    ck(!!reads && new Set((reads.r2 || []).map(x => x[0].toFixed(7) + ',' + x[1].toFixed(7))).size > 1, 'whose points differ, as a receiver\'s do');
+    const st = await r.store();
+    ck(!!((st && st.att) || {})[today()], 'and the day is marked on the phone');
+    ck(r.errs.length === 0, 'no script error', r.errs[0] || '');
+    await r.shot('9-walked'); await r.ctx.close();
   }
 
   await br.close(); srv.close();
