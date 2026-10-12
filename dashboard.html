@@ -963,6 +963,9 @@ body[data-tenant="gp"] .rail .brand b::after{content:" · GP";color:var(--teal);
 .nav [data-v="leave"][aria-current]{background:var(--amber-2);color:var(--amber)}
 .nav [data-v="notices"][aria-current]{background:var(--red-2);color:var(--red)}
 .nav [data-v="duty"][aria-current]{background:var(--teal-2);color:var(--teal)}
+.nav [data-v="mock"][aria-current]{background:var(--teal-2);color:var(--teal)}
+.mkfix summary{cursor:pointer;font-size:12px;color:var(--pri);margin-top:4px}
+.mkfix table{margin-top:6px}
 .nav [data-v="map"][aria-current]{background:var(--blue-2);color:var(--blue)}
 .nav [data-v="gpdp"][aria-current]{background:var(--teal-2);color:var(--teal)}
 .nav [data-v="advisory"][aria-current]{background:var(--amber-2);color:var(--gold)}
@@ -1326,6 +1329,7 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
       <button data-v="leave"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>Leave</button>
       <button data-v="notices"><svg viewBox="0 0 24 24"><path d="M12 3a5.5 5.5 0 0 0-5.5 5.5V12l-1.8 3.4h14.6L17.5 12V8.5A5.5 5.5 0 0 0 12 3z"/><path d="M9.8 17.8a2.3 2.3 0 0 0 4.4 0"/></svg>Notices</button>
       <button data-v="duty"><svg viewBox="0 0 24 24"><path d="M12 2.6c-3.2 0-5.8 2.6-5.8 5.8 0 4.2 5.8 12 5.8 12s5.8-7.8 5.8-12c0-3.2-2.6-5.8-5.8-5.8z"/><circle cx="12" cy="8.4" r="2.2"/></svg>Place of duty</button>
+      <button data-v="mock"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><path d="M12 3.2v3.6M12 17.2v3.6M3.2 12h3.6M17.2 12h3.6"/><circle cx="12" cy="12" r="2.1"/></svg>Not measured</button>
       <button data-v="map"><svg viewBox="0 0 24 24"><path d="M9 4 3.8 6v14L9 18l6 2 5.2-2V4L15 6 9 4zM9 4v14M15 6v14"/></svg>Map</button>
       <button data-v="gpdp"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>GPDP</button>
       <button data-v="advisory"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/><path d="M12 8v3M12 13.4v.2"/></svg>Advisory</button>
@@ -1451,7 +1455,7 @@ const TENANCY = {
      Leave. */
   HRMS:{ key:'HRMS', name:'District HRMS',  full:'District HRMS · leave',      store:'sjgp-hrms1',
     cfg:'hrms/config.js', home:'leave',
-    off:['overview','attendance','analytics','villages','schedule','notices','map','gpdp','advisory','duty'],
+    off:['overview','attendance','analytics','villages','schedule','notices','map','gpdp','advisory','duty','mock'],
     aud:[['EMP','Employees'],['HOD','Heads of office']] }
 };
 let TVIEW='SJGP';
@@ -1618,7 +1622,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '3a76756 - 12 Oct 16:11';
+const BUILD_STAMP = '9e928f4 - 12 Oct 16:25';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -2899,6 +2903,7 @@ function loadXLSX(){
 }
 function expNote(t){ const el=$('#expNote'); if(el) el.textContent=t; }
 async function doExport(kind){
+  if(/^mk/.test(kind)){ mockExport(kind); return; }
   /* THE FILING SCHEDULE'S OWN REGISTERS. They come out of SCHED, which is its
      own call, so they are answered before the dashboard payload is asked for.
      Every one of them counts LINES, not villages — a mandal village is named
@@ -5849,6 +5854,141 @@ function vDuty(j,A){
   return h;
 }
 
+/* ================= NOT MEASURED — the location a handset did not read =================
+   Ordered 12.10.2026. The register's own thirty days held thirty-four
+   Secretaries whose morning coordinate repeated to six decimals across
+   days, most of them pinned to the surveyed coordinate of their own village
+   office, with an accuracy of one metre — the shape of a mock-location app
+   and of nothing a receiver measures. The fence looks straight at them and
+   sees a man at his desk, so this screen is the reading that the fence
+   cannot make. IT ACCUSES NOBODY (rule 10): nothing here refuses a mark or
+   walks the ladder. It is what the Collector reads before a mandal is asked
+   to open a phone's Developer options, where the mock-location setting
+   settles the question in a minute. */
+let MOCK=null, MOCK_DAYS=30, MOCK_BUSY=false, MOCK_ERR='';
+function mockPull(force){
+  const key=TVIEW+'|'+MOCK_DAYS;
+  if(!force && MOCK && MOCK._key===key) return;
+  MOCK_BUSY=true; MOCK_ERR='';
+  fetch(ST.url+'?op=mockloc&token='+encodeURIComponent(ST.token)+'&days='+MOCK_DAYS+'&t='+Date.now(),{cache:'no-store'})
+    .then(r=>r.json())
+    .then(j=>{ MOCK_BUSY=false;
+      /* the shape this feature answers with, not merely ok:true — an op a
+         register does not carry is refused by name, and the screen says so */
+      if(!j||!j.ok||!Array.isArray(j.findings)){ MOCK_ERR=(j&&j.error)||'The register did not answer.'; MOCK=null; }
+      else { j._key=key; MOCK=j; }
+      if(VIEW==='mock'&&DATA) render(DATA); })
+    .catch(e=>{ MOCK_BUSY=false; MOCK_ERR=String(e); if(VIEW==='mock'&&DATA) render(DATA); });
+}
+const mkM=m=>m==null?'—':(m<1000?Math.round(m)+' m':(Math.round(m/100)/10)+' km');
+const mkDm=d=>String(d||'').slice(8)+'.'+String(d||'').slice(5,7);
+function mkFixes(r){
+  if(!(r.fixes||[]).length) return '';
+  return `<details class="mkfix"><summary>Every located morning, ${r.fixes.length} of them</summary>
+    <div class="twrap" style="max-height:260px"><table><thead><tr><th>Day</th><th>Latitude</th><th>Longitude</th><th>Claimed ± m</th><th>From own office</th><th>Marked at</th><th>Reached the district</th></tr></thead><tbody>${
+    r.fixes.map(f=>`<tr${f.acc!=null&&f.acc<=(MOCK.metre||1)?' style="color:var(--st-bad)"':''}><td class="num">${esc(f.d)}</td><td class="num">${esc(String(f.lat))}</td><td class="num">${esc(String(f.lng))}</td><td class="num">${f.acc==null?'—':esc(String(f.acc))}</td><td class="num">${mkM(f.officeM)}</td><td class="num mut">${esc(String(f.at||'').slice(0,16).replace('T',' '))}</td><td class="num mut">${esc(String(f.rx||'').slice(0,16).replace('T',' '))}</td></tr>`).join('')}</tbody></table></div></details>`;
+}
+function mkWhat(r){
+  const w=[];
+  if(r.repeat) w.push('<span class="pill bad">a typed point</span>');
+  if(r.metre&&r.metre.pinned&&r.metre.days>=(MOCK.minDays||3)) w.push('<span class="pill bad">an app, pinned</span>');
+  else if(r.metre) w.push('<span class="pill warn">the point moves</span>');
+  if((r.shared||[]).length) w.push('<span class="pill bad">two officers</span>');
+  return w.join('<br>');
+}
+function mkRow(r,i){
+  const rep=r.repeat?`<b>${r.repeat.days}</b> of ${r.repeat.fine} fine days<br><span class="mut num" style="font-size:11px">${r.repeat.points.slice(0,2).map(p=>esc(p.point)+' · '+p.dates.map(mkDm).join(', ')).join('<br>')}</span>`:'<span class="mut">—</span>';
+  const met=r.metre?`<b>${r.metre.days}</b> of ${r.metre.located} days at ±${r.metre.accs.join('/')} m<br><span class="mut" style="font-size:11px">${r.metre.pinned?'at '+r.metre.points+' point'+(r.metre.points===1?'':'s')+' — pinned':'at '+r.metre.points+' points — moving'}${r.metre.otherMin!=null?' · other days '+r.metre.otherMin+'–'+r.metre.otherMax+' m':''}</span>`:'<span class="mut">—</span>';
+  return `<tr><td>${esc(r.name||'—')}<br><span class="mut num" style="font-size:11px">${esc(r.phone||'')} · ${esc(r.role||'')}</span>${mkFixes(r)}</td>
+    <td>${esc(r.mandal||'—')}</td><td>${rep}</td><td>${met}</td>
+    <td class="num">${r.office?mkM(r.office.m)+'<br><span class="mut" style="font-size:11px">'+esc(r.office.name||'')+'</span>':'<span class="mut">not placed</span>'}</td>
+    <td class="num">${r.late||'—'}</td><td style="white-space:nowrap">${mkWhat(r)}</td></tr>`;
+}
+function vMock(j,A){
+  let h='';
+  h+='<div class="segbar" style="grid-column:1/-1;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">'+
+    '<label style="font-size:12px;color:var(--tx-2)">Window<select class="rsel" id="mockDays" style="margin-left:7px;min-width:140px">'+
+    [14,30,60,90].map(d=>'<option value="'+d+'"'+(d===MOCK_DAYS?' selected':'')+'>last '+d+' days</option>').join('')+
+    '</select></label>'+
+    (MOCK?'<span class="mut" style="font-size:12px">'+esc(MOCK.from)+' to '+esc(MOCK.to)+' · read '+esc(String(MOCK.at||'').slice(11,16))+'Z</span>':'')+
+    '</div>';
+  if(!MOCK){
+    return h+panel('c12','Not measured',MOCK_BUSY?'reading the register…':'',
+      '<div class="empty">'+(MOCK_BUSY?'Reading every mark of the window. The register walks the whole Attendance tab for this, so it takes a moment.':esc(MOCK_ERR||'The register did not answer.'))+'</div>');
+  }
+  const F=MOCK.findings||[], L=MOCK.leads||[], S=MOCK.shared||[], NJ=MOCK.notJudged||[];
+  h+='<div class="kpirow">';
+  h+=kpi('Marks never measured',IC.u,F.length,'','officers · a typed point, or a metre that never moves');
+  h+=kpi('Leads to look at',IC.u,L.length,'','a metre at points that move — a good phone, most likely');
+  h+=kpi('One point, two officers',IC.u,S.length,'','mornings, fine fixes only');
+  h+=kpi('Officers judged',IC.u,MOCK.judged,'',MOCK.clean+' show nothing · '+NJ.length+' not judged');
+  h+=kpi('Honest scatter',IC.u,MOCK.baselineM==null?'—':MOCK.baselineM+' m','','the district’s own baseline, day to day');
+  h+='</div>';
+
+  h+=panel('c12','What this screen reads, and what it does not','evidence, not a charge',
+    `<div style="font-size:13px;color:var(--tx-2);line-height:1.75">
+      A satellite fix is a measurement with noise in it: the district’s honest officers scatter by about <b>${MOCK.baselineM==null?'—':MOCK.baselineM} m</b> from one morning to the next, and the last decimal of a latitude is as good as random.
+      A mock-location app returns the point it was given, <b>byte for byte, every morning</b>, and claims one metre for it because that is its default. So the screen asks three things of every officer over the window:
+      <b>the same coordinate to six decimals on two different mornings</b>, from a fix that claimed ±${MOCK.fine} m or better — nothing a handset measures repeats to eleven centimetres across days;
+      <b>a claimed accuracy of 0 or 1 m</b> — a lead and not a verdict, because a new dual-band handset under open sky claims a metre honestly and its points move from day to day, while a metre at a point that never moves is an app;
+      and <b>one fine coordinate under two officers on one morning</b>.
+      <br><br>What is <b>not</b> counted: Google’s network positioning hands every phone in the same building the same point, claiming twenty metres from wifi or two kilometres from a cell tower, and the MPDO offices produce identical coordinates for half their staff every morning. Only a fix claiming ±${MOCK.fine} m or better is read at all. A mark that reached the district days after its date is printed and not weighed.
+      <br><br><b>Nothing here refuses a mark, raises a reminder or walks the ladder.</b> The cure is the phone: ask the mandal to open Developer options on the handset, where the mock-location setting settles it in a minute. The one rule that would have caught the apps automatically — refusing any fix better than two metres — would have refused honest officers for owning a good phone, and is not applied.</div>`);
+
+  h+=panel('c12','Marks that were never measured — '+F.length+' officer'+(F.length===1?'':'s'),
+    'a typed point, or a metre that never moves · open a name for every morning',
+    `<div class="expbar" style="margin-bottom:10px"><button class="tbtn pri" data-exp="mkfind">CSV · these officers</button><button class="tbtn" data-exp="mkdays">CSV · every morning behind them</button><button class="tbtn" data-exp="mklead">CSV · the leads</button><button class="tbtn" data-exp="mkshared">CSV · shared points</button></div>
+     <div class="twrap" data-k="mkf"><table id="mkFind"><thead><tr><th>Officer</th><th>Mandal</th><th>Identical point</th><th>0–1 m claimed</th><th>Pinned point from own office</th><th>Arrived 2+ days late</th><th>What it looks like</th></tr></thead><tbody>${
+      F.length?F.map(mkRow).join(''):'<tr><td colspan="7" class="empty">No officer in this window shows a shape a measured location does not produce.</td></tr>'}</tbody></table></div>`);
+
+  h+=panel('c12','Leads — '+L.length+' officer'+(L.length===1?'':'s'),'a metre claimed, at points that move · a good phone, most likely — not evidence on its own',
+    `<div class="twrap" data-k="mkl"><table id="mkLead"><thead><tr><th>Officer</th><th>Mandal</th><th>Identical point</th><th>0–1 m claimed</th><th>From own office</th><th>Arrived 2+ days late</th><th>What it looks like</th></tr></thead><tbody>${
+      L.length?L.map(mkRow).join(''):'<tr><td colspan="7" class="empty">None.</td></tr>'}</tbody></table></div>`);
+
+  if(S.length) h+=panel('c12','One point, two officers, one morning — '+S.length,'fine fixes only · one handset, or one typed point, marking for two',
+    `<div class="twrap"><table><thead><tr><th>Day</th><th>Point</th><th>Officers</th><th>Marked at</th><th>Claimed ± m</th></tr></thead><tbody>${
+      S.map(s=>'<tr><td class="num">'+esc(s.date)+'</td><td class="num">'+esc(s.point)+'</td><td>'+s.officers.map(o=>esc(o.name)+' <span class="mut">('+esc(o.role)+', '+esc(o.mandal)+')</span>').join(' · ')+'</td><td class="num">'+s.officers.map(o=>esc(String(o.at||'').slice(11,16))).join(' · ')+'</td><td class="num">'+s.officers.map(o=>esc(String(o.acc))).join(' · ')+'</td></tr>').join('')}</tbody></table></div>`);
+
+  h+=panel('c12','What was read','the window, in figures',
+    `<div class="twrap"><table><tbody>
+      <tr><td>Marks in the window</td><td class="num">${MOCK.marks}</td><td class="mut">${MOCK.leaveRows} sanctioned-leave rows left aside</td></tr>
+      <tr><td>Officers who marked</td><td class="num">${MOCK.officers}</td><td class="mut">${MOCK.judged} judged on ${MOCK.minDays} or more located days · ${NJ.length} not judged</td></tr>
+      <tr><td>Officer-days located</td><td class="num">${MOCK.located}</td><td class="mut">${MOCK.noFix} with no fix at all</td></tr>
+      <tr><td>Claimed 0 or 1 m</td><td class="num">${MOCK.metreDays}</td><td class="mut">officer-days, from ${MOCK.metreOfficers} officers</td></tr>
+      <tr><td>Show nothing</td><td class="num">${MOCK.clean}</td><td class="mut">their fixes move by the width of an office and repeat nowhere — what a measured location looks like</td></tr>
+    </tbody></table></div>${NJ.length?'<div class="expnote" style="margin-top:8px">Not judged, fewer than '+MOCK.minDays+' located days: '+NJ.map(x=>esc(x.name||x.phone)+' ('+x.located+')').join(', ')+'. A reading that treated two marks as a clean sheet would be the report that omits what it could not run.</div>':''}`);
+  return h;
+}
+/* THE CSVs. Each says at its foot what it is and what it is not. */
+function mockExport(kind){
+  if(!MOCK){ expNote('The reading has not been made yet.'); return; }
+  const c=v=>{ const s=String(v==null?'':v); return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+  const csv=rows=>'﻿'+rows.map(r=>r.map(c).join(',')).join('\r\n')+'\r\n';
+  const foot=['','Evidence, not a charge: nothing here refuses a mark or walks the ladder. Window '+MOCK.from+' to '+MOCK.to+', read '+MOCK.at+'. A fix is fine at ±'+MOCK.fine+' m or better; coarser fixes are never held against anyone.'];
+  const offRow=r=>[r.name,r.phone,r.role,r.mandal,r.days,r.located,r.fine,
+    r.repeat?r.repeat.days:'', r.repeat?r.repeat.points.map(p=>p.point+' on '+p.dates.join(' ')+' (±'+p.accs.join('/')+' m)').join('; '):'',
+    r.metre?r.metre.days:'', r.metre?(r.metre.pinned?'pinned':'moving'):'', r.metre?r.metre.points:'', r.metre?r.metre.accs.join('/'):'',
+    r.metre&&r.metre.otherMin!=null?r.metre.otherMin+'-'+r.metre.otherMax:'',
+    r.office?r.office.m:'', r.office?r.office.name:'', (r.shared||[]).length, r.late, (r.signals||[]).join(' ')];
+  const head=['Officer','Phone','Role','Mandal','Days marked','Days located','Fine fixes','Identical point: days','Identical point: where and when','0-1 m: days','0-1 m: pinned or moving','0-1 m: distinct points','0-1 m: claimed','Other days claimed (m)','Pinned point from own office (m)','Own office','Shared mornings','Arrived 2+ days late','Signals'];
+  const stamp=MOCK.to;
+  if(kind==='mkfind'){ dlBlob('SJGP-not-measured-'+stamp+'.csv','text/csv;charset=utf-8',csv([head].concat(MOCK.findings.map(offRow),[foot]))); }
+  else if(kind==='mklead'){ dlBlob('SJGP-not-measured-leads-'+stamp+'.csv','text/csv;charset=utf-8',csv([head].concat(MOCK.leads.map(offRow),[['','A lead is a metre claimed at points that move: a good phone, most likely. Not evidence on its own.']],[foot]))); }
+  else if(kind==='mkdays'){
+    const rows=[['Officer','Phone','Role','Mandal','Day','Latitude','Longitude','Claimed accuracy (m)','From own office (m)','Marked at (handset)','Reached the district','Verified']];
+    MOCK.findings.concat(MOCK.leads).forEach(r=>(r.fixes||[]).forEach(f=>rows.push([r.name,r.phone,r.role,r.mandal,f.d,f.lat,f.lng,f.acc==null?'':f.acc,f.officeM==null?'':f.officeM,f.at,f.rx,f.ver])));
+    rows.push(foot);
+    dlBlob('SJGP-not-measured-mornings-'+stamp+'.csv','text/csv;charset=utf-8',csv(rows));
+  }
+  else if(kind==='mkshared'){
+    const rows=[['Day','Point','Officer','Phone','Role','Mandal','Marked at','Claimed accuracy (m)']];
+    MOCK.shared.forEach(s=>s.officers.forEach(o=>rows.push([s.date,s.point,o.name,o.phone,o.role,o.mandal,o.at,o.acc])));
+    rows.push(foot);
+    dlBlob('SJGP-shared-points-'+stamp+'.csv','text/csv;charset=utf-8',csv(rows));
+  }
+  expNote('Downloaded. Evidence, not a charge.');
+}
+
 function vAdvisory(j,A){
   if(!ADV) return panel('c12','Advisories','loading',
     '<div class="empty">Reading the advisory register…</div>');
@@ -6055,6 +6195,7 @@ function render(j){
   /* THE MONTH IS ASKED FOR WHEN THE SCREEN IS OPENED, not on every poll: it
      is a dozen thousand rows and the register caches it for ten minutes. */
   if(VIEW==='analytics') anaPull(false);
+  if(VIEW==='mock') mockPull(false);
   $('#g').innerHTML = VIEW==='overview'?vOverview(j,A)
     : VIEW==='attendance'?(function(){const js=segJ(j);return vAttendance(js,ASEG==='all'?A:analyse(js));})()
     : VIEW==='analytics'?vAnalytics(j,A)
@@ -6065,6 +6206,7 @@ function render(j){
     : VIEW==='gpdp'?vGpdp(j,A)
     : VIEW==='advisory'?vAdvisory(j,A)
     : VIEW==='duty'?vDuty(j,A)
+    : VIEW==='mock'?vMock(j,A)
     : VIEW==='admin'?vAdmin(j,A) : vMap(j,A);
   document.querySelectorAll('#g [data-k]').forEach(el=>{ if(keep[el.dataset.k]) el.scrollTop=keep[el.dataset.k]; });
   if((VIEW==='map'||VIEW==='advisory') && !WX) pullWeather();
@@ -6200,6 +6342,7 @@ function retireAdvisory(){
 document.addEventListener('change', e => {
   const id = e.target && e.target.id;
   if(id === 'segSel'){ ASEG = e.target.value; if(DATA) render(DATA); return; }
+  if(id === 'mockDays'){ MOCK_DAYS = Number(e.target.value) || 30; mockPull(true); if(DATA) render(DATA); return; }
   if(id === 'anaYm' || id === 'anaSeg' || id === 'anaMandal'){
     if(id === 'anaYm') ANA_YM = e.target.value;
     if(id === 'anaSeg') ANA_SEG = e.target.value;
