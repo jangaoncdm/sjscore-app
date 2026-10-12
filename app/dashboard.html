@@ -5882,11 +5882,17 @@ function mockPull(force){
 }
 const mkM=m=>m==null?'—':(m<1000?Math.round(m)+' m':(Math.round(m/100)/10)+' km');
 const mkDm=d=>String(d||'').slice(8)+'.'+String(d||'').slice(5,7);
+/* THE REGISTER KEEPS UTC AND THE COLLECTOR READS IST. Every moment here is
+   printed as dd.mm HH:MM in Asia/Kolkata, which is what the officer's
+   morning actually was; the raw ISO string is kept in the CSV beside it. */
+const mkIst=(iso,withDate)=>{ const t=Date.parse(iso); if(!isFinite(t)) return '—';
+  const d=new Date(t+5.5*3600000); const hm2=String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0');
+  return withDate?String(d.getUTCDate()).padStart(2,'0')+'.'+String(d.getUTCMonth()+1).padStart(2,'0')+' '+hm2:hm2; };
 function mkFixes(r){
   if(!(r.fixes||[]).length) return '';
   return `<details class="mkfix"><summary>Every located morning, ${r.fixes.length} of them</summary>
-    <div class="twrap" style="max-height:260px"><table><thead><tr><th>Day</th><th>Latitude</th><th>Longitude</th><th>Claimed ± m</th><th>From own office</th><th>Marked at</th><th>Reached the district</th></tr></thead><tbody>${
-    r.fixes.map(f=>`<tr${f.acc!=null&&f.acc<=(MOCK.metre||1)?' style="color:var(--st-bad)"':''}><td class="num">${esc(f.d)}</td><td class="num">${esc(String(f.lat))}</td><td class="num">${esc(String(f.lng))}</td><td class="num">${f.acc==null?'—':esc(String(f.acc))}</td><td class="num">${mkM(f.officeM)}</td><td class="num mut">${esc(String(f.at||'').slice(0,16).replace('T',' '))}</td><td class="num mut">${esc(String(f.rx||'').slice(0,16).replace('T',' '))}</td></tr>`).join('')}</tbody></table></div></details>`;
+    <div class="twrap" style="max-height:260px"><table><thead><tr><th>Day</th><th>Latitude</th><th>Longitude</th><th>Claimed ± m</th><th>From own office</th><th>Marked at (IST)</th><th>Reached the district (IST)</th></tr></thead><tbody>${
+    r.fixes.map(f=>`<tr${f.acc!=null&&f.acc<=(MOCK.metre||1)?' style="color:var(--st-bad)"':''}><td class="num">${esc(f.d)}</td><td class="num">${esc(String(f.lat))}</td><td class="num">${esc(String(f.lng))}</td><td class="num">${f.acc==null?'—':esc(String(f.acc))}</td><td class="num">${mkM(f.officeM)}</td><td class="num mut">${mkIst(f.at,true)}</td><td class="num mut">${mkIst(f.rx,true)}</td></tr>`).join('')}</tbody></table></div></details>`;
 }
 function mkWhat(r){
   const w=[];
@@ -5911,7 +5917,7 @@ function vMock(j,A){
     '<label style="font-size:12px;color:var(--tx-2)">Window<select class="rsel" id="mockDays" style="margin-left:7px;min-width:140px">'+
     [14,30,60,90].map(d=>'<option value="'+d+'"'+(d===MOCK_DAYS?' selected':'')+'>last '+d+' days</option>').join('')+
     '</select></label>'+
-    (MOCK?'<span class="mut" style="font-size:12px">'+esc(MOCK.from)+' to '+esc(MOCK.to)+' · read '+esc(String(MOCK.at||'').slice(11,16))+'Z</span>':'')+
+    (MOCK?'<span class="mut" style="font-size:12px">'+esc(MOCK.from)+' to '+esc(MOCK.to)+' · read '+mkIst(MOCK.at)+' IST</span>':'')+
     '</div>';
   if(!MOCK){
     return h+panel('c12','Not measured',MOCK_BUSY?'reading the register…':'',
@@ -5947,8 +5953,8 @@ function vMock(j,A){
       L.length?L.map(mkRow).join(''):'<tr><td colspan="7" class="empty">None.</td></tr>'}</tbody></table></div>`);
 
   if(S.length) h+=panel('c12','One point, two officers, one morning — '+S.length,'fine fixes only · one handset, or one typed point, marking for two',
-    `<div class="twrap"><table><thead><tr><th>Day</th><th>Point</th><th>Officers</th><th>Marked at</th><th>Claimed ± m</th></tr></thead><tbody>${
-      S.map(s=>'<tr><td class="num">'+esc(s.date)+'</td><td class="num">'+esc(s.point)+'</td><td>'+s.officers.map(o=>esc(o.name)+' <span class="mut">('+esc(o.role)+', '+esc(o.mandal)+')</span>').join(' · ')+'</td><td class="num">'+s.officers.map(o=>esc(String(o.at||'').slice(11,16))).join(' · ')+'</td><td class="num">'+s.officers.map(o=>esc(String(o.acc))).join(' · ')+'</td></tr>').join('')}</tbody></table></div>`);
+    `<div class="twrap"><table><thead><tr><th>Day</th><th>Point</th><th>Officers</th><th>Marked at (IST)</th><th>Claimed ± m</th></tr></thead><tbody>${
+      S.map(s=>'<tr><td class="num">'+esc(s.date)+'</td><td class="num">'+esc(s.point)+'</td><td>'+s.officers.map(o=>esc(o.name)+' <span class="mut">('+esc(o.role)+', '+esc(o.mandal)+')</span>').join(' · ')+'</td><td class="num">'+s.officers.map(o=>mkIst(o.at)).join(' · ')+'</td><td class="num">'+s.officers.map(o=>esc(String(o.acc))).join(' · ')+'</td></tr>').join('')}</tbody></table></div>`);
 
   h+=panel('c12','What was read','the window, in figures',
     `<div class="twrap"><table><tbody>
@@ -5976,14 +5982,14 @@ function mockExport(kind){
   if(kind==='mkfind'){ dlBlob('SJGP-not-measured-'+stamp+'.csv','text/csv;charset=utf-8',csv([head].concat(MOCK.findings.map(offRow),[foot]))); }
   else if(kind==='mklead'){ dlBlob('SJGP-not-measured-leads-'+stamp+'.csv','text/csv;charset=utf-8',csv([head].concat(MOCK.leads.map(offRow),[['','A lead is a metre claimed at points that move: a good phone, most likely. Not evidence on its own.']],[foot]))); }
   else if(kind==='mkdays'){
-    const rows=[['Officer','Phone','Role','Mandal','Day','Latitude','Longitude','Claimed accuracy (m)','From own office (m)','Marked at (handset)','Reached the district','Verified']];
-    MOCK.findings.concat(MOCK.leads).forEach(r=>(r.fixes||[]).forEach(f=>rows.push([r.name,r.phone,r.role,r.mandal,f.d,f.lat,f.lng,f.acc==null?'':f.acc,f.officeM==null?'':f.officeM,f.at,f.rx,f.ver])));
+    const rows=[['Officer','Phone','Role','Mandal','Day','Latitude','Longitude','Claimed accuracy (m)','From own office (m)','Marked at (IST)','Reached the district (IST)','Marked at (UTC, as stored)','Reached (UTC, as stored)','Verified']];
+    MOCK.findings.concat(MOCK.leads).forEach(r=>(r.fixes||[]).forEach(f=>rows.push([r.name,r.phone,r.role,r.mandal,f.d,f.lat,f.lng,f.acc==null?'':f.acc,f.officeM==null?'':f.officeM,mkIst(f.at,true),mkIst(f.rx,true),f.at,f.rx,f.ver])));
     rows.push(foot);
     dlBlob('SJGP-not-measured-mornings-'+stamp+'.csv','text/csv;charset=utf-8',csv(rows));
   }
   else if(kind==='mkshared'){
-    const rows=[['Day','Point','Officer','Phone','Role','Mandal','Marked at','Claimed accuracy (m)']];
-    MOCK.shared.forEach(s=>s.officers.forEach(o=>rows.push([s.date,s.point,o.name,o.phone,o.role,o.mandal,o.at,o.acc])));
+    const rows=[['Day','Point','Officer','Phone','Role','Mandal','Marked at (IST)','Marked at (UTC, as stored)','Claimed accuracy (m)']];
+    MOCK.shared.forEach(s=>s.officers.forEach(o=>rows.push([s.date,s.point,o.name,o.phone,o.role,o.mandal,mkIst(o.at,true),o.at,o.acc])));
     rows.push(foot);
     dlBlob('SJGP-shared-points-'+stamp+'.csv','text/csv;charset=utf-8',csv(rows));
   }
