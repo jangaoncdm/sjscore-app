@@ -460,6 +460,21 @@ const esc = s => String(s == null ? '' : s).replace(/\|/g, '\\|');
   fs.mkdirSync(outDir, { recursive:true });
   const out = path.join(outDir, 'REPORT.md');
   fs.writeFileSync(out, L.join('\n') + '\n');
+  /* and the same reading as two CSVs, for a spreadsheet: the officers, and
+     every morning behind them. Each says at its foot what it is not. */
+  const cc = v => { const s = String(v == null ? '' : v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const csv = rows => '﻿' + rows.map(r => r.map(cc).join(',')).join('\r\n') + '\r\n';
+  const foot = ['', 'Evidence, not a charge: nothing here refuses a mark or walks the ladder. Window ' + from + ' to ' + to + '. A fix is fine at ±' + FINE_ACC_M + ' m or better; coarser fixes are never held against anyone.'];
+  const offRows = (list, what) => list.map(o => [what, o.name || '', o.ph, o.role, o.mandal, o.n, o.loc, o.fineN, o.score,
+    o.ev.filter(e => e.w > 0).map(e => e.kind).join(' '), o.ev.map(e => e.text).join(' | ')]);
+  fs.writeFileSync(path.join(outDir, 'not-measured.csv'), csv([['Listed as', 'Officer', 'Phone', 'Role', 'Mandal', 'Days marked', 'Days located', 'Fine fixes', 'Weight', 'Signals', 'Evidence']]
+    .concat(offRows(flagged, 'finding'), offRows(weak, 'weak'), [foot])));
+  const dayRows = [['Officer', 'Phone', 'Role', 'Mandal', 'Day', 'Latitude', 'Longitude', 'Claimed accuracy (m)', 'From own office (m)', 'Marked at (handset)', 'Reached the district', 'Verified', 'Timezone', 'Skew']];
+  flagged.concat(weak).forEach(o => o.fixes.slice().sort((a, b) => a.d.localeCompare(b.d)).forEach(f => {
+    const off = fromOffice(o.ph, f.lat, f.lng);
+    dayRows.push([o.name || '', o.ph, o.role, o.mandal, f.d, f.latS, f.lngS, f.acc == null ? '' : f.acc, off ? Math.round(off.m) : '', f.at, f.rx, f.ver, f.tz, f.skew]); }));
+  dayRows.push(foot);
+  fs.writeFileSync(path.join(outDir, 'not-measured-mornings.csv'), csv(dayRows));
   console.log('window ' + from + ' to ' + to + ' · ' + marks + ' marks · ' + Object.keys(who).length + ' officers · ' +
               flagged.length + ' flagged · ' + weak.length + ' weak · ' + notJudged.length + ' not judged · baseline ' +
               (baseline == null ? '—' : baseline.toFixed(0) + ' m'));
