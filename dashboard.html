@@ -1622,7 +1622,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '9e928f4 - 12 Oct 16:25';
+const BUILD_STAMP = '9f7f625 - 12 Oct 16:27';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -5897,7 +5897,8 @@ function mkWhat(r){
   return w.join('<br>');
 }
 function mkRow(r,i){
-  const rep=r.repeat?`<b>${r.repeat.days}</b> of ${r.repeat.fine} fine days<br><span class="mut num" style="font-size:11px">${r.repeat.points.slice(0,2).map(p=>esc(p.point)+' · '+p.dates.map(mkDm).join(', ')).join('<br>')}</span>`:'<span class="mut">—</span>';
+  const ds=p=>p.dates.slice(0,6).map(mkDm).join(', ')+(p.dates.length>6?' +'+(p.dates.length-6)+' more':'');
+  const rep=r.repeat?`<b>${r.repeat.days}</b> of ${r.repeat.fine} fine days<br><span class="mut num" style="font-size:11px">${r.repeat.points.slice(0,2).map(p=>esc(p.point)+' · '+ds(p)).join('<br>')}</span>`:'<span class="mut">—</span>';
   const met=r.metre?`<b>${r.metre.days}</b> of ${r.metre.located} days at ±${r.metre.accs.join('/')} m<br><span class="mut" style="font-size:11px">${r.metre.pinned?'at '+r.metre.points+' point'+(r.metre.points===1?'':'s')+' — pinned':'at '+r.metre.points+' points — moving'}${r.metre.otherMin!=null?' · other days '+r.metre.otherMin+'–'+r.metre.otherMax+' m':''}</span>`:'<span class="mut">—</span>';
   return `<tr><td>${esc(r.name||'—')}<br><span class="mut num" style="font-size:11px">${esc(r.phone||'')} · ${esc(r.role||'')}</span>${mkFixes(r)}</td>
     <td>${esc(r.mandal||'—')}</td><td>${rep}</td><td>${met}</td>
