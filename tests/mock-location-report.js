@@ -334,7 +334,7 @@ const esc = s => String(s == null ? '' : s).replace(/\|/g, '\\|');
       ev.push({ kind:'metre', w:lowAcc.length >= 3 ? 3 : 1, text:
         lowAcc.length + ' of ' + o.fixes.length + ' located days claim an accuracy of ' + [...new Set(lowAcc.map(f => f.acc))].join('/') + ' m (' +
         lowAcc.map(f => dm(f.d)).join(', ') + '), at ' + pts.size + ' point' + (pts.size === 1 ? '' : 's') +
-        ' — a handset’s receiver never claims a metre' + (others.length ? '; his other days claim ' + Math.min(...others) + '–' + Math.max(...others) + ' m' : '') + off });
+        ' — a metre is what a mock-location app claims by default, and what a receiver claims only on a new dual-band handset under open sky' + (others.length ? '; his other days claim ' + Math.min(...others) + '–' + Math.max(...others) + ' m' : '') + off });
     }
     /* 5. a constant claimed accuracy */
     const accs = [...new Set(fine.map(f => f.acc))];
@@ -402,7 +402,7 @@ const esc = s => String(s == null ? '' : s).replace(/\|/g, '\\|');
   L.push('4. **One coordinate under two officers on the same morning.** One handset or one typed point marking for two. Weight 3, against both.');
   L.push('5. **A constant claimed accuracy** across every fine fix. A receiver’s figure moves with the sky. Weight 1.');
   L.push('6. **The same last digit** on four fixes in five. Honest readings spread it over 0–9. Weight 1.');
-  L.push('7. **A claimed accuracy of 0 or 1 m** on three or more days. A handset’s receiver reports three metres on its best day in the open; one metre is what a mock-location app reports by default. Weight 3 (weight 1 on two days).');
+  L.push('7. **A claimed accuracy of 0 or 1 m** on three or more days. Older handsets report three metres on their best day; a new dual-band handset under open sky can report one, and so does every mock-location app by default. On its own this is a lead and not a verdict: read it with the point. A point that moves from day to day at 1 m is a good phone; a point that never moves at 1 m is an app. Weight 3 (weight 1 on two days).');
   L.push('');
   L.push('A fix is **fine** at ±' + FINE_ACC_M + ' m or better. The line sits there because Google’s network positioning hands back the centroid of the wifi access points or the cell tower in view, repeats it byte for byte for everyone in the same building, and claims twenty metres to two kilometres for it. Those repeats are honest and are not counted; the MPDO offices of the district produce them every morning.');
   L.push('');
