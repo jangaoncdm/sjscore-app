@@ -51,7 +51,16 @@
 const fs = require('fs'), path = require('path'), os = require('os');
 const { execFileSync } = require('child_process');
 
-const FINE_ACC_M = 60, TIGHT_M = 3, MIN_DAYS = 3, SHARE_MIN = 1;
+/* FINE_ACC_M is the line between a satellite claim and a wifi one. Google's
+   network positioning hands back the centroid of the access points in view,
+   and it repeats byte for byte for everyone standing in the same office —
+   with a claimed accuracy of twenty to sixty metres, not two kilometres. So
+   sixty metres lets a wifi fix through as "fine", and an office full of
+   honest staff reads as a shared typed point. Fifteen metres is a figure a
+   wifi fix does not claim and a satellite in the open does. Set it from the
+   environment to read the register both ways. */
+const FINE_ACC_M = Number(process.env.FINE_ACC_M) > 0 ? Number(process.env.FINE_ACC_M) : 15;
+const TIGHT_M = 3, MIN_DAYS = 3, SHARE_MIN = 1;
 
 /* ---------------------------------------------------------------- reading */
 function readWorkbook(file){
@@ -130,7 +139,11 @@ function dayOf(v){
   }
   return '';
 }
-const phone10 = s => { const d = String(s || '').replace(/\D/g, ''); return d.length > 10 ? d.slice(-10) : d; };
+/* a phone stored as a number comes out of an .xlsx as 8.01963139E9, which
+   loses its last digit to the exponent if read as text */
+const phone10 = s => { let t = String(s == null ? '' : s).trim();
+  if(/^\d(\.\d+)?E\+?\d+$/i.test(t)) t = String(Math.round(Number(t)));
+  const d = t.replace(/\D/g, ''); return d.length > 10 ? d.slice(-10) : d; };
 const decimals = s => { const t = String(s); const i = t.indexOf('.'); return i < 0 ? 0 : t.length - i - 1; };
 function metres(aLat, aLng, bLat, bLng){
   const R = 6371000, rad = Math.PI / 180;
@@ -150,14 +163,48 @@ const esc = s => String(s == null ? '' : s).replace(/\|/g, '\\|');
     console.error('usage: node tests/mock-location-report.js <register.xlsx|attendance.csv> [days]');
     process.exit(2);
   }
-  let rows, source;
+  let rows, source, wb = null;
   if(/\.csv$/i.test(file)){ rows = readCsv(file); source = path.basename(file) + ' (CSV)'; }
   else {
-    const wb = readWorkbook(file);
+    wb = readWorkbook(file);
     const tab = wb.names.find(n => /^attendance$/i.test(n)) || wb.names.find(n => /attendance/i.test(n));
     if(!tab){ console.error('no Attendance tab in ' + file + ' — tabs: ' + wb.names.join(', ')); process.exit(2); }
     rows = toRows(wb.sheets[tab]); source = path.basename(file) + ' · tab "' + tab + '"';
   }
+
+  /* WHERE EACH OFFICER IS SUPPOSED TO BE, when the workbook carries the roll:
+     the Users tab says which village he holds and the GPs tab says where its
+     office is. A point pinned three hundred metres from his own office is a
+     different thing from one pinned forty kilometres away — the first passes
+     the fence and the second is now refused by it — and the Collector reads
+     the two differently. */
+  const places = {}, holds = {};
+  if(wb){
+    const gt = wb.names.find(n => /^gps$/i.test(n)), ut = wb.names.find(n => /^users$/i.test(n));
+    if(gt){ const g = toRows(wb.sheets[gt]); const h = g[0].map(x => String(x || '').trim().toLowerCase());
+      const mi = h.indexOf('mandal'), gi = h.indexOf('gp'), la = h.indexOf('lat'), ln = h.indexOf('lng');
+      if(mi >= 0 && gi >= 0 && la >= 0 && ln >= 0) g.slice(1).forEach(r => {
+        const y = Number(r[la]), x = Number(r[ln]);
+        if(isFinite(y) && isFinite(x) && y > 16.4 && y < 19.2 && x > 77.6 && x < 80.9)
+          places[String(r[mi] || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '') + '|' + String(r[gi] || '').trim().toLowerCase()] = { lat:y, lng:x, gp:String(r[gi]).trim(), mandal:String(r[mi]).trim() };
+      }); }
+    if(ut){ const u = toRows(wb.sheets[ut]); const h = u[0].map(x => String(x || '').trim().toLowerCase());
+      const pi = h.indexOf('phone'), mi = h.indexOf('mandal'), gi = h.indexOf('gp');
+      if(pi >= 0 && gi >= 0) u.slice(1).forEach(r => { const p = phone10(r[pi]); if(!p) return;
+        String(r[gi] || '').split(',').map(x => x.trim()).filter(String).forEach(gp => {
+          (holds[p] = holds[p] || []).push(String(r[mi] || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '') + '|' + gp.toLowerCase()); }); }); }
+  }
+  /* the two tabs spell a mandal two ways (Raghunathpalle, Raghunathapally),
+     so a village that misses on mandal|gp is taken by its own name when the
+     roll holds exactly one village of that name — the fence's own fallback */
+  const byGp = {}; Object.keys(places).forEach(k => { const g = k.split('|')[1]; (byGp[g] = byGp[g] || []).push(places[k]); });
+  if(process.env.DEBUG_OFFICE) console.error('places', Object.keys(places).length, 'holds', Object.keys(holds).length,
+    'sample places', Object.keys(places).slice(0, 3), 'sample holds', Object.keys(holds).slice(0, 3).map(p => p + '=' + holds[p].join(';')),
+    'asked', process.env.DEBUG_OFFICE, '=', JSON.stringify(holds[process.env.DEBUG_OFFICE]));
+  const officeOf = ph => (holds[ph] || []).map(k => places[k] || ((byGp[k.split('|')[1]] || []).length === 1 ? byGp[k.split('|')[1]][0] : null)).filter(Boolean);
+  const fromOffice = (ph, lat, lng) => { let best = null;
+    officeOf(ph).forEach(o => { const d = metres(lat, lng, o.lat, o.lng); if(best === null || d < best.m) best = { m:d, gp:o.gp }; });
+    return best; };
   const head = (rows[0] || []).map(h => String(h || '').trim().toLowerCase());
   const ix = {};
   ['date','phone','name','role','mandal','markedat','lat','lng','accuracy','verified','timezone',
@@ -196,8 +243,14 @@ const esc = s => String(s == null ? '' : s).replace(/\|/g, '\\|');
                  at:cell(r, 'markedat'), rx:cell(r, 'receivedat'), tz:cell(r, 'timezone'),
                  ver:cell(r, 'verified'), skew:cell(r, 'skew') };
     o.fixes.push(fx);
-    const key = d + '|' + lat.toFixed(6) + ',' + lng.toFixed(6);
-    (byDayPoint[key] = byDayPoint[key] || []).push({ ph, name:o.name, role:o.role, mandal:o.mandal, at:fx.at, acc });
+    /* ONLY A FINE FIX CAN BE SHARED. A cell-tower fix is the centroid of the
+       tower's cell, two kilometres wide, and every phone on that tower that
+       morning returns the same point; the MPDO offices of the district share
+       theirs with half their staff. That is not one handset for two. */
+    if(acc != null && acc <= FINE_ACC_M){
+      const key = d + '|' + lat.toFixed(6) + ',' + lng.toFixed(6);
+      (byDayPoint[key] = byDayPoint[key] || []).push({ ph, name:o.name, role:o.role, mandal:o.mandal, at:fx.at, acc });
+    }
   });
 
   /* ---- the district's own baseline: how much an honest fix scatters ---- */
@@ -231,8 +284,15 @@ const esc = s => String(s == null ? '' : s).replace(/\|/g, '\\|');
     const repDays = repeats.reduce((s, r) => s + r.days.length, 0);
     if(repeats.length) ev.push({ kind:'repeat', w:3, text:
       'the same coordinate to six decimals on ' + repDays + ' of ' + fine.length + ' fine-fix days — ' +
-      repeats.slice(0, 3).map(r => r.k + ' on ' + r.days.map(dm).join(', ') + ' (claimed ±' +
-        [...new Set(r.accs)].join('/') + ' m)').join('; ') });
+      repeats.slice(0, 3).map(r => { const [la, lo] = r.k.split(',').map(Number); const d = fromOffice(o.ph, la, lo);
+        return r.k + ' on ' + r.days.map(dm).join(', ') + ' (claimed ±' + [...new Set(r.accs)].join('/') + ' m' +
+          (d ? ', ' + (d.m < 1000 ? Math.round(d.m) + ' m' : (d.m / 1000).toFixed(1) + ' km') + ' from his ' + d.gp + ' office' : '') + ')'; }).join('; ') });
+    /* a mark that reached the district days after the date it claims is
+       printed and not weighed: the app sends when it has a line, and the
+       register takes the earlier of the claim and the receipt, so this is
+       the one shape a phone with its clock set back would also make */
+    const lateN = o.fixes.filter(f => f.rx && Date.parse(f.rx) - Date.parse(f.d + 'T00:00:00+05:30') >= 2 * 86400000).length;
+    if(lateN >= 2) ev.push({ kind:'late', w:0, text: lateN + ' marks reached the district two or more days after the date they claim' });
     /* the coarse repeats are printed as what they are, never counted */
     const cseen = {};
     coarse.forEach(f => { const k = f.lat.toFixed(6) + ',' + f.lng.toFixed(6); (cseen[k] = cseen[k] || []).push(f); });
@@ -251,10 +311,31 @@ const esc = s => String(s == null ? '' : s).replace(/\|/g, '\\|');
         (baseline == null ? '?' : baseline.toFixed(0)) + ' m' });
     }
     /* 3. too few decimals */
-    const shortD = o.fixes.filter(f => decimals(f.latS) <= 3 || decimals(f.lngS) <= 3);
+    /* BOTH halves short, or it is not typing: the register stores the number
+       the handset sent and a reading that happens to end in zeros is written
+       without them — 17.664000 is stored as 17.664 — so one short half beside
+       a seven-decimal other half is a trailing zero and nothing else. The
+       district's own data says so: the last digit 0 never appears at all. */
+    const shortD = o.fixes.filter(f => decimals(f.latS) <= 3 && decimals(f.lngS) <= 3);
     if(shortD.length) ev.push({ kind:'typed', w:2, text:
       shortD.length + ' fix' + (shortD.length === 1 ? '' : 'es') + ' carry three decimals or fewer (' +
       shortD.slice(0, 3).map(f => f.latS + ', ' + f.lngS + ' on ' + dm(f.d)).join('; ') + ') — a handset reports six or seven' });
+    /* 7. THE ACCURACY A SATELLITE DOES NOT CLAIM. A handset's receiver reports
+       three metres on its best day in the open and never nought or one; the
+       mock-location apps report one metre because that is their default. An
+       officer whose other mornings read 4 to 29 m and whose repeated point
+       reads 1 m is switching between the sky and an app. */
+    const lowAcc = o.fixes.filter(f => f.acc != null && f.acc <= 1);
+    if(lowAcc.length >= 2){
+      const others = o.fixes.filter(f => f.acc != null && f.acc > 1).map(f => f.acc);
+      const pts = new Set(lowAcc.map(f => f.lat.toFixed(6) + ',' + f.lng.toFixed(6)));
+      const off = officeOf(o.ph).length ? (() => { const ds = lowAcc.map(f => fromOffice(o.ph, f.lat, f.lng)).filter(Boolean); if(!ds.length) return '';
+        const md = median(ds.map(x => x.m)); return ' · those points lie ' + (md < 1000 ? Math.round(md) + ' m' : (md / 1000).toFixed(1) + ' km') + ' from his ' + ds[0].gp + ' office'; })() : '';
+      ev.push({ kind:'metre', w:lowAcc.length >= 3 ? 3 : 1, text:
+        lowAcc.length + ' of ' + o.fixes.length + ' located days claim an accuracy of ' + [...new Set(lowAcc.map(f => f.acc))].join('/') + ' m (' +
+        lowAcc.map(f => dm(f.d)).join(', ') + '), at ' + pts.size + ' point' + (pts.size === 1 ? '' : 's') +
+        ' — a handset’s receiver never claims a metre' + (others.length ? '; his other days claim ' + Math.min(...others) + '–' + Math.max(...others) + ' m' : '') + off });
+    }
     /* 5. a constant claimed accuracy */
     const accs = [...new Set(fine.map(f => f.acc))];
     if(fine.length >= 5 && accs.length === 1) ev.push({ kind:'flat-acc', w:1, text:
@@ -306,6 +387,7 @@ const esc = s => String(s == null ? '' : s).replace(/\|/g, '\\|');
   L.push('| Rows in the window | ' + marks + ' marks · ' + leaveRows + ' sanctioned-leave rows (not marks, not read) |');
   L.push('| Officers who marked | ' + Object.keys(who).length + ' |');
   L.push('| Officer-days located | ' + located + ' · ' + noFix + ' with no fix at all |');
+  L.push('| Claimed 0 or 1 m | ' + Object.values(who).reduce((s, o) => s + o.fixes.filter(f => f.acc != null && f.acc <= 1).length, 0) + ' officer-days, from ' + Object.values(who).filter(o => o.fixes.some(f => f.acc != null && f.acc <= 1)).length + ' officers |');
   L.push('| Judged | ' + (flagged.length + weak.length + clean) + ' officers with ' + MIN_DAYS + ' or more located days · ' + notJudged.length + ' with fewer, listed below and **not judged** |');
   L.push('| The district’s own baseline | an honest officer’s fine fixes scatter by a median of **' + (baseline == null ? '—' : baseline.toFixed(0) + ' m**') + ' from day to day — this is what a satellite does in Jangaon, and every finding is read against it |');
   L.push('| Last digit of latitude, over every fine fix | ' + '0123456789'.split('').map(d => d + ':' + (lastDigits[d] || 0)).join(' · ') + ' |');
@@ -320,6 +402,9 @@ const esc = s => String(s == null ? '' : s).replace(/\|/g, '\\|');
   L.push('4. **One coordinate under two officers on the same morning.** One handset or one typed point marking for two. Weight 3, against both.');
   L.push('5. **A constant claimed accuracy** across every fine fix. A receiver’s figure moves with the sky. Weight 1.');
   L.push('6. **The same last digit** on four fixes in five. Honest readings spread it over 0–9. Weight 1.');
+  L.push('7. **A claimed accuracy of 0 or 1 m** on three or more days. A handset’s receiver reports three metres on its best day in the open; one metre is what a mock-location app reports by default. Weight 3 (weight 1 on two days).');
+  L.push('');
+  L.push('A fix is **fine** at ±' + FINE_ACC_M + ' m or better. The line sits there because Google’s network positioning hands back the centroid of the wifi access points or the cell tower in view, repeats it byte for byte for everyone in the same building, and claims twenty metres to two kilometres for it. Those repeats are honest and are not counted; the MPDO offices of the district produce them every morning.');
   L.push('');
   L.push('An officer is listed under **Findings** at a weight of 2 or more; a single weight-1 signal is listed as weak and is not, on its own, evidence of anything.');
   L.push('');
