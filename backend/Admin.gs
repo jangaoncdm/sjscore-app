@@ -54,6 +54,8 @@ function onOpen(){
     .addItem('Re-stamp them to the reporting month (asks first)', 'menuRestampFilingMonths')
     .addSeparator()
     .addItem('Is the backup real? — read only',          'menuShowBackups')
+    .addSeparator()
+    .addItem('Is anyone marking through a location proxy? — read only', 'menuShowMockLocations')
     .addToUi();
 }
 
@@ -2414,4 +2416,289 @@ function checkMailQuota(){
             'Nothing was sent to read it.';
   admSay_('The day’s mail allowance', msg);
   return msg;
+}
+
+/* =========================================================================
+ * A LOCATION THAT WAS NOT MEASURED — reading the register for a proxied fix
+ * Asked from the district on 12.10.2026: officers are marking attendance
+ * through a location proxy, and how is it to be detected.
+ *
+ * WHAT THIS CANNOT DO, SAID FIRST. Android has told NATIVE apps since API 18
+ * whether a fix came from a mock provider. A web page is not told, and this
+ * app is a web page, so there is no reading anywhere on the handset that
+ * answers "was this mocked" — and a job here that claimed to would be
+ * inventing its evidence. What this reads instead is the CONSEQUENCE of a
+ * proxy, which is that the coordinate stops behaving like a measurement. A
+ * satellite fix moves by metres between one morning and the next, every time,
+ * because it is an estimate of a position and not the position itself. A
+ * coordinate typed into a proxy app does not move at all.
+ *
+ * IT ACCUSES NOBODY AND IT WRITES NOTHING. It is the list to read BEFORE a
+ * notice is proposed, exactly as the geo-fence's Outside tab is and for the
+ * same reason (rule 10). A repeated coordinate is something to look at, not a
+ * finding against a man: the dangerous way to be wrong here is to accuse an
+ * officer who was standing where he said he was, and the photograph on every
+ * one of these marks is what settles it in a minute.
+ *
+ * THREE THINGS IT IS CAREFUL ABOUT, each of which would otherwise manufacture
+ * an accusation out of honest data:
+ *
+ * A RETRY IS NOT A SECOND MORNING. markCount exists because an officer taps
+ * again when the first attempt fails, and those rows carry the same fix by
+ * construction. Only the first row of a DATE is read, so a man who tapped six
+ * times is one day here and not six — otherwise the officers with the WORST
+ * signal, who retry most, would top the list.
+ *
+ * A WIFI FIX REPEATS HONESTLY. A network-derived location is the centroid of
+ * whatever access points the handset can see, so a man standing in the same
+ * room every morning can be handed back a byte-identical coordinate with no
+ * proxy within a hundred miles. Those fixes are COARSE. So a repeat is only
+ * counted against an officer when the handset also CLAIMED precision — better
+ * than MOCK_FINE_ACC_M — because that is the combination a wifi fix does not
+ * produce. A proxy asserts a satellite's accuracy for a point it never
+ * measured; a wifi fix is honest about being vague. The coarse repeats are
+ * still printed, under their own heading, as what they are.
+ *
+ * AND AN OFFICER WITH TOO FEW DAYS IS NOT JUDGED — he is listed as not
+ * judged. A reading that quietly treated three marks as a clean sheet would be
+ * the report that omits what it could not run, which this project already
+ * holds to be worse than no report at all.
+ *
+ * THE BASELINE IS PRINTED WITH THE FINDINGS, because a figure with nothing to
+ * compare it against is a figure nobody can act on — the same lesson the
+ * pre-flight cost an afternoon. The district's own median scatter is what a
+ * real satellite does in Jangaon, and every flagged officer is read against
+ * it rather than against a number chosen here.
+ * ========================================================================= */
+var MOCK_WINDOW_DAYS = 60;   /* how far back a reading looks, in calendar days */
+var MOCK_FINE_ACC_M  = 60;   /* a fix claiming better than this is a satellite claim */
+var MOCK_MIN_DAYS    = 3;    /* fewer located days than this and he is not judged */
+var MOCK_TIGHT_M     = 3;    /* a whole fortnight inside this is not a measurement */
+var MOCK_STEADY_DAYS = 5;    /* days needed before a constant reading means anything */
+var MOCK_LIST_CAP    = 40;   /* printed in full; the rest are counted, never dropped silently */
+
+/* Metres between two readings. distKm_ rounds to a tenth of a kilometre,
+   which is the right grain for "how far is he from his mandal" and is useless
+   here: every honest officer's daily scatter would round to nought and the
+   whole district would read as proxied. */
+function mockMetres_(aLat, aLng, bLat, bLng){
+  var R = 6371000, rad = Math.PI / 180;
+  var dLa = (bLat - aLat) * rad, dLn = (bLng - aLng) * rad;
+  var h = Math.sin(dLa / 2) * Math.sin(dLa / 2) +
+          Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLn / 2) * Math.sin(dLn / 2);
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/* A calendar day N days back. Parsed as UTC like every other date helper
+   here, because these strings are days and not moments (rule 3). */
+function mockDayBack_(d, n){
+  var t = Date.parse(String(d) + 'T00:00:00Z');
+  return isNaN(t) ? String(d) : new Date(t - n * 86400000).toISOString().slice(0, 10);
+}
+
+/* dd.mm of a yyyy-mm-dd, for a list of dates read at a glance */
+function mockDm_(d){
+  var p = String(d || '').split('-');
+  return p.length === 3 ? p[2] + '.' + p[1] : String(d || '');
+}
+
+function showMockLocations(days){
+  var win  = Number(days) > 0 ? Math.round(Number(days)) : MOCK_WINDOW_DAYS;
+  var from = mockDayBack_(today_(), win);
+  var L = [], say = function(s){ L.push(s == null ? '' : String(s)); };
+
+  var sh = sheet_('Attendance', A_HEAD), m = headMap_(sh, A_HEAD);
+  var v  = sh.getDataRange().getValues();
+
+  /* ---- gather: one mark per officer per date ---- */
+  var who = {}, rows = 0, noFix = 0, retries = 0;
+  for(var i = 1; i < v.length; i++){
+    var ph = phone10_(v[i][m.ix.phone]);
+    var d  = dateText_(v[i][m.ix.date]);
+    if(!ph || !d || d < from) continue;
+    rows++;
+    var la = Number(v[i][m.ix.lat]), ln = Number(v[i][m.ix.lng]);
+    if(!la || !ln || isNaN(la) || isNaN(ln)){ noFix++; continue; }
+    var w = who[ph];
+    if(!w) w = who[ph] = { ph: ph, name: '', role: '', mandal: '', days: {}, n: 0 };
+    w.name   = cell_(v[i], m.ix.name)   || w.name;
+    w.role   = cell_(v[i], m.ix.role)   || w.role;
+    w.mandal = cell_(v[i], m.ix.mandal) || w.mandal;
+    if(w.days[d]){ retries++; continue; }     /* a retry is not a second morning */
+    w.days[d] = { lat: la, lng: ln, acc: Number(v[i][m.ix.accuracy]) || 0,
+                  tz: cell_(v[i], m.ix.timezone) };
+    w.n++;
+  }
+
+  /* ---- read each officer ---- */
+  var found = [], thin = [], coarse = [], clean = [];
+  Object.keys(who).forEach(function(ph){
+    var w = who[ph], ds = Object.keys(w.days).sort();
+    if(w.n < MOCK_MIN_DAYS){ thin.push(w); return; }
+
+    /* every distinct point, and which days share it */
+    var pt = {}, lats = [], lngs = [], accs = {}, tzOdd = '', outBox = 0;
+    ds.forEach(function(d){
+      var f = w.days[d], k = f.lat.toFixed(6) + ',' + f.lng.toFixed(6);
+      if(!pt[k]) pt[k] = { lat: f.lat, lng: f.lng, dates: [], acc: [] };
+      pt[k].dates.push(d); pt[k].acc.push(f.acc);
+      lats.push(f.lat); lngs.push(f.lng);
+      accs[String(f.acc)] = (accs[String(f.acc)] || 0) + 1;
+      if(f.tz && !/Calcutta|Kolkata/i.test(f.tz)) tzOdd = f.tz;
+      if(f.lat < FIX_BOX_.latMin || f.lat > FIX_BOX_.latMax ||
+         f.lng < FIX_BOX_.lngMin || f.lng > FIX_BOX_.lngMax) outBox++;
+    });
+
+    /* the biggest group of days sharing one exact coordinate */
+    var top = null;
+    Object.keys(pt).forEach(function(k){
+      if(!top || pt[k].dates.length > top.dates.length) top = pt[k];
+    });
+    var topAcc = median_(top.acc);
+
+    /* how far his marks scatter about their own middle */
+    var cLat = median_(lats), cLng = median_(lngs);
+    var spread = Math.round(median_(ds.map(function(d){
+      return mockMetres_(cLat, cLng, w.days[d].lat, w.days[d].lng);
+    })));
+    var medAcc = Math.round(median_(ds.map(function(d){ return w.days[d].acc; })));
+
+    var accVals = Object.keys(accs);
+    var steady  = accVals.length === 1 && w.n >= MOCK_STEADY_DAYS;
+
+    w.spread = spread; w.medAcc = medAcc; w.top = top; w.topAcc = topAcc;
+    w.tzOdd = tzOdd; w.outBox = outBox; w.steadyAcc = steady ? accVals[0] : '';
+    w.rep = top.dates.length; w.nPts = Object.keys(pt).length;
+
+    /* A REPEAT ONLY COUNTS WHERE PRECISION WAS CLAIMED (see the wifi note).
+       THE COARSE CASE IS TESTED FIRST, and that order is the whole guard: an
+       officer whose village office has one wifi router repeats a vague point
+       AND repeats its vague accuracy, so tested the other way round he would
+       fall through to the steady-accuracy rule and be flagged for the very
+       thing that proves he is honest. */
+    var fine = topAcc > 0 && topAcc <= MOCK_FINE_ACC_M;
+    var rep  = top.dates.length;
+
+    if(rep >= 2 && !fine){ coarse.push(w); return; }
+
+    if(rep >= 3){ w.rank = 3; w.why = 'one coordinate on ' + rep + ' different days, the handset claiming ±' + Math.round(topAcc) + ' m'; }
+    else if(rep >= 2){ w.rank = 2; w.why = 'the same coordinate on ' + rep + ' different days at ±' + Math.round(topAcc) + ' m'; }
+    else if(spread <= MOCK_TIGHT_M && w.n >= MOCK_STEADY_DAYS && medAcc > 0 && medAcc <= MOCK_FINE_ACC_M){
+      w.rank = 2; w.why = w.n + ' days all inside ' + spread + ' m of one another at ±' + medAcc + ' m';
+    }
+    /* a constant accuracy means nothing unless the handset also recorded one:
+       a register with a blank accuracy column would otherwise read as every
+       officer reporting "exactly 0 m" every day */
+    else if(steady && Number(accVals[0]) > 0 && Number(accVals[0]) <= MOCK_FINE_ACC_M){
+      w.rank = 1; w.why = 'the accuracy is exactly ±' + accVals[0] + ' m on every one of ' + w.n + ' days';
+    }
+    else if(tzOdd){ w.rank = 1; w.why = 'the handset reports its timezone as ' + tzOdd; }
+    else { clean.push(w); return; }
+
+    if(outBox) w.why += '; ' + outBox + ' of them outside the district altogether';
+    found.push(w);
+  });
+
+  found.sort(function(a, b){ return (b.rank - a.rank) || (b.top.dates.length - a.top.dates.length) || (a.spread - b.spread); });
+
+  /* ---- the scale, before any finding ----
+     THE BASELINE IS THE UNREMARKABLE OFFICERS ALONE. A wifi fix that repeats
+     has a scatter of nought, so counting those in would drag the district's
+     own figure towards nought and every genuinely still officer would then be
+     measured against a standard that is already still. */
+  var baseline = clean.length ? Math.round(median_(clean.map(function(w){ return w.spread; }))) : null;
+  var judged = found.length + clean.length + coarse.length;
+
+  say('A LOCATION THAT WAS NOT MEASURED — read only, nothing was written.');
+  say('');
+  say('Window: ' + dmy_(from) + ' to ' + dmy_(today_()) + ' (' + win + ' days).');
+  say('Attendance rows read: ' + rows + '.  Carrying no fix at all: ' + noFix +
+      '.  Same-day retries folded away: ' + retries + '.');
+  say('Officers judged: ' + judged + '.  Not judged, fewer than ' + MOCK_MIN_DAYS +
+      ' located days: ' + thin.length + '.');
+  say('');
+  say('WHAT NORMAL LOOKS LIKE HERE: the officers with nothing against them scatter by a');
+  say('median of ' + (baseline == null ? '(no officer to measure)' : baseline + ' m') +
+      ' about their own middle. That is what a satellite does in Jangaon,');
+  say('and every officer below is to be read against it, not against a number chosen by me.');
+  say('');
+
+  /* ---- findings ---- */
+  if(!found.length){
+    say('NOTHING STANDS OUT. No officer in this window carries a coordinate that repeats');
+    say('exactly while the handset claims satellite precision, and none sits still enough');
+    say('to be a typed point. That is not proof nobody is doing it — see the last');
+    say('paragraph — but there is nothing here to put in front of anybody.');
+  } else {
+    var word = { 3: 'NEAR CERTAIN', 2: 'STRONG', 1: 'WORTH A LOOK' };
+    say(found.length + ' OFFICER(S) TO LOOK AT, worst first.');
+    say('');
+    found.slice(0, MOCK_LIST_CAP).forEach(function(w, n){
+      var dts = w.top.dates;
+      say((n + 1) + '. ' + (w.name || '(no name on the row)') + ' · ' + (w.role || '?') +
+          ' · ' + (w.mandal || '?') + ' · ' + w.ph);
+      say('   ' + word[w.rank] + ' — ' + w.why);
+      /* Printed only where a repeated point IS the finding. Against an
+         officer raised for his clock or his accuracy nothing repeats, and
+         printing his largest cluster - one arbitrary morning - reads as a
+         repeat that was never found. */
+      if(w.rep >= 2){
+        say('   ' + w.top.lat.toFixed(6) + ', ' + w.top.lng.toFixed(6) + '  on ' +
+            dts.slice(0, 8).map(mockDm_).join(', ') + (dts.length > 8 ? ' … and ' + (dts.length - 8) + ' more' : ''));
+      } else {
+        say('   ' + w.nPts + ' different points over ' + w.n + ' days — nothing of his repeats; '
+            + 'he is here for the line above and nothing else.');
+      }
+      say('   ' + w.n + ' located days in the window; his whole scatter is ' + w.spread +
+          ' m against the district’s ' + (baseline == null ? '?' : baseline) + ' m.');
+      say('');
+    });
+    if(found.length > MOCK_LIST_CAP)
+      say('… and ' + (found.length - MOCK_LIST_CAP) + ' more not printed. Run showMockLocations() ' +
+          'from the editor and read the log for the whole list.');
+  }
+
+  /* ---- the honest asides ---- */
+  if(coarse.length){
+    say('');
+    say('REPEATED, BUT HONESTLY SO — ' + coarse.length + ' officer(s) carry a coordinate that');
+    say('repeats while the handset admits it is vague (worse than ±' + MOCK_FINE_ACC_M + ' m). That is what a');
+    say('wifi fix does from the same room every morning and it is NOT held against them:');
+    coarse.slice(0, 10).forEach(function(w){
+      say('   ' + (w.name || '(no name)') + ' · ' + (w.mandal || '?') + ' · ±' + Math.round(w.topAcc) + ' m');
+    });
+    if(coarse.length > 10) say('   … and ' + (coarse.length - 10) + ' more.');
+  }
+  if(thin.length){
+    say('');
+    say('NOT JUDGED — ' + thin.length + ' officer(s) have fewer than ' + MOCK_MIN_DAYS +
+        ' located marks in this window.');
+    say('They are not a clean sheet; there is simply not enough to read. Among them:');
+    thin.slice(0, 10).forEach(function(w){
+      say('   ' + (w.name || '(no name)') + ' · ' + (w.mandal || '?') + ' · ' + w.n + ' day(s)');
+    });
+    if(thin.length > 10) say('   … and ' + (thin.length - 10) + ' more.');
+  }
+
+  say('');
+  say('HOW TO READ THIS, AND WHAT IT IS NOT.');
+  say('Nothing above is a finding against an officer and nothing has been written to the');
+  say('register. Every one of these marks carries a photograph: open the flagged days side');
+  say('by side and the question usually answers itself in a minute, which no arithmetic');
+  say('here can do. A man may also have a handset that reports a cached fix, and a village');
+  say('office with one wifi router will hand out the same point all week.');
+  say('');
+  say('AND IT CANNOT SEE A PROXY DIRECTLY. The browser is never told whether a fix was');
+  say('mocked; only a native Android app is told that. An officer whose proxy jitters');
+  say('the coordinate a little will not appear here at all.');
+  say('It names the careless, not the careful — which is worth having, and it is');
+  say('not the same thing as a fence.');
+
+  return admSay_(L);
+}
+
+
+function menuShowMockLocations(){
+  admShow_('A location that was not measured — nothing has been written',
+    showMockLocations());
 }
