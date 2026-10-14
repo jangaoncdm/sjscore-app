@@ -52,7 +52,7 @@
   /* lines */
   --hair:rgba(16,18,28,.13); --hair-2:rgba(16,18,28,.075); --hair-3:rgba(16,18,28,.045);
   /* shape */
-  --r-card:16px; --r-ctl:12px; --r-chip:11px; --r-pill:999px;
+  --r-card:20px; --r-ctl:14px; --r-chip:11px; --r-pill:999px;
   --pad:16px; --gut:52px;
   /* type — no webfonts: this app must open with no signal. The character
      comes from treatment (mono eyebrows, weight jumps, tight tracking),
@@ -130,7 +130,7 @@ main{flex:1;padding-bottom:calc(var(--tabh) + 10px)}
   display:flex;align-items:center;gap:6px;min-height:56px;
 }
 .nav.scrolled{border-bottom-color:var(--hair)}
-.nav h1{font-size:16px;font-weight:650;letter-spacing:-.01em;flex:1;text-align:center;min-width:0;
+.nav h1{font-size:17px;font-weight:800;letter-spacing:-.02em;flex:1;text-align:center;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nav .side{min-width:72px;display:flex;align-items:center}
 .nav .side.r{justify-content:flex-end}
@@ -142,12 +142,12 @@ main{flex:1;padding-bottom:calc(var(--tabh) + 10px)}
 .masthead::after{content:"";position:absolute;left:var(--pad);right:var(--pad);bottom:0;height:1px;
   background:var(--hair-2)}
 .masthead .eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--seal)}
-.masthead h2{font-family:var(--display);font-size:31px;font-weight:800;letter-spacing:-.032em;
+.masthead h2{font-family:var(--display);font-size:34px;font-weight:800;letter-spacing:-.035em;
   line-height:1.08;color:var(--ink);margin-top:9px}
 .masthead p{font-size:13.5px;color:var(--ink-2);margin-top:7px}
 html[data-sun="1"] .masthead{background:#fff}
 .bigtitle{padding:4px var(--pad) 2px}
-.bigtitle h2{font-size:31px;font-weight:700;letter-spacing:-.025em;line-height:1.14}
+.bigtitle h2{font-size:31px;font-weight:800;letter-spacing:-.03em;line-height:1.1}
 .bigtitle p{font-size:14px;color:var(--ink-2);margin-top:4px}
 
 /* ---------- grouped list ---------- */
@@ -159,17 +159,18 @@ html[data-sun="1"] .masthead{background:#fff}
 .row.tap{cursor:pointer;transition:background .12s}
 .row.tap:active{background:var(--surface-2)}
 .row .lbl{flex:1;min-width:0}
-.row .lbl b{display:block;font-size:16px;font-weight:550;letter-spacing:-.01em}
+.row .lbl b{display:block;font-size:16px;font-weight:600;letter-spacing:-.01em}
 .row .lbl span{display:block;font-size:13.5px;color:var(--ink-2);margin-top:2px;line-height:1.35}
 .row .val{font-size:15.5px;color:var(--ink-2)}
 .chev{width:9px;height:9px;border-right:2.2px solid var(--ink-4);border-bottom:2.2px solid var(--ink-4);transform:rotate(-45deg);flex:none}
-.ico{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;flex:none;color:#fff}
-.ico svg{width:18px;height:18px;fill:currentColor}
+.ico{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;flex:none;background:var(--surface-3);color:var(--ink)}
+.ico svg{width:21px;height:21px;fill:currentColor}
+.ico[style]{color:#fff}
 
 /* ---------- buttons ---------- */
 .btn{
   display:inline-flex;align-items:center;justify-content:center;gap:9px;
-  min-height:52px;padding:0 20px;border-radius:14px;font-size:17px;font-weight:650;letter-spacing:-.01em;
+  min-height:52px;padding:0 22px;border-radius:26px;font-size:17px;font-weight:700;letter-spacing:-.01em;
   background:var(--seal);color:#fff;width:100%;transition:transform .1s var(--ease),opacity .12s;
 }
 /* ANY icon put in a button is sized here. Only ICON.plus carried its own
@@ -188,7 +189,7 @@ html[data-sun="1"] .masthead{background:#fff}
 .btn.quiet{background:var(--surface);color:var(--seal-2);box-shadow:var(--shadow)}
 .btn.danger{background:var(--flag-tint);color:var(--flag)}
 .btn.gold{background:var(--gold);color:#20160A}
-.btn.sm{min-height:44px;font-size:15px;padding:0 15px;border-radius:11px;width:auto}
+.btn.sm{min-height:44px;font-size:15px;padding:0 18px;border-radius:22px;width:auto}
 .btn+.btn{margin-top:10px}
 
 /* ---------- fields ---------- */
@@ -219,6 +220,9 @@ html[data-sun="1"] .masthead{background:#fff}
 .tabs button svg{width:25px;height:25px;fill:currentColor}
 .tabs button span{font-size:10.5px;font-weight:600;letter-spacing:.01em}
 .tabs button[aria-selected=true]{color:var(--seal)}
+.tabs button::before{content:"";position:absolute;top:5px;width:56px;height:31px;border-radius:16px;background:transparent;transition:background .18s}
+.tabs button[aria-selected=true]::before{background:var(--seal-tint)}
+.tabs button svg{position:relative;z-index:1}
 .tabs .dot{position:absolute;top:7px;margin-left:24px;width:9px;height:9px;border-radius:50%;background:var(--flag);border:2px solid var(--surface)}
 /* A COUNT, NOT A DOT. A dot says "something"; a badge says how many things,
    which is the difference between an officer checking and an officer knowing.
@@ -230,6 +234,77 @@ html[data-sun="1"] .masthead{background:#fff}
 .row .badge{margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:10px;
   background:var(--flag);color:#fff;font:700 11px/20px var(--mono);text-align:center;flex:none}
 
+/* ---------- welcome ----------
+   In front of sign-in on every opening, for people and not for robots: the seal the app ships as
+   its icon, the one gradient, and CSS motion that needs no signal. It goes by itself after 2.6 s
+   and a tap takes it away at once; a handset that asks for reduced motion sees one frame. It is
+   never shown to a driven browser (navigator.webdriver), so the render passes see the app. */
+#welcome{position:fixed;inset:0;z-index:90;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+  padding:40px 28px 36px;overflow:hidden;color:#fff;cursor:pointer;
+  background:linear-gradient(160deg,#4A40CE 0%,#3A4BD6 45%,#0E7C86 100%);transition:opacity .35s var(--ease)}
+#welcome.off{opacity:0;pointer-events:none}
+#welcome .seal{position:relative;width:132px;height:132px;display:grid;place-items:center}
+#welcome .halo{position:absolute;inset:0;border-radius:50%}
+#welcome .halo i{position:absolute;inset:0;border-radius:50%;border:2px solid #fff;opacity:0;animation:w-halo 2200ms ease-out 500ms infinite}
+#welcome .halo i:nth-child(2){animation-delay:1200ms}
+#welcome .emb{width:132px;height:132px;border-radius:50%;background:#fff;padding:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);position:relative;z-index:1;animation:w-emb 900ms cubic-bezier(.2,.9,.3,1.2) both}
+#welcome .emb img{width:100%;height:100%;display:block;border-radius:50%}
+#welcome .gov{margin-top:24px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;opacity:.9;animation:w-rise 600ms ease-out 450ms both}
+#welcome h1{margin:8px 0 0;font-family:var(--display);font-size:36px;font-weight:800;letter-spacing:-.04em;line-height:1.05;color:#fff}
+#welcome h1 span{display:inline-block;animation:w-rise 600ms ease-out both;animation-delay:600ms}
+#welcome h1 span:nth-child(2){animation-delay:720ms}#welcome h1 span:nth-child(3){animation-delay:840ms}#welcome h1 span:nth-child(4){animation-delay:960ms}
+#welcome .sub{margin:12px 0 0;font-size:15px;opacity:.92;max-width:28ch;line-height:1.45;animation:w-rise 600ms ease-out 1100ms both}
+#welcome .foot{position:absolute;left:28px;right:28px;bottom:calc(env(safe-area-inset-bottom) + 50px);font-size:12px;opacity:.75;animation:w-fade 400ms ease-out 1300ms both}
+#welcome .prog{position:absolute;left:28px;right:28px;bottom:calc(env(safe-area-inset-bottom) + 36px);height:3px;border-radius:2px;overflow:hidden;background:rgba(255,255,255,.25);animation:w-fade 400ms ease-out 1100ms both}
+#welcome .prog i{display:block;height:100%;width:100%;background:#fff;transform-origin:left;animation:w-prog 1400ms cubic-bezier(.4,0,.2,1) 1200ms both}
+@keyframes w-emb{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
+@keyframes w-halo{0%{opacity:.55;transform:scale(1)}100%{opacity:0;transform:scale(1.9)}}
+@keyframes w-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes w-fade{from{opacity:0}to{opacity:1}}
+@keyframes w-prog{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@media (prefers-reduced-motion:reduce){ #welcome *{animation-duration:1ms!important;animation-iteration-count:1!important} }
+
+/* ---------- the Today card ----------
+   Its colour is the register's own reading of the day and nothing else: red-leaning while a mark is
+   owed, green once the district holds it, amber while a mark out is open or a mark is still on the
+   phone, grey when the day asks for nothing. The chrome around it stays neutral so a colour on this
+   screen means one thing. */
+.tcard{margin:14px var(--pad) 0;padding:18px 56px 18px 18px;border-radius:var(--r-card);position:relative;
+  --st:var(--ink-3);--st-bg:var(--surface-3);background:var(--st-bg);color:var(--ink)}
+.tcard.due{--st:var(--flag);--st-bg:var(--flag-tint)}
+.tcard.overdue{--st:var(--flag);--st-bg:var(--flag-tint);box-shadow:inset 0 0 0 2px var(--flag)}
+.tcard.done{--st:var(--ok);--st-bg:var(--ok-tint)}
+.tcard.open{--st:var(--gold-ink);--st-bg:var(--gold-tint)}
+.tcard.rest{--st:var(--ink-3);--st-bg:var(--surface-3)}
+.tcard .k{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--st)}
+.tcard .k i{width:10px;height:10px;border-radius:50%;background:var(--st);flex:none}
+.tcard .k i.live{animation:st-pulse 1.8s ease-out infinite}
+@keyframes st-pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--st) 55%,transparent)}100%{box-shadow:0 0 0 9px transparent}}
+.tcard .t{font-family:var(--display);font-size:24px;font-weight:800;letter-spacing:-.03em;line-height:1.15;margin-top:8px}
+.tcard .b{font-size:14px;color:var(--ink-2);margin-top:6px;line-height:1.45}
+.tcard .b b{color:var(--ink);font-weight:700}
+.tcard .n{margin-top:12px;font-size:13.5px;font-weight:600;color:var(--st)}
+.tcard .ic{position:absolute;right:16px;top:16px;color:var(--st)}
+.tcard .ic svg{width:28px;height:28px;fill:currentColor}
+.tcard .btn{margin:14px -38px 0 0;background:var(--st);color:#fff;width:auto;min-width:0;display:flex}
+.tcard .btn.quiet{background:var(--surface);color:var(--st)}
+html[data-sun="1"] .tcard{border:1.5px solid var(--hair)}
+
+/* ---------- the weather card ---------- */
+.wx{margin:14px var(--pad) 0;padding:16px 18px;border-radius:var(--r-card);background:var(--surface);box-shadow:var(--shadow)}
+.wx .now{display:flex;align-items:center;gap:14px}
+.wx .deg{font-family:var(--display);font-size:30px;font-weight:800;letter-spacing:-.05em;line-height:1;flex:none}
+.wx .now b{display:block;font-size:15.5px;font-weight:700;letter-spacing:-.01em}
+.wx .now span{display:block;font-size:13px;color:var(--ink-2);margin-top:2px;line-height:1.4}
+.wx .fig{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.wx .fig div{background:var(--surface-3);border-radius:12px;padding:8px 6px;text-align:center;font-size:12px;color:var(--ink-2)}
+.wx .fig div b{display:block;font-size:15px;font-weight:700;color:var(--ink);margin:3px 0 1px}
+.wx .fig div.wet{background:var(--seal-tint);color:var(--seal-deep)}.wx .fig div.wet b{color:inherit}
+.wx .imd{font-size:12.5px;color:var(--ink-2);margin-top:12px;line-height:1.45}
+.wx .imd b{font-weight:700}
+.wx .imd b.w{color:var(--gold-ink)}.wx .imd b.s{color:var(--flag)}
+html[data-sun="1"] .wx{border:1.5px solid var(--hair)}
+
 /* ---------- sign in: brand band above, credentials below ---------- */
 #signin{position:fixed;inset:0;z-index:80;background:var(--canvas);display:flex;flex-direction:column;
   overflow-y:auto;-webkit-overflow-scrolling:touch}
@@ -237,11 +312,11 @@ html[data-sun="1"] .masthead{background:#fff}
   padding:calc(env(safe-area-inset-top) + 46px) 26px 30px;position:relative}
 .brandband::after{content:"";position:absolute;left:26px;right:26px;bottom:0;height:2px;
   background:linear-gradient(90deg, var(--seal) 0%, var(--iris) 46%, var(--teal) 92%, transparent 92%)}
-.brandband .mark{width:64px;height:64px;border-radius:16px;margin-bottom:20px;background:#fff;
+.brandband .mark{width:64px;height:64px;border-radius:50%;margin-bottom:20px;background:#fff;
   box-shadow:0 1px 3px rgba(16,18,28,.10), 0 14px 34px -16px rgba(42,36,130,.34)}
 .brandband .eyebrow{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.2em;
   text-transform:uppercase;color:var(--seal);margin-bottom:12px}
-.brandband h1{font-family:var(--display);font-size:38px;font-weight:800;letter-spacing:-.035em;
+.brandband h1{font-family:var(--display);font-size:40px;font-weight:800;letter-spacing:-.04em;
   line-height:1.04;color:var(--ink)}
 .brandband .sub{font-size:15px;color:var(--ink-2);margin-top:12px;max-width:25em;line-height:1.55}
 .brandband .two{font-size:14px;color:var(--ink-3);margin-top:16px;max-width:26em;line-height:1.55;
@@ -299,7 +374,7 @@ html[data-sun="1"] .brandband{background:#fff}
 .rulebox b{color:var(--ink)}
 .attwrap{padding:0 20px;max-width:560px;width:100%;margin:0 auto}
 .atthead{font-size:11.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--gold-ink)}
-.attwrap h2{font-size:29px;font-weight:700;letter-spacing:-.025em;line-height:1.15;margin-top:6px}
+.attwrap h2{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1.12;margin-top:6px}
 .attwrap .who{font-size:15px;color:var(--ink-2);margin-top:8px;line-height:1.45}
 .attcard{background:var(--surface);border-radius:var(--r-card);box-shadow:var(--shadow);margin-top:16px;overflow:hidden}
 .step{display:flex;gap:13px;padding:15px 16px;position:relative;align-items:flex-start}
@@ -527,7 +602,7 @@ html[data-sun="1"] .brandband{background:#fff}
   overflow-y:auto;-webkit-overflow-scrolling:touch;animation:up .3s var(--ease)}
 @keyframes up{from{transform:translateY(100%)}to{transform:none}}
 .grab{width:40px;height:5px;border-radius:3px;background:var(--hair);margin:0 auto 8px}
-.sheet h2{font-size:22px;font-weight:700;letter-spacing:-.02em}
+.sheet h2{font-size:24px;font-weight:800;letter-spacing:-.025em}
 .spin{width:18px;height:18px;border:2.5px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
 .btn.quiet .spin,.btn.sec .spin{border-color:var(--hair);border-top-color:var(--seal)}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -727,6 +802,16 @@ body.kb .tabs,body.kb .strip{transform:translateY(160%);pointer-events:none}
 <body>
 
 <div class="offbar" id="offbar">No network — everything you do is kept on this phone</div>
+
+<!-- ============ WELCOME ============ -->
+<div id="welcome" hidden aria-hidden="true">
+  <div class="seal"><div class="halo"><i></i><i></i></div><div class="emb"><img src="icons/icon-192.png" alt=""></div></div>
+  <div class="gov">Government of Telangana</div>
+  <h1><span>Swachh</span> <span>Jangaon</span><br><span>Gram</span> <span>Panchayat</span></h1>
+  <p class="sub">The district&rsquo;s field register for village sanitation. Attendance, the monthly evaluation and leave, working offline in the village.</p>
+  <div class="foot">Collectorate &middot; Jangaon District</div>
+  <div class="prog"><i></i></div>
+</div>
 
 <!-- ============ SIGN IN ============ -->
 <div id="signin">
