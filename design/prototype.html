@@ -1,0 +1,592 @@
+<title>SJGP Field App</title>
+<style>
+/* Layout: one phone-width app shell (390px) centred on a desk; on a phone it IS the screen.
+   Material 3 shapes and tonal surfaces, the district's indigo as primary, teal as secondary.
+   System font only: the real app must open with no signal. */
+:root{
+  --primary:#4A40CE; --on-primary:#FFFFFF; --primary-container:#E4E1FF; --on-primary-container:#15006B;
+  --secondary:#0E7C86; --secondary-container:#D2F2F4; --on-secondary-container:#003B40;
+  --surface:#FBFAFF; --surface-low:#F3F4F9; --surface-mid:#ECEDF6; --surface-high:#E4E5EF; --surface-bright:#FFFFFF;
+  --on-surface:#1B1B22; --on-surface-2:#4B4A57; --outline:#78777F; --outline-v:#D6D5E0;
+  --ok:#1B7F4B; --ok-container:#DDF3E6; --warn:#9A5B00; --warn-container:#FFE9C7; --err:#B3261E; --err-container:#FCE2DE;
+  --shadow:0 1px 2px rgba(27,27,34,.12),0 2px 8px rgba(27,27,34,.08);
+  --desk:#E6E7EF; --desk-ink:#3A3A48;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --primary:#C5BFFF; --on-primary:#2A1E8E; --primary-container:#3B30B5; --on-primary-container:#E4E1FF;
+  --secondary:#86D6DE; --secondary-container:#0E5D65; --on-secondary-container:#D2F2F4;
+  --surface:#121318; --surface-low:#1A1B21; --surface-mid:#1F2027; --surface-high:#2A2B33; --surface-bright:#30313A;
+  --on-surface:#E5E2EC; --on-surface-2:#C7C5D0; --outline:#918F9A; --outline-v:#48474F;
+  --ok:#7ED8A4; --ok-container:#0F4A2C; --warn:#F2BE62; --warn-container:#5A3600; --err:#F2B8B5; --err-container:#6F1A14;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 2px 10px rgba(0,0,0,.35);
+  --desk:#0B0B10; --desk-ink:#B9B8C4; color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --primary:#C5BFFF; --on-primary:#2A1E8E; --primary-container:#3B30B5; --on-primary-container:#E4E1FF;
+  --secondary:#86D6DE; --secondary-container:#0E5D65; --on-secondary-container:#D2F2F4;
+  --surface:#121318; --surface-low:#1A1B21; --surface-mid:#1F2027; --surface-high:#2A2B33; --surface-bright:#30313A;
+  --on-surface:#E5E2EC; --on-surface-2:#C7C5D0; --outline:#918F9A; --outline-v:#48474F;
+  --ok:#7ED8A4; --ok-container:#0F4A2C; --warn:#F2BE62; --warn-container:#5A3600; --err:#F2B8B5; --err-container:#6F1A14;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 2px 10px rgba(0,0,0,.35);
+  --desk:#0B0B10; --desk-ink:#B9B8C4; color-scheme:dark; }
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--desk);color:var(--on-surface);font-family:var(--font);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+
+/* ---- the desk: phone centred, flow notes beside it on a wide screen ---- */
+.desk{min-height:100%;display:flex;gap:32px;align-items:flex-start;justify-content:center;padding:24px 16px;color:var(--desk-ink)}
+.phone{width:390px;max-width:100%;height:844px;max-height:calc(100vh - 48px);background:var(--surface);border-radius:36px;overflow:hidden;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.28),0 0 0 10px #1a1a1f;flex:0 0 auto;display:flex;flex-direction:column}
+.notes{width:360px;flex:0 0 auto;font-size:14px;line-height:1.5}
+.notes h1{font-size:20px;margin:0 0 4px;color:var(--on-surface)}
+.notes p{margin:0 0 14px}
+.notes ol{padding-left:18px;margin:0 0 16px}
+.notes li{margin:0 0 8px}
+.notes li b{color:var(--on-surface)}
+.notes .jump{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 14px}
+.notes .jump button{background:var(--surface-bright);color:var(--on-surface);border:1px solid var(--outline-v);border-radius:999px;padding:6px 12px;font-size:12px}
+.notes .jump button:hover{border-color:var(--primary)}
+@media (max-width:820px){
+  body{background:var(--surface)}
+  .desk{padding:0;gap:0;height:100%}
+  .phone{width:100%;height:100%;max-height:none;border-radius:0;box-shadow:none}
+  .notes{display:none}
+}
+
+/* ---- app shell ---- */
+.screen{display:none;flex:1;min-height:0;flex-direction:column;background:var(--surface)}
+.screen.on{display:flex}
+.bar{height:64px;display:flex;align-items:center;gap:12px;padding:0 8px 0 16px;flex:0 0 auto;background:var(--surface)}
+.bar h1{font-size:22px;font-weight:500;margin:0;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.2px}
+.bar .ic{width:48px;height:48px;display:grid;place-items:center;border-radius:50%}
+.bar .ic:active{background:var(--surface-mid)}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary-container);color:var(--on-primary-container);display:grid;place-items:center;font-weight:600;font-size:14px}
+.scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 16px 24px;display:flex;flex-direction:column;gap:12px}
+.nav{height:80px;flex:0 0 auto;background:var(--surface-low);display:grid;grid-template-columns:repeat(4,1fr);padding:10px 8px 12px;border-top:1px solid var(--outline-v)}
+.nav button{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;font-weight:500;color:var(--on-surface-2)}
+.nav button svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.nav button .pill{width:64px;height:32px;border-radius:16px;display:grid;place-items:center;transition:background .18s}
+.nav button[aria-current]{color:var(--on-surface)}
+.nav button[aria-current] .pill{background:var(--secondary-container);color:var(--on-secondary-container)}
+.nav button[aria-current] svg{fill:currentColor;stroke:none}
+svg.i{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
+
+/* ---- components ---- */
+.card{background:var(--surface-low);border-radius:20px;padding:16px}
+.card.bright{background:var(--surface-bright);box-shadow:var(--shadow)}
+.card.hero{background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff}
+.card.tonal{background:var(--primary-container);color:var(--on-primary-container)}
+.eyebrow{font-size:12px;font-weight:500;color:var(--on-surface-2);letter-spacing:.2px}
+.title-l{font-size:22px;font-weight:500;line-height:1.25;margin:0}
+.title-m{font-size:16px;font-weight:600;margin:0}
+.body{font-size:14px;color:var(--on-surface-2);margin:0}
+.display{font-size:34px;font-weight:600;letter-spacing:-.5px;line-height:1.1;margin:0}
+.btn{height:48px;border-radius:24px;padding:0 24px;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:600;font-size:15px;width:100%}
+.btn.filled{background:var(--primary);color:var(--on-primary)}
+.btn.tonal{background:var(--secondary-container);color:var(--on-secondary-container)}
+.btn.text{color:var(--primary);height:40px}
+.btn.outl{border:1px solid var(--outline-v);color:var(--on-surface)}
+.btn:disabled{opacity:.45}
+.row{display:flex;align-items:center;gap:14px;min-height:56px;padding:8px 0}
+.row .lead{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--surface-mid);color:var(--on-surface-2);flex:0 0 auto}
+.row .txt{flex:1;min-width:0}
+.row .txt b{display:block;font-weight:500;font-size:15px}
+.row .txt span{display:block;font-size:13px;color:var(--on-surface-2)}
+.row .trail{color:var(--outline)}
+.divider{height:1px;background:var(--outline-v);margin:4px 0}
+.chip{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:8px;font-size:13px;font-weight:500;border:1px solid var(--outline-v);background:var(--surface-bright)}
+.chip.on{background:var(--secondary-container);color:var(--on-secondary-container);border-color:transparent}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:12px;font-size:12px;font-weight:600}
+.badge.ok{background:var(--ok-container);color:var(--ok)}
+.badge.warn{background:var(--warn-container);color:var(--warn)}
+.badge.err{background:var(--err-container);color:var(--err)}
+.badge.neu{background:var(--surface-high);color:var(--on-surface-2)}
+.stat{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.stat .card{padding:14px 16px}
+.stat .v{font-size:28px;font-weight:600;letter-spacing:-.3px;line-height:1.1}
+.stat .k{font-size:12px;color:var(--on-surface-2);margin-top:4px}
+.field{background:var(--surface-low);border-radius:12px 12px 4px 4px;border-bottom:2px solid var(--outline);padding:10px 16px 8px}
+.field label{display:block;font-size:12px;color:var(--on-surface-2)}
+.field input,.field select,.field textarea{width:100%;border:0;background:none;font:inherit;font-size:16px;color:var(--on-surface);padding:4px 0 0;outline:none}
+.field.focus{border-bottom-color:var(--primary)}
+.field.focus label{color:var(--primary)}
+.fab{position:absolute;right:16px;bottom:96px;height:56px;border-radius:16px;padding:0 20px 0 16px;background:var(--primary-container);color:var(--on-primary-container);display:flex;align-items:center;gap:10px;font-weight:600;box-shadow:var(--shadow)}
+.steps{display:flex;flex-direction:column;gap:0}
+.step{display:flex;gap:14px;padding:12px 0}
+.step .n{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:600;background:var(--surface-high);color:var(--on-surface-2);flex:0 0 auto}
+.step.done .n{background:var(--ok);color:#fff}
+.step.busy .n{background:var(--primary);color:var(--on-primary)}
+.step b{display:block;font-size:15px;font-weight:500}
+.step span{display:block;font-size:13px;color:var(--on-surface-2)}
+.ring{position:relative;width:120px;height:120px;margin:4px auto}
+.ring i{position:absolute;inset:0;border-radius:50%;border:2px solid var(--primary);opacity:.35;animation:pulse 2.2s ease-out infinite}
+.ring i:nth-child(2){animation-delay:.7s}.ring i:nth-child(3){animation-delay:1.4s}
+.ring .dot{position:absolute;inset:44px;border-radius:50%;background:var(--primary);box-shadow:0 0 0 6px var(--primary-container)}
+@keyframes pulse{0%{transform:scale(.5);opacity:.6}100%{transform:scale(1.15);opacity:0}}
+@media (prefers-reduced-motion:reduce){.ring i{animation:none;opacity:.25}}
+.photo{aspect-ratio:4/3;max-width:100%;border-radius:16px;background:linear-gradient(160deg,#5b5f7a,#2b2e3e);position:relative;overflow:hidden;display:grid;place-items:center;color:#fff}
+.photo .stamp{position:absolute;left:0;right:0;bottom:0;background:rgba(8,14,10,.68);border-top:3px solid #B8860B;padding:8px 12px;font-size:11px;line-height:1.4;font-family:var(--mono)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--surface-bright);border-radius:28px 28px 0 0;padding:8px 20px 20px;box-shadow:0 -8px 40px rgba(0,0,0,.25);transform:translateY(105%);transition:transform .22s ease;z-index:5}
+.sheet.on{transform:none}
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.32);opacity:0;pointer-events:none;transition:opacity .2s;z-index:4}
+.scrim.on{opacity:1;pointer-events:auto}
+.handle{width:32px;height:4px;border-radius:2px;background:var(--outline-v);margin:4px auto 14px}
+.sheet h2{font-size:22px;font-weight:500;margin:0 0 8px}
+.sheet p{color:var(--on-surface-2);margin:0 0 16px;line-height:1.5}
+.toast{position:absolute;left:16px;right:16px;bottom:92px;background:var(--on-surface);color:var(--surface);border-radius:12px;padding:12px 16px;font-size:14px;opacity:0;transform:translateY(8px);transition:all .2s;z-index:6;pointer-events:none}
+.toast.on{opacity:1;transform:none}
+.banner{display:flex;align-items:center;gap:10px;background:var(--warn-container);color:var(--warn);border-radius:12px;padding:10px 14px;font-size:13px;font-weight:500}
+.banner.ok{background:var(--ok-container);color:var(--ok)}
+.timeline{display:flex;flex-direction:column;gap:0;padding:4px 0 0}
+.tl{display:flex;gap:12px;align-items:flex-start;padding:6px 0}
+.tl .dot{width:12px;height:12px;border-radius:50%;background:var(--ok);margin-top:5px;flex:0 0 auto;box-shadow:0 0 0 3px var(--ok-container)}
+.tl .dot.off{background:var(--outline-v);box-shadow:none}
+.tl .t{font-size:13px;color:var(--on-surface-2);min-width:64px}
+.tl b{font-weight:500;font-size:14px}
+.seg{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.seg button{height:40px;border-radius:10px;background:var(--surface-mid);font-weight:600;font-size:14px}
+.seg button.on{background:var(--primary);color:var(--on-primary)}
+.score{display:flex;justify-content:space-between;align-items:center}
+.score .big{font-size:28px;font-weight:600}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:13px}
+.cal .h{font-size:11px;color:var(--on-surface-2);padding:4px 0}
+.cal .d{height:38px;display:grid;place-items:center;border-radius:10px;position:relative}
+.cal .d.p{background:var(--ok-container);color:var(--ok);font-weight:600}
+.cal .d.l{background:var(--warn-container);color:var(--warn);font-weight:600}
+.cal .d.a{background:var(--err-container);color:var(--err);font-weight:600}
+.cal .d.off{color:var(--outline)}
+.cal .d.today{box-shadow:inset 0 0 0 2px var(--primary)}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--on-surface-2);flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
+.pin{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.pin button{height:56px;border-radius:14px;background:var(--surface-low);font-size:22px;font-weight:500}
+.pin button:active{background:var(--surface-high)}
+.dots{display:flex;gap:10px;justify-content:center;margin:6px 0}
+.dots i{width:12px;height:12px;border-radius:50%;border:2px solid var(--outline)}
+.dots i.f{background:var(--on-surface);border-color:var(--on-surface)}
+.section{font-size:14px;font-weight:600;color:var(--on-surface-2);margin:8px 0 -4px}
+.notice{border-left:4px solid var(--err);padding-left:12px}
+.skel{height:14px;border-radius:7px;background:linear-gradient(90deg,var(--surface-mid),var(--surface-high),var(--surface-mid));background-size:200% 100%;animation:sk 1.2s linear infinite}
+@keyframes sk{to{background-position:-200% 0}}
+</style>
+
+<div class="desk">
+<div class="phone" id="phone">
+
+<!-- ======================= SIGN IN ======================= -->
+<section class="screen" data-s="signin">
+  <div class="scroll" style="padding-top:28px;gap:16px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="width:44px;height:44px;border-radius:12px;background:var(--primary-container);display:grid;place-items:center"><svg class="i" style="color:var(--on-primary-container)" viewBox="0 0 24 24"><path d="M3 21h18M5 21V9l7-5 7 5v12M9.5 21v-6h5v6"/></svg></div>
+      <div><div class="eyebrow">Government of Telangana</div><div style="font-weight:600;font-size:16px">Collectorate · Jangaon</div></div>
+    </div>
+    <div>
+      <p class="display" style="margin-top:8px">Swachh Jangaon</p>
+      <p class="body" style="margin-top:6px">The district's field register. Attendance, the monthly village evaluation and leave, working offline in the village.</p>
+    </div>
+    <div class="field focus"><label>Mobile number</label><input id="f-phone" inputmode="numeric" value="98480 12345"></div>
+    <div class="field"><label>PIN</label><input id="f-pin" type="password" value="••••"></div>
+    <button class="btn filled" data-go="home">Sign in</button>
+    <button class="btn text">Forgot your PIN? Ask the DPO office</button>
+    <p class="body" style="text-align:center;font-size:12px;margin-top:auto">Only numbers registered by the District Panchayat Office can sign in.</p>
+  </div>
+</section>
+
+<!-- ======================= HOME ======================= -->
+<section class="screen" data-s="home">
+  <div class="bar"><h1>Today</h1><button class="ic" data-go="more" aria-label="Account"><span class="avatar">RK</span></button></div>
+  <div class="scroll">
+    <div>
+      <div class="eyebrow">Tuesday, 14 October · Konne, Bachannapeta</div>
+      <p class="title-l">Good morning, Ravi Kumar</p>
+    </div>
+    <div class="card hero" id="home-att">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+        <div><div style="font-size:12px;opacity:.85;font-weight:500">Attendance</div><div style="font-size:22px;font-weight:600;line-height:1.2;margin-top:2px">Not marked yet</div><div style="font-size:13px;opacity:.9;margin-top:4px">Marks are due by 11:00. You are 30 m from the Konne office.</div></div>
+        <svg class="i" viewBox="0 0 24 24" style="width:28px;height:28px;opacity:.9"><path d="M12 2.6c-3.2 0-5.8 2.6-5.8 5.8 0 4.2 5.8 12 5.8 12s5.8-7.8 5.8-12c0-3.2-2.6-5.8-5.8-5.8z"/><circle cx="12" cy="8.4" r="2.2"/></svg>
+      </div>
+      <button class="btn" style="background:#fff;color:var(--on-primary-container);margin-top:14px" data-go="mark"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h3l2-2.5h6L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.2"/></svg>Mark attendance</button>
+    </div>
+    <div class="card">
+      <div class="title-m">Your day</div>
+      <div class="timeline">
+        <div class="tl"><div class="dot off"></div><div class="t">Morning</div><div><b>Mark in</b><br><span class="body">At the Konne office, with a photograph</span></div></div>
+        <div class="tl"><div class="dot off"></div><div class="t">Evening</div><div><b>Mark out</b><br><span class="body">Opens seven and a half hours after you mark in</span></div></div>
+      </div>
+    </div>
+    <div class="section">To do</div>
+    <div class="card bright" style="padding:4px 16px">
+      <button class="row" style="width:100%;text-align:left" data-go="inspect">
+        <span class="lead" style="background:var(--primary-container);color:var(--on-primary-container)"><svg class="i" viewBox="0 0 24 24"><path d="M9 11l3 3 7-7"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg></span>
+        <span class="txt"><b>Evaluate Konne for October</b><span>Due 9 November · 100-mark sheet with photographs</span></span>
+        <svg class="i trail" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <div class="divider"></div>
+      <button class="row" style="width:100%;text-align:left" data-go="notices">
+        <span class="lead" style="background:var(--err-container);color:var(--err)"><svg class="i" viewBox="0 0 24 24"><path d="M12 3a5.5 5.5 0 0 0-5.5 5.5V12l-1.8 3.4h14.6L17.5 12V8.5A5.5 5.5 0 0 0 12 3z"/><path d="M9.8 17.8a2.3 2.3 0 0 0 4.4 0"/></svg></span>
+        <span class="txt"><b>Circular from the Collector</b><span>Dasara sanitation drive · read and acknowledge</span></span>
+        <span class="badge err">New</span>
+      </button>
+    </div>
+    <div class="section">This month</div>
+    <div class="stat">
+      <div class="card"><div class="v num">11<span style="font-size:15px;color:var(--on-surface-2);font-weight:500">/12</span></div><div class="k">days marked</div></div>
+      <div class="card"><div class="v num">82</div><div class="k">Konne's September score</div></div>
+    </div>
+    <div class="card" style="display:flex;gap:12px;align-items:center">
+      <span class="lead" style="width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--warn-container);color:var(--warn)"><svg class="i" viewBox="0 0 24 24"><path d="M7 17a4 4 0 0 1-.6-7.95A5.5 5.5 0 0 1 17 8.5a3.5 3.5 0 0 1 .5 7"/><path d="M12 12v9M9 18l3 3 3-3"/></svg></span>
+      <div class="txt" style="flex:1"><b style="font-weight:500">Rain likely after 2 pm</b><div class="body">Moderate, 22 mm · plan village visits for the morning</div></div>
+    </div>
+  </div>
+  <nav class="nav" data-nav>
+    <button data-go="home" aria-current="page"><span class="pill"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></span>Today</button>
+    <button data-go="inspect"><span class="pill"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 12l3 3 5-6"/></svg></span>Villages</button>
+    <button data-go="records"><span class="pill"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4"/></svg></span>Records</button>
+    <button data-go="more"><span class="pill"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></span>More</button>
+  </nav>
+</section>
+
+<!-- ======================= MARK ATTENDANCE ======================= -->
+<section class="screen" data-s="mark">
+  <div class="bar"><button class="ic" data-go="home" aria-label="Back"><svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Mark attendance</h1></div>
+  <div class="scroll">
+    <div class="card bright" style="text-align:center;padding-top:20px">
+      <div class="ring"><i></i><i></i><i></i><div class="dot"></div></div>
+      <div class="title-m" style="margin-top:8px">Reading your location</div>
+      <p class="body" style="margin-top:4px">Reading 3 of 4 · keep the phone still, in the open</p>
+      <div class="chips" style="justify-content:center;margin-top:12px"><span class="chip on">±9 m</span><span class="chip">30 m from Konne office</span></div>
+    </div>
+    <div class="steps card" style="padding:4px 16px">
+      <div class="step done"><span class="n">✓</span><div><b>Location</b><span>17.81677, 79.03536 · inside the 5 km your place of duty allows</span></div></div>
+      <div class="divider"></div>
+      <div class="step busy"><span class="n">2</span><div><b>Photograph</b><span>One photograph of yourself at the place of duty. Date, time and place are printed on it.</span></div></div>
+    </div>
+    <button class="btn filled" data-go="photo"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h3l2-2.5h6L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.2"/></svg>Take photograph</button>
+    <p class="body" style="font-size:12px;text-align:center">Camera does not open? Open this app in Chrome, not inside WhatsApp, and allow the camera when asked.</p>
+    <button class="btn text" data-sheet="privacy">What is recorded</button>
+  </div>
+</section>
+
+<!-- ======================= PHOTO & CONFIRM ======================= -->
+<section class="screen" data-s="photo">
+  <div class="bar"><button class="ic" data-go="mark" aria-label="Back"><svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Confirm</h1></div>
+  <div class="scroll">
+    <div class="photo"><svg viewBox="0 0 24 24" style="width:64px;height:64px;opacity:.55;fill:none;stroke:#fff;stroke-width:1.5"><circle cx="12" cy="8" r="3.4"/><path d="M4.5 20c1.2-3.6 4-5.4 7.5-5.4s6.3 1.8 7.5 5.4"/></svg>
+      <div class="stamp"><b>P. Ravi Kumar · Panchayat Secretary · Konne</b><br>14.10.2026 09:28 IST · 17.81677, 79.03536 · ±9 m</div></div>
+    <div class="card" style="padding:4px 16px">
+      <div class="row"><span class="lead" style="background:var(--ok-container);color:var(--ok)"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg></span><span class="txt"><b>Location measured</b><span>4 readings, moved 6 m between them · the receiver was listening</span></span></div>
+      <div class="divider"></div>
+      <div class="row"><span class="lead" style="background:var(--ok-container);color:var(--ok)"><svg class="i" viewBox="0 0 24 24"><path d="M12 2.6c-3.2 0-5.8 2.6-5.8 5.8 0 4.2 5.8 12 5.8 12s5.8-7.8 5.8-12c0-3.2-2.6-5.8-5.8-5.8z"/></svg></span><span class="txt"><b>At your place of duty</b><span>30 m from the Konne office · inside 5 km</span></span></div>
+    </div>
+    <button class="btn filled" data-go="marked">Mark attendance</button>
+    <button class="btn text" data-go="mark">Take it again</button>
+  </div>
+</section>
+
+<!-- ======================= MARKED (HOME, after) ======================= -->
+<section class="screen" data-s="marked">
+  <div class="bar"><h1>Today</h1><button class="ic" data-go="more"><span class="avatar">RK</span></button></div>
+  <div class="scroll">
+    <div><div class="eyebrow">Tuesday, 14 October · Konne, Bachannapeta</div><p class="title-l">Good morning, Ravi Kumar</p></div>
+    <div class="banner ok"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg>Marked at 09:28 · location measured · received by the district</div>
+    <div class="card">
+      <div class="title-m">Your day</div>
+      <div class="timeline">
+        <div class="tl"><div class="dot"></div><div class="t num">09:28</div><div><b>Marked in</b><br><span class="body">30 m from the Konne office · ±9 m</span></div></div>
+        <div class="tl"><div class="dot off"></div><div class="t num">16:58</div><div><b>Mark out opens</b><br><span class="body">Seven and a half hours after marking in</span></div></div>
+      </div>
+    </div>
+    <div class="section">To do</div>
+    <div class="card bright" style="padding:4px 16px">
+      <button class="row" style="width:100%;text-align:left" data-go="inspect">
+        <span class="lead" style="background:var(--primary-container);color:var(--on-primary-container)"><svg class="i" viewBox="0 0 24 24"><path d="M9 11l3 3 7-7"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg></span>
+        <span class="txt"><b>Evaluate Konne for October</b><span>Due 9 November · 100-mark sheet with photographs</span></span>
+        <svg class="i trail" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+    <div class="section">This month</div>
+    <div class="stat">
+      <div class="card"><div class="v num">12<span style="font-size:15px;color:var(--on-surface-2);font-weight:500">/12</span></div><div class="k">days marked</div></div>
+      <div class="card"><div class="v num">82</div><div class="k">Konne's September score</div></div>
+    </div>
+  </div>
+  <nav class="nav" data-nav>
+    <button data-go="home" aria-current="page"><span class="pill"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></span>Today</button>
+    <button data-go="inspect"><span class="pill"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 12l3 3 5-6"/></svg></span>Villages</button>
+    <button data-go="records"><span class="pill"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4"/></svg></span>Records</button>
+    <button data-go="more"><span class="pill"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></span>More</button>
+  </nav>
+</section>
+
+<!-- ======================= VILLAGES / INSPECT ======================= -->
+<section class="screen" data-s="inspect">
+  <div class="bar"><h1>Villages</h1><button class="ic" aria-label="Search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button></div>
+  <div class="scroll">
+    <div class="card tonal"><div class="eyebrow" style="color:inherit;opacity:.8">October 2026 · 10 Oct – 9 Nov</div><div class="title-m" style="margin-top:2px">1 of 1 village to evaluate</div><div class="body" style="color:inherit;opacity:.85;margin-top:4px">Konne is yours this month. 26 days left.</div></div>
+    <div class="card bright" style="padding:4px 16px">
+      <button class="row" style="width:100%;text-align:left" data-go="score">
+        <span class="lead" style="background:var(--surface-mid)"><svg class="i" viewBox="0 0 24 24"><path d="M3 21h18M5 21V9l7-5 7 5v12M9.5 21v-6h5v6"/></svg></span>
+        <span class="txt"><b>Konne</b><span>Bachannapeta · not yet evaluated this month</span></span>
+        <span class="badge warn">Due</span>
+      </button>
+    </div>
+    <div class="section">Last three months</div>
+    <div class="card" style="padding:4px 16px">
+      <div class="row"><span class="txt"><b>September</b><span>Evaluated 3 Sept by you</span></span><span class="badge ok">82 · B</span></div>
+      <div class="divider"></div>
+      <div class="row"><span class="txt"><b>August</b><span>Evaluated 28 Aug by you</span></span><span class="badge ok">77 · B</span></div>
+      <div class="divider"></div>
+      <div class="row"><span class="txt"><b>July</b><span>Evaluated 30 Jul by MPO</span></span><span class="badge warn">61 · C</span></div>
+    </div>
+  </div>
+  <nav class="nav" data-nav>
+    <button data-go="home"><span class="pill"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></span>Today</button>
+    <button data-go="inspect" aria-current="page"><span class="pill"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 12l3 3 5-6"/></svg></span>Villages</button>
+    <button data-go="records"><span class="pill"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4"/></svg></span>Records</button>
+    <button data-go="more"><span class="pill"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></span>More</button>
+  </nav>
+</section>
+
+<!-- ======================= SCORE SHEET ======================= -->
+<section class="screen" data-s="score">
+  <div class="bar"><button class="ic" data-go="inspect" aria-label="Back"><svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Konne · October</h1><span class="badge neu num">3 of 10</span></div>
+  <div class="scroll">
+    <div class="card bright">
+      <div class="eyebrow">Section 3 of 10 · 10 marks</div>
+      <p class="title-l" style="margin-top:4px">Door-to-door waste collection</p>
+      <p class="body" style="margin-top:6px">Is wet and dry waste collected separately from every household, on every scheduled day?</p>
+      <div class="seg" style="margin-top:14px"><button>0</button><button>2</button><button>5</button><button class="on">8</button><button>10</button></div>
+      <div class="body" style="margin-top:10px;font-size:13px">8 — collected daily, segregation missed in a few streets</div>
+    </div>
+    <div class="card" style="padding:4px 16px">
+      <div class="row"><span class="lead"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h3l2-2.5h6L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.2"/></svg></span><span class="txt"><b>Photograph of the collection point</b><span>Required for this section · 1 added</span></span><span class="badge ok">1</span></div>
+      <div class="divider"></div>
+      <div class="row"><span class="lead"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h16M6 16l10-10 2 2L8 18z"/></svg></span><span class="txt"><b>Remark</b><span>Optional · one line</span></span><svg class="i trail" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
+    </div>
+    <div class="card score"><div><div class="eyebrow">Running score</div><div class="big num">21<span style="font-size:14px;color:var(--on-surface-2);font-weight:500"> / 30 so far</span></div></div><span class="badge ok">On track for B</span></div>
+    <div style="display:flex;gap:10px"><button class="btn outl" style="width:auto;flex:1">Previous</button><button class="btn filled" style="width:auto;flex:2" data-go="summary">Next section</button></div>
+  </div>
+</section>
+
+<!-- ======================= SUMMARY ======================= -->
+<section class="screen" data-s="summary">
+  <div class="bar"><button class="ic" data-go="score" aria-label="Back"><svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Review and file</h1></div>
+  <div class="scroll">
+    <div class="card hero"><div style="font-size:12px;opacity:.85;font-weight:500">Konne · October 2026</div><div style="display:flex;align-items:baseline;gap:8px;margin-top:4px"><span class="num" style="font-size:44px;font-weight:600;line-height:1">84</span><span style="font-size:16px;opacity:.9">/ 100 · Grade A</span></div><div style="font-size:13px;opacity:.9;margin-top:6px">Up 2 from September</div></div>
+    <div class="card" style="padding:4px 16px">
+      <div class="row"><span class="txt"><b>Waste collection</b><span>Sections 1–3</span></span><b class="num">25/30</b></div><div class="divider"></div>
+      <div class="row"><span class="txt"><b>Drains and roads</b><span>Sections 4–6</span></span><b class="num">26/30</b></div><div class="divider"></div>
+      <div class="row"><span class="txt"><b>Toilets and water</b><span>Sections 7–8</span></span><b class="num">17/20</b></div><div class="divider"></div>
+      <div class="row"><span class="txt"><b>Records and awareness</b><span>Sections 9–10</span></span><b class="num">16/20</b></div>
+    </div>
+    <div class="row" style="padding:0 4px"><span class="lead" style="background:var(--ok-container);color:var(--ok)"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg></span><span class="txt"><b>12 photographs attached</b><span>Every section that requires one has one</span></span></div>
+    <button class="btn filled" data-go="filed">File the evaluation</button>
+    <p class="body" style="font-size:12px;text-align:center">Filed against October (10 Oct – 9 Nov). It is kept on the phone and goes up when there is signal.</p>
+  </div>
+</section>
+
+<!-- ======================= FILED ======================= -->
+<section class="screen" data-s="filed">
+  <div class="scroll" style="justify-content:center;align-items:center;text-align:center;gap:14px">
+    <div style="width:96px;height:96px;border-radius:50%;background:var(--ok-container);display:grid;place-items:center;color:var(--ok)"><svg viewBox="0 0 24 24" style="width:48px;height:48px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"><path d="M5 12l4 4L19 6"/></svg></div>
+    <p class="title-l">Konne is filed for October</p>
+    <p class="body">84 marks, Grade A. The district will see it the moment the phone has signal. You can withdraw it until the 9th.</p>
+    <button class="btn filled" style="max-width:260px" data-go="home">Done</button>
+    <button class="btn text" data-go="inspect">See the village</button>
+  </div>
+</section>
+
+<!-- ======================= RECORDS ======================= -->
+<section class="screen" data-s="records">
+  <div class="bar"><h1>Records</h1><button class="ic" data-go="leave" aria-label="Apply for leave"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>
+  <div class="scroll">
+    <div class="chips"><span class="chip on">Attendance</span><span class="chip" data-go="leave">Leave</span><span class="chip">Evaluations</span></div>
+    <div class="card bright">
+      <div style="display:flex;justify-content:space-between;align-items:center"><button class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><b>October 2026</b><button class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button></div>
+      <div class="cal" style="margin-top:6px">
+        <div class="h">M</div><div class="h">T</div><div class="h">W</div><div class="h">T</div><div class="h">F</div><div class="h">S</div><div class="h">S</div>
+        <div class="d off">28</div><div class="d off">29</div><div class="d off">30</div><div class="d p">1</div><div class="d p">2</div><div class="d p">3</div><div class="d off">4</div>
+        <div class="d p">5</div><div class="d p">6</div><div class="d p">7</div><div class="d p">8</div><div class="d p">9</div><div class="d off">10</div><div class="d off">11</div>
+        <div class="d p">12</div><div class="d l">13</div><div class="d p today">14</div><div class="d">15</div><div class="d">16</div><div class="d">17</div><div class="d off">18</div>
+        <div class="d">19</div><div class="d">20</div><div class="d">21</div><div class="d">22</div><div class="d">23</div><div class="d">24</div><div class="d off">25</div>
+        <div class="d">26</div><div class="d">27</div><div class="d">28</div><div class="d">29</div><div class="d">30</div><div class="d">31</div><div class="d off">1</div>
+      </div>
+      <div class="legend" style="margin-top:10px"><span><i style="background:var(--ok)"></i>Marked</span><span><i style="background:var(--warn)"></i>Leave</span><span><i style="background:var(--err)"></i>Not marked</span><span><i style="background:var(--outline-v)"></i>Holiday</span></div>
+    </div>
+    <div class="stat">
+      <div class="card"><div class="v num">11</div><div class="k">marked this month</div></div>
+      <div class="card"><div class="v num">1</div><div class="k">casual leave taken</div></div>
+    </div>
+    <div class="section">Recent</div>
+    <div class="card" style="padding:4px 16px">
+      <div class="row"><span class="txt"><b>Today, 14 Oct</b><span>Marked in 09:28 · 30 m from office</span></span><span class="badge ok">Measured</span></div><div class="divider"></div>
+      <div class="row"><span class="txt"><b>Mon, 13 Oct</b><span>Casual leave · sanctioned 11 Oct</span></span><span class="badge warn">CL</span></div><div class="divider"></div>
+      <div class="row"><span class="txt"><b>Fri, 9 Oct</b><span>Marked in 08:51 · out 17:02</span></span><span class="badge ok">Measured</span></div>
+    </div>
+  </div>
+  <nav class="nav" data-nav>
+    <button data-go="home"><span class="pill"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></span>Today</button>
+    <button data-go="inspect"><span class="pill"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 12l3 3 5-6"/></svg></span>Villages</button>
+    <button data-go="records" aria-current="page"><span class="pill"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4"/></svg></span>Records</button>
+    <button data-go="more"><span class="pill"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></span>More</button>
+  </nav>
+</section>
+
+<!-- ======================= LEAVE ======================= -->
+<section class="screen" data-s="leave">
+  <div class="bar"><button class="ic" data-go="records" aria-label="Back"><svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Apply for leave</h1></div>
+  <div class="scroll">
+    <div class="section" style="margin-top:0">Kind of leave</div>
+    <div class="chips"><span class="chip on">Casual</span><span class="chip">Earned</span><span class="chip">Medical</span><span class="chip">Optional holiday</span><span class="chip">HQ permission</span></div>
+    <div style="display:flex;gap:10px"><div class="field focus" style="flex:1"><label>From</label><input value="Mon 20 Oct"></div><div class="field" style="flex:1"><label>To</label><input value="Tue 21 Oct"></div></div>
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center"><div><div class="eyebrow">Working days</div><div class="title-m num">2 days</div></div><div style="text-align:right"><div class="eyebrow">Casual leave after this</div><div class="title-m num">3 of 6 left</div></div></div>
+    <div class="field"><label>Reason</label><input value="Family function at Warangal"></div>
+    <div class="field"><label>Address while on leave</label><input value="H.No 4-12, Hanamkonda"></div>
+    <label class="row" style="padding:4px 2px"><input type="checkbox" style="width:20px;height:20px;accent-color:var(--primary)"><span class="txt"><b>I will leave headquarters</b><span>Permission to leave the mandal is asked for with the leave</span></span></label>
+    <button class="btn filled" data-sheet="leave-ok">Send to the Collector</button>
+    <p class="body" style="font-size:12px;text-align:center">Every application in the district goes to the Collector for orders. You will see the decision here and by SMS.</p>
+  </div>
+</section>
+
+<!-- ======================= NOTICES ======================= -->
+<section class="screen" data-s="notices">
+  <div class="bar"><button class="ic" data-go="home" aria-label="Back"><svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Notices and circulars</h1></div>
+  <div class="scroll">
+    <div class="card bright notice" style="border-radius:20px">
+      <div class="eyebrow">Circular · Collector &amp; District Magistrate · 13 Oct</div>
+      <p class="title-m" style="margin-top:4px;font-size:18px">Dasara special sanitation drive, 17–20 October</p>
+      <p class="body" style="margin-top:8px">All Panchayat Secretaries will ensure daily lifting of waste from pandal sites and photograph each site before 10 am. MPOs will verify two villages a day.</p>
+      <div style="display:flex;gap:10px;margin-top:14px"><button class="btn tonal" style="width:auto;flex:1" data-sheet="ack">I have read this</button><button class="btn text" style="width:auto">Open PDF</button></div>
+      <p class="body" style="font-size:12px;margin-top:8px">Acknowledging records that you saw it, not that you acted on it.</p>
+    </div>
+    <div class="section">Earlier</div>
+    <div class="card" style="padding:4px 16px">
+      <div class="row"><span class="txt"><b>Village office coordinates</b><span>Circular · 9 Oct · acknowledged</span></span><span class="badge ok">Read</span></div><div class="divider"></div>
+      <div class="row"><span class="txt"><b>Reporting month is the 10th to the 9th</b><span>Circular · 3 Sept · acknowledged</span></span><span class="badge ok">Read</span></div>
+    </div>
+    <div class="section">Show-cause notices</div>
+    <div class="card" style="padding:14px 16px;display:flex;gap:12px;align-items:center"><span class="lead" style="width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--ok-container);color:var(--ok)"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg></span><div><b style="font-weight:500">None on your file</b><div class="body">A served notice would appear here and lock the app until acknowledged.</div></div></div>
+  </div>
+</section>
+
+<!-- ======================= MORE ======================= -->
+<section class="screen" data-s="more">
+  <div class="bar"><h1>More</h1></div>
+  <div class="scroll">
+    <div class="card bright" style="display:flex;gap:14px;align-items:center"><span class="avatar" style="width:52px;height:52px;font-size:18px">RK</span><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:17px">P. Ravi Kumar</div><div class="body">Panchayat Secretary · Konne, Bachannapeta</div><div class="body num" style="font-size:12px">98480 12345</div></div></div>
+    <div class="card" style="padding:4px 16px">
+      <button class="row" style="width:100%;text-align:left" data-go="notices"><span class="lead"><svg class="i" viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/></svg></span><span class="txt"><b>Circulars</b><span>1 to acknowledge</span></span><span class="badge err">1</span></button><div class="divider"></div>
+      <button class="row" style="width:100%;text-align:left"><span class="lead"><svg class="i" viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6"/></svg></span><span class="txt"><b>Development plan</b><span>2026-27 · filed 3 Aug</span></span><span class="badge ok">Filed</span></button><div class="divider"></div>
+      <button class="row" style="width:100%;text-align:left" data-go="records"><span class="lead"><svg class="i" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg></span><span class="txt"><b>Leave</b><span>3 of 6 casual leave left this year</span></span><svg class="i trail" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button><div class="divider"></div>
+      <button class="row" style="width:100%;text-align:left"><span class="lead"><svg class="i" viewBox="0 0 24 24"><path d="M9 4 3.8 6v14L9 18l6 2 5.2-2V4L15 6 9 4zM9 4v14M15 6v14"/></svg></span><span class="txt"><b>Place of duty</b><span>Konne office · 17.81677, 79.03536</span></span><svg class="i trail" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+    <div class="section">Settings</div>
+    <div class="card" style="padding:4px 16px">
+      <div class="row"><span class="txt"><b>Language</b><span>English · తెలుగు</span></span><svg class="i trail" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div><div class="divider"></div>
+      <div class="row"><span class="txt"><b>Change PIN</b><span>Takes effect on this phone at once</span></span><svg class="i trail" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div><div class="divider"></div>
+      <div class="row"><span class="txt"><b>Waiting to send</b><span>Nothing · everything has reached the district</span></span><span class="badge ok">Synced</span></div>
+    </div>
+    <button class="btn outl" data-go="signin">Sign out</button>
+    <p class="body" style="font-size:12px;text-align:center">SJGP 7.0 · Records already on this phone stay where they are.</p>
+  </div>
+  <nav class="nav" data-nav>
+    <button data-go="home"><span class="pill"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></span>Today</button>
+    <button data-go="inspect"><span class="pill"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 12l3 3 5-6"/></svg></span>Villages</button>
+    <button data-go="records"><span class="pill"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4"/></svg></span>Records</button>
+    <button data-go="more" aria-current="page"><span class="pill"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></span>More</button>
+  </nav>
+</section>
+
+<!-- ======================= OFFLINE / QUEUED STATE ======================= -->
+<section class="screen" data-s="offline">
+  <div class="bar"><h1>Today</h1><button class="ic" data-go="more"><span class="avatar">RK</span></button></div>
+  <div class="scroll">
+    <div class="banner"><svg class="i" viewBox="0 0 24 24"><path d="M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/><path d="M3 3l18 18"/></svg>No signal. Marked at 09:28 and kept on this phone. It goes up by itself.</div>
+    <div><div class="eyebrow">Tuesday, 14 October · Konne, Bachannapeta</div><p class="title-l">Good morning, Ravi Kumar</p></div>
+    <div class="card"><div class="title-m">Your day</div><div class="timeline">
+      <div class="tl"><div class="dot"></div><div class="t num">09:28</div><div><b>Marked in</b><br><span class="body">Waiting to send · the district has not seen it yet</span></div></div>
+      <div class="tl"><div class="dot off"></div><div class="t num">16:58</div><div><b>Mark out opens</b></div></div></div></div>
+    <div class="section">Waiting to send</div>
+    <div class="card" style="padding:4px 16px"><div class="row"><span class="lead"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><span class="txt"><b>Attendance · 14 Oct</b><span>With photograph · 1.2 MB</span></span><span class="badge warn">Queued</span></div></div>
+  </div>
+  <nav class="nav" data-nav>
+    <button data-go="home" aria-current="page"><span class="pill"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></span>Today</button>
+    <button data-go="inspect"><span class="pill"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 12l3 3 5-6"/></svg></span>Villages</button>
+    <button data-go="records"><span class="pill"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4"/></svg></span>Records</button>
+    <button data-go="more"><span class="pill"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></span>More</button>
+  </nav>
+</section>
+
+<!-- ======================= SHEETS & TOAST ======================= -->
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet"></div>
+<div class="toast" id="toast"></div>
+</div>
+
+<!-- ---- notes beside the phone, on a wide screen ---- -->
+<aside class="notes">
+  <h1>SJGP field app · flow</h1>
+  <p>Tap through on the phone. Every screen has one primary action, the bottom bar never leaves, and the day's status is always the first thing on Today.</p>
+  <div class="jump">
+    <button data-go="signin">Sign in</button><button data-go="home">Today</button><button data-go="mark">Mark attendance</button><button data-sheet="still">Not measured</button><button data-go="photo">Confirm</button><button data-go="marked">Marked</button><button data-go="inspect">Villages</button><button data-go="score">Score sheet</button><button data-go="summary">Review</button><button data-go="filed">Filed</button><button data-go="records">Records</button><button data-go="leave">Leave</button><button data-go="notices">Notices</button><button data-go="more">More</button><button data-go="offline">Offline</button><button data-sheet="refused">Refused</button>
+  </div>
+  <ol>
+    <li><b>Sign in</b> once: number and PIN, then the phone remembers the officer.</li>
+    <li><b>Today</b> opens on the day's status. If attendance is not marked, the only thing that matters is the card at the top.</li>
+    <li><b>Mark attendance</b>: the location is read four times while the photograph is taken. Identical readings bring up the walk-and-read-again sheet. Out of place brings up the fence sheet.</li>
+    <li><b>Confirm</b> shows the stamped photograph and the two checks that passed before the mark goes.</li>
+    <li><b>Villages</b> lists what is due this reporting month, then the score sheet one section at a time, then review and file.</li>
+    <li><b>Records</b> is a calendar month, with leave applied for from the same place.</li>
+    <li><b>Notices</b> hold circulars to acknowledge and any show-cause notice on file.</li>
+    <li><b>Offline</b> is a state, not a screen: a banner and a queue, never an error.</li>
+  </ol>
+</aside>
+</div>
+
+<script>
+(function(){
+  const $ = s => document.querySelector(s), $$ = s => Array.from(document.querySelectorAll(s));
+  const SHEETS = {
+    still:{ title:'The location was not measured', body:'Your phone reported exactly the same point 4 times in a row, and a receiver never does that. Walk ten or twenty metres into the open and read the location again.', primary:'Read the location again', secondary:'Close' },
+    refused:{ title:'You are not at your place of duty', body:'You are 17.3 km away from Konne, your place of duty. Please reach the location to mark attendance.', primary:'Read the location again', secondary:'Close' },
+    privacy:{ title:'What is recorded', body:'One photograph, the location and the time, at the moment you press Mark attendance. The location is read a few times over that minute so that a real receiver can be told from a location app. Nothing else, at no other time. The app does not follow you during the day.', primary:'Understood' },
+    'leave-ok':{ title:'Sent to the Collector', body:'Casual leave for 20 and 21 October, two working days. You will see the orders here and by SMS. Until then the days stay as working days.', primary:'Done', go:'records' },
+    ack:{ title:'Acknowledged', body:'The district records that you have read the circular on 14 October at 09:31. It stays under More › Circulars.', primary:'Done', go:'home' }
+  };
+  function show(name){
+    $$('.screen').forEach(s => s.classList.toggle('on', s.dataset.s === name));
+    $('#phone .scroll') ; $$('.screen.on .scroll').forEach(el => el.scrollTop = 0);
+    try{ history.replaceState(null, '', '#' + name); }catch(e){}
+  }
+  function sheet(name){
+    const d = SHEETS[name]; if(!d) return;
+    $('#sheet').innerHTML = '<div class="handle"></div><h2>' + d.title + '</h2><p>' + d.body + '</p>' +
+      '<button class="btn filled" id="shP">' + d.primary + '</button>' + (d.secondary ? '<button class="btn text" id="shS" style="margin-top:6px">' + d.secondary + '</button>' : '');
+    $('#sheet').classList.add('on'); $('#scrim').classList.add('on');
+    $('#shP').addEventListener('click', () => { hide(); if(d.go) show(d.go); if(name === 'still' || name === 'refused') toast('Reading the location again…'); });
+    const s = $('#shS'); if(s) s.addEventListener('click', hide);
+  }
+  function hide(){ $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on'); }
+  let tt = null;
+  function toast(t){ const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('on'), 2600); }
+  document.addEventListener('click', e => {
+    const g = e.target.closest('[data-go]'); if(g){ show(g.dataset.go); if(g.dataset.go === 'marked') toast('Attendance marked for Tuesday'); return; }
+    const s = e.target.closest('[data-sheet]'); if(s){ sheet(s.dataset.sheet); return; }
+    if(e.target.id === 'scrim') hide();
+  });
+  function route(){
+    const h = (location.hash || '').slice(1);
+    hide();
+    if(h === 'still' || h === 'refused'){ show('mark'); sheet(h); return; }
+    show(document.querySelector('.screen[data-s="' + h + '"]') ? h : 'home');
+  }
+  window.addEventListener('hashchange', route);
+  route();
+})();
+</script>
