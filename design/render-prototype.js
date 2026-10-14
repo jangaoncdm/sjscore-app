@@ -3,7 +3,7 @@
 const fs = require('fs'), path = require('path'), http = require('http');
 const { chromium } = require('playwright');
 const OUT = path.join(__dirname, '..', 'Info', 'design');
-const SCREENS = ['signin', 'home', 'mark', 'photo', 'marked', 'inspect', 'score', 'summary', 'filed', 'records', 'leave', 'notices', 'more', 'offline'];
+const SCREENS = ['welcome', 'signin', 'home', 'mark', 'photo', 'marked', 'inspect', 'score', 'summary', 'filed', 'records', 'leave', 'notices', 'more', 'offline'];
 const SHEETS = ['still', 'refused'];
 (async () => {
   fs.mkdirSync(OUT, { recursive:true });
@@ -23,6 +23,13 @@ const SHEETS = ['still', 'refused'];
       const wide = await p.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
       if(wide) problems.push(theme + '/' + s + ': sideways scroll');
       await p.screenshot({ path: path.join(OUT, s + '-' + theme + '.png') });
+      if(s === 'welcome'){ /* once the words and the line have settled, and before it moves on by itself */
+        await p.waitForTimeout(3600);
+        if(!(await p.evaluate(() => document.querySelector('.screen[data-s="welcome"]').classList.contains('on')))) problems.push(theme + ': welcome moved on before 4 s');
+        await p.screenshot({ path: path.join(OUT, 'welcome-settled-' + theme + '.png') });
+        await p.waitForTimeout(1800);
+        if(!(await p.evaluate(() => document.querySelector('.screen[data-s="signin"]').classList.contains('on')))) problems.push(theme + ': welcome did not move on to sign in');
+      }
     }
     await ctx.close();
   }
@@ -31,7 +38,7 @@ const SHEETS = ['still', 'refused'];
   const p2 = await ctx2.newPage(); await p2.goto(base + '#home'); await p2.waitForTimeout(350);
   await p2.screenshot({ path: path.join(OUT, 'desk-1440.png') });
   await br.close(); srv.close();
-  console.log((SCREENS.length + SHEETS.length) * 2 + 1, 'screenshots in', OUT);
+  console.log((SCREENS.length + SHEETS.length) * 2 + 3, 'screenshots in', OUT);
   if(problems.length){ console.log('PROBLEMS:'); problems.forEach(x => console.log(' ', x)); process.exit(1); }
   console.log('no script errors, no sideways scroll');
 })();
