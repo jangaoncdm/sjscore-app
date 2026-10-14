@@ -73,7 +73,20 @@ function brandRegister(){
     document.documentElement.setAttribute('data-tenant', 'gp');
   }catch(e){}
 }
-const APP_VERSION = '6.10.0';
+const APP_VERSION = '6.16.0';
+/* THE WELCOME. In front of sign-in on every opening, 2.6 s and gone, or gone on a tap. It is for
+   people: a driven browser (the render passes) is never shown it, so a pass sees the app and not a
+   splash. It is removed from the document, not hidden, so nothing can sit under it afterwards. */
+(function welcome(){
+  const w = document.getElementById('welcome'); if(!w) return;
+  const driven = !!navigator.webdriver && !/[?&]welcome=1/.test(location.search);
+  if(driven){ w.remove(); return; }
+  w.hidden = false; w.setAttribute('aria-hidden', 'false');
+  let gone = false;
+  const off = () => { if(gone) return; gone = true; w.classList.add('off'); setTimeout(() => w.remove(), 400); };
+  w.addEventListener('click', off);
+  setTimeout(off, 2600);
+})();
 
 /* ---------------- rubric (identical to the printed framework) ---------------- */
 const PC = {A:'#166534',B:'#0B6478',C:'#8A4F06',D:'#1D4ED8',E:'#5B21B6',F:'#A8201A',G:'#334155'};
@@ -1617,8 +1630,8 @@ function renderHome(){
   $('#homeSub').textContent = roleName(u.role) + (u.mandal ? ' · ' + u.mandal + ' mandal' : ' · Jangaon District');
   const ym=ymNow(), body=$('#homeBody');
   let h2 = attendanceStrip();
-  /* the other end of the same record, directly under it */
-  h2 += outStrip();
+  /* the sky over his own mandal, directly under the day's own card */
+  h2 += weatherCard();
   /* PINNED WHILE IT IS OUTSTANDING. An officer opens this screen and the first
      thing on it is what the district is waiting for; once the plan is in, it
      drops back below the circular where it belongs. */
@@ -1630,7 +1643,6 @@ function renderHome(){
      been done. It carries its own pin while the district is waiting on it. */
   h2 += scheduleCard();
   if(!gpPin) h2 += gpdpCard();
-  h2 += weatherCard();
 
   if(!isViewer(u.role)){
     const pend=pendingCount();
@@ -1699,83 +1711,98 @@ function banner(kind, icon, text){
    and nothing whatever besides — no notice, no debit, no lock. The card says
    so in as many words, because an officer who reads 'not marked' on a
    government register assumes the worst and rings the mandal office. */
+/* THE TODAY CARD. One card, whose colour is the register's own reading of the day:
+   red-leaning while a mark is owed, green once the district holds it, amber while a mark out is
+   open or a mark is still on the phone, grey when the day asks for nothing. It replaced two strips
+   (the mark in, the mark out) that read as a row of banners; the sentences are the same ones, and
+   not one of them names a sanction. A missed mark out draws a reminder and nothing else; a mark
+   held on the phone is NOT a mark the district has, and the card says so in bold with the button
+   that fixes it, because officers who had honestly marked were once read as absent. */
+function tcard(cls, live, k, t, b, extra){
+  const ic = cls === 'done' ? ICON.tickC : cls === 'open' || cls === 'overdue' ? ICON.cloud : cls === 'due' ? ICON.pin : ICON.cal;
+  return `<div class="tcard ${cls}"><span class="ic">${ic}</span><div class="k"><i class="${live?'live':''}"></i>${esc(k)}</div><div class="t">${esc(t)}</div><div class="b">${b}</div>${extra||''}</div>`;
+}
+const tfmt = iso => new Date(iso).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
 function outStrip(){
-  const key = todayStr();
-  const a = DB.att[key];
-  if(!a) return '';                    /* no mark in: nothing to close */
-  const st = (DB.outState && DB.outState.date === key) ? DB.outState : null;
-  const o = (DB.out || {})[key];
-
-  /* THE PHONE'S OWN RECEIPT COMES FIRST. A mark still queued is a mark he
-     made, and the card must not ask him for it again. */
-  if(o || (st && st.markedOut)){
-    const when = o ? o.ts : st.outAt;
-    const t = new Date(when).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
-    const bits = ['Marked out at ' + t];
-    if(o){
-      if(o.verified) bits.push('location recorded');
-      else if(o.acc) bits.push('location only to ±' + Math.round(o.acc) + ' m — filed as unverified');
-      else bits.push('no location fix — filed as unverified');
-    }
-    let html = banner('ok', ICON.tickC, bits.join(' · ') + '.');
-    if(o && o.sync !== 'synced')
-      html = banner('warn', ICON.cloud, bits.join(' · ') + '. It is on this phone and has not reached the district yet — it goes up by itself when there is a line.') +
-             '<div style="padding:0 var(--pad) 4px"><button class="btn sm quiet" id="outPush">Send it now</button></div>';
-    return html;
-  }
-
-  /* THE DISTRICT DECIDES THE HOUR (rule 1), so where it has told us, that is
-     the hour. Where it has not — no line yet, or the mark in itself still
-     queued — the phone offers the button on its own reading and says that the
-     district confirms it, because the SERVER is what refuses an early mark
-     (rule 6) and a refusal is recoverable while a button that never appears
-     is not. Withholding it wrongly costs the officer his evening; offering
-     it wrongly costs one refusal he is told about. */
-  if(st && !st.outFrom && st.why)
-    return banner('info', ICON.cal,
-      'Marking out is not open today — seven and a half hours from your mark in would run past the end of the day. Nothing is counted against you.');
-
-  const openAt = (st && st.outFrom) ? new Date(st.outFrom).getTime()
-                                    : (new Date(a.ts).getTime() + 450*60000);
-  const told = !!(st && st.outFrom);
-  const t = new Date(openAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
-  if(Date.now() < openAt)
-    return banner('info', ICON.cloud, 'Marking out opens at ' + t +
-      (told ? '.' : ', seven and a half hours after you marked in. The district confirms the exact time.'));
-  return banner('info', ICON.cloud, 'Your day is not closed yet. Marking out has been open since ' + t +
-    '. It takes one photograph, as marking in did, and nothing is counted against you either way.') +
-    '<div style="padding:0 var(--pad) 4px"><button class="btn sm" id="outGo">Mark out</button></div>';
+  /* the mark out now lives on the Today card; this stays as a name the rest of the file knows */
+  return '';
 }
 function attendanceStrip(){
-  const a = DB.att[todayStr()];
+  const u = user() || {};
+  const key = todayStr();
+  const a = DB.att[key];
   const off = dayOff();
-  if(!a && off && !attExempt((user()||{}).role))
-    return `<div class="banner ok">${ICON.tickC}<span>${esc('Holiday — '+off+'. Attendance is optional today, is not counted, and draws no notice.')}</span></div>
-      <div style="padding:0 var(--pad) 4px"><button class="btn sm quiet" id="attAnyway">Mark attendance anyway</button></div>`;
-  if(!a) return '';
-  const t = new Date(a.ts).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
-  const bits = ['Attendance marked at ' + t];
-  if(a.verified) bits.push('location recorded');
-  else if(a.acc) bits.push('location only to \u00b1' + Math.round(a.acc) + ' m — filed as unverified');
-  else bits.push('no location fix — filed as unverified');
+  const lv = approvedLeaveToday();
   let h = '';
-  /* A MARK HELD ON THE PHONE IS NOT A MARK THE DISTRICT HAS. This used to be
-     four quiet words at the end of a green banner, and officers who had
-     honestly marked were read as absent. It now says so plainly, in amber,
-     with the button that fixes it. */
-  if(a.sync !== 'synced'){
-    h += `<div class="banner bad">${ICON.warn}<span>${esc(bits.join(' · '))} — <b>NOT YET RECEIVED BY THE DISTRICT.</b> It is held on this phone only. Until it reaches the district you count as unmarked.</span></div>`
-       + `<div style="padding:0 var(--pad) 4px"><button class="btn sm" id="attPush">Send it to the district now</button></div>`;
-  } else {
-    bits.push('received by the district');
-    h += `<div class="banner ${a.verified ? 'ok' : 'warn'}">${a.verified?ICON.tickC:ICON.warn}<span>${esc(bits.join(' · '))}</span></div>`;
+  if(!a){
+    if(lv && !attExempt(u.role)){
+      h = tcard('rest', false, 'Leave · sanctioned', 'On leave today',
+        'Sanctioned by the Collector' + (lv.from === lv.to ? '' : ' for ' + esc(lvSpan(lv))) + '. Silence today is leave, not absence: no mark is asked for and none is counted against you.');
+    } else if(off && !attExempt(u.role)){
+      h = tcard('rest', false, esc(off), 'Holiday · no attendance',
+        'Attendance is optional today, is not counted, and draws no notice.',
+        '<button class="btn sm quiet" id="attAnyway">Mark attendance anyway</button>');
+    } else if(attExempt(u.role)){
+      h = tcard('rest', false, 'Attendance · voluntary', 'Not asked of your office',
+        'A day may still be marked, which is useful as proof of a field visit. Nothing is counted either way.',
+        '<button class="btn sm quiet" id="attAnyway">Mark attendance anyway</button>');
+    } else {
+      const cut = (DB.notices && DB.notices.cutoff) || 11;
+      const late = new Date().getHours() >= cut;
+      h = tcard(late ? 'overdue' : 'due', true, late ? 'Attendance · past ' + cut + ':00' : 'Attendance · due by ' + cut + ':00',
+        late ? 'Not marked today' : 'Not marked yet',
+        late ? 'A mark now is received as late. It is never a miss: an officer who marks has done his part.'
+             : 'One photograph and the location, at the place of duty.',
+        '<button class="btn" id="attAnyway">' + ICON.cam + 'Mark attendance</button>');
+    }
+    return h;
   }
+  /* a mark in exists */
+  const t = tfmt(a.ts);
+  const place = a.verified ? 'location recorded' : a.acc ? 'location only to \u00b1' + Math.round(a.acc) + ' m \u2014 filed as unverified' : 'no location fix \u2014 filed as unverified';
+  const st = (DB.outState && DB.outState.date === key) ? DB.outState : null;
+  const o = (DB.out || {})[key];
+  if(a.sync !== 'synced'){
+    h = tcard('open', true, 'Marked ' + t + ' · waiting to send', 'Marked, on this phone',
+      esc(place) + '. <b>Not yet received by the district.</b> It is held on this phone only, and until it reaches the district you count as unmarked.',
+      '<button class="btn" id="attPush">Send it to the district now</button>');
+  } else if(o || (st && st.markedOut)){
+    const when = o ? o.ts : st.outAt, t2 = tfmt(when);
+    const oplace = !o ? '' : o.verified ? 'location recorded' : o.acc ? 'location only to \u00b1' + Math.round(o.acc) + ' m \u2014 filed as unverified' : 'no location fix \u2014 filed as unverified';
+    if(o && o.sync !== 'synced'){
+      h = tcard('open', true, 'In ' + t + ' · out ' + t2 + ' · waiting to send', 'Marked out, on this phone',
+        'Marked out at ' + esc(t2) + ' · ' + esc(oplace) + '. It has not reached the district yet \u2014 it goes up by itself when there is a line.',
+        '<button class="btn sm quiet" id="outPush">Send it now</button>');
+    } else {
+      h = tcard('done', false, 'Attendance · complete', 'In ' + t + ' · out ' + t2,
+        'Marked out at ' + esc(t2) + (oplace ? ' · ' + esc(oplace) : '') + '. In at ' + esc(t) + ' · ' + esc(place) + '. Both marks are on the register. Nothing more is asked of you today.');
+    }
+  } else {
+    const body = esc(place) + ' · received by the district.';
+    if(st && !st.outFrom && st.why){
+      h = tcard('done', false, 'Attendance · marked ' + t, 'Marked for today',
+        body + ' Marking out is not open today \u2014 seven and a half hours from your mark in would run past the end of the day. Nothing is counted against you.');
+    } else {
+      const openAt = (st && st.outFrom) ? new Date(st.outFrom).getTime() : (new Date(a.ts).getTime() + 450*60000);
+      const told = !!(st && st.outFrom);
+      const t3 = tfmt(new Date(openAt).toISOString());
+      if(Date.now() < openAt){
+        h = tcard('done', false, 'Attendance · marked ' + t, 'Marked for today', body,
+          '<div class="n">Marking out opens at ' + esc(t3) + (told ? '' : ' · the district confirms the exact time') + '</div>');
+      } else {
+        h = tcard('open', true, 'Mark out · open since ' + t3, 'Your day is not closed yet',
+          'Marked in at ' + esc(t) + '. Marking out has been open since ' + esc(t3) + ' and takes one photograph, as marking in did. A missed mark out draws a reminder and nothing else.',
+          '<button class="btn" id="outGo">' + ICON.cam + 'Mark out</button>');
+      }
+    }
+  }
+  if(!a.verified && a.sync === 'synced') h += `<div class="banner warn">${ICON.warn}<span>${esc('Attendance marked at ' + t + ' · ' + place)}</span></div>`;
   const sk = Number(DB.skew) || 0;
   if(Math.abs(sk) > 120){
     const mins = Math.round(Math.abs(sk) / 60);
-    h += `<div class="banner warn">${ICON.warn}<span>This phone\u2019s clock is about <b>${mins} minute${mins===1?'':'s'} ${sk>0?'fast':'slow'}</b>, so times on this screen read wrong. Your attendance is recorded on the district\u2019s clock, so nothing is lost. Please set date and time to automatic in the phone\u2019s settings.</span></div>`;
+    h += `<div class="banner warn">${ICON.warn}<span>This phone\u2019s clock is about <b>${mins} minute${mins===1?'':'s'} ${sk>0?'fast':'slow'}</b>, so times on this screen read wrong. Your attendance is recorded on the district\u2019s clock, not this one.</span></div>`;
   }
-  if(a.dup) h += `<div class="banner warn">${ICON.warn}<span>${esc('Attendance was marked '+a.dup.n+' times today'+(a.dup.firstAt?' — the first at '+new Date(a.dup.firstAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'')+'. One mark a day is enough; repeated marking is on the district record.')}</span></div>`;
+  if(a.dup) h += `<div class="banner warn">${ICON.warn}<span>${esc('Attendance was marked '+a.dup.n+' times today'+(a.dup.firstAt?' — the first at '+tfmt(a.dup.firstAt):'')+'. The first mark is the one that counts.')}</span></div>`;
   return h;
 }
 
@@ -1792,7 +1819,7 @@ function viewerHome(u, ym){
         <span class="lbl"><b>${esc(gp)}</b><span>Grade ${esc(cur.grade)} · evaluated ${esc(niceDate(cur.date))}${cur.officer?' · '+esc(String(cur.officer).replace(/\s*\(\d+\)$/,'')):''}</span></span>
         <span class="chev"></span></div>`;
     } else {
-      h += `<div class="row"><span class="ico" style="background:var(--ink-4)">${ICON.pin}</span>
+      h += `<div class="row"><span class="ico">${ICON.pin}</span>
         <span class="lbl"><b>${esc(gp)}</b><span>Not evaluated yet this month</span></span>
         <span class="pill p-mut">Awaited</span></div>`;
     }
@@ -1874,21 +1901,21 @@ function gpHome(u){
 
   if((u.gps || []).length){
     h += `<div class="group"><div class="hdr">Your charge</div><div class="card">` +
-      u.gps.map(g => `<div class="row"><span class="ico" style="background:var(--seal)">${ICON.pin}</span>
+      u.gps.map(g => `<div class="row"><span class="ico">${ICON.pin}</span>
         <span class="lbl"><b>${esc(g)}</b><span>${esc(u.mandal||'')} mandal</span></span></div>`).join('') +
       `</div></div>`;
   }
   if(leaveVisible(u.role)){
     const pl = pendingLeave().length;
     h += `<div class="group"><div class="hdr">Leave</div><div class="card">
-      <div class="row tap" data-leave="1"><span class="ico" style="background:var(--seal-2)">${ICON.cal}</span>
+      <div class="row tap" data-leave="1"><span class="ico">${ICON.cal}</span>
         <span class="lbl"><b>${pl ? pl + (pl===1?' application waiting':' applications waiting') : 'Apply for leave'}</b>
         <span>Sanctioned by the Collector alone</span></span><span class="chev"></span></div></div></div>`;
   }
   if(canApproveLeave(u.role)){
     h += `<div class="group"><div class="hdr">Monitoring</div><div class="card">
       <a class="row tap" href="${CONSOLE_HREF}" style="text-decoration:none;color:inherit">
-        <span class="ico" style="background:var(--seal-deep)">${ICON.eye}</span>
+        <span class="ico">${ICON.eye}</span>
         <span class="lbl"><b>District monitoring console</b>
         <span>Attendance, the place of duty and leave, live on one screen.</span></span><span class="chev"></span></a>
     </div></div>`;
@@ -1956,7 +1983,7 @@ function districtHome(u, ym){
   if(att){
     const unver = att.filter(a => String(a.verified) === 'false' || a.verified === false).length;
     h += `<div class="group"><div class="hdr">Attendance today</div><div class="card">
-      <div class="row tap" data-attlist="1"><span class="ico" style="background:var(--seal)">${ICON.user}</span>
+      <div class="row tap" data-attlist="1"><span class="ico">${ICON.user}</span>
         <span class="lbl"><b>${att.length} officer${att.length===1?'':'s'} marked present</b>
         <span>${unver?unver+' without a location fix · ':''}${esc(dayName(todayStr()))}</span></span>
         <span class="chev"></span></div></div></div>`;
@@ -1970,7 +1997,7 @@ function districtHome(u, ym){
         <span>Sanctioned or refused by you alone</span></span><span class="chev"></span></div></div></div>`;
     h += `<div class="group"><div class="hdr">Monitoring</div><div class="card">
       <a class="row tap" href="${CONSOLE_HREF}" style="text-decoration:none;color:inherit">
-        <span class="ico" style="background:var(--seal-deep)">${ICON.eye}</span>
+        <span class="ico">${ICON.eye}</span>
         <span class="lbl"><b>District monitoring console</b>
         <span>Attendance, scores and leave, live on one screen. Yours alone.</span></span><span class="chev"></span></a>
     </div></div>`;
@@ -2209,7 +2236,7 @@ function renderInspect(){
       <span class="sw g" role="switch" tabindex="0" aria-checked="${!!r.rfReported}" aria-label="Reported to the Collector" data-fchk="rfReported"></span></div></div></details>`;
 
   /* Panchayat Secretary */
-  h += `<details class="pillar"><summary><span class="tag" style="background:var(--pG)">PS</span>
+  h += `<details class="pillar"><summary><span class="tag">PS</span>
     <span class="pname"><b>Panchayat Secretary</b><span>Section 43, clause by clause</span></span>
     <span class="pscore" id="psT">${psTotal(r)}<em>/100</em></span></summary><div>
     <div class="field"><label for="fPsName">Name</label><input id="fPsName" type="text" data-psname value="${esc(r.ps.name)}" placeholder="Name of the Secretary"></div>`;
@@ -2221,7 +2248,7 @@ function renderInspect(){
   h += `</div></details>`;
 
   /* sanitation workers */
-  h += `<details class="pillar" id="pil-WK"><summary><span class="tag" style="background:var(--pB)">W</span>
+  h += `<details class="pillar" id="pil-WK"><summary><span class="tag">W</span>
     <span class="pname"><b>Sanitation workers</b><span>One sheet per worker</span></span>
     <span class="pscore" id="wkT">${wkAvg(r)}<em>/100</em></span></summary><div id="wkBody">${workersHTML(r)}</div></details>`;
 
@@ -2239,7 +2266,7 @@ function renderInspect(){
   h += `</div></details>`;
 
   /* the fourteen points */
-  h += `<details class="pillar" id="pil-PH" open><summary><span class="tag" style="background:var(--seal)">${ICON.cam}</span>
+  h += `<details class="pillar" id="pil-PH" open><summary><span class="tag">${ICON.cam}</span>
     <span class="pname"><b>The fourteen points</b><span>Each one geo-stamped where it stands</span></span>
     <span class="pscore">${r.photos.length}<em>/14</em></span></summary><div>
     <div class="photos" id="phGrid">${photosHTML(r)}</div>
@@ -2695,7 +2722,7 @@ function renderView(){
     <div class="row"><span class="lbl"><b>Total</b></span><span class="val"><span class="grade g${esc(gr)}" style="padding:3px 11px">${sc} · Grade ${esc(gr)}</span></span></div>
     <div class="row"><span class="lbl"><b>Secretary&rsquo;s own score</b><span>Section 43, out of 100</span></span><span class="val num">${psTotal(rec)}</span></div>
     <div class="row"><span class="lbl"><b>Photographs</b></span><span class="val num">${(rec.photos||[]).length} of 14</span></div>
-    ${row.photoFolder?`<a class="row tap" href="${esc(row.photoFolder)}" target="_blank" rel="noopener"><span class="ico" style="background:var(--pB)">${ICON.cam}</span><span class="lbl"><b>Open the photograph folder</b><span>Opens Google Drive</span></span><span class="chev"></span></a>`:''}
+    ${row.photoFolder?`<a class="row tap" href="${esc(row.photoFolder)}" target="_blank" rel="noopener"><span class="ico">${ICON.cam}</span><span class="lbl"><b>Open the photograph folder</b><span>Opens Google Drive</span></span><span class="chev"></span></a>`:''}
   </div></div>`;
 
   if(rec.rf.length){
@@ -2723,7 +2750,7 @@ function renderView(){
       pl.items.map(([id,q,mx])=>readClause(rec,id,q,mx,id==='G1'?g1Auto(rec):rec.s[id])).join('') +
       `</div></details>`;
   });
-  h += `<details class="pillar"><summary><span class="tag" style="background:var(--pG)">PS</span>
+  h += `<details class="pillar"><summary><span class="tag">PS</span>
     <span class="pname"><b>Your own assessment</b><span>Section 43, clause by clause</span></span>
     <span class="pscore">${psTotal(rec)}<em>/100</em></span></summary><div>` +
     PS_RUBRIC.map(pt=>`<div class="subhead">${esc(pt.part)} · ${pt.max}</div>` +
@@ -2912,7 +2939,7 @@ async function renderMore(){
   const marked=Object.keys(DB.att).length;
   $('#moreBody').innerHTML = `
   <div class="group"><div class="hdr">Account</div><div class="card">
-    <div class="row"><span class="ico" style="background:var(--seal)">${ICON.user}</span>
+    <div class="row"><span class="ico">${ICON.user}</span>
       <span class="lbl"><b>${esc(u.name)}</b><span>${esc(roleName(u.role))}${u.mandal?' · '+esc(u.mandal):''}</span></span>
       ${isViewer(u.role)?'<span class="pill p-info">View access</span>':''}</div>
     <div class="row"><span class="lbl"><b>Mobile</b></span><span class="val num">+91 ${esc(u.phone||'')}</span></div>
@@ -2926,22 +2953,22 @@ async function renderMore(){
       <span>${a?esc(new Date(a.ts).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true})+' · '+(a.verified?'location recorded':'no location fix')+' · '+(a.sync==='synced'?'sent to the district':'on this phone'))
         :(attExempt(u.role)?'The Collector is not asked to mark in. A day may still be marked below, which is useful as proof of a field visit.'
                            :'Attendance is asked for once a day, when the app opens.')}</span></span></div>
-    ${(attExempt(u.role) && !a) ? `<div class="row tap" id="mAttNow"><span class="ico" style="background:var(--seal-2)">${ICON.cam}</span>
+    ${(attExempt(u.role) && !a) ? `<div class="row tap" id="mAttNow"><span class="ico">${ICON.cam}</span>
       <span class="lbl"><b>Mark today anyway</b><span>Photograph and location, the same as any officer</span></span><span class="chev"></span></div>` : ''}
     <div class="row"><span class="lbl"><b>Days marked on this phone</b></span><span class="val num">${marked}</span></div>
   </div></div>
 
   ${leaveVisible(u.role) ? `<div class="group"><div class="hdr">Leave</div><div class="card">
-    <div class="row tap" id="mAdv"><span class="ico" style="background:var(--seal)">${ICON.file}</span>
+    <div class="row tap" id="mAdv"><span class="ico">${ICON.file}</span>
       <span class="lbl"><b>Advisories</b><span>Circulars the District Collector has issued to you</span></span>
       ${advPending() ? '<i class="badge">1</i>' : '<span class="chev">›</span>'}</div>
-    ${(schedState() && schedState().mine && schedState().mine.assigned) ? `<div class="row tap" id="mSched"><span class="ico" style="background:var(--seal-deep)">${ICON.cal}</span>
+    ${(schedState() && schedState().mine && schedState().mine.assigned) ? `<div class="row tap" id="mSched"><span class="ico">${ICON.cal}</span>
       <span class="lbl"><b>Filing schedule</b><span>${schedState().mine.filed} of ${schedState().mine.assigned} villages filed${schedBehind() ? ' · ' + schedBehind() + (schedBehind() === 1 ? ' past its day' : ' past their day') : ''}</span></span>
       ${schedPending() ? '<i class="badge">1</i>' : '<span class="chev">›</span>'}</div>` : ''}
     ${gpdpOffered() ? `<div class="row tap" id="mGpdp"><span class="ico" style="background:var(--gold-ink)">${ICON.file}</span>
       <span class="lbl"><b>Development plan</b><span>Send the Gram Panchayat Development Plan the district has called for</span></span>
       ${gpdpPending() ? '<i class="badge">1</i>' : '<span class="chev">›</span>'}</div>` : ''}
-    <div class="row tap" id="mLeave"><span class="ico" style="background:var(--seal-2)">${ICON.cal}</span>
+    <div class="row tap" id="mLeave"><span class="ico">${ICON.cal}</span>
       <span class="lbl"><b>${canApproveLeave(u.role)?'Leave applications':'Apply for leave'}</b>
       <span>${canApproveLeave(u.role)
         ? 'Applications from the MPO, the Panchayat Secretary and the MPDO'
@@ -2954,7 +2981,7 @@ async function renderMore(){
     <div class="row"><span class="ico" style="background:var(--gold)">${ICON.sun}</span>
       <span class="lbl"><b>Sunlight</b><span>Flat white, black text, heavy rules — for working outdoors</span></span>
       <span class="sw g" role="switch" tabindex="0" aria-checked="${!!DB.prefs.sun}" id="prefSun" aria-label="Sunlight mode"></span></div>
-    <div class="row"><span class="ico" style="background:var(--pG)">${ICON.text}</span>
+    <div class="row"><span class="ico">${ICON.text}</span>
       <span class="lbl"><b>Larger text</b><span>One step up, everywhere</span></span>
       <span class="sw g" role="switch" tabindex="0" aria-checked="${!!DB.prefs.big}" id="prefBig" aria-label="Larger text"></span></div>
   </div></div>
@@ -2965,11 +2992,11 @@ async function renderMore(){
   </div></div>` : ''}
 
   <div class="group"><div class="hdr">Data</div><div class="card">
-    <div class="row tap" id="mPull"><span class="ico" style="background:var(--pB)">${ICON.down}</span>
+    <div class="row tap" id="mPull"><span class="ico">${ICON.down}</span>
       <span class="lbl"><b>Refresh village list</b><span>${(DB.master||[]).length} loaded</span></span><span class="chev"></span></div>
-    ${canEdit()?`<div class="row tap" id="mSync"><span class="ico" style="background:var(--seal-2)">${ICON.cloud}</span>
+    ${canEdit()?`<div class="row tap" id="mSync"><span class="ico">${ICON.cloud}</span>
       <span class="lbl"><b>Sync everything now</b><span>${pendingCount()} record(s), ${pendingAtt()} attendance mark(s) waiting</span></span><span class="chev"></span></div>`:''}
-    <div class="row tap" id="mBackup"><span class="ico" style="background:var(--pG)">${ICON.file}</span>
+    <div class="row tap" id="mBackup"><span class="ico">${ICON.file}</span>
       <span class="lbl"><b>Download a backup</b><span>Everything on this phone, as a file</span></span><span class="chev"></span></div>
     <div class="row"><span class="lbl"><b>Storage used</b><span id="stoTxt">Checking…</span></span></div>
   </div></div>
@@ -3234,26 +3261,28 @@ function refreshWeather(){
   }).catch(()=>{});
 }
 
+/* the IMD bands, in the words a district officer already reads them in */
+const IMD_BAND = { 'light rain':'2.5 to 15.5 mm', 'moderate rain':'15.6 to 64.4 mm', 'heavy rain':'64.5 to 115.5 mm',
+                   'very heavy rain':'115.6 to 204.4 mm', 'extremely heavy rain':'above 204.4 mm' };
 function weatherCard(){
   const st = wxState(); if(!st || !st.mine) return '';
   const w = st.mine;
   const lvl = w.level || 'CALM';
-  const tone = lvl === 'SEVERE' ? 'var(--flag)' : lvl === 'WATCH' ? 'var(--gold-ink)' : 'var(--ok)';
-  const head = lvl === 'SEVERE' ? 'Severe weather expected'
-             : lvl === 'WATCH'  ? 'Watch the weather today'
-             : 'Weather today';
-  const bits = [];
-  if(w.today) bits.push(w.today);
-  if(w.tmax != null) bits.push(Math.round(w.tmax) + '° max');
-  if(w.rainClass) bits.push(w.rainClass + (w.rain != null ? ' · ' + Math.round(w.rain) + ' mm' : ''));
-  else if(w.rain != null && w.rain >= 1) bits.push(Math.round(w.rain) + ' mm');
-  if(w.wind != null && w.wind >= 25) bits.push('wind to ' + Math.round(w.wind) + ' km/h');
-  return `<div class="group" style="margin-top:16px"><div class="hdr">${esc(w.mandal || 'Your mandal')} &middot; forecast</div>
-    <div class="card"><div class="row">
-      <span class="ico" style="background:${tone}">${ICON.cloud}</span>
-      <span class="lbl"><b>${esc(head)}</b><span>${esc(bits.join(' · '))}</span></span>
-      ${w.temp != null ? `<span class="num" style="font-size:19px;font-weight:750">${Math.round(w.temp)}°</span>` : ''}
-    </div></div></div>`;
+  const head = lvl === 'SEVERE' ? 'Severe weather expected' : lvl === 'WATCH' ? 'Watch the weather today' : (w.today || 'Weather today');
+  const sub = [esc(w.mandal || 'Your mandal') + ' · forecast'];
+  if(w.now && lvl !== 'CALM') sub.push(esc(w.today || w.now));
+  if(st.at) sub.push('read at ' + esc(tfmt(st.at)));
+  const rc = String(w.rainClass || '').toLowerCase();
+  const band = IMD_BAND[rc] || '';
+  const wet = w.rain != null && w.rain >= 2.5;
+  const fig = `<div class="fig">
+    <div>Max<b class="num">${w.tmax != null ? Math.round(w.tmax) + '°' : '—'}</b>today</div>
+    <div class="${wet ? 'wet' : ''}">Rain<b class="num">${w.rain != null ? Math.round(w.rain) + ' mm' : '—'}</b>${w.rainChance != null ? Math.round(w.rainChance) + '% chance' : 'today'}</div>
+    <div>Wind<b class="num">${w.wind != null ? Math.round(w.wind) : '—'}</b>km/h</div></div>`;
+  let imd = '';
+  if(rc && band) imd = `<div class="imd"><b class="${lvl === 'SEVERE' ? 's' : lvl === 'WATCH' ? 'w' : ''}">${esc(rc.charAt(0).toUpperCase() + rc.slice(1))}</b> by the IMD scale (${esc(band)})${/moderate|heavy/.test(rc) ? ' · plan village visits for the morning' : ''}</div>`;
+  else if(w.wind != null && w.wind >= 25) imd = `<div class="imd">Wind to <b>${Math.round(w.wind)} km/h</b> today</div>`;
+  return `<div class="wx"><div class="now"><span class="deg num">${w.temp != null ? Math.round(w.temp) + '°' : ''}</span><div><b>${esc(head)}</b><span>${sub.join(' · ')}</span></div></div>${fig}${imd}</div>`;
 }
 
 /* Raised once per opening, and only when the sky is worth a notification. A
@@ -3950,7 +3979,7 @@ function scheduleCard(){
     return `<div class="group pinned" style="margin-top:16px">
       <div class="hdr">Pending &middot; your filing schedule</div>
       <div class="card"><div class="row tap" data-sched="1">
-        <span class="ico" style="background:var(--seal)">${ICON.cal}</span>
+        <span class="ico">${ICON.cal}</span>
         <span class="lbl"><b>${m.assigned} village${m.assigned === 1 ? '' : 's'} are on your schedule</b>
         <span>${esc(win)} · tap to read it and tell the district you have seen it</span></span>
         <span class="chev">›</span></div></div></div>`;
@@ -3972,7 +4001,7 @@ function scheduleCard(){
         <span class="lbl"><b>${m.filed} of ${m.assigned} filed${late ? ' · ' + late + (late === 1 ? ' past its day' : ' past their day') : ''}</b>
         <span>${m.left} still to file · ${st.workingDaysLeft} working day${st.workingDaysLeft === 1 ? '' : 's'} left${m.dueToday ? ' · ' + m.dueToday + ' set for today' : ''}</span></span>
         <span class="chev">›</span></div>
-      ${nud ? `<div class="row tap" data-sched="1"><span class="ico" style="background:var(--seal-deep)">${ICON.text}</span>
+      ${nud ? `<div class="row tap" data-sched="1"><span class="ico">${ICON.text}</span>
         <span class="lbl"><b>${nud} message${nud === 1 ? '' : 's'} from the district</b><span>Tap to read</span></span>
         <span class="chev">›</span></div>` : ''}
     </div></div>`;

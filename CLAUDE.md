@@ -2150,3 +2150,44 @@ Before claiming something works: run it. Before claiming a screen looks right:
 render it. A green tick that was never executed is worse than no tick at all —
 one of these suites once passed for the wrong reason, and that near-miss is
 why the tests load the backend from disk.
+
+---
+
+## The look of the field app
+
+**Ordered 14.10.2026, from five named directions.** The look and feel are
+Material You's — tonal surfaces, 20px cards, pill buttons, the tonal pill
+behind the active tab, the one gradient — and the type and the icons are
+Base's: heavy, tight headlines at 800, and icons as stroke marks on 44px round
+neutral discs with the ink on them. The decorative indigo tints came off the
+discs; the tints that carry meaning (green, amber, red, gold) stay on their
+rows, because a colour on this app should mean one thing. `design/options.html`
+holds the five directions side by side, `design/prototype.html` the chosen one
+tapped through; both are rendered by their own scripts under `design/`.
+Restore point: `pre-redesign-2026-10-14`.
+
+**The welcome is for people, not robots.** It stands in front of sign-in on
+every opening — the seal the app ships as its icon, the four words of the name
+arriving in turn, a line that runs — for 2.6 seconds or until a tap, and it is
+then **removed from the document**, not hidden, so nothing can sit under it.
+A driven browser (`navigator.webdriver`) is never shown it, so every render
+pass sees the app and not a splash; `tests/render-welcome.js` asks for it by
+name (`?welcome=1`) and asserts that it draws, that the emblem loaded, and that
+it is gone by four seconds with sign-in underneath. A welcome that stayed
+would stand between 280 officers and their attendance.
+
+**The Today card takes its colour from the register and from nothing else.**
+Red-leaning while a mark is owed (deeper, with a rule round it, past the
+cutoff), green once the district holds it, amber while a mark out is open or a
+mark is still on the phone, grey on a holiday, on sanctioned leave, or for an
+office whose attendance is voluntary. It replaced the two strips (mark in,
+mark out) and carries their sentences unchanged — *Marking out opens at*, *has
+been open since*, *Marked out at*, *NOT yet received by the district* in bold
+with the button — because `tests/render-out.js` and `tests/render-handset.js`
+assert those words, and the words were paid for. Not one sentence on it names
+a sanction. The ids the handlers bind (`#attAnyway`, `#attPush`, `#outGo`,
+`#outPush`) are the same ids. The weather sits directly under it: the figure,
+max, rain with its chance, wind, and the rain class spelt out **by the IMD
+scale with its band in millimetres** — the classing `wxRainClass_` already did
+— so a district officer reads the word in the sense everyone else in the state
+does.
