@@ -104,6 +104,39 @@ svg.i{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke
 .card{background:var(--surface-low);border-radius:20px;padding:16px}
 .card.bright{background:var(--surface-bright);box-shadow:var(--shadow)}
 .card.hero{background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff}
+/* The state card. The tint says what the register holds for the day and nothing else: red-leaning while a
+   mark is owed, green once it is held, amber while something is open or still on the phone, grey when the
+   day asks for nothing. The gradient is not used here: a colour that means something must not compete
+   with one that is decoration. */
+.card.state{--st:var(--on-surface-2);--st-bg:var(--surface-mid);--st-c:var(--surface);background:var(--st-bg);color:var(--on-surface)}
+.card.state.due{--st:var(--err);--st-bg:var(--err-container);--st-c:var(--err-container)}
+.card.state.overdue{--st:var(--err);--st-bg:var(--err-container);--st-c:var(--err-container);box-shadow:inset 0 0 0 2px var(--err)}
+.card.state.done{--st:var(--ok);--st-bg:var(--ok-container);--st-c:var(--ok-container)}
+.card.state.open{--st:var(--warn);--st-bg:var(--warn-container);--st-c:var(--warn-container)}
+.card.state.rest{--st:var(--on-surface-2);--st-bg:var(--surface-mid);--st-c:var(--surface)}
+.card.state .st-k{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--st)}
+.card.state .st-k i{width:10px;height:10px;border-radius:50%;background:var(--st);flex:0 0 auto}
+.card.state .st-k i.live{box-shadow:0 0 0 0 var(--st);animation:st-pulse 1.8s ease-out infinite}
+@keyframes st-pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--st) 55%,transparent)}100%{box-shadow:0 0 0 9px transparent}}
+.card.state .st-t{font-size:24px;font-weight:800;letter-spacing:-.4px;line-height:1.15;margin-top:8px}
+.card.state .st-b{font-size:14px;color:var(--on-surface-2);margin-top:6px;line-height:1.45}
+.card.state .btn.st{background:var(--st);color:var(--st-c);margin-top:14px}
+.card.state .st-n{margin-top:12px;font-size:13px;font-weight:600;color:var(--st)}
+.card.state .st-ic{position:absolute;right:16px;top:16px;color:var(--st);opacity:.9}
+.card.state{position:relative;padding-right:56px}
+.card.state .btn.st{margin-right:-40px}
+/* weather: one line of fact, one line of what it means for the morning, four hours across */
+.card.wx{display:flex;flex-direction:column;gap:10px}
+.card.wx .now{display:flex;align-items:center;gap:12px}
+.card.wx .deg{font-size:28px;font-weight:800;letter-spacing:-.8px;line-height:1}
+.card.wx .now b{display:block;font-size:15px;font-weight:600}
+.card.wx .now div span{display:block;font-size:13px;color:var(--on-surface-2)}
+.card.wx .hrs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.card.wx .hr{background:var(--surface-bright);border-radius:12px;padding:8px 4px;text-align:center;font-size:12px;color:var(--on-surface-2)}
+.card.wx .hr b{display:block;font-size:14px;color:var(--on-surface);font-weight:700;margin:4px 0 2px}
+.card.wx .hr.rain{background:var(--primary-container);color:var(--on-primary-container)}.card.wx .hr.rain b{color:inherit}
+.card.wx .imd{font-size:12px;color:var(--on-surface-2)}
+.card.wx .imd b{color:var(--warn);font-weight:700}
 .card.tonal{background:var(--primary-container);color:var(--on-primary-container)}
 .eyebrow{font-size:12px;font-weight:600;color:var(--on-surface-2);letter-spacing:.2px}
 .title-l{font-size:24px;font-weight:800;line-height:1.2;letter-spacing:-.4px;margin:0}
@@ -171,6 +204,7 @@ svg.i{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke
 .tl{display:flex;gap:12px;align-items:flex-start;padding:6px 0}
 .tl .dot{width:12px;height:12px;border-radius:50%;background:var(--ok);margin-top:5px;flex:0 0 auto;box-shadow:0 0 0 3px var(--ok-container)}
 .tl .dot.off{background:var(--outline-v);box-shadow:none}
+.tl .dot.wait{background:var(--warn);box-shadow:0 0 0 3px var(--warn-container)}
 .tl .t{font-size:13px;color:var(--on-surface-2);min-width:64px}
 .tl b{font-weight:500;font-size:14px}
 .seg{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
@@ -242,19 +276,15 @@ svg.i{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke
       <div class="eyebrow">Tuesday, 14 October · Konne, Bachannapeta</div>
       <p class="title-l">Good morning, Ravi Kumar</p>
     </div>
-    <div class="card hero" id="home-att">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-        <div><div style="font-size:12px;opacity:.85;font-weight:500">Attendance</div><div style="font-size:24px;font-weight:800;letter-spacing:-.4px;line-height:1.15;margin-top:2px">Not marked yet</div><div style="font-size:13px;opacity:.9;margin-top:4px">Marks are due by 11:00. You are 30 m from the Konne office.</div></div>
-        <svg class="i" viewBox="0 0 24 24" style="width:28px;height:28px;opacity:.9"><path d="M12 2.6c-3.2 0-5.8 2.6-5.8 5.8 0 4.2 5.8 12 5.8 12s5.8-7.8 5.8-12c0-3.2-2.6-5.8-5.8-5.8z"/><circle cx="12" cy="8.4" r="2.2"/></svg>
-      </div>
-      <button class="btn" style="background:#fff;color:var(--on-primary-container);margin-top:14px" data-go="mark"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h3l2-2.5h6L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.2"/></svg>Mark attendance</button>
+    <div class="card state due" id="home-att"></div>
+    <div class="card wx" id="home-wx">
+      <div class="now"><span class="deg num">28°</span><div><b>Cloudy, rain after 2 pm</b><span>Konne · from the district's hourly forecast · read at 08:50</span></div></div>
+      <div class="hrs"><div class="hr">10 am<b class="num">29°</b>dry</div><div class="hr">1 pm<b class="num">30°</b>dry</div><div class="hr rain">4 pm<b class="num">25°</b>22 mm</div><div class="hr rain">7 pm<b class="num">24°</b>9 mm</div></div>
+      <div class="imd"><b>Moderate rain</b> by the IMD scale (15.6 to 64.4 mm) · plan village visits for the morning</div>
     </div>
     <div class="card">
       <div class="title-m">Your day</div>
-      <div class="timeline">
-        <div class="tl"><div class="dot off"></div><div class="t">Morning</div><div><b>Mark in</b><br><span class="body">At the Konne office, with a photograph</span></div></div>
-        <div class="tl"><div class="dot off"></div><div class="t">Evening</div><div><b>Mark out</b><br><span class="body">Opens seven and a half hours after you mark in</span></div></div>
-      </div>
+      <div class="timeline" id="home-tl"></div>
     </div>
     <div class="section">To do</div>
     <div class="card bright" style="padding:4px 16px">
@@ -323,41 +353,6 @@ svg.i{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke
     <button class="btn filled" data-go="marked">Mark attendance</button>
     <button class="btn text" data-go="mark">Take it again</button>
   </div>
-</section>
-
-<!-- ======================= MARKED (HOME, after) ======================= -->
-<section class="screen" data-s="marked">
-  <div class="bar"><h1>Today</h1><button class="ic" data-go="more"><span class="avatar">RK</span></button></div>
-  <div class="scroll">
-    <div><div class="eyebrow">Tuesday, 14 October · Konne, Bachannapeta</div><p class="title-l">Good morning, Ravi Kumar</p></div>
-    <div class="banner ok"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg>Marked at 09:28 · location measured · received by the district</div>
-    <div class="card">
-      <div class="title-m">Your day</div>
-      <div class="timeline">
-        <div class="tl"><div class="dot"></div><div class="t num">09:28</div><div><b>Marked in</b><br><span class="body">30 m from the Konne office · ±9 m</span></div></div>
-        <div class="tl"><div class="dot off"></div><div class="t num">16:58</div><div><b>Mark out opens</b><br><span class="body">Seven and a half hours after marking in</span></div></div>
-      </div>
-    </div>
-    <div class="section">To do</div>
-    <div class="card bright" style="padding:4px 16px">
-      <button class="row" style="width:100%;text-align:left" data-go="inspect">
-        <span class="lead"><svg class="i" viewBox="0 0 24 24"><path d="M9 11l3 3 7-7"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg></span>
-        <span class="txt"><b>Evaluate Konne for October</b><span>Due 9 November · 100-mark sheet with photographs</span></span>
-        <svg class="i trail" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
-      </button>
-    </div>
-    <div class="section">This month</div>
-    <div class="stat">
-      <div class="card"><div class="v num">12<span style="font-size:15px;color:var(--on-surface-2);font-weight:500">/12</span></div><div class="k">days marked</div></div>
-      <div class="card"><div class="v num">82</div><div class="k">Konne's September score</div></div>
-    </div>
-  </div>
-  <nav class="nav" data-nav>
-    <button data-go="home" aria-current="page"><span class="pill"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></span>Today</button>
-    <button data-go="inspect"><span class="pill"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 12l3 3 5-6"/></svg></span>Villages</button>
-    <button data-go="records"><span class="pill"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4"/></svg></span>Records</button>
-    <button data-go="more"><span class="pill"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></span>More</button>
-  </nav>
 </section>
 
 <!-- ======================= VILLAGES / INSPECT ======================= -->
@@ -571,12 +566,12 @@ svg.i{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke
   <p>Tap through on the phone. Every screen has one primary action, the bottom bar never leaves, and the day's status is always the first thing on Today.</p>
   <p>The direction chosen on 14.10.2026: Material You's look and feel (tonal surfaces, pill buttons, the one gradient, the tonal bar) with Base's type and icons (heavy, tight headlines; round neutral discs with stroke icons). The welcome opens on the Government of Telangana seal and moves on by itself.</p>
   <div class="jump"><button data-go="welcome">Welcome</button>
-    <button data-go="signin">Sign in</button><button data-go="home">Today</button><button data-go="mark">Mark attendance</button><button data-sheet="still">Not measured</button><button data-go="photo">Confirm</button><button data-go="marked">Marked</button><button data-go="inspect">Villages</button><button data-go="score">Score sheet</button><button data-go="summary">Review</button><button data-go="filed">Filed</button><button data-go="records">Records</button><button data-go="leave">Leave</button><button data-go="notices">Notices</button><button data-go="more">More</button><button data-go="offline">Offline</button><button data-sheet="refused">Refused</button>
+    <button data-go="signin">Sign in</button><button data-go="home">Today</button><button data-state="overdue">Today · past 11</button><button data-state="done">Today · marked</button><button data-state="queued">Today · queued</button><button data-state="out">Today · mark out</button><button data-state="closed">Today · complete</button><button data-state="holiday">Today · holiday</button><button data-state="leave">Today · on leave</button><button data-go="mark">Mark attendance</button><button data-sheet="still">Not measured</button><button data-go="photo">Confirm</button><button data-go="marked">Marked</button><button data-go="inspect">Villages</button><button data-go="score">Score sheet</button><button data-go="summary">Review</button><button data-go="filed">Filed</button><button data-go="records">Records</button><button data-go="leave">Leave</button><button data-go="notices">Notices</button><button data-go="more">More</button><button data-go="offline">Offline</button><button data-sheet="refused">Refused</button>
   </div>
   <ol>
     <li><b>Welcome</b> plays once an opening: the seal, the name word by word, a line that runs for five seconds, then sign in. A tap skips it.</li>
     <li><b>Sign in</b> once: number and PIN, then the phone remembers the officer.</li>
-    <li><b>Today</b> opens on the day's status. If attendance is not marked, the only thing that matters is the card at the top.</li>
+    <li><b>Today</b> opens on the day's status, and the card takes its colour from what the register holds: red-leaning while a mark is owed, green once it is held, amber while a mark out is open or a mark is still on the phone, grey on a holiday or sanctioned leave. The chrome stays neutral, so colour means one thing. Weather sits under it, classed the IMD way, with what it means for the morning.</li>
     <li><b>Mark attendance</b>: the location is read four times while the photograph is taken. Identical readings bring up the walk-and-read-again sheet. Out of place brings up the fence sheet.</li>
     <li><b>Confirm</b> shows the stamped photograph and the two checks that passed before the mark goes.</li>
     <li><b>Villages</b> lists what is due this reporting month, then the score sheet one section at a time, then review and file.</li>
@@ -598,7 +593,34 @@ svg.i{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke
     ack:{ title:'Acknowledged', body:'The district records that you have read the circular on 14 October at 09:31. It stays under More › Circulars.', primary:'Done', go:'home' }
   };
   let welT = null;
+  /* TODAY_STATES: what the register holds for the day decides the card. Every sentence here is one the
+     register can actually stand behind, and none of them names a sanction. */
+  const TODAY_STATES = {
+    due:     { cls:'due',  live:true,  k:'Attendance · due by 11:00', t:'Not marked yet', b:'You are 30 m from the Konne office. 1 h 32 min left.', btn:'Mark attendance', go:'mark', tl:[['off','Morning','Mark in','At the Konne office, with a photograph'],['off','Evening','Mark out','Opens seven and a half hours after you mark in']] },
+    overdue: { cls:'overdue', live:true, k:'Attendance · past 11:00', t:'Not marked today', b:'A mark now is received as late. It is never a miss: the officer who marks has done his part.', btn:'Mark attendance now', go:'mark', tl:[['off','Morning','Mark in','Not yet · the day is read at 18:00'],['off','Evening','Mark out','Opens seven and a half hours after you mark in']] },
+    done:    { cls:'done', k:'Attendance · marked 09:28', t:'Marked for today', b:'30 m from the Konne office · ±9 m · location measured · received by the district.', note:'Mark out opens at 16:58', tl:[['on','09:28','Marked in','30 m from the Konne office · ±9 m'],['off','16:58','Mark out opens','Seven and a half hours after marking in']] },
+    queued:  { cls:'open', live:true, k:'Marked 09:28 · waiting to send', t:'Marked, on this phone', b:'It goes up the moment there is a line. The district reads the day at 18:00, so there is time.', note:'Nothing to do · keep the phone on', tl:[['wait','09:28','Marked in','Held on this phone until there is signal'],['off','16:58','Mark out opens','Seven and a half hours after marking in']] },
+    out:     { cls:'open', live:true, k:'Mark out · open since 16:58', t:'Mark out before 21:00', b:'Marked in at 09:28. A missed mark out draws a reminder and nothing else.', btn:'Mark out', go:'mark', tl:[['on','09:28','Marked in','30 m from the Konne office · ±9 m'],['off','16:58','Mark out','Open now · closes at 21:00']] },
+    closed:  { cls:'done', k:'Attendance · complete', t:'In 09:28 · out 17:04', b:'Both marks are on the register. Nothing more is asked of you today.', tl:[['on','09:28','Marked in','30 m from the Konne office · ±9 m'],['on','17:04','Marked out','40 m from the Konne office · ±11 m']] },
+    holiday: { cls:'rest', k:'Wednesday 15 October · Dasara', t:'Holiday · no attendance', b:'A General Holiday under G.O.Rt.No.1715. The register asks for nothing today.', tl:[['off','Today','No mark asked for','Holidays are never counted as working days']] },
+    leave:   { cls:'rest', k:'Casual leave · sanctioned', t:'On leave today', b:'Sanctioned by the Collector on 12 October. Silence today is leave, not absence.', note:'Back on Thursday 16 October', tl:[['off','Today','On sanctioned leave','No mark is asked for and none is counted against you']] }
+  };
+  const ST_ICON = { due:'<svg class="i" viewBox="0 0 24 24" style="width:28px;height:28px"><path d="M12 2.6c-3.2 0-5.8 2.6-5.8 5.8 0 4.2 5.8 12 5.8 12s5.8-7.8 5.8-12c0-3.2-2.6-5.8-5.8-5.8z"/><circle cx="12" cy="8.4" r="2.2"/></svg>', overdue:'<svg class="i" viewBox="0 0 24 24" style="width:28px;height:28px"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>', done:'<svg class="i" viewBox="0 0 24 24" style="width:28px;height:28px"><path d="M5 12l4 4L19 6"/></svg>', open:'<svg class="i" viewBox="0 0 24 24" style="width:28px;height:28px"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>', rest:'<svg class="i" viewBox="0 0 24 24" style="width:28px;height:28px"><rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4"/></svg>' };
+  let todayState = 'due';
+  function renderToday(state){
+    const d = TODAY_STATES[state] || TODAY_STATES.due; todayState = d === TODAY_STATES.due ? 'due' : state;
+    const card = $('#home-att'); card.className = 'card state ' + d.cls;
+    card.innerHTML = '<span class="st-ic">' + ST_ICON[d.cls] + '</span><div class="st-k"><i class="' + (d.live ? 'live' : '') + '"></i>' + d.k + '</div><div class="st-t">' + d.t + '</div><div class="st-b">' + d.b + '</div>' +
+      (d.btn ? '<button class="btn st" data-go="' + d.go + '"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h3l2-2.5h6L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.2"/></svg>' + d.btn + '</button>' : '') +
+      (d.note ? '<div class="st-n">' + d.note + '</div>' : '');
+    $('#home-tl').innerHTML = d.tl.map(r => '<div class="tl"><div class="dot ' + (r[0] === 'on' ? '' : r[0] === 'wait' ? 'wait' : 'off') + '"></div><div class="t' + (/\d/.test(r[1]) ? ' num' : '') + '">' + r[1] + '</div><div><b>' + r[2] + '</b><br><span class="body">' + r[3] + '</span></div></div>').join('');
+    /* the holiday and the leave day are not Tuesday */
+    const eb = $('.screen[data-s="home"] .eyebrow');
+    eb.textContent = state === 'holiday' ? 'Wednesday, 15 October · Konne, Bachannapeta' : 'Tuesday, 14 October · Konne, Bachannapeta';
+  }
   function show(name){
+    if(name === 'marked'){ name = 'home'; renderToday('done'); }
+    if(name.indexOf('home-') === 0){ renderToday(name.slice(5)); name = 'home'; }
     $$('.screen').forEach(s => s.classList.toggle('on', s.dataset.s === name));
     clearTimeout(welT);
     if(name === 'welcome'){
@@ -607,8 +629,10 @@ svg.i{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke
       welT = setTimeout(() => { if($('.screen[data-s="welcome"]').classList.contains('on')) show('signin'); }, 5200);
     }
     $('#phone .scroll') ; $$('.screen.on .scroll').forEach(el => el.scrollTop = 0);
-    try{ history.replaceState(null, '', '#' + name); }catch(e){}
+    try{ history.replaceState(null, '', '#' + (name === 'home' && todayState !== 'due' ? 'home-' + todayState : name)); }catch(e){}
   }
+  document.addEventListener('click', e => { const s = e.target.closest('[data-state]'); if(s){ renderToday(s.dataset.state); show('home'); } });
+  renderToday('due');
   function sheet(name){
     const d = SHEETS[name]; if(!d) return;
     $('#sheet').innerHTML = '<div class="handle"></div><h2>' + d.title + '</h2><p>' + d.body + '</p>' +
@@ -629,6 +653,7 @@ svg.i{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke
     const h = (location.hash || '').slice(1);
     hide();
     if(h === 'still' || h === 'refused'){ show('mark'); sheet(h); return; }
+    if(h === 'marked' || h.indexOf('home-') === 0){ show(h); return; }
     show(document.querySelector('.screen[data-s="' + h + '"]') ? h : 'home');
   }
   window.addEventListener('hashchange', route);

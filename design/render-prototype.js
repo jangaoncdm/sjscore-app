@@ -3,7 +3,7 @@
 const fs = require('fs'), path = require('path'), http = require('http');
 const { chromium } = require('playwright');
 const OUT = path.join(__dirname, '..', 'Info', 'design');
-const SCREENS = ['welcome', 'signin', 'home', 'mark', 'photo', 'marked', 'inspect', 'score', 'summary', 'filed', 'records', 'leave', 'notices', 'more', 'offline'];
+const SCREENS = ['welcome', 'signin', 'home', 'mark', 'photo', 'marked', 'home-overdue', 'home-queued', 'home-out', 'home-closed', 'home-holiday', 'home-leave', 'inspect', 'score', 'summary', 'filed', 'records', 'leave', 'notices', 'more', 'offline'];
 const SHEETS = ['still', 'refused'];
 (async () => {
   fs.mkdirSync(OUT, { recursive:true });
