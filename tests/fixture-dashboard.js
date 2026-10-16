@@ -375,7 +375,11 @@ function build(){
   const lr = env.get('leaveRegister', { token: token, year: '2026' });
   if(lr.ok === false) throw new Error('the leave register refused: ' + lr.error);
   console.log('leave register       : ' + lr.officers.length + ' officers · ' + lr.totals.taken + ' days taken · ' + lr.totals.exhausted + ' exhausted');
-  return { dash: d, sched: s, pub: pub, mock: mk, leave: lr };
+  /* the year of attendance, for the calendar on the Overview and the Attendance screen */
+  const ac = env.get('attCalendar', { token: token, year: '2026' });
+  if(ac.ok === false) throw new Error('the attendance calendar refused: ' + ac.error);
+  console.log('attendance calendar  : ' + Object.keys(ac.cal).length + ' days · ' + ac.totals.marks + ' marks · ' + ac.due + ' due');
+  return { dash: d, sched: s, pub: pub, mock: mk, leave: lr, attcal: ac };
 }
 
 const out = process.argv[2] || path.join(__dirname, 'fixture-dashboard.json');
@@ -391,6 +395,9 @@ fs.writeFileSync(mout === out ? path.join(__dirname, 'fixture-mockloc.json') : m
 const lout = out.replace(/fixture-dashboard\.json$/, 'fixture-leave.json');
 fs.writeFileSync(lout === out ? path.join(__dirname, 'fixture-leave.json') : lout,
                  JSON.stringify(built.leave));
+const aout = out.replace(/fixture-dashboard\.json$/, 'fixture-attcal.json');
+fs.writeFileSync(aout === out ? path.join(__dirname, 'fixture-attcal.json') : aout,
+                 JSON.stringify(built.attcal));
 console.log('officers on the roll : ' + data.totals.officers);
 console.log('present today        : ' + data.today.present.length);
 console.log('on leave / not marked: ' + data.today.onLeave.length + ' / ' + data.today.absent.length);

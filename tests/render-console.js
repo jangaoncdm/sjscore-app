@@ -49,6 +49,7 @@ const VIEWS = ['overview', 'attendance', 'villages', 'schedule', 'leave', 'notic
 const MOCKFIX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-mockloc.json'), 'utf8'));
 /* the leave register is its own call too, read when the Leave screen is opened */
 const LEAVEFIX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-leave.json'), 'utf8'));
+const ATTCALFIX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-attcal.json'), 'utf8'));
 /* the filing schedule is fetched by its own call, so it needs its own fixture —
    built by fixture-dashboard.js off the same real backend run */
 const SCHEDFIX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-schedule.json'), 'utf8'));
@@ -141,6 +142,7 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
                              : /op=schedule/.test(u) ? SCHEDFIX
                              : /op=mockloc/.test(u) ? MOCKFIX
                              : /op=leaveRegister/.test(u) ? LEAVEFIX
+                             : /op=attCalendar/.test(u) ? ATTCALFIX
                              : /op=outday/.test(u) ? OUTFIX : payload) });
       });
       await page.route('**/gp.district/**', r =>
@@ -189,6 +191,23 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
            against his name while his mark had passed the fence. Both
            distances are drawn now, officer by officer, and the mandal one is
            kept because a village the roll has not placed has nothing else. */
+        /* ---- ATTENDANCE, DAY BY DAY (16.10.2026): the year's calendar on the
+           Overview and on the Attendance screen, off its own call. The fixture
+           plants a fortnight of marks; the map must show them, total the
+           weeks, offer the measures, and say that due is today's roll. ---- */
+        if(v === 'overview' || v === 'attendance'){
+          const lbl = size.n + '/' + theme + '/' + v + '/calendar';
+          await page.waitForTimeout(500);
+          const txt = await page.$eval('#g', e => e.innerText);
+          const cells = await page.$$eval('#atcCal td.c', cs => cs.filter(c => /k[1-5]/.test(c.className)).length).catch(() => 0);
+          if(cells < 8) problems.push(lbl + ': the attendance calendar has ' + cells + ' filled days, expected the planted fortnight');
+          const wk = await page.$$eval('#atcCal td.w', ws => ws.filter(w => w.textContent.trim()).length).catch(() => 0);
+          if(wk < 2) problems.push(lbl + ': the week totals row is empty');
+          if(!/Due is today/i.test(txt)) problems.push(lbl + ': the screen does not say that due is today’s roll');
+          const opts = await page.$$eval('#atcMeasure option', os => os.map(o => o.value)).catch(() => []);
+          if(!(opts.includes('notmarked') && opts.includes('late') && opts.includes('leave'))) problems.push(lbl + ': the measures are not all offered');
+          if(!/CSV · week by week/.test(txt)) problems.push(lbl + ': no way to download the days');
+        }
         if(v === 'attendance'){
           const lbl = size.n + '/' + theme + '/attendance';
           const txt = await page.$eval('#g', e => e.innerText);

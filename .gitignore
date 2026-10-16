@@ -24,6 +24,7 @@ tests/fixture-docs.json
 tests/fixture-schedule.json
 tests/fixture-mockloc.json
 tests/fixture-leave.json
+tests/fixture-attcal.json
 
 # The MPDO office staff list: 192 personal mobile numbers. THIS REPOSITORY IS
 # PUBLIC. It was committed on 04.10.2026 by a `git add -A` and had to be

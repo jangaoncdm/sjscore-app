@@ -55,3 +55,16 @@ Palette (light, surface #FFFFFF, categorical): 8 slots
   → FAILED — fix the marked checks  (CVD in the 6–8 floor band is legal ONLY with secondary encoding: direct labels, gaps, or texture)
   scope: categorical palettes only. For a lone status/text color check WCAG text contrast; for a sequential ramp, lightness monotonicity.
 
+
+=== HEAT RAMP (multi-hue), 16.10.2026 ===
+Asked by the Collector for the heat maps (leave by month, leave by week, attendance by week):
+more than one hue. A sequential ramp is checked for LIGHTNESS MONOTONICITY, not CVD
+separation; many hues and one order is legal so long as L* falls at every step.
+  light  --hm1..5  #FFE08A #FDB24B #F0712E #C9304A #7A1F6E   L* 90 > 78 > 62 > 46 > 30   monotonic
+  dark   --hm1..5  #FFE38F #FFB457 #F77C3A #E0455E #B04AA8   L* 91 > 79 > 65 > 53 > 48   monotonic
+  contrast vs light card #FFFFFF: 1.29 1.80 2.96 5.24 9.34  — the pale steps rely on relief (the cell
+    grid and the figure printed in the cell), as the categorical amber does on the attendance screen
+  contrast vs dark card #171B2D: 13.5 9.7 6.4 4.2 3.6 — every step clears 3:1, so the ramp does NOT
+    invert on the dark card the way --co does
+  ink on cells: dark ink (#1A2437) on steps 1–3 (12.1, 8.6, ~5), white on steps 4–5 (5.2, 9.3)
+  scope: density cells only. Bars, lines and ranks stay on --co; nothing else may read --hm.

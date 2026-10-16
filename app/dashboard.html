@@ -742,6 +742,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
   /* ordinal: ONE hue, least → most. Ordered bands (hours of the morning,
      ten-mark score bands) are one axis, not eight identities. */
   --co1:#a3aaf1; --co2:#8b93ee; --co3:#6f7ae9; --co4:#5462d8; --co5:#3a46c4;
+  /* the HEAT ramp (16.10.2026): the Collector asked for more than one hue on the
+     heat maps. Yellow to amber to orange to red to deep magenta — many hues, ONE
+     order, because L* falls at every step (91 > 78 > 63 > 45 > 30), so it still
+     reads least-to-most to any eye. It is for density cells only; a bar or a line
+     stays on --co. The record is prompt/palette-validation.txt. */
+  --hm1:#FFE08A; --hm2:#FDB24B; --hm3:#F0712E; --hm4:#C9304A; --hm5:#7A1F6E;
+  --hm-ink-lo:#1A2437; --hm-ink-hi:#FFFFFF;
   /* reserved. These mean good / warning / bad and are never series 4. */
   --st-ok:#15803D; --st-warn:#B45309; --st-bad:#B91C1C; --st-idle:#8E97AE;
 }
@@ -772,6 +779,10 @@ body.dark{
   --cs1:#6b78ea; --cs2:#17a98f; --cs3:#bf8718; --cs4:#8f6ff0;
   --cs5:#d9484c; --cs6:#2f9fce; --cs7:#8a9a20; --cs8:#b8446a;
   --co1:#3a46c4; --co2:#5866e0; --co3:#7b87ec; --co4:#a0a9f3; --co5:#c3c9f9;
+  /* the heat ramp does not invert on the dark card: a heat map's least is still its
+     palest, and every step clears 3:1 against #171B2D */
+  --hm1:#FFE38F; --hm2:#FFB457; --hm3:#F77C3A; --hm4:#E0455E; --hm5:#B04AA8;
+  --hm-ink-lo:#1A2437; --hm-ink-hi:#FFFFFF;
   --st-ok:#5BD68A; --st-warn:#E9A93C; --st-bad:#F1737A; --st-idle:#8B93AB;
 }
 body.dark .msg.q{color:#0E1120}
@@ -1146,9 +1157,7 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
 .hm th.who{z-index:4}
 .hm td.who small{display:block;color:var(--tx-3);font-size:11px}
 .hm td.c{width:40px;min-width:40px;height:28px;border-radius:6px;text-align:center;font-variant-numeric:tabular-nums;color:var(--tx-2);background:var(--panel)}
-.hm td.c.k1{background:var(--co1);color:var(--ch-ink)}.hm td.c.k2{background:var(--co2);color:var(--ch-ink)}.hm td.c.k3{background:var(--co3);color:#fff}.hm td.c.k4{background:var(--co4);color:#fff}.hm td.c.k5{background:var(--co5);color:#fff}
-/* on the dark card the ordinal ramp inverts: the least is the darkest step, so the ink flips with it */
-body.dark .hm td.c.k1,body.dark .hm td.c.k2{color:#fff}body.dark .hm td.c.k3{color:var(--bg)}body.dark .hm td.c.k4,body.dark .hm td.c.k5{color:var(--bg)}
+.hm td.c.k1{background:var(--hm1);color:var(--hm-ink-lo)}.hm td.c.k2{background:var(--hm2);color:var(--hm-ink-lo)}.hm td.c.k3{background:var(--hm3);color:var(--hm-ink-lo)}.hm td.c.k4{background:var(--hm4);color:var(--hm-ink-hi)}.hm td.c.k5{background:var(--hm5);color:var(--hm-ink-hi)}
 .hm td.c.w{box-shadow:inset 0 0 0 2px var(--st-warn);color:var(--st-warn)}
 .hm td.t{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;padding:0 8px;color:var(--tx);white-space:nowrap}
 .hmleg{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:11.5px;color:var(--tx-2);margin-top:10px}
@@ -1162,7 +1171,7 @@ body.dark .hm td.c.k1,body.dark .hm td.c.k2{color:#fff}body.dark .hm td.c.k3{col
 .lvcal th{color:var(--tx-3);font-weight:600;font-size:10.5px;text-align:left;padding:0 4px;white-space:nowrap}
 .lvcal th.d{text-align:right;width:30px;padding-right:6px}
 .lvcal td.c{width:18px;min-width:18px;height:18px;border-radius:4px;background:var(--panel);box-shadow:inset 0 0 0 1px var(--line-2)}
-.lvcal td.c.k1{background:var(--co1)}.lvcal td.c.k2{background:var(--co2)}.lvcal td.c.k3{background:var(--co3)}.lvcal td.c.k4{background:var(--co4)}.lvcal td.c.k5{background:var(--co5)}
+.lvcal td.c.k1{background:var(--hm1)}.lvcal td.c.k2{background:var(--hm2)}.lvcal td.c.k3{background:var(--hm3)}.lvcal td.c.k4{background:var(--hm4)}.lvcal td.c.k5{background:var(--hm5)}
 .lvcal td.c.off{background:var(--well);box-shadow:none}
 .lvcal td.c.today{box-shadow:inset 0 0 0 2px var(--st-warn)}
 .lvcal td.w{text-align:center;font-variant-numeric:tabular-nums;font-weight:700;color:var(--tx);padding-top:4px;font-size:10.5px}
@@ -2662,6 +2671,7 @@ function vOverview(j,A){
   h+=panel('c7','Live map · officers and villages','wheel scrolls the page · Ctrl+wheel zooms',
     mapTools()+'<div id="map"></div>');
 
+  h+=atcPanel();
   h+=panel('c8','District activity · last 14 days','tap a measure',
     `<div class="mtabs" id="mtabs">`+
     [['present','Present',A.present],['leave','On leave',A.onLeave],['absent','Not marked',A.absent],['filed','Villages filed',A.filed]]
@@ -2935,6 +2945,7 @@ function expNote(t){ const el=$('#expNote'); if(el) el.textContent=t; }
 async function doExport(kind){
   if(/^mk/.test(kind)){ mockExport(kind); return; }
   if(/^lv/.test(kind)){ lvExport(kind); return; }
+  if(kind==='atcweeks'){ atcExport(); return; }
   /* THE FILING SCHEDULE'S OWN REGISTERS. They come out of SCHED, which is its
      own call, so they are answered before the dashboard payload is asked for.
      Every one of them counts LINES, not villages — a mandal village is named
@@ -3408,6 +3419,7 @@ function vAttendance(j,A){
     : (j.today.present||[]).filter(r=>r.far).sort((a,b)=>b.km-a.km);
   h+='</div>';
 
+  h+=atcPanel();
   /* WHO TRIED AND WAS REFUSED, BY NAME, BEFORE ANY NOTICE IS PROPOSED.
      The count alone says forty; which forty, and from where, is the question
      a Collector actually has — and the difference between an officer at a
@@ -3722,7 +3734,7 @@ function lvHeat(rows){
     h+='<td class="t">'+lvNum(o._v)+(o._a>0?' <small style="color:var(--st-warn)">+'+lvNum(o._a)+'</small>':'')+'</td></tr>';
   });
   h+='</tbody></table></div>';
-  h+='<div class="hmleg"><span>Days in the month:</span><span><i style="background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)"></i>none</span><span><i style="background:var(--co1)"></i>1</span><span><i style="background:var(--co2)"></i>2–3</span><span><i style="background:var(--co3)"></i>4–5</span><span><i style="background:var(--co4)"></i>6–9</span><span><i style="background:var(--co5)"></i>10+</span><span><i class="w"></i>awaiting orders, not debited</span>'+(rows.length>400?'<span class="mut">· the first 400 of '+rows.length+' lines; the CSV carries all</span>':'')+'</div>';
+  h+='<div class="hmleg"><span>Days in the month:</span><span><i style="background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)"></i>none</span><span><i style="background:var(--hm1)"></i>1</span><span><i style="background:var(--hm2)"></i>2–3</span><span><i style="background:var(--hm3)"></i>4–5</span><span><i style="background:var(--hm4)"></i>6–9</span><span><i style="background:var(--hm5)"></i>10+</span><span><i class="w"></i>awaiting orders, not debited</span>'+(rows.length>400?'<span class="mut">· the first 400 of '+rows.length+' lines; the CSV carries all</span>':'')+'</div>';
   return h;
 }
 /* THE DISTRICT, WEEK BY WEEK. Fifty-three columns of weeks beginning on Monday, seven rows of days,
@@ -3774,7 +3786,7 @@ function lvCalendar(){
   }
   h+='<tr><td class="wl">Week total</td>'+weeks.map(w=>'<td class="w'+(w.total&&w===peak?' hi':'')+'" title="'+esc('week of '+dm(w.from)+': '+w.total+' officer-day'+(w.total===1?'':'s'))+'">'+(w.total||'')+'</td>').join('')+'</tr>';
   h+='</tbody></table></div>';
-  h+='<div class="hmleg"><span>Officers away on the day:</span><span><i style="background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)"></i>none</span><span><i style="background:var(--co1)"></i>1</span><span><i style="background:var(--co2)"></i>2–3</span><span><i style="background:var(--co3)"></i>4–6</span><span><i style="background:var(--co4)"></i>7–12</span><span><i style="background:var(--co5)"></i>13+</span><span><i style="box-shadow:inset 0 0 0 2px var(--st-warn);background:var(--panel)"></i>today</span></div>';
+  h+='<div class="hmleg"><span>Officers away on the day:</span><span><i style="background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)"></i>none</span><span><i style="background:var(--hm1)"></i>1</span><span><i style="background:var(--hm2)"></i>2–3</span><span><i style="background:var(--hm3)"></i>4–6</span><span><i style="background:var(--hm4)"></i>7–12</span><span><i style="background:var(--hm5)"></i>13+</span><span><i style="box-shadow:inset 0 0 0 2px var(--st-warn);background:var(--panel)"></i>today</span></div>';
   h+='<p class="mut" style="font-size:12px;margin-top:10px"><b>'+total.toLocaleString('en-IN')+' officer-days</b> of sanctioned leave in '+LVR.year+(LVR_MANDAL?' in '+esc(LVR_MANDAL):'')+(LVR_KIND==='all'?'':' under '+LV_KINDS[LVR_KIND].toLowerCase())+'. '+
     'The busiest week began on <b>'+esc(dm(peak.from))+'</b> with '+peak.total+' officer-day'+(peak.total===1?'':'s')+(peakDay.n?'; the busiest day was <b>'+esc(dm(peakDay.key))+'</b> with '+peakDay.n+' officer'+(peakDay.n===1?'':'s')+' away':'')+'. '+
     'A cell counts the officers whose sanctioned leave covers that day, whatever the kind; Sundays and holidays inside a spell are counted as the spell covers them. Nothing awaiting orders is on this map.</p>';
@@ -3865,6 +3877,112 @@ function lvExport(kind){
     out.push(foot);
     dlBlob('SJGP-leave-spells-'+y+'.csv','text/csv;charset=utf-8',csv(out));
   }
+}
+/* ============================================================================
+   ATTENDANCE, DAY BY DAY · asked 16.10.2026
+   ----------------------------------------------------------------------------
+   The same calendar the leave register got, for the district's mornings: a
+   year of weeks across, Monday to Sunday down, and a cell is the officers
+   who marked that day — or, by the switch, those who came late, those on
+   sanctioned leave, or on the working days already past, those who did
+   neither. The counts come from op=attCalendar, one officer one day off the
+   whole Attendance tab, cached by the day on the server. Due is TODAY'S roll
+   and the screen says so: on a day months ago "not marked" is an upper
+   figure. Sundays and holidays are grey and never counted as unmarked.
+   ========================================================================== */
+let ATC=null, ATC_BUSY=false, ATC_ERR='', ATC_YEAR=String(new Date().getFullYear()), ATC_MEASURE='marked';
+function atcPull(force){
+  const key=TVIEW+'|'+ATC_YEAR;
+  if(!force && ATC && ATC._key===key) return;
+  ATC_BUSY=true; ATC_ERR='';
+  fetch(ST.url+'?op=attCalendar&token='+encodeURIComponent(ST.token)+'&year='+encodeURIComponent(ATC_YEAR)+'&t='+Date.now(),{cache:'no-store'})
+    .then(r=>r.json())
+    .then(j=>{ ATC_BUSY=false;
+      if(!j||!j.ok||!j.cal){ ATC_ERR=(j&&j.error)||'The register did not answer.'; ATC=null; }
+      else { j._key=key; ATC=j; }
+      if((VIEW==='overview'||VIEW==='attendance')&&DATA) render(DATA); })
+    .catch(e=>{ ATC_BUSY=false; ATC_ERR=String(e); if((VIEW==='overview'||VIEW==='attendance')&&DATA) render(DATA); });
+}
+const ATC_MEASURES={ marked:'Marked', notmarked:'Not marked', late:'Marked late', leave:'On sanctioned leave' };
+function atcValue(key,c,off){
+  const past=key<=String(ATC.today||'');
+  if(ATC_MEASURE==='marked') return c?c.marked:0;
+  if(ATC_MEASURE==='late') return c?c.late:0;
+  if(ATC_MEASURE==='leave') return c?c.leave:0;
+  /* not marked: only a working day already past can have any; due less marked less on leave, never below nought */
+  if(off||!past) return 0;
+  return Math.max(0,(ATC.due||0)-(c?c.marked:0)-(c?c.leave:0));
+}
+/* bins: marked is a share of those due; the rest are counts */
+function atcBin(v){
+  if(v<=0) return '';
+  if(ATC_MEASURE==='marked'){ const s=ATC.due?v/ATC.due:0; return s<.5?'k1':s<.7?'k2':s<.85?'k3':s<.95?'k4':'k5'; }
+  return v<2?'k1':v<6?'k2':v<16?'k3':v<41?'k4':'k5';
+}
+function atcCalendar(){
+  if(!ATC) return '<div class="empty">'+(ATC_BUSY?'Reading the year off the Attendance tab. It takes a moment the first time; the register keeps it for twenty minutes.':esc(ATC_ERR||'The register did not answer.'))+'</div>';
+  const y=Number(ATC.year), cal=ATC.cal||{}, off=ATC.off||{}, today=String(ATC.today||'');
+  const jan1=Date.UTC(y,0,1), dec31=Date.UTC(y,11,31), dow0=(new Date(jan1).getUTCDay()+6)%7, start=jan1-dow0*86400000;
+  const weeks=[];
+  for(let t=start;t<=dec31;t+=7*86400000){
+    const w={ from:new Date(t).toISOString().slice(0,10), days:[], total:0, wd:0 };
+    for(let d=0;d<7;d++){
+      const dt=new Date(t+d*86400000), key=dt.toISOString().slice(0,10), inYear=dt.getUTCFullYear()===y;
+      const o=inYear?off[key]:'', n=inYear?atcValue(key,cal[key],o):0;
+      w.days.push({ key, n, inYear, off:o, future:key>today }); w.total+=n; if(inYear&&!o&&key<=today) w.wd++;
+    }
+    weeks.push(w);
+  }
+  const total=weeks.reduce((s,w)=>s+w.total,0);
+  const monthOf=w=>{ const d=new Date(w.from+'T00:00:00Z'); return d.getUTCDate()<=7?LV_MON[d.getUTCMonth()]:''; };
+  const word=ATC_MEASURES[ATC_MEASURE].toLowerCase();
+  let h='<div class="segbar" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">'+
+    '<label style="font-size:12px;color:var(--tx-2)">Show<select class="rsel" id="atcMeasure" style="margin-left:7px;min-width:170px">'+
+      Object.keys(ATC_MEASURES).map(k=>'<option value="'+k+'"'+(ATC_MEASURE===k?' selected':'')+'>'+ATC_MEASURES[k]+'</option>').join('')+'</select></label>'+
+    '<label style="font-size:12px;color:var(--tx-2)">Year<select class="rsel" id="atcYear" style="margin-left:7px;min-width:90px">'+
+      [y-1,y,y+1].filter(v=>v<=new Date().getFullYear()).map(v=>'<option value="'+v+'"'+(String(v)===String(ATC_YEAR)?' selected':'')+'>'+v+'</option>').join('')+'</select></label>'+
+    '<span style="flex:1"></span><button class="tbtn" data-exp="atcweeks">CSV · week by week</button></div>';
+  h+='<div class="hmwrap" style="max-height:none;padding:8px 6px"><table class="lvcal" id="atcCal"><thead><tr><th class="d"></th>'+weeks.map(w=>'<th>'+monthOf(w)+'</th>').join('')+'</tr></thead><tbody>';
+  for(let d=0;d<7;d++){
+    h+='<tr><th class="d">'+LV_DOW[d]+'</th>';
+    weeks.forEach(w=>{ const x=w.days[d];
+      const cls='c '+(!x.inYear||x.future?'off':x.off?(x.n?atcBin(x.n):'off'):atcBin(x.n))+(x.key===today?' today':'');
+      const tip=!x.inYear?'':x.future?dm(x.key)+' · not yet':
+        dm(x.key)+(x.off?' · '+x.off:'')+' · '+(x.n?x.n+' '+word:(x.off&&ATC_MEASURE==='notmarked'?'off day — nobody is due':'none '+word))+
+        (ATC_MEASURE==='marked'&&ATC.due&&!x.off?' of '+ATC.due+' due':'');
+      h+='<td class="'+cls+'"'+(tip?' title="'+esc(tip)+'"':'')+'></td>'; });
+    h+='</tr>';
+  }
+  h+='<tr><td class="wl">Week total</td>'+weeks.map(w=>'<td class="w" title="'+esc('week of '+dm(w.from)+': '+w.total+' '+word+(w.wd?' over '+w.wd+' working day'+(w.wd===1?'':'s'):''))+'">'+(w.total||'')+'</td>').join('')+'</tr>';
+  h+='</tbody></table></div>';
+  const leg=ATC_MEASURE==='marked'?[['none'],['under 50%'],['50–69%'],['70–84%'],['85–94%'],['95% and over']]:[['none'],['1'],['2–5'],['6–15'],['16–40'],['41+']];
+  h+='<div class="hmleg"><span>'+(ATC_MEASURE==='marked'?'Marked, as a share of the '+ATC.due+' due:':'Officers on the day:')+'</span>'+
+    leg.map((l,i)=>'<span><i style="'+(i?'background:var(--hm'+i+')':'background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)')+'"></i>'+l[0]+'</span>').join('')+
+    '<span><i style="background:var(--well)"></i>Sunday, holiday or not yet</span><span><i style="box-shadow:inset 0 0 0 2px var(--st-warn);background:var(--panel)"></i>today</span></div>';
+  const T=ATC.totals||{};
+  const avg=T.workingDaysPast?Math.round(T.marks/T.workingDaysPast):0;
+  h+='<p class="mut" style="font-size:12px;margin-top:10px"><b>'+(T.marks||0).toLocaleString('en-IN')+' marks</b> over '+T.workingDaysPast+' working day'+(T.workingDaysPast===1?'':'s')+' of '+ATC.year+' so far — about '+avg+' a day against '+ATC.due+' due today'+
+    (T.late?'; '+T.late.toLocaleString('en-IN')+' of them late, after '+ATC.cutoff+':00':'')+(T.leaveDays?'; '+T.leaveDays.toLocaleString('en-IN')+' officer-days of sanctioned leave':'')+'. '+
+    'One officer counts once a day however many times he marked. <b>Due is today’s roll</b>, so on a day months ago "not marked" is an upper figure: an officer who joined since was not due then. Sundays and holidays are never counted as unmarked. '+
+    'This is a picture of the year and not a charge: what any day on it means is read on the facts.</p>';
+  return h;
+}
+function atcPanel(){
+  return panel('c12','Attendance, week by week · '+ATC_YEAR,(ATC?ATC_MEASURES[ATC_MEASURE]+' · '+ATC.due+' due':'reading'),atcCalendar(),'atc');
+}
+function atcExport(){
+  if(!ATC) return;
+  const c=v=>{const s=String(v==null?'':v);return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
+  const csv=rows=>'\uFEFF'+rows.map(r=>r.map(c).join(',')).join('\r\n')+'\r\n';
+  const y=Number(ATC.year), cal=ATC.cal||{}, off=ATC.off||{};
+  const out=[['Day','Off','Marked','Late','On sanctioned leave','Not marked (upper figure)','Due today']];
+  for(let t=Date.UTC(y,0,1);t<=Date.UTC(y,11,31);t+=86400000){
+    const key=new Date(t).toISOString().slice(0,10); if(key>String(ATC.today||'')) break;
+    const x=cal[key]||{marked:0,late:0,leave:0}, o=off[key]||'';
+    out.push([key,o,x.marked,x.late,x.leave,o?'':Math.max(0,(ATC.due||0)-x.marked-x.leave),ATC.due]);
+  }
+  out.push(['','One officer counts once a day. Due is today\u2019s roll, so not marked on a past day is an upper figure. Off days carry no not-marked figure.']);
+  dlBlob('SJGP-attendance-days-'+y+'.csv','text/csv;charset=utf-8',csv(out));
 }
 function vLeave(j,A){
   const lp=j.leave.pending, lr=j.leave.recent.filter(r=>r.status!=='PENDING');
@@ -6459,6 +6577,7 @@ function render(j){
   if(VIEW==='analytics') anaPull(false);
   if(VIEW==='mock') mockPull(false);
   if(VIEW==='leave') lvPull(false);
+  if(VIEW==='overview'||VIEW==='attendance') atcPull(false);
   $('#g').innerHTML = VIEW==='overview'?vOverview(j,A)
     : VIEW==='attendance'?(function(){const js=segJ(j);return vAttendance(js,ASEG==='all'?A:analyse(js));})()
     : VIEW==='analytics'?vAnalytics(j,A)
@@ -6607,6 +6726,8 @@ document.addEventListener('change', e => {
   if(id === 'segSel'){ ASEG = e.target.value; if(DATA) render(DATA); return; }
   if(id === 'mockDays'){ MOCK_DAYS = Number(e.target.value) || 30; mockPull(true); if(DATA) render(DATA); return; }
   if(id === 'lvYear'){ LVR_YEAR = e.target.value; lvPull(true); if(DATA) render(DATA); return; }
+  if(id === 'atcYear'){ ATC_YEAR = e.target.value; atcPull(true); if(DATA) render(DATA); return; }
+  if(id === 'atcMeasure'){ ATC_MEASURE = e.target.value; if(DATA) render(DATA); return; }
   if(id === 'lvKind' || id === 'lvMandal' || id === 'lvSort'){
     if(id === 'lvKind') LVR_KIND = e.target.value; if(id === 'lvMandal') LVR_MANDAL = e.target.value; if(id === 'lvSort') LVR_SORT = e.target.value;
     if(DATA) render(DATA); return; }

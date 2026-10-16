@@ -2240,3 +2240,34 @@ server (`calendar` on the same answer, by kind, by mandal and by both), not
 from the capped spell list, so the map is complete where the lines are not.
 Headcount and not debited days, because a day cell answers *who is away
 today*; nothing awaiting orders is on it. CSV week by week.
+
+## Attendance, day by day, and the heat ramp
+
+**Asked 16.10.2026, after the leave register's week map: the same for
+attendance, on the Overview and the Attendance screen.**
+`backend/FeatureAttCalendar.gs` (`op=attCalendar&year=`, the Collector's
+alone, read-only, `FEATURE_OFF=attcal`) walks the Attendance tab once for the
+year — **one officer one day** however many rows, late by `effMarkAt_`
+against `CUTOFF_HOUR` so the map and the ladder can never disagree about what
+late means, sanctioned leave read off the Leave register and the leave rows on
+the Attendance tab as one set per day (rule 9) — and is **cached twenty
+minutes by the day**, because a review opens the Overview six times an hour.
+The screen switches between marked (as a share of those due), not marked,
+late, and on sanctioned leave; week totals underneath; CSV day by day.
+
+**Due is today's roll, and the answer and the screen both say so.** The
+register keeps no roll per day, so "not marked" on a day months ago is an
+upper figure: an officer who joined since was not due then. Sundays and the
+Holidays tab are grey and never counted as unmarked; the voluntary office is
+neither due nor counted; a day not yet reached is blank. It accuses nobody
+(rule 10): nothing reads it but the Collector. Suite 39 holds it.
+
+**The heat maps are multi-hue, by the Collector's choice the same day**, and
+that is a deliberate exception to "an ordered scale is one hue". `--hm1…--hm5`
+is yellow → amber → orange → red → deep magenta: many hues, **one order**,
+because L* falls at every step (90 > 78 > 62 > 46 > 30 light; 91 > 79 > 65 >
+53 > 48 dark), which is the check a sequential ramp answers to. It does not
+invert on the dark card — a heat map's least is still its palest, and every
+step clears 3:1 on `#171B2D`. Dark ink on steps 1–3, white on 4–5. **Density
+cells only**: bars, lines and ranks stay on `--co`, and nothing else may read
+`--hm`. The record is `prompt/palette-validation.txt`.
