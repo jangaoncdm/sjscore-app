@@ -1138,6 +1138,25 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
 .fchip:hover{color:var(--tx)}
 /* export bar */
 .expbar{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+/* ---- the leave register's heat map: officers down, months across, a cell is days taken ---- */
+.hmwrap{overflow:auto;max-height:520px;border-radius:14px;box-shadow:var(--nm-in-sm);background:var(--well)}
+.hm{border-collapse:separate;border-spacing:3px;font-size:12px;min-width:100%}
+.hm th{position:sticky;top:0;background:var(--well);color:var(--tx-3);font-weight:600;font-size:11px;text-align:center;padding:4px 2px;z-index:2}
+.hm th.who,.hm td.who{position:sticky;left:0;background:var(--well);text-align:left;z-index:3;min-width:180px;max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px;color:var(--tx)}
+.hm th.who{z-index:4}
+.hm td.who small{display:block;color:var(--tx-3);font-size:11px}
+.hm td.c{width:40px;min-width:40px;height:28px;border-radius:6px;text-align:center;font-variant-numeric:tabular-nums;color:var(--tx-2);background:var(--panel)}
+.hm td.c.k1{background:var(--co1);color:var(--ch-ink)}.hm td.c.k2{background:var(--co2);color:var(--ch-ink)}.hm td.c.k3{background:var(--co3);color:#fff}.hm td.c.k4{background:var(--co4);color:#fff}.hm td.c.k5{background:var(--co5);color:#fff}
+/* on the dark card the ordinal ramp inverts: the least is the darkest step, so the ink flips with it */
+body.dark .hm td.c.k1,body.dark .hm td.c.k2{color:#fff}body.dark .hm td.c.k3{color:var(--bg)}body.dark .hm td.c.k4,body.dark .hm td.c.k5{color:var(--bg)}
+.hm td.c.w{box-shadow:inset 0 0 0 2px var(--st-warn);color:var(--st-warn)}
+.hm td.t{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;padding:0 8px;color:var(--tx);white-space:nowrap}
+.hmleg{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:11.5px;color:var(--tx-2);margin-top:10px}
+.hmleg i{display:inline-block;width:22px;height:14px;border-radius:4px;vertical-align:middle;margin-right:4px}
+.hmleg i.w{box-shadow:inset 0 0 0 2px var(--st-warn);background:var(--panel)}
+.lvreg td.n{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.lvreg td.n small{color:var(--tx-3)}
+.lvreg .left0{color:var(--st-bad);font-weight:700}
 .expbar .tbtn{min-height:40px}
 .expnote{font-size:12px;color:var(--tx-3)}
 
@@ -1622,7 +1641,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '6d2c2ef - 14 Oct 12:24';
+const BUILD_STAMP = '69add35 - 16 Oct 11:16';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -2904,6 +2923,7 @@ function loadXLSX(){
 function expNote(t){ const el=$('#expNote'); if(el) el.textContent=t; }
 async function doExport(kind){
   if(/^mk/.test(kind)){ mockExport(kind); return; }
+  if(/^lv/.test(kind)){ lvExport(kind); return; }
   /* THE FILING SCHEDULE'S OWN REGISTERS. They come out of SCHED, which is its
      own call, so they are answered before the dashboard payload is asked for.
      Every one of them counts LINES, not villages — a mandal village is named
@@ -3612,6 +3632,168 @@ function vVillages(j,A){
   + vTables(j,A,true);
   return h;
 }
+/* ============================================================================
+   THE LEAVE REGISTER · ordered 16.10.2026
+   ----------------------------------------------------------------------------
+   The Leave screen carried what was waiting and the last forty orders, and
+   the Collector could not see the one thing a register is for: every
+   officer's year — what he was allowed, what he took, what is left, what is
+   still on the desk — and the months it fell in. op=leaveRegister answers
+   that, read on the server off the Leave tab with the SAME arithmetic the
+   sanction refuses on (entitlement_, an application counted once however
+   many rows carry its id), so the screen cannot argue with the order. It is
+   fetched when the screen is opened and not on every poll: it reads the tab
+   whole, which is right at 284 officers.
+
+   THE HEAT MAP IS DAYS TAKEN, officers down and months across, one hue least
+   to most, laid out in HTML at exact pixel sizes. An application awaiting
+   orders is drawn as an outlined cell and never as a filled one: nothing is
+   debited until the Collector's hand has passed on it. Medical leave prints
+   no balance, because it has none; the headquarters permission is counted as
+   occasions, because it is not leave.
+   ========================================================================== */
+let LVR=null, LVR_BUSY=false, LVR_ERR='', LVR_YEAR=String(new Date().getFullYear()), LVR_KIND='all', LVR_MANDAL='', LVR_SORT='taken';
+function lvPull(force){
+  const key=TVIEW+'|'+LVR_YEAR;
+  if(!force && LVR && LVR._key===key) return;
+  LVR_BUSY=true; LVR_ERR='';
+  fetch(ST.url+'?op=leaveRegister&token='+encodeURIComponent(ST.token)+'&year='+encodeURIComponent(LVR_YEAR)+'&t='+Date.now(),{cache:'no-store'})
+    .then(r=>r.json())
+    .then(j=>{ LVR_BUSY=false;
+      if(!j||!j.ok||!Array.isArray(j.officers)){ LVR_ERR=(j&&j.error)||'The register did not answer.'; LVR=null; }
+      else { j._key=key; LVR=j; }
+      if(VIEW==='leave'&&DATA) render(DATA); })
+    .catch(e=>{ LVR_BUSY=false; LVR_ERR=String(e); if(VIEW==='leave'&&DATA) render(DATA); });
+}
+const LV_MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const LV_KINDS={CL:'Casual leave',EL:'Earned leave',OH:'Optional holiday',ML:'Medical leave',HQ:'Headquarters permission'};
+/* one hue, least to most: 1, 2-3, 4-5, 6-9, 10 and over */
+const lvBin=v=>v<=0?'':v<1.5?'k1':v<3.5?'k2':v<5.5?'k3':v<9.5?'k4':'k5';
+const lvNum=v=>v==null?'':(Math.round(v*10)/10===Math.round(v)?String(Math.round(v)):String(Math.round(v*10)/10));
+/* the lines the screen shows: the kind narrows what is counted, the mandal narrows who */
+function lvLines(){
+  if(!LVR) return [];
+  let rows=LVR.officers.filter(o=>!LVR_MANDAL||String(o.mandal||'')===LVR_MANDAL);
+  const k=LVR_KIND;
+  const val=o=>k==='all'?o.taken:(o.types[k]?o.types[k].taken:0);
+  const aw=o=>k==='all'?o.awaiting:(o.types[k]?o.types[k].awaiting:0);
+  rows=rows.map(o=>Object.assign({_v:val(o),_a:aw(o),_m:k==='all'?o.months:lvMonthsOf(o,k),_am:k==='all'?o.awaitingMonths:lvMonthsOf(o,k,true)},o));
+  if(LVR_SORT==='taken') rows.sort((a,b)=>b._v-a._v||b._a-a._a||String(a.name).localeCompare(String(b.name)));
+  else if(LVR_SORT==='left') rows.sort((a,b)=>(a.types.CL.left==null?99:a.types.CL.left)-(b.types.CL.left==null?99:b.types.CL.left)||String(a.name).localeCompare(String(b.name)));
+  else if(LVR_SORT==='mandal') rows.sort((a,b)=>String(a.mandal||'').localeCompare(String(b.mandal||''))||String(a.name).localeCompare(String(b.name)));
+  else rows.sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  return rows;
+}
+/* the months of ONE kind are re-split from the officer's own spells, because the server's twelve
+   cells are the whole year; a kind filter has to re-count from the spells it carries */
+function lvMonthsOf(o,k,awaiting){
+  const m=[0,0,0,0,0,0,0,0,0,0,0,0];
+  (o.spells||[]).filter(s=>s.type===k&&s.status===(awaiting?'PENDING':'APPROVED')).forEach(s=>{
+    const a=Date.parse(s.from+'T00:00:00Z'), b=Date.parse(s.to+'T00:00:00Z'); if(!isFinite(a)||!isFinite(b)||b<a) return;
+    const span=Math.round((b-a)/86400000)+1, days=k==='HQ'?1:(Number(s.days)||0);
+    for(let i=0;i<span;i++){ const d=new Date(a+i*86400000); if(String(d.getUTCFullYear())!==String(LVR.year)) continue; m[d.getUTCMonth()]+=days/span; }
+  });
+  return m.map(x=>Math.round(x*10)/10);
+}
+function lvHeat(rows){
+  if(!rows.length) return '<div class="empty">Nothing taken this year under this kind.</div>';
+  const shown=rows.slice(0,400);
+  const ym=LVR.year, cur=String(LVR.today||'').slice(0,4)===String(ym)?Number(String(LVR.today).slice(5,7))-1:12;
+  let h='<div class="hmwrap"><table class="hm" id="lvHeat"><thead><tr><th class="who">Officer</th>'+LV_MON.map((m,i)=>'<th'+(i===cur?' style="color:var(--tx)"':'')+'>'+m+'</th>').join('')+'<th>Year</th></tr></thead><tbody>';
+  shown.forEach(o=>{
+    h+='<tr><td class="who" title="'+esc(o.name)+' · '+esc(o.role)+' · '+esc(o.mandal||'')+'">'+esc(o.name)+'<small>'+esc(o.role)+' · '+esc(o.mandal||'—')+(o.active===false?' · no longer on the roll':'')+'</small></td>';
+    for(let i=0;i<12;i++){
+      const v=o._m[i]||0, a=o._am[i]||0;
+      const cls='c '+lvBin(v)+(a>0&&v<=0?' w':'');
+      const tip=esc(o.name)+' · '+LV_MON[i]+' '+ym+': '+(v>0?lvNum(v)+' day'+(v===1?'':'s')+' taken':'nothing taken')+(a>0?' · '+lvNum(a)+' awaiting orders':'');
+      h+='<td class="'+cls+'" title="'+tip+'">'+(v>0?lvNum(v):(a>0?'<span style="font-size:10px">'+lvNum(a)+'?</span>':''))+'</td>';
+    }
+    h+='<td class="t">'+lvNum(o._v)+(o._a>0?' <small style="color:var(--st-warn)">+'+lvNum(o._a)+'</small>':'')+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  h+='<div class="hmleg"><span>Days in the month:</span><span><i style="background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)"></i>none</span><span><i style="background:var(--co1)"></i>1</span><span><i style="background:var(--co2)"></i>2–3</span><span><i style="background:var(--co3)"></i>4–5</span><span><i style="background:var(--co4)"></i>6–9</span><span><i style="background:var(--co5)"></i>10+</span><span><i class="w"></i>awaiting orders, not debited</span>'+(rows.length>400?'<span class="mut">· the first 400 of '+rows.length+' lines; the CSV carries all</span>':'')+'</div>';
+  return h;
+}
+function lvTable(rows){
+  const ent=LVR.entitlement;
+  const cell=(t,k)=>{ const x=t[k]; if(!x) return '<td class="n">—</td>';
+    if(k==='ML') return '<td class="n">'+lvNum(x.taken)+(x.awaiting?' <small>+'+lvNum(x.awaiting)+'</small>':'')+'<br><small>no yearly figure · '+LVR.mlSpell+' a spell</small></td>';
+    if(k==='HQ') return '<td class="n">'+x.occasions+(x.awaiting||x.occasions?'<br><small>occasion'+(x.occasions===1?'':'s')+'</small>':'')+'</td>';
+    return '<td class="n">'+lvNum(x.taken)+' <small>/ '+ent[k]+'</small>'+(x.awaiting?' <small>+'+lvNum(x.awaiting)+'</small>':'')+'<br><small class="'+(x.left===0?'left0':'')+'">'+lvNum(x.left)+' left</small></td>'; };
+  let h='<div class="twrap" style="max-height:600px"><table class="lvreg" id="lvReg"><thead><tr><th>Officer</th><th>Mandal</th><th>Casual</th><th>Earned</th><th>Optional</th><th>Medical</th><th>HQ</th><th>Awaiting</th><th>Refused</th></tr></thead><tbody>';
+  if(!rows.length) h+='<tr><td colspan="9" class="empty">No officer matches.</td></tr>';
+  rows.slice(0,600).forEach(o=>{
+    h+='<tr><td>'+esc(o.name)+'<br><span class="mut" style="font-size:11px">'+esc(o.role)+(o.active===false?' · no longer on the roll':'')+'</span></td><td>'+esc(o.mandal||'—')+'</td>'+
+      cell(o.types,'CL')+cell(o.types,'EL')+cell(o.types,'OH')+cell(o.types,'ML')+cell(o.types,'HQ')+
+      '<td class="n">'+(o.awaiting?'<span class="pill warn">'+lvNum(o.awaiting)+' day'+(o.awaiting===1?'':'s')+'</span>':'<span class="mut">—</span>')+'</td>'+
+      '<td class="n">'+(o.refused||'<span class="mut">—</span>')+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  if(rows.length>600) h+='<div class="mut" style="font-size:12px;margin-top:8px">The first 600 of '+rows.length+' lines; the CSV carries all.</div>';
+  return h;
+}
+function lvRegister(){
+  let h='<div class="segbar" style="grid-column:1/-1;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0 12px">'+
+    '<label style="font-size:12px;color:var(--tx-2)">Year<select class="rsel" id="lvYear" style="margin-left:7px;min-width:96px">'+
+      ((LVR&&LVR.years&&LVR.years.length)?LVR.years:[Number(LVR_YEAR)]).map(y=>'<option value="'+y+'"'+(String(y)===String(LVR_YEAR)?' selected':'')+'>'+y+'</option>').join('')+'</select></label>'+
+    '<label style="font-size:12px;color:var(--tx-2)">Kind<select class="rsel" id="lvKind" style="margin-left:7px;min-width:150px"><option value="all"'+(LVR_KIND==='all'?' selected':'')+'>Every kind</option>'+
+      Object.keys(LV_KINDS).map(k=>'<option value="'+k+'"'+(LVR_KIND===k?' selected':'')+'>'+LV_KINDS[k]+'</option>').join('')+'</select></label>'+
+    '<label style="font-size:12px;color:var(--tx-2)">Mandal<select class="rsel" id="lvMandal" style="margin-left:7px;min-width:140px"><option value="">Whole district</option>'+
+      (LVR?[...new Set(LVR.officers.map(o=>String(o.mandal||'')).filter(Boolean))].sort().map(m=>'<option value="'+esc(m)+'"'+(LVR_MANDAL===m?' selected':'')+'>'+esc(m)+'</option>').join(''):'')+'</select></label>'+
+    '<label style="font-size:12px;color:var(--tx-2)">Order<select class="rsel" id="lvSort" style="margin-left:7px;min-width:140px">'+
+      [['taken','most taken first'],['left','least casual leave left'],['name','by name'],['mandal','by mandal']].map(([k,l])=>'<option value="'+k+'"'+(LVR_SORT===k?' selected':'')+'>'+l+'</option>').join('')+'</select></label>'+
+    '<span style="flex:1"></span>'+
+    '<div class="expbar"><button class="tbtn pri" data-exp="lvreg">CSV · the register</button><button class="tbtn" data-exp="lvmonths">CSV · month by month</button><button class="tbtn" data-exp="lvspells">CSV · every spell</button></div></div>';
+  if(!LVR){
+    return h+panel('c12','The leave register','',
+      '<div class="empty">'+(LVR_BUSY?'Reading every application of the year off the Leave tab. It takes a moment.':esc(LVR_ERR||'The register did not answer.'))+'</div>');
+  }
+  const rows=lvLines(), T=LVR.totals, ent=LVR.entitlement;
+  h+='<div class="kpirow">';
+  h+=kpi('Officers',IC.u,T.officers,'','on the register · '+LVR.year);
+  h+=kpi('Days taken',IC.c,lvNum(T.taken),'',T.withLeave+' officer'+(T.withLeave===1?'':'s')+' took leave');
+  h+=kpi('Awaiting orders',IC.c,lvNum(T.awaiting),'','days on your desk');
+  h+=kpi('Casual leave exhausted',IC.c,T.exhausted,'',ent.CL+' days a year'+(LVR.year===2026?' · the opening year':''));
+  h+=kpi('Refused or withdrawn',IC.c,T.refused,'','never debited');
+  h+='</div>';
+  const kindWord=LVR_KIND==='all'?'every kind of leave':LV_KINDS[LVR_KIND].toLowerCase();
+  h+=panel('c12','When the leave fell · '+LVR.year,rows.length+' officer'+(rows.length===1?'':'s')+' · '+kindWord,
+    lvHeat(rows)+
+    '<p class="mut" style="font-size:12px;margin-top:10px">A cell is the days taken in that month, a spell split across the months it falls in, so a row adds up to the officer’s year. '+
+    'An outlined cell is an application awaiting your orders: it is not debited until you pass them. The figures are the ones the sanction refuses on — '+
+    'the allowance is the register’s own (casual leave '+ent.CL+', earned '+ent.EL+', optional holidays '+ent.OH+' for '+LVR.year+'), and an application is counted once however many rows carry it.</p>','lvh');
+  h+=panel('c12','The register · every officer’s account for '+LVR.year,rows.length+' line'+(rows.length===1?'':'s')+(LVR.truncated?' · the register holds more than this screen carries':''),
+    lvTable(rows)+
+    '<p class="mut" style="font-size:12px;margin-top:10px">Taken / allowed, with what is left. Medical leave answers to no yearly figure — the Collector’s order caps a spell at '+LVR.mlSpell+' days — and the headquarters permission is not leave and is counted as occasions. '+
+    'This is a record of what was sanctioned; whether anything on it is a default is yours to read, under the leave rules.</p>','lvt');
+  return h;
+}
+function lvExport(kind){
+  if(!LVR) return;
+  const c=v=>{const s=String(v==null?'':v);return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
+  const csv=rows=>'\uFEFF'+rows.map(r=>r.map(c).join(',')).join('\r\n')+'\r\n';
+  const rows=lvLines(), ent=LVR.entitlement, y=LVR.year;
+  const foot=['','Read from the '+TENANCY[TVIEW].name+' register on '+String(LVR.at).slice(0,10)+'. Taken counts sanctioned applications only, once each; awaiting is not debited; medical leave has no yearly figure; HQ is occasions.'];
+  if(kind==='lvreg'){
+    const head=['Officer','Phone','Role','Mandal','On the roll','CL taken','CL allowed','CL left','CL awaiting','EL taken','EL allowed','EL left','EL awaiting','OH taken','OH allowed','OH left','OH awaiting','ML days','ML awaiting','HQ occasions','Days taken','Days awaiting','Refused or withdrawn'];
+    const r=o=>[o.name,o.phone,o.role,o.mandal,o.active===false?'no':'yes',
+      o.types.CL.taken,ent.CL,o.types.CL.left,o.types.CL.awaiting, o.types.EL.taken,ent.EL,o.types.EL.left,o.types.EL.awaiting,
+      o.types.OH.taken,ent.OH,o.types.OH.left,o.types.OH.awaiting, o.types.ML.taken,o.types.ML.awaiting, o.types.HQ.occasions, o.taken,o.awaiting,o.refused];
+    dlBlob('SJGP-leave-register-'+y+'.csv','text/csv;charset=utf-8',csv([head].concat(rows.map(r),[foot])));
+  } else if(kind==='lvmonths'){
+    const head=['Officer','Phone','Role','Mandal','Kind'].concat(LV_MON.map(m=>m+' '+y),['Year']);
+    const out=[head];
+    rows.forEach(o=>{ out.push([o.name,o.phone,o.role,o.mandal,LVR_KIND==='all'?'every kind':LVR_KIND].concat(o._m.map(lvNum),[lvNum(o._v)]));
+      if(o._a>0) out.push([o.name,o.phone,o.role,o.mandal,'awaiting orders'].concat(o._am.map(lvNum),[lvNum(o._a)])); });
+    out.push(foot);
+    dlBlob('SJGP-leave-by-month-'+y+'.csv','text/csv;charset=utf-8',csv(out));
+  } else if(kind==='lvspells'){
+    const out=[['Officer','Phone','Role','Mandal','Kind','From','To','Days','Status','Application id']];
+    rows.forEach(o=>(o.spells||[]).forEach(s=>out.push([o.name,o.phone,o.role,o.mandal,s.type,s.from,s.to,s.days,s.status==='APPROVED'?'sanctioned':'awaiting orders',s.id])));
+    out.push(foot);
+    dlBlob('SJGP-leave-spells-'+y+'.csv','text/csv;charset=utf-8',csv(out));
+  }
+}
 function vLeave(j,A){
   const lp=j.leave.pending, lr=j.leave.recent.filter(r=>r.status!=='PENDING');
   const sanctioned=lr.filter(r=>r.status==='APPROVED');
@@ -3631,6 +3813,7 @@ function vLeave(j,A){
   h+=panel('c6','Recent orders',lr.length+' on record',
     `<div class="twrap"><table><thead><tr><th>Officer</th><th>Kind</th><th>Days</th><th>From</th><th>Status</th></tr></thead><tbody>`+
     (lr.length?lr.slice(0,60).map(row).join(''):'<tr><td colspan="5" class="empty">No orders yet.</td></tr>')+`</tbody></table></div>`,'lr');
+  h+=lvRegister();
   return h;
 }
 /* ============================================================================
@@ -6203,6 +6386,7 @@ function render(j){
      is a dozen thousand rows and the register caches it for ten minutes. */
   if(VIEW==='analytics') anaPull(false);
   if(VIEW==='mock') mockPull(false);
+  if(VIEW==='leave') lvPull(false);
   $('#g').innerHTML = VIEW==='overview'?vOverview(j,A)
     : VIEW==='attendance'?(function(){const js=segJ(j);return vAttendance(js,ASEG==='all'?A:analyse(js));})()
     : VIEW==='analytics'?vAnalytics(j,A)
@@ -6350,6 +6534,10 @@ document.addEventListener('change', e => {
   const id = e.target && e.target.id;
   if(id === 'segSel'){ ASEG = e.target.value; if(DATA) render(DATA); return; }
   if(id === 'mockDays'){ MOCK_DAYS = Number(e.target.value) || 30; mockPull(true); if(DATA) render(DATA); return; }
+  if(id === 'lvYear'){ LVR_YEAR = e.target.value; lvPull(true); if(DATA) render(DATA); return; }
+  if(id === 'lvKind' || id === 'lvMandal' || id === 'lvSort'){
+    if(id === 'lvKind') LVR_KIND = e.target.value; if(id === 'lvMandal') LVR_MANDAL = e.target.value; if(id === 'lvSort') LVR_SORT = e.target.value;
+    if(DATA) render(DATA); return; }
   if(id === 'anaYm' || id === 'anaSeg' || id === 'anaMandal'){
     if(id === 'anaYm') ANA_YM = e.target.value;
     if(id === 'anaSeg') ANA_SEG = e.target.value;
