@@ -210,6 +210,24 @@ function build(){
       type:'CL', fromDate:'2026-08-24', toDate:'2026-08-25', days:2,
       status:'PENDING', appliedAt:'2026-08-21T03:00:00.000Z', reason:'Personal' });
   }
+  /* THE YEAR'S LEAVE, for the register's heat map: spells in different months
+     and kinds, one crossing a month edge, one officer who has exhausted his
+     casual leave, and a refused application that must never be debited. */
+  {
+    const yr = [['2026-02-02','2026-02-03','CL',2],['2026-03-16','2026-03-20','EL',5],['2026-05-28','2026-06-02','CL',6],
+                ['2026-07-06','2026-07-06','OH',1],['2026-08-10','2026-08-12','CL',3],['2026-04-01','2026-04-10','ML',10]];
+    marking.slice(0, 6).forEach((u, i) => {
+      const s = yr[i];
+      lv.push({ id:'LVY' + i, phone:u.Phone, name:u.Name, role:u.Role, mandal:u.Mandal, type:s[2], fromDate:s[0], toDate:s[1], days:s[3],
+        status:'APPROVED', appliedAt:'2026-01-20T10:00:00.000Z', decidedAt:'2026-01-21T05:00:00.000Z', reason:'Personal' });
+    });
+    const ex = marking[0];   /* six casual days: the opening year's allowance, exhausted */
+    lv.push({ id:'LVX1', phone:ex.Phone, name:ex.Name, role:ex.Role, mandal:ex.Mandal, type:'CL', fromDate:'2026-07-20', toDate:'2026-07-23', days:4,
+      status:'APPROVED', appliedAt:'2026-07-10T10:00:00.000Z', decidedAt:'2026-07-11T05:00:00.000Z', reason:'Personal' });
+    const rf = marking[7];
+    lv.push({ id:'LVR1', phone:rf.Phone, name:rf.Name, role:rf.Role, mandal:rf.Mandal, type:'EL', fromDate:'2026-06-15', toDate:'2026-06-19', days:5,
+      status:'REJECTED', appliedAt:'2026-06-01T10:00:00.000Z', decidedAt:'2026-06-02T05:00:00.000Z', reason:'Personal', remarks:'Not at this time' });
+  }
   env.mkSheet('Leave', env.eval('L_HEAD'), lv);
 
   /* THREE OFFICERS WHO TRIED AND WERE REFUSED BY THE GEO-FENCE.
@@ -353,7 +371,11 @@ function build(){
   if(mk.ok === false) throw new Error('the not-measured reading refused: ' + mk.error);
   console.log('not measured         : ' + mk.findings.length + ' findings · ' + mk.leads.length + ' leads · ' + mk.shared.length + ' shared mornings');
 
-  return { dash: d, sched: s, pub: pub, mock: mk };
+  /* the leave register, off the same world, for the console's Leave screen */
+  const lr = env.get('leaveRegister', { token: token, year: '2026' });
+  if(lr.ok === false) throw new Error('the leave register refused: ' + lr.error);
+  console.log('leave register       : ' + lr.officers.length + ' officers · ' + lr.totals.taken + ' days taken · ' + lr.totals.exhausted + ' exhausted');
+  return { dash: d, sched: s, pub: pub, mock: mk, leave: lr };
 }
 
 const out = process.argv[2] || path.join(__dirname, 'fixture-dashboard.json');
@@ -366,6 +388,9 @@ fs.writeFileSync(sout === out ? path.join(__dirname, 'fixture-schedule.json') : 
 const mout = out.replace(/fixture-dashboard\.json$/, 'fixture-mockloc.json');
 fs.writeFileSync(mout === out ? path.join(__dirname, 'fixture-mockloc.json') : mout,
                  JSON.stringify(built.mock));
+const lout = out.replace(/fixture-dashboard\.json$/, 'fixture-leave.json');
+fs.writeFileSync(lout === out ? path.join(__dirname, 'fixture-leave.json') : lout,
+                 JSON.stringify(built.leave));
 console.log('officers on the roll : ' + data.totals.officers);
 console.log('present today        : ' + data.today.present.length);
 console.log('on leave / not marked: ' + data.today.onLeave.length + ' / ' + data.today.absent.length);

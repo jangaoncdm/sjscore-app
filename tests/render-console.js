@@ -47,6 +47,8 @@ function serve(){
 const VIEWS = ['overview', 'attendance', 'villages', 'schedule', 'leave', 'notices', 'map', 'duty', 'mock', 'admin'];
 /* the Not-measured reading is its own call, like the schedule */
 const MOCKFIX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-mockloc.json'), 'utf8'));
+/* the leave register is its own call too, read when the Leave screen is opened */
+const LEAVEFIX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-leave.json'), 'utf8'));
 /* the filing schedule is fetched by its own call, so it needs its own fixture —
    built by fixture-dashboard.js off the same real backend run */
 const SCHEDFIX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-schedule.json'), 'utf8'));
@@ -138,6 +140,7 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
                              : /op=roll/.test(u) ? ROLLFIX
                              : /op=schedule/.test(u) ? SCHEDFIX
                              : /op=mockloc/.test(u) ? MOCKFIX
+                             : /op=leaveRegister/.test(u) ? LEAVEFIX
                              : /op=outday/.test(u) ? OUTFIX : payload) });
       });
       await page.route('**/gp.district/**', r =>
@@ -224,6 +227,31 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
           if(!/CSV/.test(txt)) problems.push(lbl + ': no way to download the reading');
           const opened = await page.$$eval('#mkFind details', ds => ds.length);
           if(opened < 1) problems.push(lbl + ': a finding does not open to its mornings');
+        }
+        /* ---- THE LEAVE REGISTER (16.10.2026): the heat map and the table are
+           drawn off their own call; the fixture plants spells across the year,
+           one crossing a month edge, one officer with casual leave exhausted
+           and a refused application. The screen must show the months, the
+           balance, say that awaiting is not debited, and offer the CSV. ---- */
+        if(v === 'leave'){
+          const lbl = size.n + '/' + theme + '/leave';
+          await page.waitForTimeout(600);
+          const txt = await page.$eval('#g', e => e.innerText);
+          const cells = await page.$$eval('#lvHeat td.c', cs => cs.filter(c => /k[1-5]/.test(c.className)).length).catch(() => 0);
+          if(cells < 5) problems.push(lbl + ': the heat map has ' + cells + ' filled cells, expected the planted spells');
+          const months = await page.$$eval('#lvHeat thead th', ths => ths.map(t => t.textContent.trim())).catch(() => []);
+          if(!(months.includes('Feb') && months.includes('Dec'))) problems.push(lbl + ': the heat map does not run January to December');
+          const rows = await page.$$eval('#lvReg tbody tr', rs => rs.filter(r => !r.querySelector('.empty')).length).catch(() => 0);
+          if(rows < 5) problems.push(lbl + ': the register table has ' + rows + ' lines');
+          if(!/left/i.test(txt)) problems.push(lbl + ': no balance is printed');
+          if(!/no yearly figure/i.test(txt)) problems.push(lbl + ': medical leave is not said to have no yearly figure');
+          if(!/not debited/i.test(txt)) problems.push(lbl + ': the screen does not say that awaiting is not debited');
+          if(!/exhausted/i.test(txt)) problems.push(lbl + ': no tile counts casual leave exhausted');
+          const left0 = await page.$$eval('#lvReg .left0', es => es.length).catch(() => 0);
+          if(left0 < 1) problems.push(lbl + ': the officer whose casual leave is exhausted is not marked');
+          if(!/CSV · the register/.test(txt)) problems.push(lbl + ': no way to download the register');
+          const sel = await page.$$eval('#lvYear option', os => os.length).catch(() => 0);
+          if(sel < 1) problems.push(lbl + ': no year to choose');
         }
         if(v === 'duty'){
           const lbl = size.n + '/' + theme + '/duty';

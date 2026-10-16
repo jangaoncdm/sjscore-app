@@ -2191,3 +2191,42 @@ max, rain with its chance, wind, and the rain class spelt out **by the IMD
 scale with its band in millimetres** — the classing `wxRainClass_` already did
 — so a district officer reads the word in the sense everyone else in the state
 does.
+
+---
+
+## The leave register on the console
+
+**Ordered 16.10.2026.** The Leave screen carried what was waiting and the last
+forty orders; it now carries the register — every officer's year — with a heat
+map of the months the leave fell in. `backend/FeatureLeaveRegister.gs` is the
+module (`op=leaveRegister&year=`, the Collector's alone, read-only, one line in
+`FEATURE_MODULES`, `FEATURE_OFF=leavereg` takes it out with no deploy); the
+console fetches it when the screen is opened and not on every poll, because it
+reads the Leave tab whole, which is right at 284 officers. On the District
+HRMS the answer is bounded at `LVREG_MAX_OFFICERS` and says when it has left
+lines out.
+
+**One arithmetic, the sanction's own.** The allowance is `entitlement_` (the
+tenant's opening figures, the pro-rated first year, 2026's optional holidays
+cut to three) and the days taken are counted as `clUsed_` counts them: APPROVED
+rows only, the days the register debited, **an application once however many
+rows carry its id** — `leaveFold_` folds twins to the decided row. A screen
+that printed one figure while the order refused on another would be the
+register arguing with itself in front of the Collector. Awaiting is awaiting
+and never taken; refused is counted and never debited; **medical leave prints
+no balance because it has none** and carries the spell cap beside it; the
+headquarters permission is occasions, not days. A spell is split across the
+months it falls in, in proportion to its calendar days and scaled to the days
+debited, so a row's twelve cells add up to the year. An officer no longer on
+the roll is named with his leave rather than dropped; a row with no id is not
+an application. Suite 38 holds every one of these.
+
+**The heat map is one hue, least to most** — the validated ordinal ramp
+`--co1…--co5`, laid out in HTML at exact pixel sizes, with an outlined cell
+for an application awaiting orders so nothing undebited is ever drawn as
+taken. The ramp inverts on the dark card and the ink flips with it. Three
+CSVs: the register, month by month, every spell. The screen says in words that
+it is a record of what was sanctioned and that whether anything on it is a
+default is the Collector's to read. `tests/render-console.js` asserts the
+map, the table, the exhausted officer, the balance and the wording;
+`tests/fixture-dashboard.js` plants spells across the year for it.
