@@ -1662,7 +1662,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '6fc158c - 16 Oct 12:13';
+const BUILD_STAMP = '070fe01 - 16 Oct 12:18';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
