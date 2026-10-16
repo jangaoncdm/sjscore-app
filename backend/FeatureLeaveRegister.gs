@@ -55,6 +55,24 @@ function lvregMonthSplit_(from, to, days){
   return out.map(function(x){ return Math.round(x * 10) / 10; });
 }
 
+/* every calendar day of a sanctioned spell that falls in the year: one officer, under his kind and his mandal */
+function lvregCalendar_(cal, a, mandal, year){
+  var span = spanDays_(a.from, a.to); if(!(span > 0)) return;
+  if(span > 400) span = 400;                              /* a span that cannot be right is not walked for ever */
+  var t0 = Date.parse(String(a.from) + 'T00:00:00Z');
+  for(var i = 0; i < span; i++){
+    var d = new Date(t0 + i * 86400000);
+    if(d.getUTCFullYear() !== year) continue;
+    var key = d.toISOString().slice(0, 10);
+    var c = cal[key] = cal[key] || { n:0, k:{}, m:{}, km:{} };
+    c.n++;
+    c.k[a.type] = (c.k[a.type] || 0) + 1;
+    var mk = String(mandal || '');
+    c.m[mk] = (c.m[mk] || 0) + 1;
+    c.km[a.type + '|' + mk] = (c.km[a.type + '|' + mk] || 0) + 1;
+  }
+}
+
 function feature_leavereg(){
   return {
     name: 'leavereg',
@@ -74,7 +92,11 @@ function feature_leavereg(){
 
 function leaveRegister_(year){
   var out = { ok:true, at:new Date().toISOString(), today:today_(), year:year,
-              entitlement:{}, mlSpell:ML_MAX_SPELL, years:[], officers:[], totals:{}, truncated:false };
+              entitlement:{}, mlSpell:ML_MAX_SPELL, years:[], officers:[], totals:{}, truncated:false,
+              /* the district's calendar: for every day of the year with anyone on sanctioned
+                 leave, how many officers, by kind and by mandal. Headcount, not debited days:
+                 a day cell answers "who is away today", which is the question a week map asks. */
+              calendar:{} };
   LVREG_TYPES.forEach(function(t){ out.entitlement[t] = entitlement_(t, year); });
 
   /* ---- the roll: one line per officer, the union of his rows ---- */
@@ -137,6 +159,7 @@ function leaveRegister_(year){
       t.taken += days; t.occasions += 1; ac.taken += days;
       lvregMonthSplit_(a.from, a.to, a.type === 'HQ' ? 1 : a.days).forEach(function(x, i){ ac.months[i] = Math.round((ac.months[i] + x) * 10) / 10; });
       if(ac.spells.length < 40) ac.spells.push({ id:a.id, type:a.type, from:a.from, to:a.to, days:a.days, status:'APPROVED' });
+      lvregCalendar_(out.calendar, a, who[a.phone].mandal || a.mandal, year);
     } else if(a.status === 'PENDING'){
       var pd = a.type === 'HQ' ? 0 : a.days;
       t.awaiting += pd; ac.awaiting += pd;

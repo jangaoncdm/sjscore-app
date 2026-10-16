@@ -250,6 +250,13 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
           const left0 = await page.$$eval('#lvReg .left0', es => es.length).catch(() => 0);
           if(left0 < 1) problems.push(lbl + ': the officer whose casual leave is exhausted is not marked');
           if(!/CSV · the register/.test(txt)) problems.push(lbl + ': no way to download the register');
+          const calc = await page.$$eval('#lvCal td.c', cs => cs.filter(c => /k[1-5]/.test(c.className)).length).catch(() => 0);
+          if(calc < 10) problems.push(lbl + ': the district calendar has ' + calc + ' filled days, expected the planted spells');
+          const wk = await page.$$eval('#lvCal td.w', ws => ws.filter(w => w.textContent.trim()).length).catch(() => 0);
+          if(wk < 3) problems.push(lbl + ': the week totals row is empty');
+          if(!/officer-days/.test(txt)) problems.push(lbl + ': the district calendar does not total its officer-days');
+          if(!/busiest week/i.test(txt)) problems.push(lbl + ': the busiest week is not named');
+          if(!/CSV · week by week/.test(txt)) problems.push(lbl + ': no way to download the weeks');
           const sel = await page.$$eval('#lvYear option', os => os.length).catch(() => 0);
           if(sel < 1) problems.push(lbl + ': no year to choose');
         }

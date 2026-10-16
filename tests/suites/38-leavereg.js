@@ -132,6 +132,17 @@ module.exports = {
     t.eq(r.officers.filter(o => o.phone === '9000000071').length, 1, 'a second row of the same number is the same officer, not a second line');
     t.eq(a.role, 'PS', 'and his line carries his first row’s role');
 
+    /* ---- 7a. THE DISTRICT'S CALENDAR: officers on leave, day by day ---- */
+    t.eq((r.calendar['2026-08-31'] || {}).n, 1, '31 August: A, on the spell that crosses into September');
+    t.eq((r.calendar['2026-09-07'] || {}).n, 1, '7 September: B, once — the twin row is not a second officer');
+    t.eq((r.calendar['2026-07-05'] || {}).n, 1, '5 July: C on medical leave');
+    t.eq((r.calendar['2026-07-05'] || {}).k.ML, 1, 'under his kind');
+    t.eq((r.calendar['2026-07-05'] || {}).m.Devaruppula, 1, 'and his mandal');
+    t.eq((r.calendar['2026-08-15'] || {}).k.HQ, 1, 'the headquarters permission is a day away too');
+    t.ok(!r.calendar['2026-09-14'], 'the refused earned leave puts nobody away');
+    t.ok(!r.calendar['2026-10-20'], 'nor does an application still awaiting orders');
+    t.ok(!r.calendar['2025-12-29'], 'and last year is not on this calendar');
+
     /* ---- 8. THE TOTALS, and nothing written ---- */
     t.eq(r.totals.officers, r.officers.length, 'totals count the lines');
     t.eq(r.totals.byType.CL.taken, 10, 'district casual leave: 5 + 3 + 2');

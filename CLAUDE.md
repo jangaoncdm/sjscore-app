@@ -2230,3 +2230,13 @@ it is a record of what was sanctioned and that whether anything on it is a
 default is the Collector's to read. `tests/render-console.js` asserts the
 map, the table, the exhausted officer, the balance and the wording;
 `tests/fixture-dashboard.js` plants spells across the year for it.
+
+**And the district, week by week** (asked the same day). A calendar heat map
+above the officer map: fifty-three weeks across, Monday to Sunday down, a cell
+the **officers whose sanctioned leave covers that day** under the kind and
+the mandal chosen, and a row of week totals in officer-days underneath, with
+the busiest week and day named in words. The per-day counts come from the
+server (`calendar` on the same answer, by kind, by mandal and by both), not
+from the capped spell list, so the map is complete where the lines are not.
+Headcount and not debited days, because a day cell answers *who is away
+today*; nothing awaiting orders is on it. CSV week by week.

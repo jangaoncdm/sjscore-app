@@ -1157,6 +1157,17 @@ body.dark .hm td.c.k1,body.dark .hm td.c.k2{color:#fff}body.dark .hm td.c.k3{col
 .lvreg td.n{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
 .lvreg td.n small{color:var(--tx-3)}
 .lvreg .left0{color:var(--st-bad);font-weight:700}
+/* ---- the district's calendar: weeks across, the days of the week down, a cell is officers away ---- */
+.lvcal{border-collapse:separate;border-spacing:2px;font-size:11px}
+.lvcal th{color:var(--tx-3);font-weight:600;font-size:10.5px;text-align:left;padding:0 4px;white-space:nowrap}
+.lvcal th.d{text-align:right;width:30px;padding-right:6px}
+.lvcal td.c{width:18px;min-width:18px;height:18px;border-radius:4px;background:var(--panel);box-shadow:inset 0 0 0 1px var(--line-2)}
+.lvcal td.c.k1{background:var(--co1)}.lvcal td.c.k2{background:var(--co2)}.lvcal td.c.k3{background:var(--co3)}.lvcal td.c.k4{background:var(--co4)}.lvcal td.c.k5{background:var(--co5)}
+.lvcal td.c.off{background:var(--well);box-shadow:none}
+.lvcal td.c.today{box-shadow:inset 0 0 0 2px var(--st-warn)}
+.lvcal td.w{text-align:center;font-variant-numeric:tabular-nums;font-weight:700;color:var(--tx);padding-top:4px;font-size:10.5px}
+.lvcal td.w.hi{color:var(--pri-strong)}
+.lvcal td.wl{color:var(--tx-3);font-size:10.5px;padding:4px 6px 0 0;text-align:right;white-space:nowrap}
 .expbar .tbtn{min-height:40px}
 .expnote{font-size:12px;color:var(--tx-3)}
 
@@ -3714,6 +3725,61 @@ function lvHeat(rows){
   h+='<div class="hmleg"><span>Days in the month:</span><span><i style="background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)"></i>none</span><span><i style="background:var(--co1)"></i>1</span><span><i style="background:var(--co2)"></i>2–3</span><span><i style="background:var(--co3)"></i>4–5</span><span><i style="background:var(--co4)"></i>6–9</span><span><i style="background:var(--co5)"></i>10+</span><span><i class="w"></i>awaiting orders, not debited</span>'+(rows.length>400?'<span class="mut">· the first 400 of '+rows.length+' lines; the CSV carries all</span>':'')+'</div>';
   return h;
 }
+/* THE DISTRICT, WEEK BY WEEK. Fifty-three columns of weeks beginning on Monday, seven rows of days,
+   a cell is the officers on sanctioned leave that day under the kind and the mandal chosen, and
+   a row of week totals underneath — officer-days, the sum of the seven cells. Laid out in HTML at
+   exact pixel sizes, on the ordinal ramp. */
+const LV_DOW=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const lvCalBin=v=>v<=0?'':v<2?'k1':v<4?'k2':v<7?'k3':v<13?'k4':'k5';
+function lvCalCount(c){
+  if(!c) return 0;
+  if(LVR_KIND!=='all'&&LVR_MANDAL) return c.km[LVR_KIND+'|'+LVR_MANDAL]||0;
+  if(LVR_KIND!=='all') return c.k[LVR_KIND]||0;
+  if(LVR_MANDAL) return c.m[LVR_MANDAL]||0;
+  return c.n||0;
+}
+function lvWeeks(){
+  const y=Number(LVR.year), cal=LVR.calendar||{};
+  const jan1=Date.UTC(y,0,1), dec31=Date.UTC(y,11,31);
+  const dow0=(new Date(jan1).getUTCDay()+6)%7;             /* Monday = 0 */
+  const start=jan1-dow0*86400000;
+  const weeks=[];
+  for(let t=start;t<=dec31;t+=7*86400000){
+    const w={ from:new Date(t).toISOString().slice(0,10), days:[], total:0 };
+    for(let d=0;d<7;d++){
+      const dt=new Date(t+d*86400000), key=dt.toISOString().slice(0,10), inYear=dt.getUTCFullYear()===y;
+      const n=inYear?lvCalCount(cal[key]):0;
+      w.days.push({ key, n, inYear, sun:d===6 }); w.total+=n;
+    }
+    weeks.push(w);
+  }
+  return weeks;
+}
+function lvCalendar(){
+  const weeks=lvWeeks(), today=String(LVR.today||'');
+  const total=weeks.reduce((s,w)=>s+w.total,0);
+  if(!total) return '<div class="empty">Nobody on sanctioned leave this year under this kind.</div>';
+  const peak=weeks.reduce((b,w)=>w.total>b.total?w:b,weeks[0]);
+  const peakDay=weeks.flatMap(w=>w.days).reduce((b,d)=>d.n>b.n?d:b,{n:0});
+  const monthOf=w=>{ const d=new Date(w.from+'T00:00:00Z'); return d.getUTCDate()<=7?LV_MON[d.getUTCMonth()]:''; };
+  let h='<div class="hmwrap" style="max-height:none;padding:8px 6px"><table class="lvcal" id="lvCal"><thead><tr><th class="d"></th>'+
+    weeks.map(w=>'<th>'+monthOf(w)+'</th>').join('')+'</tr></thead><tbody>';
+  for(let d=0;d<7;d++){
+    h+='<tr><th class="d">'+LV_DOW[d]+'</th>';
+    weeks.forEach(w=>{ const x=w.days[d];
+      const cls='c '+(x.inYear?lvCalBin(x.n):'off')+(x.key===today?' today':'');
+      const tip=x.inYear?(dm(x.key)+' · '+(x.n?x.n+' officer'+(x.n===1?'':'s')+' on sanctioned leave':'nobody on leave')):'';
+      h+='<td class="'+cls+'"'+(tip?' title="'+esc(tip)+'"':'')+'></td>'; });
+    h+='</tr>';
+  }
+  h+='<tr><td class="wl">Week total</td>'+weeks.map(w=>'<td class="w'+(w.total&&w===peak?' hi':'')+'" title="'+esc('week of '+dm(w.from)+': '+w.total+' officer-day'+(w.total===1?'':'s'))+'">'+(w.total||'')+'</td>').join('')+'</tr>';
+  h+='</tbody></table></div>';
+  h+='<div class="hmleg"><span>Officers away on the day:</span><span><i style="background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)"></i>none</span><span><i style="background:var(--co1)"></i>1</span><span><i style="background:var(--co2)"></i>2–3</span><span><i style="background:var(--co3)"></i>4–6</span><span><i style="background:var(--co4)"></i>7–12</span><span><i style="background:var(--co5)"></i>13+</span><span><i style="box-shadow:inset 0 0 0 2px var(--st-warn);background:var(--panel)"></i>today</span></div>';
+  h+='<p class="mut" style="font-size:12px;margin-top:10px"><b>'+total.toLocaleString('en-IN')+' officer-days</b> of sanctioned leave in '+LVR.year+(LVR_MANDAL?' in '+esc(LVR_MANDAL):'')+(LVR_KIND==='all'?'':' under '+LV_KINDS[LVR_KIND].toLowerCase())+'. '+
+    'The busiest week began on <b>'+esc(dm(peak.from))+'</b> with '+peak.total+' officer-day'+(peak.total===1?'':'s')+(peakDay.n?'; the busiest day was <b>'+esc(dm(peakDay.key))+'</b> with '+peakDay.n+' officer'+(peakDay.n===1?'':'s')+' away':'')+'. '+
+    'A cell counts the officers whose sanctioned leave covers that day, whatever the kind; Sundays and holidays inside a spell are counted as the spell covers them. Nothing awaiting orders is on this map.</p>';
+  return h;
+}
 function lvTable(rows){
   const ent=LVR.entitlement;
   const cell=(t,k)=>{ const x=t[k]; if(!x) return '<td class="n">—</td>';
@@ -3743,7 +3809,7 @@ function lvRegister(){
     '<label style="font-size:12px;color:var(--tx-2)">Order<select class="rsel" id="lvSort" style="margin-left:7px;min-width:140px">'+
       [['taken','most taken first'],['left','least casual leave left'],['name','by name'],['mandal','by mandal']].map(([k,l])=>'<option value="'+k+'"'+(LVR_SORT===k?' selected':'')+'>'+l+'</option>').join('')+'</select></label>'+
     '<span style="flex:1"></span>'+
-    '<div class="expbar"><button class="tbtn pri" data-exp="lvreg">CSV · the register</button><button class="tbtn" data-exp="lvmonths">CSV · month by month</button><button class="tbtn" data-exp="lvspells">CSV · every spell</button></div></div>';
+    '<div class="expbar"><button class="tbtn pri" data-exp="lvreg">CSV · the register</button><button class="tbtn" data-exp="lvmonths">CSV · month by month</button><button class="tbtn" data-exp="lvweeks">CSV · week by week</button><button class="tbtn" data-exp="lvspells">CSV · every spell</button></div></div>';
   if(!LVR){
     return h+panel('c12','The leave register','',
       '<div class="empty">'+(LVR_BUSY?'Reading every application of the year off the Leave tab. It takes a moment.':esc(LVR_ERR||'The register did not answer.'))+'</div>');
@@ -3757,6 +3823,7 @@ function lvRegister(){
   h+=kpi('Refused or withdrawn',IC.c,T.refused,'','never debited');
   h+='</div>';
   const kindWord=LVR_KIND==='all'?'every kind of leave':LV_KINDS[LVR_KIND].toLowerCase();
+  h+=panel('c12','The district, week by week · '+LVR.year,(LVR_MANDAL||'whole district')+' · '+kindWord,lvCalendar(),'lvc');
   h+=panel('c12','When the leave fell · '+LVR.year,rows.length+' officer'+(rows.length===1?'':'s')+' · '+kindWord,
     lvHeat(rows)+
     '<p class="mut" style="font-size:12px;margin-top:10px">A cell is the days taken in that month, a spell split across the months it falls in, so a row adds up to the officer’s year. '+
@@ -3787,6 +3854,11 @@ function lvExport(kind){
       if(o._a>0) out.push([o.name,o.phone,o.role,o.mandal,'awaiting orders'].concat(o._am.map(lvNum),[lvNum(o._a)])); });
     out.push(foot);
     dlBlob('SJGP-leave-by-month-'+y+'.csv','text/csv;charset=utf-8',csv(out));
+  } else if(kind==='lvweeks'){
+    const out=[['Week beginning'].concat(LV_DOW,['Week total (officer-days)'])];
+    lvWeeks().forEach(w=>out.push([w.from].concat(w.days.map(d=>d.inYear?d.n:''),[w.total])));
+    out.push(['','A cell is the officers whose sanctioned leave covers that day'+(LVR_MANDAL?' in '+LVR_MANDAL:'')+(LVR_KIND==='all'?'':' under '+LVR_KIND)+'. Nothing awaiting orders is counted.']);
+    dlBlob('SJGP-leave-weeks-'+y+'.csv','text/csv;charset=utf-8',csv(out));
   } else if(kind==='lvspells'){
     const out=[['Officer','Phone','Role','Mandal','Kind','From','To','Days','Status','Application id']];
     rows.forEach(o=>(o.spells||[]).forEach(s=>out.push([o.name,o.phone,o.role,o.mandal,s.type,s.from,s.to,s.days,s.status==='APPROVED'?'sanctioned':'awaiting orders',s.id])));
