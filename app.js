@@ -73,7 +73,7 @@ function brandRegister(){
     document.documentElement.setAttribute('data-tenant', 'gp');
   }catch(e){}
 }
-const APP_VERSION = '6.16.0';
+const APP_VERSION = '6.17.0';
 /* THE WELCOME. In front of sign-in on every opening, 2.6 s and gone, or gone on a tap. It is for
    people: a driven browser (the render passes) is never shown it, so a pass sees the app and not a
    splash. It is removed from the document, not hidden, so nothing can sit under it afterwards. */
@@ -239,6 +239,7 @@ function load(){
   DB.reminders = DB.reminders || [];        /* informal nudges — they never lock the app */
   DB.remSeen = DB.remSeen || {};            /* ids already shown on this phone */
   DB.holidays = DB.holidays || {};          /* the year's off days, from the district */
+  DB.days = DB.days || null;                /* his own last fortnight, from the district */
   DB.noticeAckQ = DB.noticeAckQ || [];      /* acknowledged on the phone, awaiting signal */
   DB.noticeDone = DB.noticeDone || {};      /* ids acknowledged locally — the gate lifts at once */
   /* the filing schedule. What this phone has recorded beats the district's
@@ -1397,6 +1398,7 @@ async function _syncAttendance(){
            record is kept on the district's clock either way, but the officer
            is seeing the wrong time on his own screen and should know. */
         if(typeof r.skew === 'number') DB.skew = r.skew;
+        DAYS_STALE = true;                   /* the fortnight is read again, fresh, at the next draw */
         if(r.resent){ /* the same mark arrived twice on a weak line — nothing to say */ }
         else if(r.duplicate){
           a.dup = {n:r.marks||2, firstAt:r.firstAt||''};
@@ -1618,6 +1620,7 @@ function renderHome(){
     refreshAdvisory();  /* and the circular is put up the moment it is issued */
     refreshSchedule();  /* his own villages, his own days, and what the district has sent him */
     refreshWeather();   /* the sky over his own mandal, from the district's one call */
+    refreshDays();      /* and his own last fortnight, drawn under the day's card */
     refreshDuty();      /* and where he is supposed to be, so the gate works with no signal */
     flushAdvAcks();     /* any receipt the signal swallowed goes up now */
     flushSchedAcks();   /* and the same for the schedule's */
@@ -1630,7 +1633,9 @@ function renderHome(){
   $('#homeSub').textContent = roleName(u.role) + (u.mandal ? ' · ' + u.mandal + ' mandal' : ' · Jangaon District');
   const ym=ymNow(), body=$('#homeBody');
   let h2 = attendanceStrip();
-  /* the sky over his own mandal, directly under the day's own card */
+  /* his own last fortnight, directly under the day's own card */
+  h2 += daysCard();
+  /* and the sky over his own mandal */
   h2 += weatherCard();
   /* PINNED WHILE IT IS OUTSTANDING. An officer opens this screen and the first
      thing on it is what the district is waiting for; once the plan is in, it
@@ -3260,6 +3265,97 @@ function refreshWeather(){
     }
   }).catch(()=>{});
 }
+
+/* ============================================================================
+ * HIS OWN LAST FORTNIGHT — the attendance calendar on the home screen
+ * ----------------------------------------------------------------------------
+ * Asked 16.10.2026, after the console's calendars. Fourteen cells under the
+ * Today card, one a day: marked, marked late, on sanctioned leave, a Sunday
+ * or a holiday, held on this phone, or not marked. The district draws it
+ * (op=myDays, FeatureMyDays.gs) off its own reading of every day — late by
+ * the same rule a reminder uses — and this app only lays it out.
+ *
+ * TWO THINGS THE PHONE KNOWS BETTER THAN THE DISTRICT, and overlays:
+ *   · a mark still queued on a village road. The district has not received
+ *     it, so its answer says unmarked; the cell says "held on this phone",
+ *     never "not marked", because the receipt is the phone's;
+ *   · today. The day is running until 18:00, so today is outlined and never
+ *     painted as a miss, whatever the hour (rule 2).
+ * A late mark is drawn as late and is never a miss. A voluntary office sees
+ * its marks and nothing against its blanks. Nothing on the card names a
+ * sanction: a day not marked is the fact the register already holds, shown
+ * to the man it concerns, and tests/render-days.js asserts the words.
+ *
+ * Read once every half hour while the app is open, and again fresh the
+ * moment one of this phone's marks is received, because the card is the
+ * first place an officer looks to see that it was.
+ * ========================================================================== */
+let DAYS_STALE = false;
+function daysState(){ return (DB.days && typeof DB.days === 'object' && Array.isArray(DB.days.days)) ? DB.days : null; }
+function refreshDays(force){
+  if(!navigator.onLine) return Promise.resolve();
+  const u = user(); if(!u || u.role === 'COLLECTOR') return Promise.resolve();
+  const st = daysState(), fresh = force || DAYS_STALE;
+  if(!fresh && st && st.today === todayStr() && st.at && Date.now() - new Date(st.at).getTime() < 30 * 60000) return Promise.resolve();
+  const q = { op:'myDays' }; if(fresh) q.fresh = '1';
+  return get(q).then(r => {
+    if(r && r.ok && Array.isArray(r.days)){
+      DAYS_STALE = false;
+      DB.days = { at:new Date().toISOString(), today:r.today, cutoff:r.cutoff, exempt:!!r.exempt,
+                  days:r.days, totals:r.totals || {} };
+      save();
+      if(TAB === 'home') renderHome();
+    }
+  }).catch(()=>{});
+}
+const DAY_LETTER = ['S','M','T','W','T','F','S'];
+function daysCard(){
+  const u = user(); if(!u || u.role === 'COLLECTOR') return '';
+  const st = daysState(); if(!st || !st.days.length) return '';
+  const today = todayStr();
+  /* THE PHONE'S OWN MARKS CORRECT THE DISTRICT'S COUNT. The district counted
+     a past working day it holds no mark for as not marked; if this phone
+     holds that mark — queued, or received since the district last read —
+     the day is held or marked, and the figure moves with the tile. */
+  let marked = st.totals.marked || 0, held = 0, fixed = 0;
+  const cells = st.days.map(d => {
+    const loc = DB.att[d.date];
+    const dt = new Date(d.date + 'T00:00:00');
+    const when = dt.toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short' });
+    let cls, word;
+    if(d.leave){ cls = 'lv'; word = 'on sanctioned leave'; }
+    else if(d.marked){ cls = d.late ? 'late' : 'ok'; word = (d.late ? 'marked late, at ' : 'marked at ') + tfmt(d.at); }
+    else if(loc && loc.sync !== 'synced'){ cls = 'held'; held++; if(!d.off && d.date < today) fixed++; word = 'marked, held on this phone — not yet received by the district'; }
+    else if(loc){ cls = 'ok'; marked++; if(!d.off && d.date < today) fixed++; word = 'marked at ' + tfmt(loc.ts); }
+    else if(d.off){ cls = 'off'; word = d.off; }
+    else if(d.date === today){ cls = 'today'; word = 'today — not marked yet'; }
+    else if(st.exempt){ cls = 'off'; word = 'not asked of your office'; }
+    else { cls = 'miss'; word = 'not marked'; }
+    return '<button type="button" class="d ' + cls + (d.date === today ? ' now' : '') + '" data-say="' + esc(when + ' · ' + word) + '" aria-label="' + esc(when + ', ' + word) + '">' +
+      '<i>' + DAY_LETTER[dt.getDay()] + '</i><b class="num">' + dt.getDate() + '</b></button>';
+  }).join('');
+  const T = st.totals, working = T.working || 0;
+  const head = st.exempt
+    ? (marked ? marked + ' day' + (marked === 1 ? '' : 's') + ' marked, voluntarily' : 'Attendance is not asked of your office')
+    : marked + ' of ' + working + ' working day' + (working === 1 ? '' : 's') + ' marked';
+  const bits = [];
+  if(T.late) bits.push(T.late + ' late');
+  if(T.leaveDays) bits.push(T.leaveDays + ' on sanctioned leave');
+  if(held) bits.push(held + ' held on this phone');
+  const notMarked = Math.max(0, (T.notMarked || 0) - fixed);
+  if(!st.exempt && notMarked) bits.push(notMarked + ' not marked');
+  const sub = bits.length ? bits.join(' · ') : (st.exempt ? 'Nothing is counted either way.' : 'Every working day accounted for.');
+  const lg = [['ok','marked'],['late','late — never a miss'],['lv','on leave'],['off','Sunday or holiday'],['held','held on this phone']]
+    .concat(st.exempt ? [] : [['miss','not marked']])
+    .map(([c, w]) => '<span><i class="' + c + '"></i>' + w + '</span>').join('');
+  return '<div class="days" id="days"><div class="k">Attendance · last 14 days</div><div class="t">' + esc(head) + '</div>' +
+    '<div class="s">' + esc(sub) + '</div><div class="grid" role="list">' + cells + '</div><div class="lg">' + lg + '</div>' +
+    '<div class="nt">What the district holds for you, read at ' + esc(tfmt(st.at)) + '. Today is still running and is never counted. Tap a day for its detail.</div></div>';
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('.days .d');
+  if(b && b.dataset.say) toast(b.dataset.say, 2600);
+});
 
 /* the IMD bands, in the words a district officer already reads them in */
 const IMD_BAND = { 'light rain':'2.5 to 15.5 mm', 'moderate rain':'15.6 to 64.4 mm', 'heavy rain':'64.5 to 115.5 mm',
