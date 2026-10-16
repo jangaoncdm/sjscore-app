@@ -68,6 +68,12 @@ const PASSES = [
   { name: 'Marking out',
     what: 'The home-screen card and the screen it opens, driven in a real browser: the hour the district names, the button that is not offered before it, the mark itself with its photograph and coordinates, and the receipt the PHONE holds beating the district’s answer — the fault reported twice about the circular. Every state is read for words of sanction, because none arises.',
     cmd: ['tests/render-out.js'], needs: BROWSER ? null : 'playwright is not installed', shots: 'out-render' },
+  { name: 'His own last fortnight, on the home screen',
+    what: 'The real field app at 390px with the district’s answer for an officer’s last fourteen days. It asserts the '
+        + 'fourteen tiles and their states, that a mark still queued on the phone is drawn as held and never as not '
+        + 'marked, that today is outlined and never a miss, that the voluntary office has nothing counted against it, '
+        + 'that the card is simply absent when the district cannot answer, and that not one word of sanction is on it.',
+    cmd: ['tests/render-days.js'], needs: BROWSER ? null : 'playwright is not installed', shots: 'days-render' },
   { name: 'The welcome',
     what: 'The splash in front of sign-in, asked for by name since a driven browser is never shown it: it draws, the emblem loads, a tap takes it away, and by four seconds it is gone from the document with sign-in underneath.',
     cmd: ['tests/render-welcome.js'], needs: BROWSER ? null : 'playwright is not installed', shots: 'welcome-render' },

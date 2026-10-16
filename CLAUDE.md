@@ -2334,3 +2334,37 @@ the fortnight tiles carry their figures, and it scrolls to the top before
 every screenshot, or a view opened after a scrolled one carries the sticky top
 bar mid-page. On a 1366 laptop the top bar also cuts the date line to one
 line and caps the register picker, so the greeting is not left 190px.
+
+## His own last fortnight, on the home screen
+
+**Asked 16.10.2026, after the console's calendars: the same for each officer
+in his own app.** Fourteen tiles under the Today card, one a day, with the
+weekday letter above and the date on the tile: green is a mark the district
+holds, amber a mark that is late or still on the phone, indigo tint is
+sanctioned leave, grey a Sunday or a holiday, red a working day the register
+holds no mark for. Today is outlined whatever it is. A tap says what the day
+was. `backend/FeatureMyDays.gs` is the module (`op=myDays`, the token's own
+officer and nobody else's, read-only, `FEATURE_OFF=mydays` takes it out);
+`daysCard()` and `refreshDays()` in `app.js` draw it.
+
+**The district reads every day; the phone overlays two things it knows
+better.** Late is by `effMarkAt_` against `CUTOFF_HOUR`, one officer one
+day, leave off the Leave register and the attendance tab as one set (rule 9),
+Sundays and the order's holidays off — the same reading a reminder is made
+on, so the card and the ladder cannot disagree. **Today is never counted as
+unmarked** (rule 2): the day is read at 18:00, and a card painting the
+morning red at nine would be judging a running day. **A mark still queued on
+this phone is drawn as held and never as not marked**, because the receipt is
+the phone's; the count moves with the tile. The voluntary office sees its
+marks and nothing against its blanks. The Attendance tab is read from its
+**tail** (`MYDAYS_TAIL_ROWS`) and the answer cached ten minutes per officer,
+because 280 phones open this screen several times a day; the app asks for it
+fresh the moment one of its marks is received.
+
+**It accuses nobody**: nothing is written, no reminder raised; a day not
+marked is the fact the register already holds, shown to the man it concerns.
+Not one word of sanction is on the card — `tests/render-days.js` asserts the
+words, the states, the held mark, the outlined today and that the card is
+simply absent when the district cannot answer. Suite 40 holds the server
+half, including that the District HRMS, which keeps no attendance, refuses
+it by name.
