@@ -743,11 +743,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
      ten-mark score bands) are one axis, not eight identities. */
   --co1:#a3aaf1; --co2:#8b93ee; --co3:#6f7ae9; --co4:#5462d8; --co5:#3a46c4;
   /* the HEAT ramp (16.10.2026): the Collector asked for more than one hue on the
-     heat maps. Yellow to amber to orange to red to deep magenta — many hues, ONE
-     order, because L* falls at every step (91 > 78 > 63 > 45 > 30), so it still
+     heat maps. Soft yellow to green to teal to blue to indigo (the first ramp, yellow to
+     magenta, was not liked and went the same day) — many hues, ONE order,
+     because L* falls at every step (91 > 79 > 67 > 51 > 27), so it still
      reads least-to-most to any eye. It is for density cells only; a bar or a line
      stays on --co. The record is prompt/palette-validation.txt. */
-  --hm1:#FFE08A; --hm2:#FDB24B; --hm3:#F0712E; --hm4:#C9304A; --hm5:#7A1F6E;
+  --hm1:#F4E97A; --hm2:#8FD38B; --hm3:#2FB5A0; --hm4:#2E7FBF; --hm5:#3B2F8F;
   --hm-ink-lo:#1A2437; --hm-ink-hi:#FFFFFF;
   /* reserved. These mean good / warning / bad and are never series 4. */
   --st-ok:#15803D; --st-warn:#B45309; --st-bad:#B91C1C; --st-idle:#8E97AE;
@@ -781,7 +782,7 @@ body.dark{
   --co1:#3a46c4; --co2:#5866e0; --co3:#7b87ec; --co4:#a0a9f3; --co5:#c3c9f9;
   /* the heat ramp does not invert on the dark card: a heat map's least is still its
      palest, and every step clears 3:1 against #171B2D */
-  --hm1:#FFE38F; --hm2:#FFB457; --hm3:#F77C3A; --hm4:#E0455E; --hm5:#B04AA8;
+  --hm1:#F6EB85; --hm2:#97D994; --hm3:#3CC1AC; --hm4:#4A95D1; --hm5:#7A6DD6;
   --hm-ink-lo:#1A2437; --hm-ink-hi:#FFFFFF;
   --st-ok:#5BD68A; --st-warn:#E9A93C; --st-bad:#F1737A; --st-idle:#8B93AB;
 }

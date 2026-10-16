@@ -2264,9 +2264,10 @@ neither due nor counted; a day not yet reached is blank. It accuses nobody
 
 **The heat maps are multi-hue, by the Collector's choice the same day**, and
 that is a deliberate exception to "an ordered scale is one hue". `--hm1…--hm5`
-is yellow → amber → orange → red → deep magenta: many hues, **one order**,
-because L* falls at every step (90 > 78 > 62 > 46 > 30 light; 91 > 79 > 65 >
-53 > 48 dark), which is the check a sequential ramp answers to. It does not
+is soft yellow → green → teal → blue → indigo (the first cut, yellow to
+magenta, was not liked and went the same day): many hues, **one order**,
+because L* falls at every step (91 > 79 > 67 > 51 > 27 light; 92 > 81 > 71 >
+60 > 52 dark), which is the check a sequential ramp answers to. It does not
 invert on the dark card — a heat map's least is still its palest, and every
 step clears 3:1 on `#171B2D`. Dark ink on steps 1–3, white on 4–5. **Density
 cells only**: bars, lines and ranks stay on `--co`, and nothing else may read
