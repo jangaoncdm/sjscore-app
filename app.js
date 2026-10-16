@@ -73,7 +73,7 @@ function brandRegister(){
     document.documentElement.setAttribute('data-tenant', 'gp');
   }catch(e){}
 }
-const APP_VERSION = '6.17.0';
+const APP_VERSION = '6.17.1';
 /* THE WELCOME. In front of sign-in on every opening, 2.6 s and gone, or gone on a tap. It is for
    people: a driven browser (the render passes) is never shown it, so a pass sees the app and not a
    splash. It is removed from the document, not hidden, so nothing can sit under it afterwards. */
@@ -3294,7 +3294,7 @@ let DAYS_STALE = false;
 function daysState(){ return (DB.days && typeof DB.days === 'object' && Array.isArray(DB.days.days)) ? DB.days : null; }
 function refreshDays(force){
   if(!navigator.onLine) return Promise.resolve();
-  const u = user(); if(!u || u.role === 'COLLECTOR') return Promise.resolve();
+  const u = user(); if(!u) return Promise.resolve();
   const st = daysState(), fresh = force || DAYS_STALE;
   if(!fresh && st && st.today === todayStr() && st.at && Date.now() - new Date(st.at).getTime() < 30 * 60000) return Promise.resolve();
   const q = { op:'myDays' }; if(fresh) q.fresh = '1';
@@ -3310,7 +3310,8 @@ function refreshDays(force){
 }
 const DAY_LETTER = ['S','M','T','W','T','F','S'];
 function daysCard(){
-  const u = user(); if(!u || u.role === 'COLLECTOR') return '';
+  /* the Collector sees his own, in the voluntary form: he is not due and nothing is counted against a blank day */
+  const u = user(); if(!u) return '';
   const st = daysState(); if(!st || !st.days.length) return '';
   const today = todayStr();
   /* THE PHONE'S OWN MARKS CORRECT THE DISTRICT'S COUNT. The district counted
