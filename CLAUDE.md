@@ -2272,3 +2272,16 @@ invert on the dark card — a heat map's least is still its palest, and every
 step clears 3:1 on `#171B2D`. Dark ink on steps 1–3, white on 4–5. **Density
 cells only**: bars, lines and ranks stay on `--co`, and nothing else may read
 `--hm`. The record is `prompt/palette-validation.txt`.
+
+**An Apps Script project holds 200 versions, and every deploy mints one.** On
+16.10.2026 the sanitation project reached the cap: `clasp push` succeeded, the
+deploy step answered *Cannot create more versions*, and the live register went
+on running the previous version. Nothing on the register was affected, but no
+backend change could land until the cap was cleared. **There is no API and no
+clasp command that deletes a version** (the API has create, get and list). It
+is done in the browser by the project's owner, the `jangaoncdm` account: open
+the project in the Apps Script editor, Project history, Bulk delete versions,
+keep the last fifty. Versions a deployment still uses are skipped there, which
+is right. The deploy step now names that act in its error rather than one line
+that reads like any other failure. The Gram Palana and HRMS projects reach the
+same cap in their turn, at one version per push to main.

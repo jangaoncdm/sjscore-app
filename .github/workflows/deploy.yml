@@ -179,7 +179,22 @@ jobs:
         env:
           MSG: ${{ github.event.head_commit.message }}
         run: |
-          clasp deploy -i "${{ vars.GP_DEPLOYMENT_ID }}" -d "auto ${{ github.run_number }}: $(printf '%s' "$MSG" | head -n 1 | cut -c1-120)"
+          # THE 200-VERSION CAP. Every deploy mints a version and an Apps Script project
+          # holds 200; on 16.10.2026 the sanitation project reached it and clasp said so
+          # in one line that read like any other failure. There is no API and no clasp
+          # command that deletes a version: it is done in the browser, by the project's
+          # owner, from Project history > Bulk delete versions (versions in use by a
+          # deployment are skipped there, which is right). So the step names that act
+          # rather than leaving the reader to guess at the cause.
+          set +e
+          out=$(clasp deploy -i "${{ vars.GP_DEPLOYMENT_ID }}" -d "auto ${{ github.run_number }}: $(printf '%s' "$MSG" | head -n 1 | cut -c1-120)" 2>&1); rc=$?
+          set -e
+          printf '%s\n' "$out"
+          if printf '%s' "$out" | grep -q "limit of 200 versions"; then
+            echo "::error::This Apps Script project holds 200 versions, the cap. The code WAS pushed but no new version could be made, so the live register still runs the previous one. Open the project in the Apps Script editor as its owner, choose Project history, then Bulk delete versions, keep the last fifty, and re-run this job. Nothing on the register is affected."
+            exit 1
+          fi
+          exit $rc
       - name: Confirm the Gram Palana register is answering, AND that it knows which register it is
         # The stamp alone is not enough here. Both projects run the same bytes,
         # so a diag that says ok:true proves only that SOMETHING answered — it
@@ -306,7 +321,22 @@ jobs:
         env:
           MSG: ${{ github.event.head_commit.message }}
         run: |
-          clasp deploy -i "${{ steps.up.outputs.deployment_id }}" -d "auto ${{ github.run_number }}: $(printf '%s' "$MSG" | head -n 1 | cut -c1-120)"
+          # THE 200-VERSION CAP. Every deploy mints a version and an Apps Script project
+          # holds 200; on 16.10.2026 the sanitation project reached it and clasp said so
+          # in one line that read like any other failure. There is no API and no clasp
+          # command that deletes a version: it is done in the browser, by the project's
+          # owner, from Project history > Bulk delete versions (versions in use by a
+          # deployment are skipped there, which is right). So the step names that act
+          # rather than leaving the reader to guess at the cause.
+          set +e
+          out=$(clasp deploy -i "${{ steps.up.outputs.deployment_id }}" -d "auto ${{ github.run_number }}: $(printf '%s' "$MSG" | head -n 1 | cut -c1-120)" 2>&1); rc=$?
+          set -e
+          printf '%s\n' "$out"
+          if printf '%s' "$out" | grep -q "limit of 200 versions"; then
+            echo "::error::This Apps Script project holds 200 versions, the cap. The code WAS pushed but no new version could be made, so the live register still runs the previous one. Open the project in the Apps Script editor as its owner, choose Project history, then Bulk delete versions, keep the last fifty, and re-run this job. Nothing on the register is affected."
+            exit 1
+          fi
+          exit $rc
       - name: Confirm the HRMS register is answering, AND that it knows which register it is
         # All three projects run the same bytes, so ok:true proves only that
         # SOMETHING answered — it would say exactly the same if the overlay had
@@ -364,7 +394,22 @@ jobs:
         env:
           MSG: ${{ github.event.head_commit.message }}
         run: |
-          clasp deploy -i "${{ vars.SJGP_DEPLOYMENT_ID }}" -d "auto ${{ github.run_number }}: $(printf '%s' "$MSG" | head -n 1 | cut -c1-120)"
+          # THE 200-VERSION CAP. Every deploy mints a version and an Apps Script project
+          # holds 200; on 16.10.2026 the sanitation project reached it and clasp said so
+          # in one line that read like any other failure. There is no API and no clasp
+          # command that deletes a version: it is done in the browser, by the project's
+          # owner, from Project history > Bulk delete versions (versions in use by a
+          # deployment are skipped there, which is right). So the step names that act
+          # rather than leaving the reader to guess at the cause.
+          set +e
+          out=$(clasp deploy -i "${{ vars.SJGP_DEPLOYMENT_ID }}" -d "auto ${{ github.run_number }}: $(printf '%s' "$MSG" | head -n 1 | cut -c1-120)" 2>&1); rc=$?
+          set -e
+          printf '%s\n' "$out"
+          if printf '%s' "$out" | grep -q "limit of 200 versions"; then
+            echo "::error::This Apps Script project holds 200 versions, the cap. The code WAS pushed but no new version could be made, so the live register still runs the previous one. Open the project in the Apps Script editor as its owner, choose Project history, then Bulk delete versions, keep the last fifty, and re-run this job. Nothing on the register is affected."
+            exit 1
+          fi
+          exit $rc
       - name: Confirm the district is answering on the new code
         # Six attempts over ~two minutes, because Google's /exec endpoint can
         # serve a transient "unable to open the file" page for a short while
