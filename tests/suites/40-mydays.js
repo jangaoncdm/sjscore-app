@@ -122,7 +122,9 @@ module.exports = {
     /* ---- the Collector reads his own, which is empty, and is not refused ---- */
     const rc = env.get('myDays', { token:cdm });
     t.eq(rc.ok, true, 'the Collector is answered');
+    t.eq(rc.exempt, true, 'as not due — nothing is counted against his blank days');
     t.eq(rc.totals.marked, 0, 'with his own empty fortnight');
+    t.eq(rc.totals.notMarked, 0, 'and nothing not marked');
 
     /* ---- cached by the day, written nowhere ---- */
     const again = env.get('myDays', { token:a });

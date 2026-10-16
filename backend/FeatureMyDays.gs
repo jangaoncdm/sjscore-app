@@ -72,7 +72,8 @@ function feature_mydays(){
 function myDays_(phone, role, today){
   var t1 = Date.parse(today + 'T00:00:00Z'), t0 = t1 - (MYDAYS_SPAN - 1) * 86400000;
   var from = mydaysKey_(t0);
-  var exempt = !!attExempt_(String(role || '').toUpperCase());
+  /* the Collector is not on the roll that is due, so his fortnight is read the way a voluntary office's is */
+  var exempt = !!attExempt_(String(role || '').toUpperCase()) || String(role || '').toUpperCase() === 'COLLECTOR';
 
   /* ---- off days ---- */
   var hs = {};
