@@ -81,7 +81,20 @@ const ROLLFIX = { ok:true,
     { phone:'9848100206', name:'M. Sattaiah',   role:'MPDO',     mandal:'Narmetta',      gp:'',             email:'f@x', hasPin:true,  active:true,  rows:1 },
     { phone:'9848100207', name:'Gone Away',     role:'PS',       mandal:'Zaffergadh',    gp:'Old Charge',   email:'g@x', hasPin:true,  active:false, rows:1 }
   ] };
-const SIZES = [{ w:2560, h:1440, n:'2560' }, { w:1500, h:1000, n:'1500' }, { w:390, h:844, n:'390' }];
+/* FIVE WIDTHS, BECAUSE THE CONSOLE RESIZES EVERYTHING (16.10.2026). Three
+   widths found the phone and the 2K faults; what they could not see was the
+   1366px laptop every mandal office actually owns and the 1920px monitor
+   most desks have, which are the two widths the console is read on most. The
+   two are driven in the light theme only — the dark theme is a palette, not
+   a layout, and 2560, 1500 and 390 already prove it at both ends. Pass the
+   widths you want as SIZES=1366,1920 to drive a few. */
+const ALL_SIZES = [
+  { w:2560, h:1440, n:'2560' }, { w:1920, h:1080, n:'1920', themes:['light'] },
+  { w:1500, h:1000, n:'1500' }, { w:1366, h:768,  n:'1366', themes:['light'] },
+  { w:390,  h:844,  n:'390' } ];
+const SIZES = process.env.SIZES
+  ? ALL_SIZES.filter(z => process.env.SIZES.split(',').includes(z.n))
+  : ALL_SIZES;
 
 /* ---- THE SECOND REGISTER, for the tenant switch ----
    Plainly different figures, so a screenshot of one cannot be mistaken for a
@@ -113,7 +126,7 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
   const problems = [];
 
   for(const size of SIZES){
-    for(const theme of ['light', 'dark']){
+    for(const theme of (size.themes || ['light', 'dark'])){
       const ctx = await browser.newContext({ viewport: { width: size.w, height: size.h },
         deviceScaleFactor: 1 });
       await ctx.addInitScript(([data, th]) => {
@@ -180,6 +193,7 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
 
       for(const v of VIEWS){
         await go(v);
+        await page.evaluate(() => window.scrollTo(0, 0));
         await page.waitForTimeout(450);
         await page.screenshot({ path: path.join(OUT, size.n + '-' + theme + '-' + v + '.png'),
           fullPage: size.w > 500 });
@@ -204,13 +218,87 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
           const wk = await page.$$eval('#atcCal td.w', ws => ws.filter(w => w.textContent.trim()).length).catch(() => 0);
           if(wk < 2) problems.push(lbl + ': the week totals row is empty');
           if(!/Due is today/i.test(txt)) problems.push(lbl + ': the screen does not say that due is today’s roll');
-          const opts = await page.$$eval('#atcMeasure option', os => os.map(o => o.value)).catch(() => []);
+          const opts = await page.$$eval('#atcMeasure [data-atc]', os => os.map(o => o.dataset.atc)).catch(() => []);
           if(!(opts.includes('notmarked') && opts.includes('late') && opts.includes('leave'))) problems.push(lbl + ': the measures are not all offered');
+          /* AND THEY ARE TABS THAT WORK: pressing one redraws the map under
+             that measure, and the strip is as wide as the grid, not a column
+             of it — the fault the dropdown had. */
+          const stripW = await page.$eval('#atcMeasure', e => Math.round(e.getBoundingClientRect().width)).catch(() => 0);
+          if(stripW < 200) problems.push(lbl + ': the measure strip is ' + stripW + 'px wide — squeezed into a grid column');
+          await page.click('#atcMeasure [data-atc="late"]');
+          await page.waitForTimeout(350);
+          const sel = await page.$eval('#atcMeasure [data-atc="late"]', e => e.getAttribute('aria-selected')).catch(() => '');
+          if(sel !== 'true') problems.push(lbl + ': pressing a measure tab does not select it');
+          const hd = await page.$eval('#g', e => e.innerText);
+          if(!/Marked late · /.test(hd)) problems.push(lbl + ': the calendar heading does not follow the measure chosen');
+          await page.click('#atcMeasure [data-atc="marked"]');
+          await page.waitForTimeout(350);
+          /* A SQUARE DAY, at every width: the cell the page actually drew */
+          const cell = await page.$eval('#atcCal td.c', e => { const r = e.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; }).catch(() => null);
+          if(cell && Math.abs(cell.w - cell.h) > 6) problems.push(lbl + ': a calendar day is ' + cell.w + 'x' + cell.h + 'px — not square');
           if(!/CSV · week by week/.test(txt)) problems.push(lbl + ': no way to download the days');
+        }
+        /* ---- THE FORTNIGHT IS A HEAT MAP WITH THE FIGURES ON IT (16.10.2026):
+           tinted tiles under the figures, each column to its own high, the
+           Sunday off, the figures still there to read. ---- */
+        if(v === 'overview'){
+          const lbl = size.n + '/' + theme + '/overview/fortnight';
+          const d = await page.evaluate(() => {
+            const t = document.querySelector('.dayhm'); if(!t) return null;
+            const tinted = t.querySelectorAll('td.c.k1,td.c.k2,td.c.k3,td.c.k4,td.c.k5');
+            const withNum = [...tinted].filter(c => /^\d+$/.test(c.textContent.trim())).length;
+            return { tinted: tinted.length, withNum, off: t.querySelectorAll('td.c.off').length,
+                     dark: [...t.querySelectorAll('td.c.k5')].length, rows: t.querySelectorAll('tbody tr').length };
+          });
+          if(!d) problems.push(lbl + ': the day-by-day table is not a heat map');
+          else {
+            if(d.rows < 10) problems.push(lbl + ': only ' + d.rows + ' days');
+            if(d.tinted < 20) problems.push(lbl + ': only ' + d.tinted + ' tinted cells');
+            if(d.withNum !== d.tinted) problems.push(lbl + ': ' + (d.tinted - d.withNum) + ' tinted cells carry no figure');
+            if(d.dark < 1) problems.push(lbl + ': no column reaches its own high');
+            if(d.off < 1) problems.push(lbl + ': the Sunday is not drawn off');
+          }
         }
         if(v === 'attendance'){
           const lbl = size.n + '/' + theme + '/attendance';
           const txt = await page.$eval('#g', e => e.innerText);
+          /* THE SEGMENT IS TABS ACROSS THE GRID (16.10.2026). The dropdown
+             it replaced sat in one twelfth of the grid, 60px wide with its
+             caption wrapping word by word beneath it, at every width. */
+          const seg = await page.evaluate(() => {
+            const t = document.getElementById('segTabs'); if(!t) return null;
+            const bar = t.closest('.segbar'), g = document.getElementById('g');
+            return { tabs: t.querySelectorAll('[data-seg]').length,
+                     barW: Math.round(bar.getBoundingClientRect().width), gridW: Math.round(g.getBoundingClientRect().width),
+                     sel: (t.querySelector('[aria-selected="true"]') || {}).dataset ? t.querySelector('[aria-selected="true"]').dataset.seg : '' };
+          });
+          if(!seg) problems.push(lbl + ': no segment tabs');
+          else {
+            if(seg.tabs !== 3) problems.push(lbl + ': ' + seg.tabs + ' segment tabs, expected three rolls');
+            if(seg.barW < seg.gridW - 2) problems.push(lbl + ': the segment bar is ' + seg.barW + 'px of a ' + seg.gridW + 'px grid — it is in one column again');
+            if(seg.sel !== 'field') problems.push(lbl + ': the field officers are not the roll shown first');
+            await page.click('#segTabs [data-seg="all"]');
+            await page.waitForTimeout(400);
+            const after = await page.$eval('#segTabs [data-seg="all"]', e => e.getAttribute('aria-selected')).catch(() => '');
+            if(after !== 'true') problems.push(lbl + ': pressing a segment tab does not select it');
+            const note = await page.$eval('#g', e => e.innerText);
+            if(!/Both rolls together/.test(note)) problems.push(lbl + ': the note does not follow the segment chosen');
+            await page.click('#segTabs [data-seg="field"]');
+            await page.waitForTimeout(400);
+          }
+          /* THE WIDE TIER (above 1980): seven tiles in one row, the two
+             half-screen tables side by side. Below it, neither. */
+          const wide = await page.evaluate(() => {
+            const ks = [...document.querySelectorAll('.kpirow .kpi')].map(k => Math.round(k.getBoundingClientRect().top));
+            const w6 = [...document.querySelectorAll('.panel.w6')].map(p => Math.round(p.getBoundingClientRect().top));
+            return { tiles: ks.length, tileRows: new Set(ks).size, w6: w6.length, w6Rows: new Set(w6).size };
+          });
+          if(size.w >= 1980){
+            if(wide.tiles >= 6 && wide.tileRows !== 1) problems.push(lbl + ': ' + wide.tiles + ' tiles sit in ' + wide.tileRows + ' rows on a 2K screen');
+            if(wide.w6 === 2 && wide.w6Rows !== 1) problems.push(lbl + ': the refused and the marked-away tables are stacked on a 2K screen');
+          } else if(size.w > 760){
+            if(wide.w6 === 2 && wide.w6Rows !== 2) problems.push(lbl + ': the wide tier has leaked below 1980px');
+          }
           if(!/from place of duty/i.test(txt))
             problems.push(lbl + ': the attendance screen does not carry the distance from the place of duty, which is what the fence decides on');
           if(!/from mandal/i.test(txt))

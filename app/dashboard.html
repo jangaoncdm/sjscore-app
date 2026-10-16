@@ -1010,6 +1010,23 @@ body[data-tenant="gp"] .rail .brand b::after{content:" · GP";color:var(--teal);
 .segbar label{display:inline-flex;align-items:center;gap:6px;max-width:100%}
 .segbar .rsel{max-width:min(200px,46vw);min-width:0}
 .segbar .expnote{flex:1 1 220px;min-width:0}
+/* THE SEGMENT IS A ROW OF TABS, NOT A DROPDOWN (16.10.2026). "Showing" on
+   the Attendance screen was a <select> dropped straight into the twelve-column
+   grid with no span, so it took one column: a 60px box with its caption
+   wrapping word by word underneath, at every width. Reported from the
+   district as a misaligned dropdown. A segmented strip says what the three
+   rolls are and how many are on each without being opened, which a dropdown
+   never does; the click handler already read data-seg, so the dropdown was
+   the only thing in the way. The bar spans the grid, as every other bar does. */
+.segbar{grid-column:1/-1}
+.segtabs{display:inline-flex;gap:4px;padding:4px;border-radius:14px;background:var(--well);box-shadow:var(--nm-in-sm);max-width:100%;overflow-x:auto;flex:none}
+.segtabs button{flex:none;display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:0 14px;border-radius:10px;font-size:12.5px;font-weight:650;color:var(--tx-2);white-space:nowrap}
+.segtabs button b{font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--tx-3);padding:1px 7px;border-radius:7px;background:var(--panel)}
+.segtabs button[aria-selected=true]{background:var(--panel);color:var(--pri);box-shadow:var(--nm-out-sm)}
+.segtabs button[aria-selected=true] b{color:var(--pri);background:var(--pri-2)}
+.segtabs button:hover:not([aria-selected=true]){color:var(--tx)}
+.segtabs .lbl{font-size:12px;color:var(--tx-2);padding:0 6px 0 10px;align-self:center}
+@media(max-width:760px){.segtabs button{min-height:40px;padding:0 12px}}
 /* the observations: the only prose on the analytics screen, set apart so a
    reader knows where the figures stop and the sentences begin */
 .obs{margin:2px 0 4px 18px;padding:0}
@@ -1230,6 +1247,68 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
   /* the rail no longer scrolls with the page here, so its footer must live
      in the flow — absolutely positioned, it was landing on the KPI cards */
   .railfoot{position:static;margin-top:10px}}
+/* ---- THE CONSOLE AT EVERY WIDTH TO 2K (16.10.2026) ----
+   The grid is twelve columns and stretches to whatever it is given, which is
+   right down to 1180 and wrong above about 1980: on a 2560px monitor the
+   seven attendance tiles sat five and two with three empty slots, a year
+   calendar's day cells had become 40x18 slabs, the officer-by-month heat map
+   had spread its twelve 40px cells across 2,000px, and two full-width tables
+   that each fit in half the screen were stacked one over the other. The
+   screen was being resized rather than laid out. Above 1980 the tiles take
+   the row they can fill, the two half-screen tables sit side by side
+   (.c12.w6), the calendar cell is square at every width, and the heat map
+   keeps its cells together. Below 1980 nothing here applies. */
+@media(min-width:1980px){
+  .kpirow{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  .c12.w6{grid-column:span 6}
+  .kpi{min-height:124px}.kpi .v{font-size:33px}
+}
+/* A SQUARE DAY. The table stretches to the panel, so a cell was as wide as a
+   fifty-third of the screen and 18px tall. The height follows the width the
+   page actually gives a column, clamped so a phone keeps an 18px tap and a 2K
+   monitor does not draw a 40px slab. */
+/* THE YEAR FITS THE PANEL. The dense desk gives every th 6px of padding and a
+   border, and that rule outranks the calendar's own; so the 53 header cells
+   came out 26px wide, the table was 1,395px on a 1,208px panel, and the year
+   ended at November — scrolling, with nothing to say so. Fixed layout gives
+   every week the same share of the panel, the month names overflow their
+   cell instead of widening it, and the day is as tall as it is wide. A phone
+   keeps 18px days and scrolls the year, because a 5px day is not a target. */
+.hmwrap .lvcal{table-layout:fixed;width:100%}
+.hmwrap .lvcal th{padding:0;border:0;background:none;letter-spacing:0;text-transform:none;font-size:10.5px;overflow:visible;white-space:nowrap}
+.hmwrap .lvcal th.d{width:58px;padding-right:6px}
+.hmwrap .lvcal td.c{padding:0;border:0;width:auto;min-width:0;height:clamp(18px,calc((100vw - 400px)/53 - 2px),36px)}
+.hmwrap .lvcal td.w,.hmwrap .lvcal td.wl{padding:4px 0 0;border:0;font-size:10px;overflow:visible}
+.hmwrap .lvcal td.wl{padding-right:6px}
+@media(max-width:1180px){.hmwrap .lvcal td.c{height:clamp(16px,calc((100vw - 240px)/53 - 2px),22px)}}
+@media(max-width:760px){.hmwrap .lvcal{table-layout:auto;width:auto}.hmwrap .lvcal td.c{width:18px;min-width:18px;height:18px}.hmwrap .lvcal th{padding:0 2px}}
+/* THE OFFICER MAP KEEPS ITS CELLS TOGETHER. min-width:100% made the table
+   fill the panel; a 40px cell every 170px is not a heat map. */
+.hm{min-width:0;width:auto}
+/* THE FORTNIGHT HEAT MAP: a table of figures, each on a tile tinted by its
+   share of the column's high. Tiles, not borders, so the eye reads the tint;
+   the figure stays in the mono column the table always had. */
+.dayhm{border-collapse:separate;border-spacing:3px;width:100%}
+.dayhm th{background:none;border:0;padding:4px 8px 6px}
+.dayhm td{border:0;padding:7px 8px;border-radius:7px;background:var(--panel)}
+.dayhm td.d{text-align:left;white-space:nowrap;color:var(--tx);font-weight:600}
+.dayhm td.d.off{color:var(--tx-3);font-weight:500}
+.dayhm td.c{text-align:center;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:650;color:var(--tx-3);box-shadow:inset 0 0 0 1px var(--line-2)}
+.dayhm td.c.k1{background:var(--hm1);color:var(--hm-ink-lo);box-shadow:none}.dayhm td.c.k2{background:var(--hm2);color:var(--hm-ink-lo);box-shadow:none}
+.dayhm td.c.k3{background:var(--hm3);color:var(--hm-ink-lo);box-shadow:none}.dayhm td.c.k4{background:var(--hm4);color:var(--hm-ink-hi);box-shadow:none}
+.dayhm td.c.k5{background:var(--hm5);color:var(--hm-ink-hi);box-shadow:none}
+.dayhm td.c.off{background:var(--well);box-shadow:none}
+.dayhm tr:hover td{filter:brightness(.97)}
+/* THE TOP BAR ON A 1366 LAPTOP. The greeting column was left ~190px by the
+   controls, so the name broke in two and the date line ran to three. Between
+   the icon rail and 1500 the date line is one line, cut with an ellipsis —
+   the filing month it would lose is on the picker beside it. */
+@media(max-width:1500px) and (min-width:761px){
+  .top>div:first-child{flex:1 1 270px}
+  #tenPick{max-width:200px}
+  .top .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .top .live span{display:none}
+}
 #g.dim{opacity:.55;filter:grayscale(.4)}
 /* -------- LOADING state: same surfaces, breathing -------- */
 .skel{position:relative;overflow:hidden}
@@ -3156,19 +3235,34 @@ function dayRows(j){
       filed:d.filed.length, avg:d.filed.length?Math.round(d.sum/d.filed.length):null,
       rf:d.rf, list:d.filed}; }).reverse();
 }
+/* THE FORTNIGHT IS A HEAT MAP WITH THE FIGURES ON IT (asked 16.10.2026).
+   Six columns of figures read one at a time; a tint under each figure lets
+   the eye find the heavy days of a column at once — the morning the missing
+   ran to 29, the day the filings came in — while the figure is still there
+   to be read. EACH COLUMN IS SCALED TO ITS OWN FORTNIGHT HIGH, because 90
+   present and 4 filed are not on one scale, and darker is simply MORE: the
+   map does not say whether more is good, which is the restraint every
+   density map here keeps. A Sunday is off and carries no missing figure; a
+   nought is left blank, as on the year calendar. The row still opens the day. */
 function dayTable(j){
   const rows=dayRows(j); window.__ROWS.dayd=rows;
-  return `<div class="twrap"><table><thead><tr><th>Day</th><th>Present</th><th>Leave</th><th>Missing</th><th>Filed</th><th>Day avg</th><th>Flags</th></tr></thead><tbody>`+
-    rows.map((r,i)=>{const sun=new Date(r.date+'T00:00:00').getDay()===0;
-      return `<tr data-dd="${i}" style="cursor:pointer${sun?';opacity:.55':''}">
-      <td>${esc(dm(r.date))}${sun?' <span class="mut">Sun</span>':''}</td>
-      <td class="num" style="color:var(--green)">${r.present||'—'}</td>
-      <td class="num">${r.leave||'—'}</td>
-      <td class="num" style="color:${sun?'var(--tx-3)':r.absent?'var(--red)':'var(--green)'}">${sun?'—':r.absent}</td>
-      <td class="num">${r.filed||'—'}</td>
-      <td class="num">${r.avg==null?'—':r.avg}</td>
-      <td class="num">${r.rf?'<span class="pill bad">'+r.rf+'</span>':'—'}</td></tr>`;}).join('')+
-    `</tbody></table></div>`;
+  const cols=[['present','Present'],['leave','Leave'],['absent','Missing'],['filed','Filed'],['avg','Day avg'],['rf','Flags']];
+  const sunOf=r=>new Date(r.date+'T00:00:00').getDay()===0;
+  const val=(r,k)=>{ const v=k==='rf'?Number(r.rf||0):r[k]; return v==null||v===''?null:Number(v); };
+  const hi={}; cols.forEach(([k])=>{ hi[k]=Math.max(0,...rows.map(r=>(k==='absent'&&sunOf(r))?0:(val(r,k)||0))); });
+  const bin=(v,k)=>{ if(!(v>0)||!(hi[k]>0)) return ''; const q=v/hi[k]; return q<=.2?'k1':q<=.4?'k2':q<=.6?'k3':q<=.8?'k4':'k5'; };
+  return `<div class="twrap"><table class="dayhm"><thead><tr><th>Day</th>`+cols.map(c=>'<th>'+c[1]+'</th>').join('')+`</tr></thead><tbody>`+
+    rows.map((r,i)=>{const sun=sunOf(r);
+      return `<tr data-dd="${i}" style="cursor:pointer">
+      <td class="d${sun?' off':''}">${esc(dm(r.date))}${sun?' <span class="mut">Sun</span>':''}</td>`+
+      cols.map(([k])=>{ const v=val(r,k); const off=sun&&k==='absent';
+        const b=off?'':bin(v,k); const txt=off?'—':(v==null||(v===0&&k!=='avg')?'—':String(v));
+        return '<td class="c '+(off?'off':b)+'"'+(v!=null&&!off?' title="'+esc(k==='present'?v+' present':k==='leave'?v+' on leave':k==='absent'?v+' not marked':k==='filed'?v+' filed':k==='avg'?'day average '+v:v+' red flag'+(v===1?'':'s'))+'"':'')+'>'+txt+'</td>'; }).join('')+
+      '</tr>';}).join('')+
+    `</tbody></table></div>
+    <div class="hmleg"><span>Darker is more, column by column — each is scaled to its own fortnight high:</span>`+
+    [1,2,3,4,5].map(i=>'<span><i style="background:var(--hm'+i+')"></i></span>').join('')+
+    `<span><i style="background:var(--well)"></i>Sunday — nobody is due</span><span>A blank is a nought. More is not better on every column; read the heading.</span></div>`;
 }
 function bestWorst(j){
   const rows=j.month.rows;
@@ -3237,13 +3331,12 @@ function segSwitch(){
      question that does not arise there. */
   if(TVIEW === 'GP') return '';
   const c = segCounts(DATA || { today:{} });
-  const opt = (k, label, n) => '<option value="' + k + '"' + (ASEG === k ? ' selected' : '') +
-    '>' + label + ' ' + String.fromCharCode(183) + ' ' + n + '</option>';
+  const tab = (k, label, n) => '<button type="button" role="tab" data-seg="' + k + '" aria-selected="' + (ASEG === k) + '">' +
+    label + '<b>' + n + '</b></button>';
   return '<div class="segbar" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">' +
-    '<label style="font-size:12px;color:var(--tx-2)">Showing' +
-    '<select class="rsel" id="segSel" style="margin-left:7px">' +
-    opt('field', 'Field officers', c.field) + opt('staff', 'MPDO office staff', c.staff) +
-    opt('all', 'Everyone', c.all) + '</select></label>' +
+    '<div class="segtabs" role="tablist" id="segTabs" aria-label="Which roll is shown"><span class="lbl">Showing</span>' +
+    tab('field', 'Field officers', c.field) + tab('staff', 'MPDO office staff', c.staff) +
+    tab('all', 'Everyone', c.all) + '</div>' +
     '<span class="expnote">' +
     (ASEG === 'staff'
       ? 'The office staff mark in and apply for leave. No show-cause notice, no casual-leave debit and no lock on the app arises from this screen.'
@@ -3278,7 +3371,7 @@ function vAnalytics(j, A){
     for(let i = 0; i < 12; i++){ months.push(y + '-' + String(m).padStart(2,'0'));
       m--; if(m === 0){ m = 12; y--; } } }
 
-  h += '<div class="segbar" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">' +
+  h += '<div class="segbar" style="grid-column:1/-1;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">' +
     '<label style="font-size:12px;color:var(--tx-2)">Month<select class="rsel" id="anaYm" style="margin-left:7px">' +
       months.map(m => '<option value="' + m + '"' + (m === ym ? ' selected' : '') + '>' + monName(m) + '</option>').join('') +
     '</select></label>' +
@@ -3429,7 +3522,7 @@ function vAttendance(j,A){
      attendance register has an explanation the register itself knows. */
   if(((j.fence||{}).today||[]).length){
     const ou=(j.fence.today||[]);
-    h+=panel('c12','Refused — marked away from the place of duty',
+    h+=panel('c12 w6','Refused — marked away from the place of duty',
       'today · within '+esc(String((j.fence||{}).km||5))+' km is the rule',
       `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
         These officers tried to mark and the register did not take it, so they stand inside
@@ -3465,7 +3558,7 @@ function vAttendance(j,A){
      edge of his mandal. A fenced register that showed only the second was
      showing the Collector a figure the order does not use. */
   const fenced = DUTY() && TVIEW!=='GP' && !!(((j.fence||{}).on));
-  h+=panel('c12', DUTY()?'Marked away from the place of duty':'Marked away from the mandal',
+  h+=panel('c12 w6', DUTY()?'Marked away from the place of duty':'Marked away from the mandal',
     farRows.length?farRows.length+' of '+A.present+' present · over '+farLim+' km':'nothing over '+farLim+' km today',
     `<div class="twrap"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th>${DUTY()?'<th>Place of duty</th><th>From place of duty</th><th>From mandal</th>':'<th>Distance</th>'}<th>Marked</th><th>Reading</th><th></th></tr></thead><tbody>`+
     farRows.map(r=>`<tr>
@@ -3937,9 +4030,13 @@ function atcCalendar(){
   const total=weeks.reduce((s,w)=>s+w.total,0);
   const monthOf=w=>{ const d=new Date(w.from+'T00:00:00Z'); return d.getUTCDate()<=7?LV_MON[d.getUTCMonth()]:''; };
   const word=ATC_MEASURES[ATC_MEASURE].toLowerCase();
+  /* THE MEASURE IS A ROW OF TABS. Four measures are four tabs a reader sees
+     at once and switches with one click; a dropdown hides three of them.
+     The year is still a select, because a list of years is what a select is
+     for. The tabs carry data-atc and the handler re-renders in place. */
   let h='<div class="segbar" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">'+
-    '<label style="font-size:12px;color:var(--tx-2)">Show<select class="rsel" id="atcMeasure" style="margin-left:7px;min-width:170px">'+
-      Object.keys(ATC_MEASURES).map(k=>'<option value="'+k+'"'+(ATC_MEASURE===k?' selected':'')+'>'+ATC_MEASURES[k]+'</option>').join('')+'</select></label>'+
+    '<div class="segtabs" role="tablist" id="atcMeasure" aria-label="Which measure is drawn">'+
+      Object.keys(ATC_MEASURES).map(k=>'<button type="button" role="tab" data-atc="'+k+'" aria-selected="'+(ATC_MEASURE===k)+'">'+ATC_MEASURES[k]+'</button>').join('')+'</div>'+
     '<label style="font-size:12px;color:var(--tx-2)">Year<select class="rsel" id="atcYear" style="margin-left:7px;min-width:90px">'+
       [y-1,y,y+1].filter(v=>v<=new Date().getFullYear()).map(v=>'<option value="'+v+'"'+(String(v)===String(ATC_YEAR)?' selected':'')+'>'+v+'</option>').join('')+'</select></label>'+
     '<span style="flex:1"></span><button class="tbtn" data-exp="atcweeks">CSV · week by week</button></div>';
@@ -6724,11 +6821,9 @@ function retireAdvisory(){
    below is one listener and not forty. */
 document.addEventListener('change', e => {
   const id = e.target && e.target.id;
-  if(id === 'segSel'){ ASEG = e.target.value; if(DATA) render(DATA); return; }
   if(id === 'mockDays'){ MOCK_DAYS = Number(e.target.value) || 30; mockPull(true); if(DATA) render(DATA); return; }
   if(id === 'lvYear'){ LVR_YEAR = e.target.value; lvPull(true); if(DATA) render(DATA); return; }
   if(id === 'atcYear'){ ATC_YEAR = e.target.value; atcPull(true); if(DATA) render(DATA); return; }
-  if(id === 'atcMeasure'){ ATC_MEASURE = e.target.value; if(DATA) render(DATA); return; }
   if(id === 'lvKind' || id === 'lvMandal' || id === 'lvSort'){
     if(id === 'lvKind') LVR_KIND = e.target.value; if(id === 'lvMandal') LVR_MANDAL = e.target.value; if(id === 'lvSort') LVR_SORT = e.target.value;
     if(DATA) render(DATA); return; }
@@ -6751,6 +6846,9 @@ document.addEventListener('click',e=>{
      staff, or both, which answer to different rules */
   const sg=e.target.closest('[data-seg]');
   if(sg){ ASEG=sg.dataset.seg; if(DATA) render(DATA); return; }
+  /* the measure drawn on the year calendar — marked, not marked, late, on leave */
+  const atm=e.target.closest('[data-atc]');
+  if(atm){ ATC_MEASURE=atm.dataset.atc; if(DATA) render(DATA); return; }
   const kp=e.target.closest('[data-act]');
   if(kp){ const [kind,arg]=kp.dataset.act.split(':');
     if(kind==='view'){ VIEW=arg; document.querySelectorAll('#nav [data-v]').forEach(x=>x.toggleAttribute('aria-current',x.dataset.v===arg)); if(DATA) render(DATA); }

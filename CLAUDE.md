@@ -2285,3 +2285,52 @@ keep the last fifty. Versions a deployment still uses are skipped there, which
 is right. The deploy step now names that act in its error rather than one line
 that reads like any other failure. The Gram Palana and HRMS projects reach the
 same cap in their turn, at one version per push to main.
+
+## The console at every width to 2K
+
+**Asked 16.10.2026: the "Showing" dropdown on the Attendance screen was
+misaligned.** It was a `<select>` dropped straight into the twelve-column
+grid with no span, so it took one column — a 60px box with its caption
+wrapping word by word underneath, at every width. The segment is a **row of
+tabs** now (`.segtabs`, `data-seg`): the three rolls and how many are on
+each, readable without being opened, spanning the grid as every other bar
+does. The measure on the year calendar is the same strip (`data-atc`); the
+year stays a select, because a list of years is what a select is for. The
+analytics bar had the same fault and only needed the span.
+
+**The grid stretched; it did not lay out.** Twelve columns to whatever width
+they were given was right down to 1180 and wrong above about 1980: seven
+attendance tiles sat five and two with three empty slots, the year calendar's
+days had become 40×18 slabs, the officer-by-month map had spread twelve 40px
+cells across 2,000px, and two tables that each fit in half a 2K screen were
+stacked. Above 1980 the tiles take the row they can fill (`auto-fit`), the
+two half-screen tables sit side by side (`.c12.w6`), and the figure on a
+tile grows a size. Below 1980 none of it applies.
+
+**The year calendar was scrolling at 1500 and 1366 and nothing said so.** The
+dense desk gives every `th` 6px of padding and a border, and that rule
+outranks `.lvcal th`; so fifty-three header cells came out 26px wide, the
+table was 1,395px on a 1,208px panel, and the year ended at November. The
+calendar is `table-layout:fixed` now — every week an equal share of the
+panel, month names overflowing their cell rather than widening it — and a day
+is as tall as it is wide at every width (`clamp` off the viewport), because
+the same `td` padding was adding 10px to an 18px cell. A phone keeps 18px
+days and scrolls the year; a 5px day is not a target.
+
+**The fortnight is a heat map with the figures on it** (asked the same day).
+Day by day on the Overview tints each figure by its share of **its own
+column's** fortnight high — 90 present and 4 filed are not on one scale —
+and darker is simply more; the legend says that more is not better on every
+column. A Sunday is off and carries no missing figure, and the row still
+opens the day.
+
+**The render pass drives five widths now** — 2560, 1920, 1500, 1366 and 390
+— because the three it had could not see the 1366 laptop every mandal office
+owns or the 1920 monitor most desks have. The two new widths run in the light
+theme only: the dark theme is a palette, not a layout. `SIZES=1366,1920`
+drives a few. It asserts the tabs are tabs that work and span the grid, the
+day is square, the wide tier holds above 1980 and has not leaked below it,
+the fortnight tiles carry their figures, and it scrolls to the top before
+every screenshot, or a view opened after a scrolled one carries the sticky top
+bar mid-page. On a 1366 laptop the top bar also cuts the date line to one
+line and caps the register picker, so the greeting is not left 190px.
