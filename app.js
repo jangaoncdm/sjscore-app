@@ -73,7 +73,7 @@ function brandRegister(){
     document.documentElement.setAttribute('data-tenant', 'gp');
   }catch(e){}
 }
-const APP_VERSION = '6.18.1';
+const APP_VERSION = '6.19.0';
 /* THE WELCOME. In front of sign-in on every opening, 2.6 s and gone, or gone on a tap. It is for
    people: a driven browser (the render passes) is never shown it, so a pass sees the app and not a
    splash. It is removed from the document, not hidden, so nothing can sit under it afterwards. */
@@ -1158,7 +1158,7 @@ function drawAttendance(){
          file input does nothing whatever — no camera, no event, no error —
          and the officer is left tapping a button that cannot work. Nothing in
          the page can detect that, so the cure is written where he is looking. */
-      (canShoot ? `<p class="hint" style="margin-top:9px">Camera does not open? Open this app in <b>Chrome</b> rather than inside WhatsApp, and allow the camera when the phone asks.</p>` : '');
+      '';
     const b = $('#attShoot'); if(b) b.addEventListener('click', () => $('#camAtt').click());
   } else {
     box.innerHTML = `<button class="btn" id="attMark">${(ATT&&ATT.out)?'Mark out':'Mark attendance'}</button>
@@ -2275,7 +2275,6 @@ function renderInspect(){
     <span class="pname"><b>The fourteen points</b><span>Each one geo-stamped where it stands</span></span>
     <span class="pscore">${r.photos.length}<em>/14</em></span></summary><div>
     <div class="photos" id="phGrid">${photosHTML(r)}</div>
-    <p class="hint">Tap any empty square to photograph that point. The village, the coordinates and the time are printed onto every picture. Photographs leave the phone when the record syncs.</p>
   </div></details>`;
 
   h += `<div class="group"><div class="hdr">Deficiencies carried to next month</div><div class="card">
@@ -2818,7 +2817,7 @@ function renderRecords(){
       <span class="lbl"><b>${esc(r.gp)}</b><span>${esc(monthName(r.ym))} · ${esc(r.mandal)}${un?' · '+un+' photo'+(un>1?'s':'')+' to send':''}</span></span>
       ${badge}<span class="chev"></span></div>`;
   }).join('') + `</div></div>
-  <p class="hint" style="padding:16px 20px 28px">Photographs leave the phone once a record is filed, which frees storage. File the same day wherever there is signal.</p>`;
+`;
   b.querySelectorAll('[data-open]').forEach(el=>el.addEventListener('click',()=>openRecord(el.dataset.open, el.dataset.ym)));
   const sa=$('#btnSyncAll'); if(sa) sa.addEventListener('click', syncAll);
 }
@@ -2956,44 +2955,40 @@ async function renderMore(){
     <div class="row"><span class="ico" style="background:${a?(a.verified?'var(--ok)':'var(--warn)'):'var(--ink-4)'}">${ICON.tickC}</span>
       <span class="lbl"><b>${a?'Marked today':(attExempt(u.role)?'Not required for your office':'Not marked today')}</b>
       <span>${a?esc(new Date(a.ts).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true})+' · '+(a.verified?'location recorded':'no location fix')+' · '+(a.sync==='synced'?'sent to the district':'on this phone'))
-        :(attExempt(u.role)?'The Collector is not asked to mark in. A day may still be marked below, which is useful as proof of a field visit.'
-                           :'Attendance is asked for once a day, when the app opens.')}</span></span></div>
+        :''}</span></span></div>
     ${(attExempt(u.role) && !a) ? `<div class="row tap" id="mAttNow"><span class="ico">${ICON.cam}</span>
-      <span class="lbl"><b>Mark today anyway</b><span>Photograph and location, the same as any officer</span></span><span class="chev"></span></div>` : ''}
+      <span class="lbl"><b>Mark today anyway</b></span><span class="chev"></span></div>` : ''}
     <div class="row"><span class="lbl"><b>Days marked on this phone</b></span><span class="val num">${marked}</span></div>
   </div></div>
 
   ${leaveVisible(u.role) ? `<div class="group"><div class="hdr">Leave</div><div class="card">
     <div class="row tap" id="mAdv"><span class="ico">${ICON.file}</span>
-      <span class="lbl"><b>Advisories</b><span>Circulars the District Collector has issued to you</span></span>
+      <span class="lbl"><b>Advisories</b></span>
       ${advPending() ? '<i class="badge">1</i>' : '<span class="chev">›</span>'}</div>
     ${(schedState() && schedState().mine && schedState().mine.assigned) ? `<div class="row tap" id="mSched"><span class="ico">${ICON.cal}</span>
       <span class="lbl"><b>Filing schedule</b><span>${schedState().mine.filed} of ${schedState().mine.assigned} villages filed${schedBehind() ? ' · ' + schedBehind() + (schedBehind() === 1 ? ' past its day' : ' past their day') : ''}</span></span>
       ${schedPending() ? '<i class="badge">1</i>' : '<span class="chev">›</span>'}</div>` : ''}
     ${gpdpOffered() ? `<div class="row tap" id="mGpdp"><span class="ico" style="background:var(--gold-ink)">${ICON.file}</span>
-      <span class="lbl"><b>Development plan</b><span>Send the Gram Panchayat Development Plan the district has called for</span></span>
+      <span class="lbl"><b>Development plan</b></span>
       ${gpdpPending() ? '<i class="badge">1</i>' : '<span class="chev">›</span>'}</div>` : ''}
     <div class="row tap" id="mLeave"><span class="ico">${ICON.cal}</span>
-      <span class="lbl"><b>${canApproveLeave(u.role)?'Leave applications':'Apply for leave'}</b>
-      <span>${canApproveLeave(u.role)
-        ? 'Applications from the MPO, the Panchayat Secretary and the MPDO'
-        : 'Applications go to the Collector for orders'}</span></span>
+      <span class="lbl"><b>${canApproveLeave(u.role)?'Leave applications':'Apply for leave'}</b></span>
       ${canApproveLeave(u.role) && pendingLeave().length ? `<span class="pill p-warn">${pendingLeave().length} waiting</span>` : ''}
       <span class="chev"></span></div>
   </div></div>` : ''}
 
   <div class="group"><div class="hdr">Reading the screen</div><div class="card">
     <div class="row"><span class="ico" style="background:var(--gold)">${ICON.sun}</span>
-      <span class="lbl"><b>Sunlight</b><span>Flat white, black text, heavy rules — for working outdoors</span></span>
+      <span class="lbl"><b>Sunlight</b></span>
       <span class="sw g" role="switch" tabindex="0" aria-checked="${!!DB.prefs.sun}" id="prefSun" aria-label="Sunlight mode"></span></div>
     <div class="row"><span class="ico">${ICON.text}</span>
-      <span class="lbl"><b>Larger text</b><span>One step up, everywhere</span></span>
+      <span class="lbl"><b>Larger text</b></span>
       <span class="sw g" role="switch" tabindex="0" aria-checked="${!!DB.prefs.big}" id="prefBig" aria-label="Larger text"></span></div>
   </div></div>
 
   ${(IOS && !STANDALONE) ? `<div class="group"><div class="hdr">Install</div><div class="card">
     <div class="row tap" id="mIos"><span class="ico" style="background:var(--gold)">${ICON.down}</span>
-      <span class="lbl"><b>Add to Home Screen</b><span>Run full screen and keep records safely</span></span><span class="chev"></span></div>
+      <span class="lbl"><b>Add to Home Screen</b></span><span class="chev"></span></div>
   </div></div>` : ''}
 
   <div class="group"><div class="hdr">Data</div><div class="card">
@@ -3002,7 +2997,7 @@ async function renderMore(){
     ${canEdit()?`<div class="row tap" id="mSync"><span class="ico">${ICON.cloud}</span>
       <span class="lbl"><b>Sync everything now</b><span>${pendingCount()} record(s), ${pendingAtt()} attendance mark(s) waiting</span></span><span class="chev"></span></div>`:''}
     <div class="row tap" id="mBackup"><span class="ico">${ICON.file}</span>
-      <span class="lbl"><b>Download a backup</b><span>Everything on this phone, as a file</span></span><span class="chev"></span></div>
+      <span class="lbl"><b>Download a backup</b></span><span class="chev"></span></div>
     <div class="row"><span class="lbl"><b>Storage used</b><span id="stoTxt">Checking…</span></span></div>
   </div></div>
 
@@ -3010,7 +3005,7 @@ async function renderMore(){
     <div class="row tap" id="mPin"><span class="ico" style="background:var(--gold)">${ICON.key}</span>
       <span class="lbl"><b>Change my PIN</b></span><span class="chev"></span></div>
     <div class="row tap" id="mOut"><span class="ico" style="background:var(--flag)">${ICON.out}</span>
-      <span class="lbl"><b>Sign out</b><span>Unsynced records stay on the phone</span></span><span class="chev"></span></div>
+      <span class="lbl"><b>Sign out</b></span><span class="chev"></span></div>
   </div></div>
 
   <p style="font-size:12.5px;color:var(--ink-3);text-align:center;padding:22px 24px 34px;line-height:1.6">
@@ -3235,8 +3230,8 @@ const LV_PILL = {PENDING:['p-warn','Pending'], APPROVED:['p-ok','Sanctioned'],
                  RETURNED:['p-warn','Sent back — correct and resend']};
 function lvPill(st, l){
   let [c, w] = LV_PILL[st] || ['p-mut', st];
-  if(l && st === 'CANCELLED' && /set aside/i.test(String(l.decidedBy || ''))) w = 'Set aside by the Collector';
-  else if(l && st === 'APPROVED' && /by rule/i.test(String(l.decidedBy || ''))) w = 'Sanctioned by rule';
+  /* a sanction the Collector took back is not the officer's own withdrawal */
+  if(l && st === 'CANCELLED' && /set aside|cancelled/i.test(String(l.decidedBy || ''))) w = 'Cancelled by the Collector';
   return `<span class="pill ${c}">${esc(w)}</span>`;
 }
 function lvSpan(l){
@@ -3350,13 +3345,66 @@ function daysCard(){
   if(held) bits.push(held + ' held on this phone');
   const notMarked = Math.max(0, (T.notMarked || 0) - fixed);
   if(!st.exempt && notMarked) bits.push(notMarked + ' not marked');
-  const sub = bits.length ? bits.join(' · ') : (st.exempt ? 'Nothing is counted either way.' : 'Every working day accounted for.');
-  const lg = [['ok','marked'],['late','late — never a miss'],['lv','on leave'],['off','Sunday or holiday'],['held','held on this phone']]
-    .concat(st.exempt ? [] : [['miss','not marked']])
-    .map(([c, w]) => '<span><i class="' + c + '"></i>' + w + '</span>').join('');
+  const sub = bits.join(' · ');
   return '<div class="days" id="days"><div class="k">Attendance · last 14 days</div><div class="t">' + esc(head) + '</div>' +
-    '<div class="s">' + esc(sub) + '</div><div class="grid" role="list">' + cells + '</div><div class="lg">' + lg + '</div>' +
-    '<div class="nt">What the district holds for you, read at ' + esc(tfmt(st.at)) + '. Today is still running and is never counted. Tap a day for its detail.</div></div>';
+    (sub ? '<div class="s">' + esc(sub) + '</div>' : '') + '<div class="grid" role="list">' + cells + '</div>' +
+    placeRow(st) + weatherRow(st) + '</div>';
+}
+/* WHERE EACH MARK WAS MADE (asked 17.10.2026, under the fortnight). The
+   district measures the mark that counted for the day against the nearest of
+   his own places of duty — the fence's own arithmetic — and sends the
+   kilometres; a mark still on this phone is measured here off DB.duty, the
+   same points. An officer the district has not placed sees the fix's
+   precision instead. It is drawn and it decides nothing. */
+const smTile = (cls, txt, say, now) =>
+  '<button type="button" class="d sm ' + cls + (now ? ' now' : '') + '" data-say="' + esc(say) + '" aria-label="' + esc(say) + '"><b class="num">' + txt + '</b></button>';
+const dayWhen = date => new Date(date + 'T00:00:00').toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short' });
+function placeRow(st){
+  const today = todayStr(), fence = Number(st.fenceKm) || 0;
+  const pts = (DB.duty && DB.duty.pts) || [];
+  const rows = st.days.map(d => {
+    let km = d.km, acc = d.acc, place = d.place;
+    const loc = DB.att[d.date];
+    if(km == null && !d.marked && loc && loc.lat && loc.lng && pts.length){
+      pts.forEach(p => { const k = kmBetween(loc.lat, loc.lng, Number(p.lat), Number(p.lng)); if(km == null || k < km){ km = k; place = p.name; } });
+      if(acc == null && loc.acc) acc = Math.round(loc.acc);
+    } else if(km == null && acc == null && loc && loc.acc) acc = Math.round(loc.acc);
+    return { d, km, acc, place };
+  });
+  if(!rows.some(r => r.km != null || r.acc != null)) return '';
+  const anyKm = rows.some(r => r.km != null);
+  const cells = rows.map(({ d, km, acc, place }) => {
+    const when = dayWhen(d.date), now = d.date === today;
+    if(km != null){
+      const near = fence ? km <= fence : km <= 5;
+      const cls = km <= 1 ? 'p0' : near ? 'p1' : km <= 15 ? 'p2' : 'p3';
+      const txt = km < 10 ? String(+km.toFixed(1)) : String(Math.round(km));
+      return smTile(cls, txt, when + ' · ' + txt + ' km from ' + (place || 'the place of duty') + (acc ? ' · ±' + acc + ' m' : ''), now);
+    }
+    if(acc != null){
+      const cls = acc <= 15 ? 'p0' : acc <= 50 ? 'p1' : acc <= 250 ? 'p2' : 'p3';
+      const txt = acc >= 1000 ? (acc / 1000).toFixed(1) + 'k' : String(acc);
+      return smTile(cls, txt, when + ' · location ±' + acc + ' m', now);
+    }
+    return smTile('pn', '·', when + (d.off ? ' · ' + d.off : d.leave ? ' · on leave' : ' · no location'), now);
+  }).join('');
+  return '<div class="k2">' + (anyKm ? 'Distance from place of duty · km' : 'Location fix · metres') + '</div><div class="grid sm pl" role="list">' + cells + '</div>';
+}
+/* THE DAY'S TEMPERATURE, off the forecast service's record for his mandal,
+   which rides on the hourly weather read (op=weather carries the fortnight). */
+function weatherRow(st){
+  const today = todayStr(), wx = wxState();
+  const by = {}; (((wx || {}).mine || {}).days || []).forEach(x => { if(x && x.date) by[x.date] = x; });
+  if(!st.days.some(d => by[d.date] && by[d.date].tmax != null)) return '';
+  const cells = st.days.map(d => {
+    const w = by[d.date], when = dayWhen(d.date), now = d.date === today;
+    if(!w || w.tmax == null) return smTile('pn', '·', when + ' · no reading', now);
+    const t = Math.round(w.tmax);
+    const cls = t < 25 ? 't0' : t < 30 ? 't1' : t < 34 ? 't2' : t < 38 ? 't3' : 't4';
+    const say = when + ' · max ' + t + '°' + (w.tmin != null ? ', min ' + Math.round(w.tmin) + '°' : '') + (w.rain >= 1 ? ', ' + Math.round(w.rain) + ' mm rain' : '');
+    return smTile(cls, String(t), say, now);
+  }).join('');
+  return '<div class="k2">Temperature · max °C' + (wx && wx.mine && wx.mine.mandal ? ' · ' + esc(wx.mine.mandal) : '') + '</div><div class="grid sm wx" role="list">' + cells + '</div>';
 }
 document.addEventListener('click', e => {
   const b = e.target.closest && e.target.closest('.days .d');
@@ -3381,9 +3429,7 @@ function weatherCard(){
     <div>Max<b class="num">${w.tmax != null ? Math.round(w.tmax) + '°' : '—'}</b>today</div>
     <div class="${wet ? 'wet' : ''}">Rain<b class="num">${w.rain != null ? Math.round(w.rain) + ' mm' : '—'}</b>${w.rainChance != null ? Math.round(w.rainChance) + '% chance' : 'today'}</div>
     <div>Wind<b class="num">${w.wind != null ? Math.round(w.wind) : '—'}</b>km/h</div></div>`;
-  let imd = '';
-  if(rc && band) imd = `<div class="imd"><b class="${lvl === 'SEVERE' ? 's' : lvl === 'WATCH' ? 'w' : ''}">${esc(rc.charAt(0).toUpperCase() + rc.slice(1))}</b> by the IMD scale (${esc(band)})${/moderate|heavy/.test(rc) ? ' · plan village visits for the morning' : ''}</div>`;
-  else if(w.wind != null && w.wind >= 25) imd = `<div class="imd">Wind to <b>${Math.round(w.wind)} km/h</b> today</div>`;
+  const imd = (rc && band) ? `<div class="imd"><b class="${lvl === 'SEVERE' ? 's' : lvl === 'WATCH' ? 'w' : ''}">${esc(rc.charAt(0).toUpperCase() + rc.slice(1))}</b></div>` : '';
   return `<div class="wx"><div class="now"><span class="deg num">${w.temp != null ? Math.round(w.temp) + '°' : ''}</span><div><b>${esc(head)}</b><span>${sub.join(' · ')}</span></div></div>${fig}${imd}</div>`;
 }
 
@@ -4264,7 +4310,7 @@ function renderLeave(){
     const pendN = pendingLeave().length;
     if(pendN > 1) h += `<div class="group" style="margin-top:12px">
       <button class="btn" id="lvAll">Sanction all ${pendN} waiting</button>
-      <p class="lvnote" style="margin-top:8px">Each application still answers its own checks — anything that cannot be sanctioned is refused by name and stays waiting for your single order.</p></div>`;
+      </div>`;
   }
   if(mine){
     const yr = new Date().getFullYear();
@@ -4282,8 +4328,8 @@ function renderLeave(){
       LEAVE_TYPES.filter(([,,m]) => m.counts).map(([k,n]) =>
         `<div class="row"><span class="tag" style="width:44px;flex:none;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--seal);background:var(--seal-tint);border-radius:8px;min-height:34px;display:grid;place-items:center">${k}</span>
           <span class="lbl"><b>${esc(n)}</b></span></div>`).join('') +
-      `<div class="row"><span class="lbl"><b>Medical Leave</b><span>On a certificate from a Government doctor or hospital. No yearly limit — but not more than ${leaveMeta('ML').max} days at a time.</span></span></div>
-       <div class="row"><span class="lbl"><b>Permission to leave Headquarters</b><span>A permission, not leave. Nothing is deducted.</span></span></div>
+      `<div class="row"><span class="lbl"><b>Medical Leave</b></span></div>
+       <div class="row"><span class="lbl"><b>Permission to leave Headquarters</b></span></div>
       </div></div>`;
     h += `<div class="group" style="margin-top:14px"><button class="btn" id="lvNew">${ICON.plus}Apply for leave</button></div>`;
     const lv = approvedLeaveToday();
@@ -4293,9 +4339,7 @@ function renderLeave(){
   }
 
   if(!list.length){
-    h += emptyState(boss ? 'Nothing here' : 'No application yet',
-      boss ? 'Applications from the MPO, the Panchayat Secretary and the MPDO appear here for your orders.'
-           : 'Leave within the rules, beginning today or later, is sanctioned here at once; anything else goes to the Collector for orders. Apply before you leave station wherever it is possible to do so.');
+    h += emptyState(boss ? 'Nothing here' : 'No application yet', '');
   } else {
     /* ONE row per application. There used to be a second block below this
        that drew the whole list again as plain rows carrying the status pill —
@@ -4334,9 +4378,7 @@ function openLeaveForm(edit){
   LV_EDIT = (edit && edit.id) ? edit : null;
   const t = todayStr();
   showSheet(`<div style="padding:6px 20px 4px"><h2>${LV_EDIT ? 'Correct and resend' : 'Apply for leave'}</h2>
-    <p style="font-size:13.5px;color:var(--ink-2);margin-top:4px">${LV_EDIT
-      ? 'The Collector’s remarks: “' + esc(LV_EDIT.remarks || '') + '”'
-      : 'Within the rules and beginning today or later, it is sanctioned the moment it is received; anything else goes to the Collector. You will see the orders here.'}</p></div>
+    ${LV_EDIT ? '<p style="font-size:13.5px;color:var(--ink-2);margin-top:4px">The Collector’s remarks: “' + esc(LV_EDIT.remarks || '') + '”</p>' : ''}</div>
     <div class="group" style="margin-top:8px"><div class="card">
       <div class="field"><label for="lvType">Kind of leave</label>
         <select id="lvType">${LEAVE_TYPES.map(([k,n]) => `<option value="${k}">${esc(n)}</option>`).join('')}</select></div>
@@ -4355,12 +4397,11 @@ function openLeaveForm(edit){
         <p style="font-size:12px;color:var(--ink-3);margin-top:5px;line-height:1.45">Medical leave is sanctioned only on a certificate from a Government doctor or a Government hospital. Carry the original for the office record. There is no yearly limit on it, but not more than ${leaveMeta('ML').max} days may be taken at a time.</p></div>
       <div class="field"><label for="lvAddr">Address during leave</label>
         <input type="text" id="lvAddr" placeholder="Where you can be reached"></div>
-      <div class="row" id="lvHqRow"><span class="lbl"><b>Permission to leave headquarters</b>
-        <span>Tick if you will be away from the mandal headquarters</span></span>
+      <div class="row" id="lvHqRow"><span class="lbl"><b>Permission to leave headquarters</b></span>
         <span class="sw g" role="switch" tabindex="0" aria-checked="false" id="lvHq" aria-label="Permission to leave headquarters"></span></div>
     </div></div>
     <p class="lvnote" id="lvCount">1 day</p>
-    <div class="group" style="margin-top:14px"><button class="btn" id="lvSend">Send the application</button>
+    <div class="group" style="margin-top:14px"><button class="btn" id="lvSend">Send to the Collector</button>
       <button class="btn quiet" id="lvCancelForm" style="margin-top:9px">Not now</button></div>`);
 
   /* NOT the hidden attribute: .field carries display:block, and an author
@@ -4429,7 +4470,7 @@ function openLeaveForm(edit){
     if(LV_EDIT.hq) $('#lvHq').setAttribute('aria-checked', 'true');
     const ohSel = $('#lvOh');
     if(leaveMeta(LV_EDIT.type || '').pick && ohSel) ohSel.value = LV_EDIT.from || '';
-    $('#lvSend').textContent = 'Resend the application';
+    $('#lvSend').textContent = 'Resend to the Collector';
   }
   count();
 }
@@ -4506,10 +4547,12 @@ async function submitLeave(){
     toast(l.rejected, 7000);
     return;
   }
-  if(sent && l.status === 'APPROVED') toast('Sanctioned by rule — within your entitlement. The Collector sees it and may set it aside.', 6000);
-  else if(sent && l.held) toast('With the Collector for orders — ' + l.held, 8000);
-  else toast(sent ? 'Sent to the Collector for orders' : 'Saved on this phone — it goes when there is signal');
+  toast(sent ? 'Sent to the Collector' : 'Saved on this phone — it goes when there is signal');
   renderLeave();
+  /* the orders on it may be passed a few minutes after the district receives
+     it (the standing order of 17.10.2026 — the district's business, not the
+     phone's); ask once a little after, so he reads them without reopening */
+  if(sent) setTimeout(() => { refreshLeave().catch(()=>{}); }, (5 * 60 + 30) * 1000);
 }
 
 /* ---------------- one application ---------------- */
@@ -4544,30 +4587,27 @@ function openLeaveOne(id){
         <button class="btn quiet" id="lvShut" style="margin-top:9px">Close</button></div>` : `
       ${mine && l.status === 'RETURNED' ? `<div class="group" style="margin-top:12px">
         <button class="btn" id="lvFix">Correct and resend</button>
-        <button class="btn quiet" id="lvShut" style="margin-top:9px">Close</button>
-        <p class="lvnote" style="margin-top:9px">The Collector sent this back — the remarks above say what to correct. Your corrected copy goes in under the same application.</p></div>`
+        <button class="btn quiet" id="lvShut" style="margin-top:9px">Close</button></div>`
       : mine && l.status === 'PENDING' ? `<div class="group" style="margin-top:12px">
         <button class="btn danger" id="lvWithdraw">Withdraw the application</button>
         <button class="btn quiet" id="lvShut" style="margin-top:9px">Close</button></div>`
       : boss && l.status === 'APPROVED' ? `<div class="group"><div class="card"><div class="field">
-        <label for="lvRem">Why it is set aside</label>
-        <textarea id="lvRem" rows="2" placeholder="The remarks travel to the officer and stand on the register"></textarea></div></div></div>
+        <label for="lvRem">Remarks</label>
+        <textarea id="lvRem" rows="2"></textarea></div></div></div>
       <div class="group" style="margin-top:12px">
-        <button class="btn danger" id="lvAside">Set this sanction aside</button>
-        <button class="btn quiet" id="lvShut" style="margin-top:9px">Close</button>
-        <p class="lvnote" style="margin-top:9px">The whole spell returns to his account and the days are due again. A spell partly availed is apportioned by your office, not by this screen.</p></div>`
+        <button class="btn danger" id="lvAside">Cancel this sanction</button>
+        <button class="btn quiet" id="lvShut" style="margin-top:9px">Close</button></div>`
       : mine && l.status === 'APPROVED' && String(l.from || '') > todayStr() ? `<div class="group" style="margin-top:12px">
         <button class="btn danger" id="lvCancelOk">Cancel this sanctioned leave</button>
-        <button class="btn quiet" id="lvShut" style="margin-top:9px">Close</button>
-        <p class="lvnote" style="margin-top:9px">It has not begun, so it can be given back whole — the days return to your account and you report for duty as usual. Once leave has started, only the Collector’s office can rule on it.</p></div>`
+        <button class="btn quiet" id="lvShut" style="margin-top:9px">Close</button></div>`
       : `<div class="group" style="margin-top:12px"><button class="btn quiet" id="lvShut">Close</button></div>`}`}`);
 
   const shut = $('#lvShut'); if(shut) shut.addEventListener('click', hideSheet);
   const ok = $('#lvOk'), no = $('#lvNo'), wd = $('#lvWithdraw'), co = $('#lvCancelOk'), bk = $('#lvBack'), fx = $('#lvFix'), as = $('#lvAside');
   if(as) as.addEventListener('click', () => {
     const rem = ($('#lvRem').value || '').trim();
-    if(!rem){ toast('Say why it is set aside — the remarks travel to the officer.'); $('#lvRem').focus(); return; }
-    confirmSheet('Set this sanction aside?', leaveName(l.type) + ' · ' + lvSpan(l) + ' · ' + l.name + '. The days return to his account and are due again.', true,
+    if(!rem){ toast('Remarks are required.'); $('#lvRem').focus(); return; }
+    confirmSheet('Cancel this sanction?', leaveName(l.type) + ' · ' + lvSpan(l) + ' · ' + l.name, true,
       () => decideLeave(l.id, 'CANCELLED', rem));
   });
   if(ok) ok.addEventListener('click', () => decideLeave(l.id, 'APPROVED', ($('#lvRem').value || '').trim()));
@@ -4638,7 +4678,7 @@ async function sanctionAll(){
 async function decideLeave(id, status, remarks){
   const l = (DB.leave || []).find(x => x.id === id); if(!l) return;
   const word = status === 'APPROVED' ? 'Sanctioned' : status === 'REJECTED' ? 'Refused' : status === 'RETURNED' ? 'Sent back for correction'
-             : (status === 'CANCELLED' && l.status === 'APPROVED') ? 'Set aside' : 'Withdrawn';
+             : (status === 'CANCELLED' && l.status === 'APPROVED') ? 'Cancelled' : 'Withdrawn';
   try{
     const r = await post({kind:'leaveDecision', token: DB.session.token, id, status, remarks: remarks || ''});
     if(!r || !r.ok){ toast((r && r.error) || 'Could not send the orders'); return; }
@@ -4663,16 +4703,7 @@ async function syncLeave(){
         id:l.id, appliedAt:l.appliedAt, type:l.type, from:l.from, to:l.to, days:l.days,
         reason:l.reason, address:l.address, hq:l.hq, cert:l.cert||'', status:l.status
       }});
-      if(r && r.ok){
-        l.sync = 'synced'; done++;
-        /* SANCTIONED BY RULE (17.10.2026): leave within the rules and
-           beginning today or later is sanctioned the moment the district
-           takes it, and the answer carries the order. What the register held
-           for the Collector says why, so the officer is not left guessing. */
-        if(r.status === 'APPROVED'){ l.status = 'APPROVED'; l.decidedBy = r.decidedBy || ''; l.decidedAt = r.decidedAt || new Date().toISOString(); l.remarks = r.remarks || ''; l.auto = true; }
-        else if(r.held){ l.held = r.held; }
-        saveNow();
-      }
+      if(r && r.ok){ l.sync = 'synced'; done++; saveNow(); }
       else if(r && r.duplicate){ l.rejected = r.error; saveNow(); }
       else break;
     }catch(e){ break; }
