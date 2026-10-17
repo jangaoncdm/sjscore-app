@@ -125,6 +125,12 @@ const store = (u, extra) => Object.assign({ url:'https://mock.district/exec', ca
     await p.click('#lvNew'); await p.waitForTimeout(300);
     ck((await text(p, '#lvSend')) === 'Send the application', 'the button no longer says "Send to the Collector"', await text(p, '#lvSend'));
     await p.fill('#lvReason', 'Family function');
+    await p.evaluate(() => { const e = document.querySelector('#lvFrom'); if(e) e.dispatchEvent(new Event('change')); });
+    await p.waitForTimeout(200);
+    const form = await text(p, '#sheetBody');
+    ck(/1 day/.test(form), 'the form counts the days he has picked', form.slice(-300));
+    ck(/sanctioned the moment it is received/.test(form) && !/The application goes to the Collector/.test(form), 'and its heading no longer says every application goes to the Collector', form.slice(0, 200));
+    await shot(p, '0-the-apply-form');
     await p.click('#lvSend'); await p.waitForTimeout(900);
     const toast = await text(p, '#toast');
     ck(/Sanctioned by rule/.test(toast), 'the toast says it is sanctioned by rule', toast);
@@ -166,6 +172,31 @@ const store = (u, extra) => Object.assign({ url:'https://mock.district/exec', ca
     const body = await text(p, '#lvBody');
     ck(/Pending/.test(body) && !/Sanctioned/.test(body), 'the row reads as pending and never as sanctioned', body.slice(0, 200));
     await shot(p, '2-held-for-the-collector');
+    ck(r.errs.length === 0, 'no script error', r.errs.join(' | '));
+    await r.ctx.close();
+  }
+
+  console.log('\n2b. an application for days already gone — waits for the Collector, no check failed');
+  {
+    const D = byRule();
+    D.onLeave = x => {
+      const l = x.leave;
+      D.rows.unshift({ id:l.id, appliedAt:l.appliedAt, phone:officer.phone, name:officer.name, role:officer.role, mandal:officer.mandal,
+        type:l.type, from:l.from, to:l.to, days:l.days, reason:l.reason, status:'PENDING', decidedBy:'', decidedAt:'', remarks:'' });
+      return { ok:true, id:l.id, status:'PENDING' };
+    };
+    const r = await open_(store(officer), D), p = r.p;
+    await p.click('#lvNew'); await p.waitForTimeout(300);
+    await p.fill('#lvFrom', inDays(-3)); await p.fill('#lvTo', inDays(-3));
+    await p.evaluate(() => { const e = document.querySelector('#lvFrom'); if(e) e.dispatchEvent(new Event('change')); });
+    await p.fill('#lvReason', 'Was unwell, could not apply before');
+    await p.click('#lvSend'); await p.waitForTimeout(900);
+    const toast = await text(p, '#toast');
+    ck(/Sent to the Collector for orders/.test(toast), 'the toast says it went to the Collector', toast);
+    ck(!/by rule/i.test(toast), 'and not that the rule passed it');
+    const body = await text(p, '#lvBody');
+    ck(/Pending/.test(body) && !/Sanctioned/.test(body), 'the row reads as pending', body.slice(0, 200));
+    await shot(p, '2b-days-already-gone');
     ck(r.errs.length === 0, 'no script error', r.errs.join(' | '));
     await r.ctx.close();
   }
@@ -224,6 +255,20 @@ const store = (u, extra) => Object.assign({ url:'https://mock.district/exec', ca
     ck(!(await wide(p)), 'no sideways scroll');
     ck(r.errs.length === 0, 'no script error', r.errs.join(' | '));
     await r.ctx.close();
+
+    /* and the officer, afterwards: the same district, his own phone */
+    console.log('\n3d. the officer reads the setting aside');
+    const o = await open_(store(officer), D), q = o.p;
+    const mine = await text(q, '#lvBody');
+    ck(/Set aside by the Collector/.test(mine), 'his list reads "Set aside by the Collector"', mine.slice(0, 300));
+    await q.click('#lvBody [data-lv="LVr1"]'); await q.waitForTimeout(300);
+    const sh = await text(q, '#sheetBody');
+    ck(/Required at the review/.test(sh), 'and the application carries the Collector\u2019s remarks', sh.slice(-300));
+    ck(/set aside/i.test(sh), 'with the hand named');
+    ck(!(await q.$('#lvWithdraw')), 'nothing left for him to withdraw');
+    await shot(q, '3d-the-officer-reads-it');
+    ck(o.errs.length === 0, 'no script error', o.errs.join(' | '));
+    await o.ctx.close();
   }
 
   await br.close(); srv.close();
