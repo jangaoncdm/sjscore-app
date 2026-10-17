@@ -6023,7 +6023,10 @@ function weatherRead_(u, forDraft){
                    mine: mine[0] || null, level: (mine[0] || {}).level || 'CALM' });
   }
   const out = { ok:true, at:w.at, date:w.date, level:w.level, counts:w.counts,
-                rows:w.rows, source:w.source };
+                rows:w.rows, source:w.source,
+                /* the district officer's own phone draws the weather card and the temperature row off mine,
+                   which a district role never had: it reads the headquarters mandal */
+                mine: w.rows.find(r => /^jangaon$/i.test(String(r.mandal || "").trim())) || w.rows[0] || null };
   if(forDraft) out.draft = wxDraft_(w);
   return json_(out);
 }
