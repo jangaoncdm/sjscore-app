@@ -73,7 +73,7 @@ function brandRegister(){
     document.documentElement.setAttribute('data-tenant', 'gp');
   }catch(e){}
 }
-const APP_VERSION = '6.18.0';
+const APP_VERSION = '6.18.1';
 /* THE WELCOME. In front of sign-in on every opening, 2.6 s and gone, or gone on a tap. It is for
    people: a driven browser (the render passes) is never shown it, so a pass sees the app and not a
    splash. It is removed from the document, not hidden, so nothing can sit under it afterwards. */
@@ -4336,7 +4336,7 @@ function openLeaveForm(edit){
   showSheet(`<div style="padding:6px 20px 4px"><h2>${LV_EDIT ? 'Correct and resend' : 'Apply for leave'}</h2>
     <p style="font-size:13.5px;color:var(--ink-2);margin-top:4px">${LV_EDIT
       ? 'The Collector’s remarks: “' + esc(LV_EDIT.remarks || '') + '”'
-      : 'The application goes to the Collector. You will see the orders here.'}</p></div>
+      : 'Within the rules and beginning today or later, it is sanctioned the moment it is received; anything else goes to the Collector. You will see the orders here.'}</p></div>
     <div class="group" style="margin-top:8px"><div class="card">
       <div class="field"><label for="lvType">Kind of leave</label>
         <select id="lvType">${LEAVE_TYPES.map(([k,n]) => `<option value="${k}">${esc(n)}</option>`).join('')}</select></div>
