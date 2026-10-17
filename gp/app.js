@@ -73,7 +73,7 @@ function brandRegister(){
     document.documentElement.setAttribute('data-tenant', 'gp');
   }catch(e){}
 }
-const APP_VERSION = '6.17.1';
+const APP_VERSION = '6.18.0';
 /* THE WELCOME. In front of sign-in on every opening, 2.6 s and gone, or gone on a tap. It is for
    people: a driven browser (the render passes) is never shown it, so a pass sees the app and not a
    splash. It is removed from the document, not hidden, so nothing can sit under it afterwards. */
@@ -3233,7 +3233,12 @@ function pendingLeave(){ return (DB.leave || []).filter(l => l.status === 'PENDI
 const LV_PILL = {PENDING:['p-warn','Pending'], APPROVED:['p-ok','Sanctioned'],
                  REJECTED:['p-bad','Refused'], CANCELLED:['p-mut','Withdrawn'],
                  RETURNED:['p-warn','Sent back — correct and resend']};
-function lvPill(st){ const [c,l] = LV_PILL[st] || ['p-mut', st]; return `<span class="pill ${c}">${esc(l)}</span>`; }
+function lvPill(st, l){
+  let [c, w] = LV_PILL[st] || ['p-mut', st];
+  if(l && st === 'CANCELLED' && /set aside/i.test(String(l.decidedBy || ''))) w = 'Set aside by the Collector';
+  else if(l && st === 'APPROVED' && /by rule/i.test(String(l.decidedBy || ''))) w = 'Sanctioned by rule';
+  return `<span class="pill ${c}">${esc(w)}</span>`;
+}
 function lvSpan(l){
   return l.from === l.to ? niceDate(l.from) : niceDate(l.from) + ' to ' + niceDate(l.to);
 }
@@ -4290,7 +4295,7 @@ function renderLeave(){
   if(!list.length){
     h += emptyState(boss ? 'Nothing here' : 'No application yet',
       boss ? 'Applications from the MPO, the Panchayat Secretary and the MPDO appear here for your orders.'
-           : 'Leave is applied for here and goes to the Collector for orders. Apply before you leave station wherever it is possible to do so.');
+           : 'Leave within the rules, beginning today or later, is sanctioned here at once; anything else goes to the Collector for orders. Apply before you leave station wherever it is possible to do so.');
   } else {
     /* ONE row per application. There used to be a second block below this
        that drew the whole list again as plain rows carrying the status pill —
@@ -4305,7 +4310,7 @@ function renderLeave(){
         <span class="tag">${esc(l.type)}</span>
         <span class="mid"><b>${esc(leaveName(l.type))}</b>
           <span>${who}${esc(lvSpan(l))}${l.sync!=='synced'?' · on this phone':''}</span>
-          ${showPill ? `<span style="display:inline-block;margin-top:5px">${lvPill(l.status)}</span>` : ''}</span>
+          ${showPill ? `<span style="display:inline-block;margin-top:5px">${lvPill(l.status, l)}</span>` : ''}</span>
         <span class="lvdays">${l.days}<small>${l.days===1?'day':'days'}</small></span>
         </button>`;
     }).join('') + `</div></div>`;
@@ -4355,7 +4360,7 @@ function openLeaveForm(edit){
         <span class="sw g" role="switch" tabindex="0" aria-checked="false" id="lvHq" aria-label="Permission to leave headquarters"></span></div>
     </div></div>
     <p class="lvnote" id="lvCount">1 day</p>
-    <div class="group" style="margin-top:14px"><button class="btn" id="lvSend">Send to the Collector</button>
+    <div class="group" style="margin-top:14px"><button class="btn" id="lvSend">Send the application</button>
       <button class="btn quiet" id="lvCancelForm" style="margin-top:9px">Not now</button></div>`);
 
   /* NOT the hidden attribute: .field carries display:block, and an author
@@ -4424,7 +4429,7 @@ function openLeaveForm(edit){
     if(LV_EDIT.hq) $('#lvHq').setAttribute('aria-checked', 'true');
     const ohSel = $('#lvOh');
     if(leaveMeta(LV_EDIT.type || '').pick && ohSel) ohSel.value = LV_EDIT.from || '';
-    $('#lvSend').textContent = 'Resend to the Collector';
+    $('#lvSend').textContent = 'Resend the application';
   }
   count();
 }
@@ -4501,7 +4506,9 @@ async function submitLeave(){
     toast(l.rejected, 7000);
     return;
   }
-  toast(sent ? 'Sent to the Collector' : 'Saved on this phone — it goes when there is signal');
+  if(sent && l.status === 'APPROVED') toast('Sanctioned by rule — within your entitlement. The Collector sees it and may set it aside.', 6000);
+  else if(sent && l.held) toast('With the Collector for orders — ' + l.held, 8000);
+  else toast(sent ? 'Sent to the Collector for orders' : 'Saved on this phone — it goes when there is signal');
   renderLeave();
 }
 
@@ -4522,7 +4529,7 @@ function openLeaveOne(id){
       ${leaveMeta(l.type).counts ? (()=>{ const b=leaveBalance(l.type, Number(String(l.from).slice(0,4)), l.phone);
         return `<div class="row"><span class="lbl"><b>${esc(leaveName(l.type))} account</b>
           <span>${b.ent} for the year · ${b.used} taken · ${b.left} left</span></span></div>`; })() : ''}
-      <div class="row"><span class="lbl"><b>Status</b></span>${lvPill(l.status)}</div>
+      <div class="row"><span class="lbl"><b>Status</b></span>${lvPill(l.status, l)}</div>
       ${l.decidedBy?`<div class="row"><span class="lbl"><b>Orders by</b><span>${esc(l.decidedBy)}${l.decidedAt?' · '+esc(niceDate(String(l.decidedAt).slice(0,10))):''}</span></span></div>`:''}
       ${l.remarks?`<div class="row"><span class="lbl"><b>Remarks</b><span>${esc(l.remarks)}</span></span></div>`:''}
     </div></div>
@@ -4542,6 +4549,13 @@ function openLeaveOne(id){
       : mine && l.status === 'PENDING' ? `<div class="group" style="margin-top:12px">
         <button class="btn danger" id="lvWithdraw">Withdraw the application</button>
         <button class="btn quiet" id="lvShut" style="margin-top:9px">Close</button></div>`
+      : boss && l.status === 'APPROVED' ? `<div class="group"><div class="card"><div class="field">
+        <label for="lvRem">Why it is set aside</label>
+        <textarea id="lvRem" rows="2" placeholder="The remarks travel to the officer and stand on the register"></textarea></div></div></div>
+      <div class="group" style="margin-top:12px">
+        <button class="btn danger" id="lvAside">Set this sanction aside</button>
+        <button class="btn quiet" id="lvShut" style="margin-top:9px">Close</button>
+        <p class="lvnote" style="margin-top:9px">The whole spell returns to his account and the days are due again. A spell partly availed is apportioned by your office, not by this screen.</p></div>`
       : mine && l.status === 'APPROVED' && String(l.from || '') > todayStr() ? `<div class="group" style="margin-top:12px">
         <button class="btn danger" id="lvCancelOk">Cancel this sanctioned leave</button>
         <button class="btn quiet" id="lvShut" style="margin-top:9px">Close</button>
@@ -4549,7 +4563,13 @@ function openLeaveOne(id){
       : `<div class="group" style="margin-top:12px"><button class="btn quiet" id="lvShut">Close</button></div>`}`}`);
 
   const shut = $('#lvShut'); if(shut) shut.addEventListener('click', hideSheet);
-  const ok = $('#lvOk'), no = $('#lvNo'), wd = $('#lvWithdraw'), co = $('#lvCancelOk'), bk = $('#lvBack'), fx = $('#lvFix');
+  const ok = $('#lvOk'), no = $('#lvNo'), wd = $('#lvWithdraw'), co = $('#lvCancelOk'), bk = $('#lvBack'), fx = $('#lvFix'), as = $('#lvAside');
+  if(as) as.addEventListener('click', () => {
+    const rem = ($('#lvRem').value || '').trim();
+    if(!rem){ toast('Say why it is set aside — the remarks travel to the officer.'); $('#lvRem').focus(); return; }
+    confirmSheet('Set this sanction aside?', leaveName(l.type) + ' · ' + lvSpan(l) + ' · ' + l.name + '. The days return to his account and are due again.', true,
+      () => decideLeave(l.id, 'CANCELLED', rem));
+  });
   if(ok) ok.addEventListener('click', () => decideLeave(l.id, 'APPROVED', ($('#lvRem').value || '').trim()));
   if(no) no.addEventListener('click', () => decideLeave(l.id, 'REJECTED', ($('#lvRem').value || '').trim()));
   if(bk) bk.addEventListener('click', () => {
@@ -4617,7 +4637,8 @@ async function sanctionAll(){
 
 async function decideLeave(id, status, remarks){
   const l = (DB.leave || []).find(x => x.id === id); if(!l) return;
-  const word = status === 'APPROVED' ? 'Sanctioned' : status === 'REJECTED' ? 'Refused' : status === 'RETURNED' ? 'Sent back for correction' : 'Withdrawn';
+  const word = status === 'APPROVED' ? 'Sanctioned' : status === 'REJECTED' ? 'Refused' : status === 'RETURNED' ? 'Sent back for correction'
+             : (status === 'CANCELLED' && l.status === 'APPROVED') ? 'Set aside' : 'Withdrawn';
   try{
     const r = await post({kind:'leaveDecision', token: DB.session.token, id, status, remarks: remarks || ''});
     if(!r || !r.ok){ toast((r && r.error) || 'Could not send the orders'); return; }
@@ -4642,7 +4663,16 @@ async function syncLeave(){
         id:l.id, appliedAt:l.appliedAt, type:l.type, from:l.from, to:l.to, days:l.days,
         reason:l.reason, address:l.address, hq:l.hq, cert:l.cert||'', status:l.status
       }});
-      if(r && r.ok){ l.sync = 'synced'; done++; saveNow(); }
+      if(r && r.ok){
+        l.sync = 'synced'; done++;
+        /* SANCTIONED BY RULE (17.10.2026): leave within the rules and
+           beginning today or later is sanctioned the moment the district
+           takes it, and the answer carries the order. What the register held
+           for the Collector says why, so the officer is not left guessing. */
+        if(r.status === 'APPROVED'){ l.status = 'APPROVED'; l.decidedBy = r.decidedBy || ''; l.decidedAt = r.decidedAt || new Date().toISOString(); l.remarks = r.remarks || ''; l.auto = true; }
+        else if(r.held){ l.held = r.held; }
+        saveNow();
+      }
       else if(r && r.duplicate){ l.rejected = r.error; saveNow(); }
       else break;
     }catch(e){ break; }
