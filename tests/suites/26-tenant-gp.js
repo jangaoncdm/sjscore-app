@@ -678,8 +678,8 @@ module.exports = {
     const lv = env.post({ kind:'leave', token:gpo1, leave:{
       id:'LV-1', type:'CL', from:'2026-09-24', to:'2026-09-24', days:1, reason:'Personal' } });
     t.eq(lv.ok, true, 'a GPO applies for leave');
-    const dec = env.post({ kind:'leaveDecision', token:cdm, id:'LV-1', status:'APPROVED' });
-    t.eq(dec.ok, true, 'and the Collector sanctions it');
+    t.eq(lv.status, 'APPROVED', 'and within the rules it is sanctioned by rule on this register too (17.10.2026)');
+    t.eq(lv.auto, true, 'the answer says so');
     const mine = env.get('leave', { token:gpo1 });
     t.eq(mine.rows.length, 1, 'he sees his own application');
     t.eq(mine.rows[0].status, 'APPROVED', 'sanctioned');

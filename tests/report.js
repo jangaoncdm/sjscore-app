@@ -74,6 +74,12 @@ const PASSES = [
         + 'marked, that today is outlined and never a miss, that the voluntary office has nothing counted against it, '
         + 'that the card is simply absent when the district cannot answer, and that not one word of sanction is on it.',
     cmd: ['tests/render-days.js'], needs: BROWSER ? null : 'playwright is not installed', shots: 'days-render' },
+  { name: 'Leave sanctioned by rule',
+    what: 'The real field app at 390px against a mocked district: an officer applying within the rules is told on the spot that it '
+        + 'is sanctioned by rule, an application the district held says why and reads as pending, and the Collector sets a sanction '
+        + 'aside from the application with his reasons — the button is his alone, it refuses to go without remarks, and what went on '
+        + 'the wire is CANCELLED by id with those remarks, read back as set aside and never as withdrawn.',
+    cmd: ['tests/render-leave.js'], needs: BROWSER ? null : 'playwright is not installed', shots: 'leave-render' },
   { name: 'The welcome',
     what: 'The splash in front of sign-in, asked for by name since a driven browser is never shown it: it draws, the emblem loads, a tap takes it away, and by four seconds it is gone from the document with sign-in underneath.',
     cmd: ['tests/render-welcome.js'], needs: BROWSER ? null : 'playwright is not installed', shots: 'welcome-render' },

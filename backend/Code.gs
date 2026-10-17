@@ -459,6 +459,15 @@ const TENANTS = {
        stands it down, both without a deploy. */
     placeOfDuty:true,
     fence:5,
+    /* LEAVE WITHIN THE RULES IS SANCTIONED BY THE REGISTER ITSELF (ordered
+       17.10.2026). An application that passes every check the sanction
+       already runs — the year's balance, the optional-holiday cap, the
+       medical spell, no overlap — and begins today or later is APPROVED at
+       once, by rule, and the Collector sees it as such. What fails a check,
+       what is for days already gone, and a corrected copy he sent back all
+       wait for his orders as before. LEAVE_AUTO_OFF stands it down with no
+       deploy; the District HRMS keeps every application on his desk. */
+    autoLeave:true,
     /* CL 15 a year, EL 30, HQ a permission and ML on certificate. 2026 opened
        in August, so casual leave that year is five months' worth: 15 x 5/12,
        taken as 6 — the figure this register has run on since adoption. */
@@ -503,6 +512,8 @@ const TENANTS = {
        sanctioned by a table under an order nobody gave. Fencing it is the
        Collector's written order and suite 35 is where it is changed first. */
     fence:0,
+    /* leave within the rules is sanctioned by rule here too (17.10.2026) */
+    autoLeave:true,
     /* THE SAME YEARLY FIGURES, PRO-RATED TO WHAT IS LEFT OF THE YEAR. This
        register opened on 19.09.2026 and so counts from October — three months
        of twelve. CL 15 x 3/12 = 3.75 taken as 4; EL 30 x 3/12 = 7.5 taken as
@@ -577,6 +588,11 @@ const TENANTS = {
     placeOfDuty:false,
     /* nobody on this register marks attendance, so there is nothing to fence */
     fence:0,
+    /* EVERY APPLICATION IN THE DISTRICT COMES TO THE COLLECTOR (08.10.2026).
+       The sanitation and Gram Palana registers sanction leave within the
+       rules by themselves since 17.10.2026; this one does not — that order
+       named the other two, and suite 41 holds it off here. */
+    autoLeave:false,
     entitlement:{CL:15, EL:30, HQ:0, ML:0, OH:5},
     /* AND 2026 IS NOT A YEAR ON THIS REGISTER, IT IS A QUARTER. The district
        stood the HRMS up on 09.10.2026, so the year it opens in is three months
@@ -4276,6 +4292,8 @@ function doGet(e){
        question is settled by reading, not by reasoning. It reveals nothing:
        these are endpoint names, every one of which re-checks the caller. */
     return json_({ ok:true, stamp:'SJGP-6.9-diag13', tenant:tenant_().key, tenantName:tenant_().name,
+      /* whether leave within the rules is sanctioned by the register itself (17.10.2026) */
+      autoLeave:(function(){ try{ return leaveAutoRule_().on; }catch(err){ return null; } })(),
       /* READ OFF THE RUNNING CODE, NOT TYPED HERE. A list written by hand
          says what the author believed; it proved exactly nothing when the
          question was whether the deployed build carried an endpoint, because
@@ -4712,7 +4730,7 @@ function doGet(e){
         name:cell_(lv[i], lm.ix.name), role:cell_(lv[i], lm.ix.role), mandal:cell_(lv[i], lm.ix.mandal),
         type:cell_(lv[i], lm.ix.type), from:dateText_(lv[i][lm.ix.fromDate]), to:dateText_(lv[i][lm.ix.toDate]),
         days:Number(lv[i][lm.ix.days])||0, status:String(lv[i][lm.ix.status]||'PENDING'),
-        decidedAt:String(lv[i][lm.ix.decidedAt]||''),
+        decidedAt:String(lv[i][lm.ix.decidedAt]||''), decidedBy:String(lv[i][lm.ix.decidedBy]||''),
         appliedAt:String(lv[i][lm.ix.appliedAt]||'')});
     }
     leaveFold_(lAll).forEach(row => { (row.status === 'PENDING' ? lp : lr).push(row); });
@@ -7861,6 +7879,52 @@ function mlRun_(sh, m, phone, from, to, skipId){
   return spanDays_(from, to);
 }
 
+/* ============================================================================
+ * SANCTIONED BY RULE · ordered 17.10.2026
+ * ----------------------------------------------------------------------------
+ * "In the leave section auto approve if it is in the limit of user — it goes
+ * to the Collector, but auto approved. All leaves starting today, within
+ * rule." Every application used to wait on the Collector's hand, and the
+ * balance was checked only when that hand moved. The checks are the same
+ * checks and they still run on the server (rule 6); what changed is WHEN the
+ * order is passed. An application that passes them all is sanctioned the
+ * moment it is written, the row names the rule as the hand that passed it,
+ * and the Collector reads it under Sanctioned rather than under Awaiting.
+ *
+ * WHAT STILL WAITS FOR HIM, each for a reason:
+ *   - anything that fails a check. Exceeding the year's casual leave means
+ *     loss of pay, and that is his to pass, not a table's; the application
+ *     is written and left PENDING with the arithmetic, as it always was.
+ *   - leave for days already gone. An officer with unmarked mornings could
+ *     otherwise turn them into leave by himself and cure his own notice.
+ *     "Starting today" is the order's own line: from >= today sanctions.
+ *   - a corrected copy of an application he sent back. He engaged with it
+ *     and it comes back to him.
+ * THE DISTRICT HRMS IS NOT IN THE ORDER: every application there comes to
+ * him, as directed on 08.10.2026. The tenant carries the switch.
+ *
+ * NOTHING IS DESTROYED AND HE CAN UNDO IT. A sanction passed by rule is a
+ * sanction: it covers the day (rule 9) and debits the year. So the Collector
+ * can SET IT ASIDE — decideOneLeave_ takes CANCELLED on an APPROVED
+ * application from him, with remarks, and the row keeps what it was. The
+ * script property LEAVE_AUTO_OFF stands the whole thing down in a minute
+ * with no deploy, as FENCE_OFF does the fence.
+ * ========================================================================== */
+var LEAVE_RULE_BY = 'By rule · within entitlement';
+function leaveAutoRule_(){
+  var on = !!tenant_().autoLeave;
+  try{
+    if(String(PropertiesService.getScriptProperties().getProperty('LEAVE_AUTO_OFF') || '').trim()) on = false;
+  }catch(e){}
+  return { on:on };
+}
+function leaveAudit_(action, subject, detail, by){
+  try{
+    const sh = sheet_('Audit', ['at','action','subject','detail','by']);
+    sh.appendRow([new Date().toISOString(), action, subject, detail, by]);
+  }catch(err){}
+}
+
 function saveLeave_(b, u){
   const l = b.leave || {};
   if(!l.id) return json_({ ok:false, error:'bad request' });
@@ -7960,6 +8024,19 @@ function saveLeave_(b, u){
 
   if(found) sh.getRange(found.at, 1, 1, m.width).setValues([row]);
   else sh.appendRow(row);
+
+  /* SANCTIONED BY RULE, under the same lock the row was written under, so a
+     retry racing its original cannot pass the order twice. The same checks
+     the Collector's own order runs, in decideOneLeave_, and nothing else:
+     what fails them is left PENDING for him with the reason, which is what
+     "it goes to the Collector" means. Not for days already gone, and not
+     for a corrected copy he sent back. */
+  if(leaveAutoRule_().on && !resubmit && from >= today_()){
+    const r = decideOneLeave_(l.id, 'APPROVED', '', u, LEAVE_RULE_BY);
+    if(r.ok) return json_({ ok:true, id:l.id, status:'APPROVED', auto:true,
+                            decidedBy:r.decidedBy, decidedAt:r.decidedAt, remarks:r.remarks });
+    return json_({ ok:true, id:l.id, status:'PENDING', held:r.error });
+  }
   return json_({ ok:true, id:l.id, status:'PENDING' });
   } finally { lock.releaseLock(); }
 }
@@ -7971,6 +8048,10 @@ function decideLeave_(b, u){
      ARE the instruction, so they cannot be empty */
   if(want === 'RETURNED' && !String(b.remarks || '').trim())
     return json_({ ok:false, error:'Say what needs correcting — the remarks travel back to the officer.' });
+  /* a sanction set aside carries its reason: it travels to the officer and
+     stands on the register against an order already passed */
+  if(want === 'CANCELLED' && !String(b.remarks || '').trim())
+    return json_({ ok:false, error:'Say why it is set aside — the remarks travel to the officer and stand on the register.' });
 
   /* THE WHOLE WAITING LIST IN ONE ORDER — sanction alone: a refusal or a
      return carries its own words per case and is never passed in bulk.
@@ -7998,13 +8079,16 @@ function decideLeave_(b, u){
 }
 /* one application, one order — the checks live here so a bulk sanction
    obeys exactly the same law as a single one */
-function decideOneLeave_(id, want, remarks, u){
+function decideOneLeave_(id, want, remarks, u, byText){
   const sh = sheet_('Leave', L_HEAD);
   const m = headMap_(sh, L_HEAD);
   /* the APPLICATION, which may be more than one row — see leaveRows_ */
   const hits = leaveRows_(sh, m, id);
   if(!hits.length) return { ok:false, error:'That application is not on the district record yet.' };
   const found = hits[0];
+  /* who passes it: the Collector by name, or the rule by name — never a
+     blank, because an order with no hand on it cannot be read afterwards */
+  const hand = byText || (u.name + ' (' + u.role + ')');
 
   /* IT IS WAITING IF ANY ROW OF IT IS WAITING. Reading only the first row is
      what left a sanctioned application sitting in the console for ever: the
@@ -8013,17 +8097,47 @@ function decideOneLeave_(id, want, remarks, u){
   const open = hits.filter(h => String(h.row[m.ix.status] || 'PENDING') === 'PENDING');
   if(!open.length){
     const st = String(found.row[m.ix.status] || 'PENDING');
+    /* A SANCTION SET ASIDE (17.10.2026). Leave within the rules is sanctioned
+       by the register itself now, so the Collector needs a way back over an
+       order no hand of his passed — and over his own, for that matter. The
+       row stays (rule 7): it turns CANCELLED, which clUsed_ never counts, so
+       the days return to the year and the day stops answering for him; what
+       it was is kept in the remarks and on Audit. The whole spell returns —
+       a spell partly availed is for the Collector's office to apportion by
+       hand, and the register says so rather than guessing. */
+    const standing = hits.filter(h => String(h.row[m.ix.status] || '') === 'APPROVED');
+    if(want === 'CANCELLED' && standing.length && !byText){
+      if(!String(remarks || '').trim())
+        return { ok:false, error:'Say why it is set aside — the remarks travel to the officer and stand on the register.' };
+      const wasBy = String(found.row[m.ix.decidedBy] || ''), wasAt = String(found.row[m.ix.decidedAt] || '');
+      const when2 = new Date().toISOString();
+      const by2 = u.name + ' (' + u.role + ') · set aside';
+      const note2 = ('Set aside by the Collector: ' + String(remarks || '').trim() +
+        (wasBy ? ' (sanctioned ' + (wasAt ? dmy_(wasAt.slice(0, 10)) + ' ' : '') + 'by ' + wasBy + ')' : '')).slice(0, 1000);
+      hits.forEach(h => {
+        sh.getRange(h.at, m.ix.status + 1).setValue('CANCELLED');
+        sh.getRange(h.at, m.ix.decidedBy + 1).setValue(by2);
+        sh.getRange(h.at, m.ix.decidedAt + 1).setValue(when2);
+        sh.getRange(h.at, m.ix.remarks + 1).setValue(note2);
+      });
+      leaveAudit_('leaveSetAside', id, 'was APPROVED by ' + wasBy + (wasAt ? ' at ' + wasAt : '') +
+        '; ' + String(found.row[m.ix.type] || '') + ' ' + dateText_(found.row[m.ix.fromDate]) + ' to ' +
+        dateText_(found.row[m.ix.toDate]) + '; ' + String(remarks || '').trim(), u.name + ' (' + u.role + ')');
+      return { ok:true, decidedBy:by2, decidedAt:when2, rows:hits.length, setAside:true, remarks:note2 };
+    }
     return { ok:false, error:'Orders have already been passed on this application (' + st + ').' };
   }
 
+  let note = String(remarks || '').slice(0, 1000);
   if(want === 'APPROVED'){
     const type = String(found.row[m.ix.type] || '');
     const yr = Number(String(dateText_(found.row[m.ix.fromDate])).slice(0,4));
     const ent = entitlement_(type, yr);
+    const want_ = Number(found.row[m.ix.days]) || 0;
+    let used = 0;
     if(ent > 0){
       const ph = phone10_(found.row[m.ix.phone]);
       const all = sh.getDataRange().getValues();
-      let used = 0;
       const counted = {};
       for(let i = 1; i < all.length; i++){
         if(String(all[i][m.ix.id]) === id) continue;
@@ -8039,21 +8153,29 @@ function decideOneLeave_(id, want, remarks, u){
         if(seenId) counted[seenId] = true;
         used += Number(all[i][m.ix.days]) || 0;
       }
-      const want_ = Number(found.row[m.ix.days]) || 0;
       if(used + want_ > ent)
         return { ok:false, error:'That would exceed the year\'s ' + type + ': ' + ent +
           ' for ' + yr + ', ' + used + ' already sanctioned, ' + want_ + ' now sought.' };
+    }
+    /* an order passed by rule carries its arithmetic, so the officer and the
+       Collector both read on the row WHY it passed without asking anybody */
+    if(byText){
+      note = 'Sanctioned by rule, within entitlement: ' +
+        (ent > 0 ? type + ' ' + (used + want_) + ' of ' + ent + ' for ' + yr + ' after this spell'
+         : type === 'ML' ? 'medical leave of ' + want_ + ' days, within the ' + ML_MAX_SPELL + '-day spell'
+         : type === 'HQ' ? 'permission to leave headquarters' : type) +
+        '. The Collector may set it aside.';
     }
   }
   const when = new Date().toISOString();
   /* every row of the application, so no twin is left behind still waiting */
   hits.forEach(h => {
     sh.getRange(h.at, m.ix.status + 1).setValue(want);
-    sh.getRange(h.at, m.ix.decidedBy + 1).setValue(u.name + ' (' + u.role + ')');
+    sh.getRange(h.at, m.ix.decidedBy + 1).setValue(hand);
     sh.getRange(h.at, m.ix.decidedAt + 1).setValue(when);
-    sh.getRange(h.at, m.ix.remarks + 1).setValue(String(remarks || '').slice(0, 1000));
+    sh.getRange(h.at, m.ix.remarks + 1).setValue(note);
   });
-  return { ok:true, decidedBy:u.name + ' (' + u.role + ')', decidedAt:when, rows:hits.length };
+  return { ok:true, decidedBy:hand, decidedAt:when, rows:hits.length, remarks:note };
 }
 
 /* ================== FIELD ISSUE REGISTER · 28.07.2026 ==================

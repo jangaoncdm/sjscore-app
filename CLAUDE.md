@@ -2368,3 +2368,55 @@ words, the states, the held mark, the outlined today and that the card is
 simply absent when the district cannot answer. Suite 40 holds the server
 half, including that the District HRMS, which keeps no attendance, refuses
 it by name.
+
+## Leave sanctioned by rule
+
+**Ordered 17.10.2026**, in these words: *"In the leave section auto approve if
+it is in the limit of user — it goes to the Collector, but auto approved. All
+leaves starting today, within rule."* On the **sanitation and Gram Palana
+registers** an application that passes every check the sanction already ran
+— the year's balance, the three optional holidays, the fifteen-day medical
+spell, no overlap — and **begins today or later** is APPROVED the moment it
+is written. The checks did not move and they still run on the server (rule
+6); what moved is *when* the order is passed. The row carries
+`By rule · within entitlement` as the hand and the arithmetic that passed it
+in the remarks, so the officer, the console and the Audit all read *why*
+without asking anybody. `TENANTS[k].autoLeave` is the switch per register;
+the script property `LEAVE_AUTO_OFF` stands it down with no deploy, as
+`FENCE_OFF` does the fence, and `op=diag` says whether it is in force.
+
+**What still waits for the Collector, and why each does.** Anything that
+*fails* a check is written and left PENDING with the reason (`held` in the
+answer): exceeding the year's casual leave means loss of pay, and that is his
+to pass and not a table's. **Leave for days already gone** waits, whatever the
+balance: an officer with unmarked mornings could otherwise turn them into
+leave by himself and cure his own notice. *"Starting today"* is the order's
+own line, so `from >= today` sanctions and yesterday does not. And a
+**corrected copy he sent back** comes back to him — he engaged with it.
+
+**The District HRMS is not in the order.** Every application there comes to
+the Collector, as directed on 08.10.2026; `autoLeave:false` and suite 41
+hold it off, and it is changed there first.
+
+**He can undo it, and nothing is destroyed.** A sanction by rule covers the
+day (rule 9) and debits the year like any other, so the Collector can **set a
+sanction aside** — by rule or his own — from the application in his app, with
+remarks that travel to the officer. `decideOneLeave_` takes CANCELLED on an
+APPROVED application from him: the row stays and turns CANCELLED, which
+`clUsed_` never counts, so the days return and the day stops answering for
+the officer; the remarks and `Audit` keep what it was and whose hand passed
+it. **The whole spell returns** — a spell partly availed is apportioned by his
+office, and the sheet says so rather than guessing. The officer's own
+withdrawal path is untouched. A second setting aside finds nothing standing
+(rule 8).
+
+**The screens name the hand everywhere.** The app's pill reads *Sanctioned
+by rule* and *Set aside by the Collector*, never *Withdrawn* for a setting
+aside; the console's Leave screen counts *by rule* against *by your hand* on
+the Sanctioned tile, pills each row, and says in words under Awaiting your
+orders what waits there and why. The apply button no longer says *Send to the
+Collector*, because mostly it does not. Suite 08 was changed deliberately —
+where the Collector's hand is tested it is tested on applications for days
+already gone — and suite 41 holds the rule itself; `tests/render-leave.js`
+drives the real app through the three screens and asserts what went on the
+wire.

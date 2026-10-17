@@ -1,6 +1,9 @@
-/* Leave. One application per spell, retries keep working, the Collector
-   alone sanctions, the balance is checked server-side, and an applicant
-   sees his own file and nobody else's. */
+/* Leave. One application per spell, retries keep working, the balance is
+   checked server-side, and an applicant sees his own file and nobody else's.
+   Since 17.10.2026 an application within the rules and beginning today or
+   later is SANCTIONED BY RULE the moment it is written; the Collector's own
+   hand is tested here on applications for days already gone, which still
+   wait for him. Suite 41 holds the rule itself. */
 'use strict';
 const mock = require('../gasmock.js');
 
@@ -21,7 +24,9 @@ module.exports = {
 
     const r1 = env.post({ kind: 'leave', token: a, leave: { id: 'L1', from: '2026-08-20', to: '2026-08-21', days: 2, type: 'CL', reason: 'family function' } });
     t.eq(r1.ok, true, 'a fresh application is taken');
-    t.eq(r1.status, 'PENDING', 'and waits on the Collector');
+    t.eq(r1.status, 'APPROVED', 'within the rules and beginning after today, it is sanctioned by rule at once');
+    t.eq(r1.auto, true, 'and the answer says the rule passed it');
+    t.contains(r1.decidedBy, 'By rule', 'with the rule named as the hand');
 
     /* Rule 5 — the same id again is a retry and must keep working */
     const r1again = env.post({ kind: 'leave', token: a, leave: { id: 'L1', from: '2026-08-20', to: '2026-08-21', days: 2, type: 'CL', reason: 'family function' } });
@@ -34,20 +39,26 @@ module.exports = {
     t.eq(dup.ok, false, 'an overlapping application is refused');
     t.eq(dup.duplicate, true, 'flagged as the duplicate it is');
     t.eq(dup.existingId, 'L1', 'and names the spell it collides with');
-    t.contains(dup.error, 'already with the Collector', 'in words the officer can act on');
+    t.contains(dup.error, 'already sanctioned', 'in words the officer can act on');
 
     /* another officer's overlap is not a collision */
     const other = env.post({ kind: 'leave', token: b, leave: { id: 'L2', from: '2026-08-20', to: '2026-08-21', days: 2, type: 'CL' } });
     t.eq(other.ok, true, 'the spell rule is per officer, not per district');
 
-    /* sanction: the Collector alone */
-    const notCdm = env.post({ kind: 'leaveDecision', token: b, id: 'L1', status: 'APPROVED' });
+    /* sanction: the Collector alone — on an application for days already
+       gone, which the rule never passes */
+    const past = env.post({ kind: 'leave', token: a, leave: { id: 'LP', from: '2026-08-10', to: '2026-08-11', days: 2, type: 'EL', reason: 'was away' } });
+    t.eq(past.ok, true, 'leave for days already gone is taken');
+    t.eq(past.status, 'PENDING', 'and waits on the Collector — the rule does not reach back');
+    t.eq(past.held, undefined, 'not because it failed a check: because of the dates');
+    const notCdm = env.post({ kind: 'leaveDecision', token: b, id: 'LP', status: 'APPROVED' });
     t.eq(notCdm.ok, false, 'an MPDO cannot sanction');
-    const ok = env.post({ kind: 'leaveDecision', token: cdm, id: 'L1', status: 'APPROVED', remarks: 'Sanctioned.' });
+    const ok = env.post({ kind: 'leaveDecision', token: cdm, id: 'LP', status: 'APPROVED', remarks: 'Sanctioned.' });
     t.eq(ok.ok, true, 'the Collector sanctions');
     t.eq(ok.status, 'APPROVED', 'and the register turns APPROVED');
+    t.contains(ok.decidedBy, 'COLLECTOR', 'under his own name');
 
-    const twice = env.post({ kind: 'leaveDecision', token: cdm, id: 'L1', status: 'REJECTED' });
+    const twice = env.post({ kind: 'leaveDecision', token: cdm, id: 'LP', status: 'REJECTED' });
     t.eq(twice.ok, false, 'orders once passed cannot be passed again');
     t.contains(twice.error, 'already been passed', 'and the refusal says so');
 
@@ -67,6 +78,8 @@ module.exports = {
     env.post({ kind: 'leaveDecision', token: cdm, id: 'L3', status: 'APPROVED' });
     const r4 = env.post({ kind: 'leave', token: a, leave: { id: 'L4', from: '2026-10-05', to: '2026-10-09', days: 5, type: 'CL' } });
     t.eq(r4.ok, true, 'applying is free — the check falls at sanction');
+    t.eq(r4.status, 'PENDING', 'and one that fails the check is held for the Collector');
+    t.contains(r4.held, 'exceed', 'with the arithmetic that held it');
     const over = env.post({ kind: 'leaveDecision', token: cdm, id: 'L4', status: 'APPROVED' });
     t.eq(over.ok, false, '4 taken + 5 sought > 6: refused');
     t.contains(over.error, 'exceed', 'with the arithmetic shown');
@@ -79,7 +92,7 @@ module.exports = {
     const notMine = env.post({ kind: 'leaveWithdraw', token: b, id: 'L5' });
     t.eq(notMine.ok, false, 'nobody withdraws another officer’s application');
     const wd = env.post({ kind: 'leaveWithdraw', token: a, id: 'L5' });
-    t.eq(wd.status, 'CANCELLED', 'the applicant takes his own back');
+    t.eq(wd.status, 'CANCELLED', 'the applicant takes his own back (sanctioned by rule, not yet begun, so it comes back whole)');
 
     /* a sanctioned spell can be given back — WHOLE, and only BEFORE it begins */
     const wdDecided = env.post({ kind: 'leaveWithdraw', token: a, id: 'L1' });
@@ -97,14 +110,14 @@ module.exports = {
     t.contains(cs.error, 'already begun', 'and only the Collector’s office can rule on it');
 
     /* sent back for correction: neither refused nor sanctioned */
-    env.post({ kind: 'leave', token: a, leave: { id: 'L6', from: '2026-11-10', to: '2026-11-12', days: 3, type: 'EL', reason: 'inspection tour' } });
+    env.post({ kind: 'leave', token: a, leave: { id: 'L6', from: '2026-08-03', to: '2026-08-05', days: 3, type: 'EL', reason: 'inspection tour' } });
     const noRem = env.post({ kind: 'leaveDecision', token: cdm, id: 'L6', status: 'RETURNED' });
     t.eq(noRem.ok, false, 'sending back without remarks says nothing');
     t.contains(noRem.error, 'what needs correcting', 'and is refused in words');
     const back = env.post({ kind: 'leaveDecision', token: cdm, id: 'L6', status: 'RETURNED', remarks: 'Dates clash with the review — shift by a week.' });
     t.eq(back.status, 'RETURNED', 'with remarks, it travels back');
     const fix = env.post({ kind: 'leave', token: a, leave: { id: 'L6', from: '2026-11-17', to: '2026-11-19', days: 3, type: 'EL', reason: 'inspection tour, shifted' } });
-    t.eq(fix.status, 'PENDING', 'the corrected copy goes in under the SAME application and waits again');
+    t.eq(fix.status, 'PENDING', 'the corrected copy goes in under the SAME application and waits again — never by rule, he sent it back');
     const l6Row = env.sheets['Leave'].rows.find(r => String(r[0]) === 'L6');
     t.eq(String(l6Row[lHead2.indexOf('fromDate')]), '2026-11-17', 'with the corrected dates');
     t.eq(String(l6Row[lHead2.indexOf('remarks')]), '', 'the return remarks stand cleared for fresh orders');
@@ -124,6 +137,7 @@ module.exports = {
     /* the Optional Holiday: one NOTIFIED day, the list is law */
     const oh1 = env.post({ kind: 'leave', token: b, leave: { id: 'OH1', from: '2026-09-23', to: '2026-09-23', days: 3, type: 'OH' } });
     t.eq(oh1.ok, true, 'a notified optional date is taken');
+    t.eq(oh1.status, 'APPROVED', 'and sanctioned by rule — the first of the year');
     const ohRow = env.sheets['Leave'].rows.find(r => String(r[0]) === 'OH1');
     const lHead = env.sheets['Leave'].rows[0].map(String);
     t.eq(Number(ohRow[lHead.indexOf('days')]), 1, 'and it is one day whatever the client claimed');
@@ -134,13 +148,12 @@ module.exports = {
     const ohSpan = env.post({ kind: 'leave', token: b, leave: { id: 'OH3', from: '2026-10-19', to: '2026-10-26', days: 8, type: 'OH' } });
     t.contains(ohSpan.error, 'single day', 'an optional holiday cannot span');
     /* the cap falls at sanction, like CL's — the app may ask, the server decides */
-    ['2026-10-19', '2026-10-26', '2026-11-08', '2026-12-24'].forEach((d2, i2) =>
+    const ohm = ['2026-10-19', '2026-10-26', '2026-11-08', '2026-12-24'].map((d2, i2) =>
       env.post({ kind: 'leave', token: b, leave: { id: 'OHm' + i2, from: d2, to: d2, days: 1, type: 'OH' } }));
-    ['OH1', 'OHm0'].forEach(id2 =>
-      t.eq(env.post({ kind: 'leaveDecision', token: cdm, id: id2, status: 'APPROVED' }).ok, true,
-        'the first two optional holidays are sanctioned'));
-    t.eq(env.post({ kind: 'leaveDecision', token: cdm, id: 'OHm1', status: 'APPROVED' }).ok, true,
-      'and the third');
+    t.eq(ohm[0].status, 'APPROVED', 'the second optional holiday is sanctioned by rule');
+    t.eq(ohm[1].status, 'APPROVED', 'and the third');
+    t.eq(ohm[2].status, 'PENDING', 'the fourth is held for the Collector');
+    t.contains(ohm[2].held, 'OH: 3', 'with the cap that held it');
     const ohOver = env.post({ kind: 'leaveDecision', token: cdm, id: 'OHm2', status: 'APPROVED' });
     t.eq(ohOver.ok, false, 'the fourth optional holiday of 2026 is refused');
     t.contains(ohOver.error, 'OH: 3', 'with the arithmetic shown');
@@ -178,9 +191,10 @@ module.exports = {
     t.ok(c.sanctionedSet_('2026-09-23')['9000000012'], 'the day is covered — no notice can arise on it');
 
     /* the whole waiting list in one order — each application still answers
-       its own checks, and a refusal is named, never silent */
-    [['2026-12-07','2026-12-08'], ['2026-12-14','2026-12-15'], ['2026-12-21','2026-12-22']].forEach((p3, i3) =>
-      env.post({ kind: 'leave', token: a, leave: { id: 'LB' + i3, from: p3[0], to: p3[1], days: 2, type: 'CL' } }));
+       its own checks, and a refusal is named, never silent. B's three are
+       for days already gone, so they wait for him; B holds 2 of 6 CL. */
+    [['2026-07-06','2026-07-07'], ['2026-07-13','2026-07-14'], ['2026-07-20','2026-07-21']].forEach((p3, i3) =>
+      env.post({ kind: 'leave', token: b, leave: { id: 'LB' + i3, from: p3[0], to: p3[1], days: 2, type: 'CL' } }));
     const bulkBad = env.post({ kind: 'leaveDecision', token: cdm, ids: ['LB0'], status: 'REJECTED' });
     t.eq(bulkBad.ok, false, 'only sanction passes in bulk');
     t.contains(bulkBad.error, 'their own words', 'refusals and returns are per-case');
@@ -193,7 +207,7 @@ module.exports = {
     const lbHead = env.sheets['Leave'].rows[0].map(String);
     t.eq(String(env.sheets['Leave'].rows.find(r => String(r[0]) === 'LB2')[lbHead.indexOf('status')]), 'PENDING',
       'the refused application stays waiting for the single-order look');
-    t.eq(c.clUsed_('9000000011', 2026), 6, 'the register closes the year’s CL at exactly its entitlement');
+    t.eq(c.clUsed_('9000000012', 2026), 6, 'the register closes the year’s CL at exactly its entitlement');
 
     /* MEDICAL LEAVE — NO YEARLY FIGURE, BUT NOT MORE THAN FIFTEEN DAYS AT A
        TIME (the Collector's order). An illness does not keep to an allowance,
@@ -217,8 +231,8 @@ module.exports = {
     t.contains(ml16.error, 'Collector', 'and the officer told where a longer absence is decided');
     t.eq(env.sheets['Leave'].rows.filter(r => String(r[0]) === 'ML2').length, 0, 'and nothing is written for it');
 
-    t.eq(env.post({ kind: 'leaveDecision', token: cdm, id: 'ML1', status: 'APPROVED' }).ok, true,
-      'the fifteen days sanction — no balance stands in the way');
+    t.eq(ml1.status, 'APPROVED', 'the fifteen days sanction by rule — no balance stands in the way');
+    t.contains(ml1.remarks, '15-day spell', 'and the row says which rule passed it');
 
     /* THE CAP IS ON THE SPELL, NOT ON THE APPLICATION. Fifteen days sanctioned
        and one more beginning the very next morning is sixteen days at a time,
@@ -241,13 +255,13 @@ module.exports = {
        the same year is taken and sanctioned like the first */
     const ml2nd = env.post({ kind: 'leave', token: d, leave: { id: 'ML6', from: '2027-06-01', to: '2027-06-15', days: 15, type: 'ML' } });
     t.eq(ml2nd.ok, true, 'a second fifteen-day spell in the same year is taken');
-    t.eq(env.post({ kind: 'leaveDecision', token: cdm, id: 'ML6', status: 'APPROVED' }).ok, true,
-      'and sanctioned — thirty days of medical leave in a year is not a breach');
+    t.eq(ml2nd.status, 'APPROVED', 'and sanctioned by rule — thirty days of medical leave in a year is not a breach');
 
     /* a spell sent back for correction is not counted against itself */
-    env.post({ kind: 'leave', token: d, leave: { id: 'ML7', from: '2027-09-01', to: '2027-09-10', days: 10, type: 'ML' } });
+    const ml7 = env.post({ kind: 'leave', token: d, leave: { id: 'ML7', from: '2026-08-01', to: '2026-08-10', days: 10, type: 'ML' } });
+    t.eq(ml7.status, 'PENDING', 'medical leave for days already gone waits for the Collector');
     env.post({ kind: 'leaveDecision', token: cdm, id: 'ML7', status: 'RETURNED', remarks: 'Enclose the certificate.' });
-    const mlFix = env.post({ kind: 'leave', token: d, leave: { id: 'ML7', from: '2027-09-01', to: '2027-09-14', days: 14, type: 'ML', cert: 'Govt. Hospital, Jangaon, 31.08.2027' } });
+    const mlFix = env.post({ kind: 'leave', token: d, leave: { id: 'ML7', from: '2026-08-01', to: '2026-08-14', days: 14, type: 'ML', cert: 'Govt. Hospital, Jangaon, 31.07.2026' } });
     t.eq(mlFix.ok, true, 'the corrected copy is measured on its own, not added to the copy it replaces');
 
     /* THE TWIN THAT COULD NEVER BE CLEARED. Before saveLeave_ took the lock, a
@@ -332,7 +346,7 @@ module.exports = {
     const mine = env.get('leave', { token: a });
     t.ok(mine.rows.every(r => r.phone === '9000000011'), 'an applicant sees his file and nobody else’s');
     const theirs = env.get('leave', { token: b });
-    t.eq(theirs.rows.length, 7, 'B sees exactly his own: one CL, five optional-holiday applications, one begun-and-standing EL');
+    t.eq(theirs.rows.length, 10, 'B sees exactly his own: one CL, five optional-holiday applications, one begun-and-standing EL, three past CLs');
     t.ok(theirs.rows.every(r => r.phone === '9000000012'), 'and nobody else’s');
     const allRows = env.get('leave', { token: cdm });
     t.ok(allRows.rows.length >= 5, 'the Collector sees the whole register');
