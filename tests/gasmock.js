@@ -265,7 +265,7 @@ function load(opts){
       getProjectTriggers: () => env.installed.map(name => ({ getHandlerFunction: () => name })),
       deleteTrigger: t => { env.installed = env.installed.filter(n => n !== t.getHandlerFunction()); },
       newTrigger: name => ({
-        timeBased(){ return this; }, everyDays(){ return this; },
+        timeBased(){ return this; }, everyDays(){ return this; }, everyMinutes(){ return this; },
         atHour(){ return this; },
         create(){ env.triggers.push(name); env.installed.push(name); }
       }),

@@ -45,6 +45,7 @@ function feature_health(){
                            scheduleReminders:'the schedule reminder, ~09:00',
                            dailyBackup:'the nightly backup, ~01:00',
                            featureDaily:'the feature modules’ daily round, ~07:00',
+                           leaveStandingOrders: tenant_().autoLeave ? 'leave under the standing order, every five minutes' : '',
                            autoCloseDay:'', issueAbsenceNotices:'', settleAbsenceDebits:'' };
             const have = {};
             ScriptApp.getProjectTriggers().forEach(function(t){

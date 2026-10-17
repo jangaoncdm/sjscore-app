@@ -226,7 +226,10 @@ const A_HEAD = ['id','date','phone','name','role','mandal','markedAt','lat','lng
                    of marking, and how far those readings moved (12.10.2026) */
                 'readings','spread'];
 const L_HEAD = ['id','appliedAt','phone','name','role','mandal','type','fromDate','toDate','days',
-                'reason','address','leaveHq','certificate','status','decidedBy','decidedAt','remarks','receivedAt'];
+                'reason','address','leaveHq','certificate','status','decidedBy','decidedAt','remarks','receivedAt',
+                /* HOLD: a corrected copy the Collector sent back, for his hand; PASSED: sanctioned under the
+                   standing order of 17.10.2026. Never sent to the phone. */
+                'standingOrder'];
 /* Show-cause notices for unmarked attendance. The register continues the
    signed series (54 issued on paper on 07.08.2026), so the running number
    opens at 55 unless NOTICE_SEQ_NEXT says otherwise in Script Properties.
@@ -3933,17 +3936,21 @@ function sendDailyReportNow(){
 function installReportTriggers(){
   ScriptApp.getProjectTriggers().forEach(t => {
     const f = t.getHandlerFunction();
-    if(f === 'villageFilingReminders' || f === 'dailyCollectorReport') ScriptApp.deleteTrigger(t);
+    if(f === 'villageFilingReminders' || f === 'dailyCollectorReport' || f === 'leaveStandingOrders') ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('villageFilingReminders').timeBased().everyDays(1).atHour(10).create();
   ScriptApp.newTrigger('dailyCollectorReport').timeBased().everyDays(1).atHour(19).create();
+  /* leave under the standing order (17.10.2026): every five minutes, on the
+     registers the order names; the function itself answers LEAVE_AUTO_OFF */
+  if(tenant_().autoLeave) ScriptApp.newTrigger('leaveStandingOrders').timeBased().everyMinutes(LEAVE_AUTO_AFTER_MIN).create();
   /* the schedule reminder goes an hour BEFORE the mandal-wide one, because it
      is the one that stands the other down for the officers it reaches */
   installScheduleTrigger();
   Logger.log('Report triggers installed (Asia/Calcutta):\n' +
     '  scheduleReminders      ~09:00 — every working day, to an officer behind his own schedule.\n' +
     '  villageFilingReminders ~10:00 — from the ' + FILING_REMIND_FROM + 'th, every working day.\n' +
-    '  dailyCollectorReport   ~19:00 — one structured mail, once a day, guarded against double sends.');
+    '  dailyCollectorReport   ~19:00 — one structured mail, once a day, guarded against double sends.' +
+    (tenant_().autoLeave ? '\n  leaveStandingOrders    every ' + LEAVE_AUTO_AFTER_MIN + ' minutes — leave within the rules, passed under the standing order of 17.10.2026.' : ''));
 }
 
 /* ================== THE BACKUP · 29.08.2026 ==================================
@@ -4292,8 +4299,9 @@ function doGet(e){
        question is settled by reading, not by reasoning. It reveals nothing:
        these are endpoint names, every one of which re-checks the caller. */
     return json_({ ok:true, stamp:'SJGP-6.9-diag13', tenant:tenant_().key, tenantName:tenant_().name,
-      /* whether leave within the rules is sanctioned by the register itself (17.10.2026) */
+      /* whether leave within the rules is passed under the standing order (17.10.2026), and after how long */
       autoLeave:(function(){ try{ return leaveAutoRule_().on; }catch(err){ return null; } })(),
+      autoLeaveAfterMin:LEAVE_AUTO_AFTER_MIN,
       /* READ OFF THE RUNNING CODE, NOT TYPED HERE. A list written by hand
          says what the author believed; it proved exactly nothing when the
          question was whether the deployed build carried an endpoint, because
@@ -4608,6 +4616,7 @@ function doGet(e){
        Vratham 2026 it showed ninety sanctioned officers as not marked.
        The notice engine always consulted the Leave register; the console
        now does the same. */
+    try{ leaveStandingOrders_(); }catch(err){}          /* orders due under the standing order, first */
     const lsh = sheet_('Leave', L_HEAD), lm = headMap_(lsh, L_HEAD);
     const lv = lsh.getDataRange().getValues();
     const d14 = [];
@@ -4818,6 +4827,9 @@ function doGet(e){
 
   if(p.op === 'leave'){
     if(!canApplyLeave_(u.role) && !canApproveLeave_(u.role)) return json_({ ok:true, rows:[] });
+    /* orders due under the standing order are passed before the file is read,
+       so a phone asking five minutes after it applied reads the order */
+    try{ leaveStandingOrders_(); }catch(err){}
     const sh = sheet_('Leave', L_HEAD);
     const data = sh.getDataRange().getValues();
     if(data.length < 2) return json_({ ok:true, rows:[] });
@@ -5907,7 +5919,7 @@ function wxFetch_(points){
     '&longitude=' + points.map(p => p.lng).join(',') +
     '&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m' +
     '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max' +
-    '&timezone=Asia%2FKolkata&forecast_days=3';
+    '&timezone=Asia%2FKolkata&forecast_days=3&past_days=14';     /* the fortnight behind, for the officer's own row */
   const res = UrlFetchApp.fetch(url, { muteHttpExceptions:true });
   const body = res.getContentText();
   let j;
@@ -5931,7 +5943,11 @@ function wxRead_(){
   const rows = points.map((p, i) => {
     const w = raw[i] || raw[0] || {};
     const cur = w.current || {}, day = w.daily || {};
-    const at = a => (Array.isArray(a) ? a[0] : undefined);
+    /* with past days in the answer, today is no longer the first entry — it
+       is found by its date, and an answer with no dates is read as before */
+    const td = today_(), time = Array.isArray(day.time) ? day.time.map(String) : [];
+    let ti = time.indexOf(td); if(ti < 0) ti = 0;
+    const at = a => (Array.isArray(a) ? a[ti] : undefined);
     const d = {
       mandal: p.mandal, lat: p.lat, lng: p.lng, located: p.located,
       temp: cur.temperature_2m, humidity: cur.relative_humidity_2m,
@@ -5941,6 +5957,10 @@ function wxRead_(){
       rain: at(day.precipitation_sum), rainChance: at(day.precipitation_probability_max),
       wind: at(day.wind_speed_10m_max), dayCode: at(day.weather_code)
     };
+    /* the fortnight behind and today, day by day: temperature and rain */
+    d.days = time.map((dt, k) => ({ date:dt, tmax:(day.temperature_2m_max || [])[k], tmin:(day.temperature_2m_min || [])[k],
+                                     rain:(day.precipitation_sum || [])[k], code:(day.weather_code || [])[k] }))
+                 .filter(x => x.date && x.date <= td && x.tmax != null);
     d.rainClass = wxRainClass_(d.rain);
     d.level = wxLevel_({ code: d.dayCode != null ? d.dayCode : d.code, rain: d.rain, wind: d.wind, tmax: d.tmax });
     d.today = wxText_(d.dayCode);
@@ -7880,43 +7900,141 @@ function mlRun_(sh, m, phone, from, to, skipId){
 }
 
 /* ============================================================================
- * SANCTIONED BY RULE · ordered 17.10.2026
+ * LEAVE UNDER THE STANDING ORDER · ordered 17.10.2026
  * ----------------------------------------------------------------------------
  * "In the leave section auto approve if it is in the limit of user — it goes
  * to the Collector, but auto approved. All leaves starting today, within
- * rule." Every application used to wait on the Collector's hand, and the
- * balance was checked only when that hand moved. The checks are the same
- * checks and they still run on the server (rule 6); what changed is WHEN the
- * order is passed. An application that passes them all is sanctioned the
- * moment it is written, the row names the rule as the hand that passed it,
- * and the Collector reads it under Sanctioned rather than under Awaiting.
+ * rule." And the same afternoon: "do not write sanctioned by rule or
+ * whatever — let them feel it like the process before, and approve after
+ * five minutes of the request; do not give any additional info."
  *
- * WHAT STILL WAITS FOR HIM, each for a reason:
- *   - anything that fails a check. Exceeding the year's casual leave means
- *     loss of pay, and that is his to pass, not a table's; the application
- *     is written and left PENDING with the arithmetic, as it always was.
- *   - leave for days already gone. An officer with unmarked mornings could
- *     otherwise turn them into leave by himself and cure his own notice.
- *     "Starting today" is the order's own line: from >= today sanctions.
+ * So the officer's side is exactly what it was. He applies, the toast says
+ * "Sent to the Collector", the row reads Pending. Five minutes after the
+ * district RECEIVED it (receivedAt — the district's clock, rule 1), the
+ * register passes the order itself: the row turns APPROVED under the
+ * Collector's own name, as his hand reads, with no remarks and no word about
+ * a rule. The checks did not move and still run on the server (rule 6) —
+ * decideOneLeave_ is the one place a sanction is passed, and the pass goes
+ * through it like any order of his.
+ *
+ * WHAT STILL WAITS FOR HIM, each for a reason, and in silence — the officer
+ * is told nothing he was not told before:
+ *   - anything that fails a check (the year's balance, the three optional
+ *     holidays, the medical spell). Exceeding the year means loss of pay,
+ *     and that is his to pass, not a table's. It stays PENDING, as it did.
+ *   - leave for days already gone — gone on the day it was received. An
+ *     officer with unmarked mornings could otherwise turn them into leave
+ *     by himself and cure his own notice. "Starting today" is the order's
+ *     own line.
  *   - a corrected copy of an application he sent back. He engaged with it
- *     and it comes back to him.
- * THE DISTRICT HRMS IS NOT IN THE ORDER: every application there comes to
- * him, as directed on 08.10.2026. The tenant carries the switch.
+ *     and it comes back to him; the row carries HOLD in standingOrder.
+ *   - a row with no receivedAt, which is an application older than the
+ *     column; and any application one of whose twin rows is already decided,
+ *     which is settleLeaveTwins' business and not this pass's.
  *
- * NOTHING IS DESTROYED AND HE CAN UNDO IT. A sanction passed by rule is a
- * sanction: it covers the day (rule 9) and debits the year. So the Collector
- * can SET IT ASIDE — decideOneLeave_ takes CANCELLED on an APPROVED
- * application from him, with remarks, and the row keeps what it was. The
+ * WHEN THE PASS RUNS. A time-based trigger (leaveStandingOrders, every five
+ * minutes, installed by installReportTriggers) is the clockwork; and the
+ * same pass runs at the head of op=leave and of the console payload, under
+ * a short cache guard, so an officer whose phone asks after five minutes
+ * reads the order even on a register whose triggers were never installed.
+ * Both paths are the one function, under the script lock, and a second run
+ * finds nothing to do (rule 8).
+ *
+ * THE RECORD SAYS WHOSE ORDER IT WAS. The row carries the Collector's name
+ * because the order is his — passed under his standing order of this date
+ * — but a file must be producible afterwards (rule 7), so the row also
+ * carries PASSED in the standingOrder column and Audit records every
+ * application the pass sanctioned, with the moment and the spell. Neither
+ * reaches the officer's phone: op=leave names its fields.
+ *
+ * THE DISTRICT HRMS IS NOT IN THE ORDER: every application there comes to
+ * him, as directed on 08.10.2026. The tenant carries the switch, and the
  * script property LEAVE_AUTO_OFF stands the whole thing down in a minute
  * with no deploy, as FENCE_OFF does the fence.
+ *
+ * NOTHING IS DESTROYED AND HE CAN UNDO IT. The Collector can SET A SANCTION
+ * ASIDE — decideOneLeave_ takes CANCELLED on an APPROVED application from
+ * him, with remarks that travel to the officer, and the row keeps what it
+ * was. The days return and the day stops answering for the officer.
  * ========================================================================== */
-var LEAVE_RULE_BY = 'By rule · within entitlement';
+var LEAVE_AUTO_AFTER_MIN = 5;
 function leaveAutoRule_(){
   var on = !!tenant_().autoLeave;
   try{
     if(String(PropertiesService.getScriptProperties().getProperty('LEAVE_AUTO_OFF') || '').trim()) on = false;
   }catch(e){}
-  return { on:on };
+  return { on:on, afterMin:LEAVE_AUTO_AFTER_MIN };
+}
+/* whose name the order carries: the register's own Collector, off the roll */
+function collectorHand_(){
+  try{
+    const t = uidx_(), v = t.sh.getDataRange().getValues();
+    for(let i = 1; i < v.length; i++){
+      if(cell_(v[i], t.ix.role).toUpperCase() !== 'COLLECTOR') continue;
+      if(t.ix.active >= 0 && String(v[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
+      return { name: cell_(v[i], t.ix.name) || 'Collector', role:'COLLECTOR', phone: phone10_(v[i][t.ix.phone]) };
+    }
+  }catch(err){}
+  return { name:'Collector', role:'COLLECTOR', phone:'' };
+}
+/* the pass. opts.force skips the cache guard and waits for the lock — the
+   trigger; the lazy callers take neither more than a moment. */
+function leaveStandingOrders_(opts){
+  opts = opts || {};
+  const rule = leaveAutoRule_();
+  if(!rule.on) return { ok:true, on:false, passed:0 };
+  let cache = null; try{ cache = CacheService.getScriptCache(); }catch(e){}
+  if(!opts.force && cache){ try{ if(cache.get('lsoRan')) return { ok:true, on:true, passed:0, skipped:'recent' }; }catch(e){} }
+  const lock = LockService.getScriptLock();
+  if(!lock.tryLock(opts.force ? 30000 : 4000)) return { ok:true, on:true, passed:0, skipped:'busy' };
+  try{
+    if(cache){ try{ cache.put('lsoRan', '1', 40); }catch(e){} }
+    const sh = sheet_('Leave', L_HEAD);
+    const m = headMap_(sh, L_HEAD);
+    const all = sh.getDataRange().getValues();
+    if(all.length < 2) return { ok:true, on:true, passed:0 };
+    const now = Date.now(), wait = LEAVE_AUTO_AFTER_MIN * 60000;
+    /* the APPLICATION, not the row: ripe when its first receipt is old enough */
+    const apps = {}, order = [];
+    for(let i = 1; i < all.length; i++){
+      const id = String(all[i][m.ix.id] || '').trim(); if(!id) continue;
+      if(!apps[id]){ apps[id] = { pending:false, decided:false, hold:false, recv:'', from:'', to:'', type:'', days:0 }; order.push(id); }
+      const a = apps[id];
+      const st = String(all[i][m.ix.status] || 'PENDING');
+      if(st === 'PENDING') a.pending = true; else a.decided = true;
+      if(m.ix.standingOrder >= 0 && String(all[i][m.ix.standingOrder] || '').toUpperCase() === 'HOLD') a.hold = true;
+      const rc = String(all[i][m.ix.receivedAt] || '').trim();
+      if(rc && (!a.recv || rc < a.recv)) a.recv = rc;
+      a.from = dateText_(all[i][m.ix.fromDate]); a.to = dateText_(all[i][m.ix.toDate]);
+      a.type = String(all[i][m.ix.type] || ''); a.days = Number(all[i][m.ix.days]) || 0;
+    }
+    const hand = collectorHand_();
+    let passed = 0, left = 0; const ids = [];
+    order.forEach(id => {
+      const a = apps[id];
+      if(!a.pending || a.decided || a.hold || !a.recv) return;
+      const t = Date.parse(a.recv);
+      if(!(t > 0) || now - t < wait) return;
+      /* "starting today" — today being the day the district received it */
+      const recvDay = Utilities.formatDate(new Date(t), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      if(!a.from || a.from < recvDay) return;
+      const r = decideOneLeave_(id, 'APPROVED', '', hand);
+      if(!r.ok){ left++; return; }
+      passed++; ids.push(id);
+      if(m.ix.standingOrder >= 0)
+        leaveRows_(sh, m, id).forEach(h => sh.getRange(h.at, m.ix.standingOrder + 1).setValue('PASSED'));
+      leaveAudit_('leaveStandingOrder', id, a.type + ' ' + a.from + ' to ' + a.to + ' (' + a.days + ' days), received ' + a.recv +
+        '; passed ' + LEAVE_AUTO_AFTER_MIN + ' minutes after receipt under the standing order of 17.10.2026',
+        hand.name + ' (' + hand.role + ')');
+    });
+    return { ok:true, on:true, passed:passed, left:left, ids:ids };
+  } finally { lock.releaseLock(); }
+}
+/* the trigger's handler — every five minutes, installed by installReportTriggers */
+function leaveStandingOrders(){
+  const r = leaveStandingOrders_({ force:true });
+  if(r.passed) Logger.log('Leave under the standing order: ' + r.passed + ' passed · ' + r.ids.join(', '));
+  return r;
 }
 function leaveAudit_(action, subject, detail, by){
   try{
@@ -8020,23 +8138,16 @@ function saveLeave_(b, u){
   put('leaveHq', l.hq === true || String(l.hq) === 'true' ? 'true' : 'false');
   put('certificate', String(l.cert || '').slice(0, 300));
   if(!found || resubmit){ put('status', 'PENDING'); put('decidedBy', ''); put('decidedAt', ''); put('remarks', ''); }
+  if(!found || resubmit) put('standingOrder', resubmit ? 'HOLD' : '');
   put('receivedAt', new Date().toISOString());
 
   if(found) sh.getRange(found.at, 1, 1, m.width).setValues([row]);
   else sh.appendRow(row);
 
-  /* SANCTIONED BY RULE, under the same lock the row was written under, so a
-     retry racing its original cannot pass the order twice. The same checks
-     the Collector's own order runs, in decideOneLeave_, and nothing else:
-     what fails them is left PENDING for him with the reason, which is what
-     "it goes to the Collector" means. Not for days already gone, and not
-     for a corrected copy he sent back. */
-  if(leaveAutoRule_().on && !resubmit && from >= today_()){
-    const r = decideOneLeave_(l.id, 'APPROVED', '', u, LEAVE_RULE_BY);
-    if(r.ok) return json_({ ok:true, id:l.id, status:'APPROVED', auto:true,
-                            decidedBy:r.decidedBy, decidedAt:r.decidedAt, remarks:r.remarks });
-    return json_({ ok:true, id:l.id, status:'PENDING', held:r.error });
-  }
+  /* it waits, as it always did. Five minutes from receivedAt the standing
+     order reaches it — see leaveStandingOrders_ — and the answer here says
+     nothing about that, because the officer is not to be told anything he
+     was not told before. */
   return json_({ ok:true, id:l.id, status:'PENDING' });
   } finally { lock.releaseLock(); }
 }
@@ -8051,7 +8162,7 @@ function decideLeave_(b, u){
   /* a sanction set aside carries its reason: it travels to the officer and
      stands on the register against an order already passed */
   if(want === 'CANCELLED' && !String(b.remarks || '').trim())
-    return json_({ ok:false, error:'Say why it is set aside — the remarks travel to the officer and stand on the register.' });
+    return json_({ ok:false, error:'Remarks are required to cancel a sanction.' });
 
   /* THE WHOLE WAITING LIST IN ONE ORDER — sanction alone: a refusal or a
      return carries its own words per case and is never passed in bulk.
@@ -8079,16 +8190,17 @@ function decideLeave_(b, u){
 }
 /* one application, one order — the checks live here so a bulk sanction
    obeys exactly the same law as a single one */
-function decideOneLeave_(id, want, remarks, u, byText){
+function decideOneLeave_(id, want, remarks, u){
   const sh = sheet_('Leave', L_HEAD);
   const m = headMap_(sh, L_HEAD);
   /* the APPLICATION, which may be more than one row — see leaveRows_ */
   const hits = leaveRows_(sh, m, id);
   if(!hits.length) return { ok:false, error:'That application is not on the district record yet.' };
   const found = hits[0];
-  /* who passes it: the Collector by name, or the rule by name — never a
-     blank, because an order with no hand on it cannot be read afterwards */
-  const hand = byText || (u.name + ' (' + u.role + ')');
+  /* who passes it: the caller by name — the Collector's own hand, or the
+     standing order in his name (collectorHand_) — never a blank, because an
+     order with no hand on it cannot be read afterwards */
+  const hand = u.name + ' (' + u.role + ')';
 
   /* IT IS WAITING IF ANY ROW OF IT IS WAITING. Reading only the first row is
      what left a sanctioned application sitting in the console for ever: the
@@ -8106,14 +8218,15 @@ function decideOneLeave_(id, want, remarks, u, byText){
        a spell partly availed is for the Collector's office to apportion by
        hand, and the register says so rather than guessing. */
     const standing = hits.filter(h => String(h.row[m.ix.status] || '') === 'APPROVED');
-    if(want === 'CANCELLED' && standing.length && !byText){
+    if(want === 'CANCELLED' && standing.length){
       if(!String(remarks || '').trim())
-        return { ok:false, error:'Say why it is set aside — the remarks travel to the officer and stand on the register.' };
+        return { ok:false, error:'Remarks are required to cancel a sanction.' };
       const wasBy = String(found.row[m.ix.decidedBy] || ''), wasAt = String(found.row[m.ix.decidedAt] || '');
       const when2 = new Date().toISOString();
-      const by2 = u.name + ' (' + u.role + ') · set aside';
-      const note2 = ('Set aside by the Collector: ' + String(remarks || '').trim() +
-        (wasBy ? ' (sanctioned ' + (wasAt ? dmy_(wasAt.slice(0, 10)) + ' ' : '') + 'by ' + wasBy + ')' : '')).slice(0, 1000);
+      /* the officer reads the Collector's words and nothing else; what the
+         sanction was, and whose, goes to Audit below */
+      const by2 = u.name + ' (' + u.role + ') · cancelled';
+      const note2 = ('Cancelled by the Collector: ' + String(remarks || '').trim()).slice(0, 1000);
       hits.forEach(h => {
         sh.getRange(h.at, m.ix.status + 1).setValue('CANCELLED');
         sh.getRange(h.at, m.ix.decidedBy + 1).setValue(by2);
@@ -8156,15 +8269,6 @@ function decideOneLeave_(id, want, remarks, u, byText){
       if(used + want_ > ent)
         return { ok:false, error:'That would exceed the year\'s ' + type + ': ' + ent +
           ' for ' + yr + ', ' + used + ' already sanctioned, ' + want_ + ' now sought.' };
-    }
-    /* an order passed by rule carries its arithmetic, so the officer and the
-       Collector both read on the row WHY it passed without asking anybody */
-    if(byText){
-      note = 'Sanctioned by rule, within entitlement: ' +
-        (ent > 0 ? type + ' ' + (used + want_) + ' of ' + ent + ' for ' + yr + ' after this spell'
-         : type === 'ML' ? 'medical leave of ' + want_ + ' days, within the ' + ML_MAX_SPELL + '-day spell'
-         : type === 'HQ' ? 'permission to leave headquarters' : type) +
-        '. The Collector may set it aside.';
     }
   }
   const when = new Date().toISOString();

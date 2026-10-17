@@ -4085,29 +4085,22 @@ function atcExport(){
 function vLeave(j,A){
   const lp=j.leave.pending, lr=j.leave.recent.filter(r=>r.status!=='PENDING');
   const sanctioned=lr.filter(r=>r.status==='APPROVED');
-  /* SANCTIONED BY RULE (17.10.2026): the register passes the order itself
-     when an application is within the rules and begins today or later; the
-     console names the hand on every row, so what he passed and what the
-     rule passed are never read as one thing */
-  const byRule=sanctioned.filter(r=>/by rule/i.test(r.decidedBy||'')).length;
-  const setAside=lr.filter(r=>r.status==='CANCELLED'&&/set aside/i.test(r.decidedBy||'')).length;
   const oldestH=lp.length?Math.max(...lp.map(l=>(Date.now()-new Date(l.appliedAt).getTime())/36e5)):0;
   let h='<div class="kpirow">';
   h+=kpi('Awaiting orders',IC.c,lp.length,'','on your desk');
   h+=kpi('Oldest wait',IC.c,lp.length?Math.round(oldestH)+'h':'—','','apply-to-order');
-  h+=kpi('Sanctioned',IC.c,sanctioned.length,'',byRule?byRule+' by rule \u00b7 '+(sanctioned.length-byRule)+' by your hand':'recent record');
+  h+=kpi('Sanctioned',IC.c,sanctioned.length,'','recent record');
   h+=kpi('Days sanctioned',IC.c,sanctioned.reduce((s,r)=>s+(r.days||0),0),'','recent record');
   h+=kpi('Refused / withdrawn',IC.c,lr.length-sanctioned.length,'','recent record');
   h+='</div>';
   const row=r=>{const st=r.status==='PENDING'?'<span class="pill warn">waiting</span>'
-    :r.status==='APPROVED'?(/by rule/i.test(r.decidedBy||'')?'<span class="pill ok">sanctioned \u00b7 by rule</span>':'<span class="pill ok">sanctioned</span>')
+    :r.status==='APPROVED'?'<span class="pill ok">sanctioned</span>'
     :r.status==='REJECTED'?'<span class="pill bad">refused</span>'
-    :/set aside/i.test(r.decidedBy||'')?'<span class="pill bad">set aside</span>':'<span class="pill mut">withdrawn</span>';
+    :/set aside|cancelled/i.test(r.decidedBy||'')?'<span class="pill bad">cancelled</span>':'<span class="pill mut">withdrawn</span>';
     return `<tr><td>${esc(r.name)}<span class="mut"> · ${esc(r.mandal)}</span></td><td class="num">${esc(r.type)}</td><td class="num">${r.days}</td><td class="num mut">${esc(dm(r.from))}</td><td>${st}</td></tr>`;};
   h+=panel('c6','Awaiting your orders',lp.length+' application'+(lp.length===1?'':'s'),
     `<div class="twrap"><table><thead><tr><th>Officer</th><th>Kind</th><th>Days</th><th>From</th><th>Status</th></tr></thead><tbody>`+
-    (lp.length?lp.map(row).join(''):'<tr><td colspan="5" class="empty">Nothing waiting.</td></tr>')+`</tbody></table></div>
-    <p class="note">Leave within the rules and beginning today or later is sanctioned by the register the moment it is applied for, and is read under Recent orders as <b>by rule</b>. What waits here failed a check — the year\u2019s balance, the optional-holiday cap, the medical spell — or is for days already gone, or is a corrected copy you sent back. A sanction, by rule or by your hand, is set aside from the app with your reasons; nothing is struck off.${setAside?' Set aside so far: '+setAside+'.':''}</p>`,'lp');
+    (lp.length?lp.map(row).join(''):'<tr><td colspan="5" class="empty">Nothing waiting.</td></tr>')+`</tbody></table></div>`,'lp');
   h+=panel('c6','Recent orders',lr.length+' on record',
     `<div class="twrap"><table><thead><tr><th>Officer</th><th>Kind</th><th>Days</th><th>From</th><th>Status</th></tr></thead><tbody>`+
     (lr.length?lr.slice(0,60).map(row).join(''):'<tr><td colspan="5" class="empty">No orders yet.</td></tr>')+`</tbody></table></div>`,'lr');

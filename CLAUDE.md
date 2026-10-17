@@ -2369,54 +2369,110 @@ simply absent when the district cannot answer. Suite 40 holds the server
 half, including that the District HRMS, which keeps no attendance, refuses
 it by name.
 
-## Leave sanctioned by rule
+## Leave under the standing order
 
 **Ordered 17.10.2026**, in these words: *"In the leave section auto approve if
 it is in the limit of user — it goes to the Collector, but auto approved. All
-leaves starting today, within rule."* On the **sanitation and Gram Palana
-registers** an application that passes every check the sanction already ran
-— the year's balance, the three optional holidays, the fifteen-day medical
-spell, no overlap — and **begins today or later** is APPROVED the moment it
-is written. The checks did not move and they still run on the server (rule
-6); what moved is *when* the order is passed. The row carries
-`By rule · within entitlement` as the hand and the arithmetic that passed it
-in the remarks, so the officer, the console and the Audit all read *why*
-without asking anybody. `TENANTS[k].autoLeave` is the switch per register;
-the script property `LEAVE_AUTO_OFF` stands it down with no deploy, as
-`FENCE_OFF` does the fence, and `op=diag` says whether it is in force.
+leaves starting today, within rule."* And the same afternoon, after the first
+cut was shown: *"do not write sanctioned by rule or whatever — let them feel
+it like the process before, and approve after five minutes of the request; do
+not give any additional info."*
 
-**What still waits for the Collector, and why each does.** Anything that
-*fails* a check is written and left PENDING with the reason (`held` in the
-answer): exceeding the year's casual leave means loss of pay, and that is his
-to pass and not a table's. **Leave for days already gone** waits, whatever the
-balance: an officer with unmarked mornings could otherwise turn them into
-leave by himself and cure his own notice. *"Starting today"* is the order's
-own line, so `from >= today` sanctions and yesterday does not. And a
-**corrected copy he sent back** comes back to him — he engaged with it.
+**So the officer's side is exactly what it was.** He applies, the toast says
+*Sent to the Collector*, the row reads Pending. **Five minutes after the
+district received it** (`receivedAt`, the district's clock, rule 1) the
+register passes the order itself: the row turns APPROVED under the
+**Collector's own name**, as his hand reads, with **no remarks**, and the
+app's pill reads *Sanctioned* as it always did. The checks did not move and
+still run on the server (rule 6): `decideOneLeave_` is the one place a
+sanction is passed and the pass goes through it like any order of his, with
+`collectorHand_()` — the register's own Collector, off the roll — as the
+hand. Nothing in the answer to the application, in `op=leave` or on any
+screen names a rule; suite 41 and `tests/render-leave.js` assert the words
+are absent.
+
+**The record still says whose order it was** (rule 7). The row carries
+`PASSED` in the `standingOrder` column (appended to `L_HEAD`, never
+sent to the phone — `op=leave` names its fields) and `Audit` records every
+application the pass sanctioned, with the moment and the spell. A file can be
+produced that tells the Collector's own hand from the standing order; the
+officer is simply not shown the difference, which is what was ordered.
+
+**When the pass runs.** `leaveStandingOrders()` is a time-based trigger
+every five minutes (`LEAVE_AUTO_AFTER_MIN`), installed by
+`installReportTriggers()` — so the Collector presses *Install the district's
+daily jobs* once on the Admin screen — on the registers the order names. And
+the same pass, `leaveStandingOrders_()`, runs at the head of `op=leave` and
+of the console payload under a forty-second cache guard, so an officer whose
+phone asks five minutes after it applied reads the order even on a register
+whose triggers were never installed. The app asks once, five and a half
+minutes after it sent an application, for that reason. Both paths are one
+function under the script lock, and a second run finds nothing to do (rule 8).
+
+**What still waits for the Collector, and in silence** — the officer is told
+nothing he was not told before. Anything that *fails* a check (the year's
+balance, the three optional holidays of 2026, the medical spell) stays
+PENDING with no reason written where he would read it: exceeding the year
+means loss of pay, and that is the Collector's to pass. **Leave for days
+already gone** waits, gone on the day it was *received* — an application made
+at 23:58 for that day is still today's at 00:04 — because an officer with
+unmarked mornings could otherwise turn them into leave by himself and cure his
+own notice. A **corrected copy he sent back** carries `HOLD` and comes back to
+him. An application with no `receivedAt` is older than the column and is
+his; one with a twin row already decided is `settleLeaveTwins`' business.
 
 **The District HRMS is not in the order.** Every application there comes to
-the Collector, as directed on 08.10.2026; `autoLeave:false` and suite 41
-hold it off, and it is changed there first.
+the Collector, as directed on 08.10.2026; `autoLeave:false`, no trigger is
+installed there, and suite 41 is where it is changed first. The script
+property `LEAVE_AUTO_OFF` stands the whole thing down with no deploy, as
+`FENCE_OFF` does the fence; `op=diag` says whether it is in force and after
+how many minutes.
 
-**He can undo it, and nothing is destroyed.** A sanction by rule covers the
-day (rule 9) and debits the year like any other, so the Collector can **set a
-sanction aside** — by rule or his own — from the application in his app, with
-remarks that travel to the officer. `decideOneLeave_` takes CANCELLED on an
-APPROVED application from him: the row stays and turns CANCELLED, which
-`clUsed_` never counts, so the days return and the day stops answering for
-the officer; the remarks and `Audit` keep what it was and whose hand passed
-it. **The whole spell returns** — a spell partly availed is apportioned by his
-office, and the sheet says so rather than guessing. The officer's own
-withdrawal path is untouched. A second setting aside finds nothing standing
-(rule 8).
+**He can undo it, and nothing is destroyed.** From the application in his
+app the Collector can **cancel a sanction** — the standing order's or his
+own — with remarks that travel to the officer. `decideOneLeave_` takes
+CANCELLED on an APPROVED application from him: the row stays and turns
+CANCELLED, which `clUsed_` never counts, so the days return and the day
+stops answering for the officer; the remarks and `Audit` keep what it was and
+whose hand passed it. The app's pill reads *Cancelled by the Collector*, never
+*Withdrawn*. The officer's own withdrawal path is untouched. A second
+cancellation finds nothing standing (rule 8).
 
-**The screens name the hand everywhere.** The app's pill reads *Sanctioned
-by rule* and *Set aside by the Collector*, never *Withdrawn* for a setting
-aside; the console's Leave screen counts *by rule* against *by your hand* on
-the Sanctioned tile, pills each row, and says in words under Awaiting your
-orders what waits there and why. The apply button no longer says *Send to the
-Collector*, because mostly it does not. Suite 08 was changed deliberately —
-where the Collector's hand is tested it is tested on applications for days
-already gone — and suite 41 holds the rule itself; `tests/render-leave.js`
-drives the real app through the three screens and asserts what went on the
-wire.
+**The descriptive lines came off the app the same afternoon** (*"from app
+remove all descriptive information"*): the hints under the camera and the
+photographs, the notes under the leave buttons, the explanatory sub-lines
+under the More menu rows, the legend and the note under the fortnight card,
+the reading of the IMD band, the sentence on the sign-in brand. What remains
+is names, figures, states and actions. The sentences the render passes assert
+on the Today card were kept, because they are the record and not a
+description of it.
+
+## Two more rows under the fortnight
+
+**Asked 17.10.2026: a location heat map and a weather heat map under the
+attendance one.** Under the fourteen attendance tiles the card now carries
+**how far from his place of duty each mark was made**, in kilometres, and
+**the day's maximum temperature** over his mandal.
+
+The distance is the fence's own arithmetic: `FeatureMyDays.gs` measures the
+mark that counted for the day (the earliest, as the ladder reads it) against
+the **nearest of his own places of duty** through `dutyPoints_` — alias,
+transliteration, mandal office and all — and sends `km`, `acc` and
+`place`; a mark still queued on the phone is measured on the phone off
+`DB.duty`, the same points. Green within a kilometre, green tint within the
+fence (`fenceKm` rides on the answer, five on the sanitation register), amber
+to fifteen, red beyond; an officer the district has not placed sees the fix's
+**precision** in metres instead, on the same four bands. **It decides
+nothing** (rule 10): the figure is drawn for the man it concerns and nothing
+reads it but him.
+
+The temperature comes off the hourly weather read: `wxFetch_` asks
+Open-Meteo for `past_days=14` as well, `wxRead_` finds today by its **date**
+in the daily arrays rather than taking the first entry — with past days in
+the answer the first entry is a fortnight ago — and every mandal row carries
+`days`, which `op=weather` hands the officer under `mine`. The ramp is five
+tokens, `--t0…--t4`, cool to hot, one order, dark ink on the first three;
+it is the app's and not the console's validated series. Suite 40 holds the
+server half of the distance; `tests/render-days.js` asserts both rows, the
+amber tile for the mark seven kilometres out, the queued mark measured off
+the phone, and that no legend and no note stand under any of it.

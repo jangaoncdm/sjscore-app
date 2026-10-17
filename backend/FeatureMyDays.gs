@@ -80,7 +80,7 @@ function myDays_(phone, role, today){
   try{ hs = holidaySet_(); }catch(e){}
 
   /* ---- the officer's marks, off the tail of the register ---- */
-  var marks = {}, leave = {}, outs = {};
+  var marks = {}, leave = {}, outs = {}, fix = {};
   try{
     var sh = sheet_('Attendance', A_HEAD), m = headMap_(sh, A_HEAD);
     var last = sh.getLastRow(), cols = sh.getLastColumn();
@@ -96,7 +96,11 @@ function myDays_(phone, role, today){
         if(st === 'LEAVE'){ leave[dk] = String(v[i][m.ix.leaveType] || '') || 'leave'; continue; }
         var eff = effMarkAt_(String(v[i][m.ix.markedAt] || ''), String(v[i][m.ix.receivedAt] || ''));
         /* one officer one day: the EARLIEST reading is the mark that counts */
-        if(!marks[dk] || (eff && eff < marks[dk])) marks[dk] = eff || marks[dk] || '';
+        if(!marks[dk] || (eff && eff < marks[dk])){
+          marks[dk] = eff || marks[dk] || '';
+          /* the fix that came with the mark that counts: where, and how precise */
+          fix[dk] = { lat:Number(v[i][m.ix.lat]) || 0, lng:Number(v[i][m.ix.lng]) || 0, acc:Number(v[i][m.ix.accuracy]) || 0 };
+        }
         if(ixOut >= 0 && String(v[i][ixOut] || '')) outs[dk] = true;
       }
     }
@@ -119,6 +123,19 @@ function myDays_(phone, role, today){
     }
   }catch(e){}
 
+  /* ---- his place of duty, to measure each mark against (asked 17.10.2026:
+     a location row under the fortnight). The same points the fence reads,
+     through dutyPoints_ — alias, transliteration, mandal office and all —
+     and the nearest of his own offices, as fenceCheck_ measures. A district
+     officer holds no one place and gets the fix's precision alone. Nothing
+     here decides anything: the figure is shown to the man it concerns. ---- */
+  var pts = [], fenceKm = 0;
+  try{
+    var uo = findByPhone_(phone);
+    if(uo && !districtRole_(uo.role)) pts = dutyPoints_(uo) || [];
+  }catch(e){ pts = []; }
+  try{ var fr = fenceRule_(); fenceKm = fr.off ? 0 : (Number(fr.km) || 0); }catch(e){}
+
   /* ---- the fortnight, oldest first ---- */
   var days = [], T = { working:0, marked:0, late:0, leaveDays:0, notMarked:0 };
   for(var t = t0; t <= t1; t += 86400000){
@@ -128,6 +145,18 @@ function myDays_(phone, role, today){
     var h = at ? mydaysHour_(at) : null;
     var late = !!(at && h != null && h >= CUTOFF_HOUR);
     var day = { date:dk2, off:off, marked:!!at, at:at, late:late, out:!!outs[dk2], leave:leave[dk2] || '' };
+    var fx = fix[dk2];
+    if(fx){
+      if(fx.acc > 0) day.acc = Math.round(fx.acc);
+      if(fx.lat && fx.lng && pts.length){
+        var best = null;
+        pts.forEach(function(p){
+          var dd = distKm_(fx.lat, fx.lng, p.lat, p.lng);
+          if(dd != null && (best === null || dd < best.km)) best = { km:dd, place:p.name };
+        });
+        if(best){ day.km = best.km; day.place = best.place; }
+      }
+    }
     days.push(day);
     if(day.leave){ T.leaveDays++; continue; }
     if(off) continue;
@@ -136,7 +165,7 @@ function myDays_(phone, role, today){
     /* today is a running day and is never counted as unmarked */
     else if(!exempt && dk2 < today) T.notMarked++;
   }
-  return { ok:true, today:today, from:from, to:today, cutoff:CUTOFF_HOUR, exempt:exempt,
+  return { ok:true, today:today, from:from, to:today, cutoff:CUTOFF_HOUR, exempt:exempt, fenceKm:fenceKm, placed:pts.length > 0,
            days:days, totals:T, at:new Date().toISOString(), sanction:false,
            note:'What the district holds for you, day by day. A day on sanctioned leave is leave, not absence; a late mark is never a miss; today is still running.' };
 }

@@ -58,13 +58,15 @@ function answer(opts){
   for(let n = 13; n >= 0; n--){ const d = new Date(); d.setDate(d.getDate() - n); wk.push({ k:key(d), dow:d.getDay(), n }); }
   const weekdays = wk.filter(x => x.dow !== 0 && x.n > 0);
   const hol = weekdays[1] && weekdays[1].k, leave = weekdays[3] && weekdays[3].k,
-        miss = weekdays[5] && weekdays[5].k, late = weekdays[7] && weekdays[7].k;
+        miss = weekdays[5] && weekdays[5].k, late = weekdays[7] && weekdays[7].k, far = weekdays[2] && weekdays[2].k;
   wk.forEach(x => {
     const off = x.dow === 0 ? 'Sunday' : x.k === hol ? 'A general holiday' : '';
     const lv = x.k === leave ? 'CL' : '';
     const marked = !off && !lv && x.k !== miss && x.n > 0 && !opts.exempt ? true : (!off && !lv && x.n > 0 && opts.exempt && x.n % 3 === 0);
     const at = marked ? x.k + 'T' + (x.k === late ? '11:42' : '09:1' + (x.n % 10)) + ':00+05:30' : '';
     const d = { date:x.k, off, marked, at, late: marked && x.k === late, out:false, leave:lv };
+    /* where the mark was made: most at the village office, one 7 km away */
+    if(marked){ d.acc = 8 + x.n; d.km = x.k === far ? 7.2 : +(0.1 * (x.n % 3)).toFixed(1); d.place = 'Konne'; }
     days.push(d);
     if(lv){ T.leaveDays++; return; }
     if(off) return;
@@ -72,8 +74,8 @@ function answer(opts){
     if(marked){ T.marked++; if(d.late) T.late++; }
     else if(!opts.exempt && x.n > 0) T.notMarked++;
   });
-  return { ok:true, today:today(), from:ago(13), to:today(), cutoff:11, exempt:!!opts.exempt, days, totals:T,
-           at:new Date().toISOString(), sanction:false, note:'What the district holds for you.', _miss:miss, _late:late, _leave:leave, _hol:hol };
+  return { ok:true, today:today(), from:ago(13), to:today(), cutoff:11, exempt:!!opts.exempt, fenceKm:5, placed:true, days, totals:T,
+           at:new Date().toISOString(), sanction:false, note:'What the district holds for you.', _miss:miss, _late:late, _leave:leave, _hol:hol, _far:far };
 }
 /* a mark in made today, already with the district, so the gate stays down */
 const markIn = (phone, extra) => {
@@ -83,7 +85,15 @@ const markIn = (phone, extra) => {
 };
 const who = (role, name) => ({ name, role, phone:'9000000014', mandal:'Jangaon', gp:'Konne', gps:['Konne'] });
 const BASE = { url:'https://mock.district/exec', cache:[], master:[], leave:[], prefs:{ sun:0, big:0 }, who:'9000000014',
-               session:{ token:'T1', user: who('PS', 'K. Ramesh') }, out:{} };
+               session:{ token:'T1', user: who('PS', 'K. Ramesh') }, out:{},
+               /* his place of duty, as op=duty leaves it on the phone: a mark still on this phone is measured against it */
+               duty:{ on:true, km:5, acc:1000, which:'gp', why:'', pts:[{ name:'Konne', lat:17.7, lng:79.1 }], at:Date.now() } };
+/* the forecast service's record for his mandal, the fortnight behind and today */
+const WX = (() => {
+  const days = []; for(let n = 13; n >= 0; n--){ const d = new Date(); d.setDate(d.getDate() - n); days.push({ date:key(d), tmax: 27 + (n * 7) % 13, tmin: 21, rain: n % 5 === 0 ? 12 : 0 }); }
+  return { ok:true, at:new Date().toISOString(), date:today(), source:'Open-Meteo', level:'CALM',
+           mine:{ mandal:'Jangaon', level:'CALM', temp:30, tmax:33, tmin:22, rain:0, rainChance:10, wind:12, today:'Clear', days } };
+})();
 const SANCTION = /show.?cause|casual leave|debit|loss of pay|default|notice|disciplin|penalt/i;
 
 (async () => {
@@ -104,6 +114,8 @@ const SANCTION = /show.?cause|casual leave|debit|loss of pay|default|notice|disc
         if(x.kind === 'attendance') return r.abort('failed');            /* a village road: the queued mark stays queued */
         return rep({ ok:true }); }
       if(/op=myDays/.test(q.url())){ asked++; return rep(daysAnswer); }
+      if(/op=weather/.test(q.url())) return rep(WX);
+      if(/op=duty/.test(q.url())) return rep({ ok:true, on:true, km:5, acc:1000, which:'gp', why:'', duty:[{ name:'Konne', lat:17.7, lng:79.1 }] });
       if(/op=out/.test(q.url())) return rep({ ok:true, date:today(), markedIn:true, markedOut:false, outFrom:'', canOut:false, why:'' });
       if(/op=gpdp/.test(q.url())) return rep({ ok:true, year:'2026-27', due:false, mine:null, maxMB:8 });
       return rep({ ok:true, rows:[], gps:[], reminders:[], holidays:{}, mine:null });
@@ -114,8 +126,9 @@ const SANCTION = /show.?cause|casual leave|debit|loss of pay|default|notice|disc
     await p.waitForTimeout(2400);
     const card = await p.evaluate(() => {
       const c = document.getElementById('days'); if(!c) return null;
-      return { text: c.innerText, tiles: [...c.querySelectorAll('.d')].map(b => ({ cls:b.className.replace(/\bd\b|\bnow\b/g,'').trim(), say:b.dataset.say, num:b.querySelector('b').textContent })),
-               now: (c.querySelector('.d.now') || {}).dataset ? c.querySelector('.d.now').dataset.say : '' };
+      const read = sel => [...c.querySelectorAll(sel)].map(b => ({ cls:b.className.replace(/\bd\b|\bnow\b|\bsm\b/g,'').trim(), say:b.dataset.say, num:b.querySelector('b').textContent }));
+      return { text: c.innerText, tiles: read('.grid:not(.sm) .d'), pl: read('.grid.pl .d'), wx: read('.grid.wx .d'),
+               now: (c.querySelector('.grid:not(.sm) .d.now') || {}).dataset ? c.querySelector('.grid:not(.sm) .d.now').dataset.say : '' };
     });
     const home = await p.evaluate(() => (document.getElementById('homeBody') || document.body).innerText);
     const wide = await p.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
@@ -141,7 +154,7 @@ const SANCTION = /show.?cause|casual leave|debit|loss of pay|default|notice|disc
       const by = {}; A.days.forEach((d, i) => { by[d.date] = r.card.tiles[i]; });
       ck(by[A._miss] && by[A._miss].cls === 'miss', 'the working day with no mark is drawn as not marked', JSON.stringify(by[A._miss]));
       ck(by[A._late] && by[A._late].cls === 'late', 'the late mark is drawn as late', JSON.stringify(by[A._late]));
-      ck(/never a miss/i.test(r.card.text), 'and the legend says late is never a miss');
+      ck(!/never a miss|Sunday or holiday|Tap a day|read at/i.test(r.card.text), 'no legend and no note under the tiles — the card carries figures only', r.card.text.slice(-120));
       ck(by[A._leave] && by[A._leave].cls === 'lv', 'sanctioned leave is drawn as leave', JSON.stringify(by[A._leave]));
       ck(by[A._hol] && by[A._hol].cls === 'off' && /general holiday/i.test(by[A._hol].say), 'the holiday is off, by name', JSON.stringify(by[A._hol]));
       const sun = A.days.find(d => d.off === 'Sunday');
@@ -150,7 +163,17 @@ const SANCTION = /show.?cause|casual leave|debit|loss of pay|default|notice|disc
       ck(td.cls === 'ok', 'today, marked on this phone and received, is green', JSON.stringify(td));
       ck(/of \d+ working days marked/.test(r.card.text), 'the headline counts the working days', (r.card.text.match(/.*working days marked/) || [''])[0]);
       ck(/1 not marked/.test(r.card.text), 'and names the one day not marked', (r.card.text.match(/[^\n]*not marked[^\n]*/) || [''])[0]);
-      ck(/Today is still running/i.test(r.card.text), 'and says today is still running');
+      /* the two rows under it (asked 17.10.2026) */
+      ck(r.card.pl.length === 14, 'fourteen tiles of distance from the place of duty', String(r.card.pl.length));
+      ck(/Distance from place of duty/i.test(r.card.text), 'labelled as such');
+      const pl = {}; A.days.forEach((d, i) => { pl[d.date] = r.card.pl[i]; });
+      ck(pl[A._far] && pl[A._far].cls === 'p2' && /7\.2 km from Konne/.test(pl[A._far].say), 'the mark 7 km out is amber and says so', JSON.stringify(pl[A._far]));
+      ck(pl[A._late] && pl[A._late].cls === 'p0', 'a mark at the office is green', JSON.stringify(pl[A._late]));
+      ck(pl[A._miss] && pl[A._miss].cls === 'pn', 'a day with no mark has no distance', JSON.stringify(pl[A._miss]));
+      ck(r.card.wx.length === 14, 'fourteen tiles of temperature', String(r.card.wx.length));
+      ck(/Temperature/i.test(r.card.text), 'labelled as such');
+      ck(r.card.wx.every(t => /^\d+$/.test(t.num)), 'each carrying the day’s maximum, the unit on the label', JSON.stringify(r.card.wx.slice(0, 3)));
+      ck(r.card.wx.some(t => /mm rain/.test(t.say)), 'and the rain where there was any');
       ck(!SANCTION.test(r.card.text), 'not one word of sanction on the card', (r.card.text.match(SANCTION) || ['clean'])[0]);
     }
     ck(!r.wide, 'no sideways scroll at 390px');
@@ -182,6 +205,8 @@ const SANCTION = /show.?cause|casual leave|debit|loss of pay|default|notice|disc
     if(r.card){
       const t = r.card.tiles[A.days.findIndex(d => d.date === y)];
       ck(t && t.cls === 'held', '…and the phone draws its own queued mark as held', JSON.stringify(t));
+      const tp = r.card.pl[13];
+      ck(tp && tp.cls === 'p0' && /0 km from Konne/.test(tp.say), 'and measures that queued mark against his place of duty off the phone’s own points', JSON.stringify(tp));
       ck(/held on this phone/.test(r.card.text), 'the line says so');
       ck(/1 held on this phone/.test(r.card.text) && !/\d+ not marked/.test(r.card.text), 'counted as held, not as a miss', (r.card.text.split('\n')[2] || ''));
     }

@@ -34,7 +34,7 @@ module.exports = {
     const c = env.ctx;
     env.seedUsers();
 
-    env.mkSheet('Leave', L_HEAD, [
+    env.mkSheet('Leave', env.eval('L_HEAD'), [
       /* 1 - sanctioned on the first row, waiting on its twin. This is the one
              the district could see and could not clear. */
       row({ id:'LV-A', name:'Rachakonda Upender', mandal:'Raghunathpalle', type:'CL', days:2,
