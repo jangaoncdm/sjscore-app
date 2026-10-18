@@ -201,6 +201,9 @@ function feature_hrms(){
     tenants: ['HRMS'],
 
     post: {
+      /* the rows that name nobody — see hrmsSetAside_ */
+      hrmsSetAside: function(b, u){ return hrmsSetAside_(b, u); },
+
       /* THE CLAIM IS NOT DECLARED HERE. It happens BEFORE auth_, so it is a
          line in doPost beside login and hrmsClaim_ below does the work;
          declaring it as a module kind as well had the registry refuse the
@@ -243,7 +246,7 @@ function feature_hrms(){
              op=hrmsClaims while the row is still unclaimed, because an office
              loses a printed sheet and a re-paste would mint nothing (rule 8). */
           return json_({ ok:true, dry:false, counts:hrmsCounts_(plans), total:plans.length,
-                         added:done.added, corrected:done.corrected, issued:done.issued });
+                         added:done.added, corrected:done.corrected, setRight:done.setRight || 0, issued:done.issued });
         } finally { lock.releaseLock(); }
       }
     },
@@ -548,19 +551,34 @@ function hrmsPlan_(t, v, r, seen){
     return out;
   }
   const was = cell_(v[mine[0]], t.ix.name);
-  if(!postSameMan_(was, name)){
+  /* A ROW THAT NAMES NOBODY IS NOT SOMEBODY'S ROW. On 18.10.2026 a paste of
+     the Base Format reached the console with its tabs turned to spaces, was
+     read as the officers list, and wrote a thousand rows with a date for a
+     name and the employee id for an office — every one of them as a head of
+     office, because that was the panel's default. Nothing points at such a
+     row: no PIN was ever set on it and no leave was ever applied under it.
+     So the Base Format row carrying its number sets it right IN PLACE, name,
+     office, designation and role, rather than being refused because "that
+     number is on the roll as 30-09-2026". The guard that refuses one number
+     under two NAMES stands for every row that is a person's. */
+  const nobody = hrmsNamesNobody_(t, v, mine[0]);
+  if(nobody) out.replace = true;
+  else if(!postSameMan_(was, name)){
     out.verdict = 'refused';
     out.why = 'that number is on the roll as "' + was + '". One number is one employee: settle which of the two holds it.';
     return out;
   }
   out.row = mine[0] + 1;
+  if(nobody){
+    out.changes.push('a row that named nobody is set right: "' + was + '" → ' + name + ', ' + role + ' of ' + office);
+  }
   /* A HEAD OF OFFICE IS NOT DEMOTED BY HIS OWN OFFICE'S WORKBOOK. The 68
      district officers went on as HOD from the officers list; each appears
      again in his office's Base Format, where every row arrives as EMP. The
      higher standing stays, and the row gains his office and his record. */
   const wasRole = cell_(v[mine[0]], t.ix.role).toUpperCase();
-  if((rank_()[wasRole] || 0) > (rank_()[role] || 0)){ role = wasRole; out.role = role; }
-  if(was !== name) out.changes.push('name "' + was + '" → "' + name + '"');
+  if(!nobody && (rank_()[wasRole] || 0) > (rank_()[role] || 0)){ role = wasRole; out.role = role; }
+  if(!nobody && was !== name) out.changes.push('name "' + was + '" → "' + name + '"');
   if(t.ix.mandal >= 0 && cell_(v[mine[0]], t.ix.mandal) !== office) out.changes.push('office → ' + office);
   if(t.ix.designation >= 0 && desig && cell_(v[mine[0]], t.ix.designation) !== desig) out.changes.push('designation → ' + desig);
   if(t.ix.empid >= 0 && emp && cell_(v[mine[0]], t.ix.empid) !== emp) out.changes.push('employee id → ' + emp);
@@ -596,7 +614,7 @@ function hrmsCounts_(plans){
 
 function hrmsWrite_(t, plans, u){
   const sh = t.sh;
-  let added = 0, corrected = 0;
+  let added = 0, corrected = 0, setRight = 0;
   const fresh = [], issued = [];
   /* the column before the first row is written, or a code would have nowhere
      to go and the office would be handed an establishment it cannot claim */
@@ -650,9 +668,10 @@ function hrmsWrite_(t, plans, u){
       if(t.ix.name >= 0 && p.name) row[t.ix.name] = p.name;
       if(t.ix.role >= 0 && p.role) row[t.ix.role] = p.role;
       if(t.ix.mandal >= 0 && p.office) row[t.ix.mandal] = p.office;
-      if(t.ix.designation >= 0 && p.desig) row[t.ix.designation] = p.desig;
+      if(t.ix.designation >= 0 && (p.desig || p.replace)) row[t.ix.designation] = p.desig;
       if(t.ix.empid >= 0 && p.emp) row[t.ix.empid] = p.emp;
       if(p.base) putBase(row, p.base);
+      if(p.replace) setRight++;
       if(p.issue && ci >= 0){
         p.code = hrmsCode_();
         while(row.length <= ci) row.push('');
@@ -680,9 +699,87 @@ function hrmsWrite_(t, plans, u){
   /* the Audit tab records that codes were ISSUED and to how many — never one
      of them, exactly as it records that a PIN was set and never the PIN */
   admAudit_('HRMS ESTABLISHMENT SEEDED', tenant_().key,
-    added + ' added · ' + corrected + ' corrected · ' + issued.length +
+    added + ' added · ' + corrected + ' corrected' + (setRight ? ' (' + setRight + ' of them rows that named nobody, set right)' : '') + ' · ' + issued.length +
     ' enrolment code(s) issued' + (anyBase ? ' · with the Base Format' : '') + ' · by ' + u.name);
-  return { added:added, corrected:corrected, issued:issued };
+  return { added:added, corrected:corrected, setRight:setRight, issued:issued };
+}
+
+/* ------------------------------------------------- a row that names nobody
+   The tell is in the row itself: an office that is all digits (an employee
+   id written where the office goes) or a name with no letter in it (a date
+   written where the name goes). And nothing points at it: no PIN, and no
+   leave row under its number. Both must hold. */
+function hrmsNamesNobody_(t, v, i){
+  const name = cell_(v[i], t.ix.name), office = t.ix.mandal >= 0 ? cell_(v[i], t.ix.mandal) : '';
+  const desig = t.ix.designation >= 0 ? cell_(v[i], t.ix.designation) : '';
+  /* three tells, any one enough: no letter in the name (a date), an office
+     that is all digits (an employee id), or a designation longer than any
+     post is called (the rest of the row, written into one cell) */
+  const tell = !/[A-Za-z\u0C00-\u0C7F]/.test(name) || /^\d+(\.\d+)?$/.test(office) || desig.length > 120;
+  if(!tell) return false;
+  if(cell_(v[i], t.ix.hash)) return false;
+  return !hrmsHasLeave_(phone10_(v[i][t.ix.phone]));
+}
+var HRMS_LEAVE_PHONES_ = null;
+function hrmsHasLeave_(phone){
+  if(!HRMS_LEAVE_PHONES_){
+    HRMS_LEAVE_PHONES_ = {};
+    const sh = sheet_('Leave', L_HEAD), m = headMap_(sh, L_HEAD), last = sh.getLastRow();
+    if(last >= 2 && m.ix.phone >= 0){
+      const col = sh.getRange(2, m.ix.phone + 1, last - 1, 1).getValues();
+      col.forEach(function(r){ const p = phone10_(r[0]); if(p) HRMS_LEAVE_PHONES_[p] = true; });
+    }
+  }
+  return !!HRMS_LEAVE_PHONES_[phone];
+}
+
+/* THE ROWS THAT NAME NOBODY AND THAT NO PASTE WILL CORRECT — a misread row
+   whose "number" was the first ten digits of a twelve-digit employee id has
+   no Base Format row to set it right — are SET ASIDE under the Collector's
+   hand: marked inactive, the role brought down to EMP, the name prefixed so
+   it can never be read as a person's, the enrolment code spent, the reason
+   on the row and on Audit. Proposed first (dry), written on his word, and a
+   second press finds nothing (rule 8). Nothing is deleted. */
+function hrmsSetAside_(b, u){
+  if(u.role !== 'COLLECTOR') return json_({ ok:false, error:'Rows are set aside by the Collector alone.' });
+  const t = uidx_(), v = t.sh.getDataRange().getValues();
+  const ci = hrmsCodeIx_(t), bix = hrmsBaseIx_(t);
+  const hits = [], hodWithRecord = [];
+  for(let i = 1; i < v.length; i++){
+    if(String(v[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
+    const role = cell_(v[i], t.ix.role).toUpperCase();
+    if(role === 'COLLECTOR') continue;
+    if(hrmsNamesNobody_(t, v, i)) hits.push(i);
+    /* and the ones the paste of 06:53 corrected before this rule existed,
+       which kept the HOD the misread paste gave them: named for the
+       Collector, who alone can say which of them heads an office */
+    else if(role === 'HOD' && bix.balAsOn >= 0 && cell_(v[i], bix.balAsOn) && ci >= 0 && cell_(v[i], ci) && t.ix.empid >= 0 && cell_(v[i], t.ix.empid))
+      hodWithRecord.push({ name:cell_(v[i], t.ix.name), phone:phone10_(v[i][t.ix.phone]), office:cell_(v[i], t.ix.mandal), desig:cell_(v[i], t.ix.designation) });
+  }
+  if(b.dry) return json_({ ok:true, dry:true, found:hits.length, hodWithRecord:hodWithRecord,
+    sample:hits.slice(0, 20).map(function(i){ return { row:i + 1, name:cell_(v[i], t.ix.name), office:cell_(v[i], t.ix.mandal), phone:phone10_(v[i][t.ix.phone]) }; }) });
+  if(!hits.length) return json_({ ok:true, dry:false, setAside:0, hodWithRecord:hodWithRecord });
+  const lock = LockService.getScriptLock();
+  try{ lock.waitLock(30000); }catch(err){ return json_({ ok:false, error:'busy — try again' }); }
+  try{
+    ensureHeaders_(t.sh, HRMS_BASE_HEAD); t.bix = null;
+    const bx = hrmsBaseIx_(t);
+    const all = t.sh.getDataRange().getValues();
+    const w = Math.max.apply(null, all.map(function(r){ return r.length; }));
+    all.forEach(function(r){ while(r.length < w) r.push(''); });
+    hits.forEach(function(i){
+      const r = all[i];
+      r[t.ix.active] = 'FALSE';
+      if(t.ix.role >= 0) r[t.ix.role] = 'EMP';
+      r[t.ix.name] = '(set aside 18.10.2026) ' + String(r[t.ix.name] || '').replace(/^\(set aside[^)]*\)\s*/, '');
+      if(ci >= 0 && ci < r.length) r[ci] = '';
+      if(bx.remarks >= 0) r[bx.remarks] = 'Set aside under the Collector\u2019s hand on ' + today_() + ': written by a misread paste of the Base Format on 18.10.2026 and naming nobody; no PIN was set and no leave applied under it.';
+      if(t.ix.phone >= 0 && /^\d+$/.test(String(r[t.ix.phone]))) r[t.ix.phone] = "'" + r[t.ix.phone];
+    });
+    t.sh.getRange(1, 1, all.length, w).setValues(all);
+    admAudit_('HRMS ROWS SET ASIDE', tenant_().key, hits.length + ' row(s) that named nobody set aside (inactive, EMP, code spent) · by ' + u.name);
+    return json_({ ok:true, dry:false, setAside:hits.length, hodWithRecord:hodWithRecord });
+  } finally { lock.releaseLock(); }
 }
 
 /* ----------------------------------------------------- his record and account

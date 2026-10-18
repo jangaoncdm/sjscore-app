@@ -965,10 +965,23 @@ function findByPhone_(phone){
   }
   if(!rows.length) return null;
 
-  let best = rows[0], hash = '', active = false;
-  rows.forEach(x => {
+  /* AN OFFICER IS NAMED BY HIS ACTIVE ROW. The name, the role and the office
+     he signs in as came from the first row carrying the number, active or
+     not, and then from the highest rank among all of them — so a row set
+     aside (a released posting, or a row a misread paste wrote under a date
+     for a name) went on greeting him and ranking him as long as it stood
+     first. The rows that are live are consulted first; the inactive ones
+     only when there is nothing else, which is how a man off the roll is
+     still found and told so. */
+  const isAct = x => { const a = t.ix.active < 0 ? true : x.v[t.ix.active];
+    return !(a === false || String(a).toUpperCase() === 'FALSE' || a === ''); };
+  const live = rows.filter(isAct), pool = live.length ? live : rows;
+  let best = pool[0], hash = '', active = false;
+  pool.forEach(x => {
     const role = cell_(x.v, t.ix.role).toUpperCase();
     if((rank_()[role] || 0) > (rank_()[cell_(best.v, t.ix.role).toUpperCase()] || 0)) best = x;
+  });
+  rows.forEach(x => {
     if(!hash) hash = cell_(x.v, t.ix.hash);
     const a = t.ix.active < 0 ? true : x.v[t.ix.active];
     if(!(a === false || String(a).toUpperCase() === 'FALSE' || a === '')) active = true;

@@ -206,6 +206,10 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   ck(tA.indexOf('Y. Ravikiran')>=0,'and who is waiting');
 
   /* ---- 4. THE PASTE IS READ, AND READ AT THE TOP LEVEL ---- */
+  /* the officers list goes on as heads of office — chosen, no longer the
+     default: the default is EMP since 18.10.2026, when a thousand employees
+     went on as HOD because nobody touched the select */
+  await page.selectOption('#hrmRole','HOD');
   await page.fill('#hrmTbl',PASTE);
   await page.dispatchEvent('#hrmTbl','change');
   await page.waitForTimeout(500);

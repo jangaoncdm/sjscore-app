@@ -236,5 +236,76 @@ module.exports = {
       t.eq(d2.days['2026-10-19'], 2, 'the answer is remembered, so the Collector opening his home six times an hour reads it once');
       t.eq(d2.at, d.at, 'the same read');
     }
+
+    /* ---- 8. A ROW THAT NAMES NOBODY IS SET RIGHT, AND THE REST ARE SET ASIDE ----
+
+       On 18.10.2026 a paste of the Base Format reached the console with its
+       tabs turned to spaces, was read as the officers list, and wrote a
+       thousand rows with a date for a name, the employee id for an office,
+       the rest of the row for a designation — every one of them as HOD. */
+    {
+      const e = start();
+      /* the roll as the misread paste left it: the code column exists, three
+         shapes of misread row, and one honest row */
+      e.mkSheet('Users', U.concat(['EnrolCode']), [
+        { Phone:'9000000001', Name:'Sandeep Kumar Jha', Role:'COLLECTOR', Mandal:'', Active:'TRUE' },
+        { Phone:'9000000002', Name:'V. Reddy', Role:'HOD', Mandal:'District Officers', Active:'TRUE', Designation:'District Panchayat Officer' },
+        { Phone:'9444400001', Name:'30-09-2026', Role:'HOD', Mandal:'2071534', Active:'TRUE', Designation:'K. Srinivas Rao Male 15-06-1972 Regular Panchayat Raj and Rural Development Superintendent Office of the District Panchayat Officer, Jangaon District Headquarters Non-Gazetted 12-11-1998 01-07-2025 On duty Yes District Panchayat Officer, Jangaon', EnrolCode:'AAAAAA' },
+        { Phone:'9444400002', Name:'M. Anitha', Role:'HOD', Mandal:'Office of the District Panchayat Officer, Jangaon', Active:'TRUE', Designation:'Female 20-04-1977 Regular Panchayat Raj and Rural Development Senior Assistant Office of the District Panchayat Officer, Jangaon District Headquarters Non-Gazetted 01-01-2010 01-01-2010 On duty Yes District Panchayat Officer, Jangaon District Panchayat Officer, Jangaon District Collector 30-09-2026 100 80 3 1 0 2 S. Laxmi', EnrolCode:'BBBBBB' },
+        { Phone:'1012121389', Name:'09-10-2026', Role:'HOD', Mandal:'101212138902', Active:'TRUE', Designation:'V.Vijay Male 09-05-1989 Outsourcing Civil Supplies Acct.', EnrolCode:'CCCCCC' },
+        { Phone:'9444400005', Name:'P. Honest', Role:'EMP', Mandal:'Office of the District Treasury Officer, Jangaon', Active:'TRUE', Designation:'Typist', EmpId:'E5' }
+      ]);
+      /* a head of office whose own workbook row arrives as EMP keeps HOD, as before */
+      t.eq(e.ctx.findByPhone_('9444400001').role, 'HOD', 'before: the misread row stands as HOD');
+      const dry = seed(e, [RAO], true);
+      t.eq(dry.plans[0].verdict, 'correct', 'THE BASE FORMAT ROW CARRYING THAT NUMBER IS NOT REFUSED');
+      t.ok(/named nobody is set right/.test(dry.plans[0].changes.join(' ')), 'and the proposal says what it is doing', dry.plans[0].changes.join(' | '));
+      const r = seed(e, [RAO]);
+      t.eq(r.corrected, 1, 'on Apply the row is corrected in place');
+      t.eq(r.setRight, 1, 'and counted as set right');
+      t.eq(e.sheets['Users'].rows.length, 7, 'NO SECOND ROW for the number');
+      const u = e.ctx.findByPhone_('9444400001');
+      t.eq(u.name, 'K. Srinivas Rao', 'he is named');
+      t.eq(u.role, 'EMP', 'AND HIS ROLE IS THE PASTE\'S, not the HOD the misread paste gave him');
+      t.eq(u.mandal, OFFICE, 'and his office is his office');
+      t.eq(u.desig, 'Superintendent', 'and the row-long designation is gone');
+      t.eq(cellOf(e, '9444400001', 'EnrolCode'), 'AAAAAA', 'the code already printed for his number still opens his row');
+      /* the second shape: a letter name and a real office, but the whole row in the designation */
+      const r2 = seed(e, [Object.assign({}, RAO, { phone:'9444400002', name:'M. Anitha', emp:'E2', desig:'Senior Assistant', gender:'Female' })]);
+      t.eq(r2.setRight, 1, 'a row with the rest of the line written into its designation is set right too');
+      t.eq(e.ctx.findByPhone_('9444400002').role, 'EMP', 'and comes down to EMP');
+      /* a person's row is still a person's row */
+      const no = seed(e, [Object.assign({}, RAO, { phone:'9444400005', name:'Somebody Else', emp:'E9' })], true);
+      t.eq(no.plans[0].verdict, 'refused', 'ONE NUMBER UNDER TWO NAMES IS STILL REFUSED where the row is a person\'s');
+      t.ok(/on the roll as "P. Honest"/.test(no.plans[0].why), 'naming the holder');
+
+      /* the leftover: a "number" that was the first ten digits of an employee id */
+      const d0 = e.post({ kind:'hrmsSetAside', token:tok(e, '9000000001'), dry:true });
+      t.eq(d0.found, 1, 'ONE ROW NAMES NOBODY AND NO PASTE CAN REACH IT');
+      t.eq(d0.sample[0].phone, '1012121389', 'the one with the id for a number');
+      t.eq(e.sheets['Users'].rows.length, 7, 'and the proposal wrote nothing');
+      const emp = e.post({ kind:'hrmsSetAside', token:tok(e, '9444400005'), dry:false });
+      t.eq(emp.ok, false, 'an employee cannot set rows aside');
+      const w = e.post({ kind:'hrmsSetAside', token:tok(e, '9000000001'), dry:false });
+      t.eq(w.setAside, 1, 'the Collector can');
+      t.eq(e.sheets['Users'].rows.length, 7, 'NOTHING IS DELETED (rule 7)');
+      t.eq(cellOf(e, '1012121389', 'Active'), 'FALSE', 'the row is inactive');
+      t.eq(cellOf(e, '1012121389', 'Role'), 'EMP', 'brought down from HOD');
+      t.ok(/^\(set aside 18\.10\.2026\)/.test(cellOf(e, '1012121389', 'Name')), 'and its name can never be read as a person\'s');
+      t.eq(cellOf(e, '1012121389', 'EnrolCode'), '', 'its code is spent');
+      t.ok(/misread paste/.test(cellOf(e, '1012121389', 'HrRemarks')), 'the reason is on the row');
+      t.ok(e.sheets['Audit'].rows.some(r => /ROWS SET ASIDE/.test(String(r[1]))), 'and on Audit');
+      const w2 = e.post({ kind:'hrmsSetAside', token:tok(e, '9000000001'), dry:false });
+      t.eq(w2.setAside, 0, 'a second press finds nothing (rule 8)');
+      t.eq(e.ctx.findByPhone_('9444400005').name, 'P. Honest', 'the honest row is untouched');
+
+      /* AN OFFICER IS NAMED BY HIS ACTIVE ROW: a set-aside row standing first
+         under a number no longer names the man whose live row comes after */
+      e.addRow('Users', { Phone:'1012121389', Name:'V. Vijay', Role:'EMP', Mandal:'Office of the Telangana State Civil Supplies Corporation, Jangaon', Active:'TRUE', EmpId:'101212138902' });
+      const vv = e.ctx.findByPhone_('1012121389');
+      t.eq(vv.name, 'V. Vijay', 'the live row names him');
+      t.eq(vv.role, 'EMP', 'with its role');
+      t.eq(vv.active, true, 'and he is active');
+    }
   }
 };
