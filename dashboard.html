@@ -1741,7 +1741,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = 'f3d8c5a - 18 Oct 12:47';
+const BUILD_STAMP = '3671d31 - 18 Oct 13:03';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -4608,27 +4608,51 @@ const HRMS_CHUNK=250;
 function hrmsSeedPost(rows,dry,after){
   if(ROLLBUSY) return;
   const parts=[]; for(let i=0;i<rows.length;i+=HRMS_CHUNK) parts.push(rows.slice(i,i+HRMS_CHUNK));
-  const merged={ok:true,dry:dry,plans:[],counts:{register:0,correct:0,unchanged:0,refused:0,incomplete:0},total:0,added:0,corrected:0,issued:[]};
+  const merged={ok:true,dry:dry,plans:[],counts:{register:0,correct:0,unchanged:0,refused:0,incomplete:0},total:0,added:0,corrected:0,setRight:0,issued:[]};
   let at=0;
   ROLLBUSY=true;
   const who=(TENANCY[TVIEW]||{}).name||TVIEW, tail=String(ST.url||'').replace(/\/exec$/,'').slice(-10);
   const fail=(msg)=>{ ROLLBUSY=false;
     rollSay(msg+(at?'  —  '+at+' of '+parts.length+' part(s) went before it'+(dry?'':', and THOSE ROWS ARE ON THE REGISTER; pasting again finds them and writes nothing twice'):'')+'  ['+who+' · …'+tail+']',true);
     if(at&&!dry){ after(merged); pullRoll().then(()=>{ if(DATA) render(DATA); }); } };
+  /* A PAGE IS NOT AN ANSWER, AND IT IS NOT A REFUSAL EITHER. On 18.10.2026
+     the first part of a paste came back as Google's own 404 page — the
+     register was still busy with the request before it, which is what an
+     Apps Script web app hands back while an execution runs behind it — and
+     the console read the page as the answer, said "SyntaxError: JSON.parse",
+     and stopped. Pressed again, it queued one more execution behind the
+     first and made the next answer slower still; by the fourth press a plain
+     op=diag took 76 seconds. So the body is read as text and parsed by hand,
+     a page is told from a refusal, and the SAME part is asked for again after
+     a pause — three times — before anything is given up. A part asked twice
+     is written once (rule 8), so the retry costs nothing, and the Collector
+     is not made to press a button that makes it worse. "busy — try again"
+     from the register itself is the same thing said in JSON and is retried
+     the same way. */
+  const WAIT=window.HRMS_RETRY_MS||[20000,45000,90000]; let tries=0;
   const step=()=>{
     if(at>=parts.length){ ROLLBUSY=false; after(merged); pullRoll().then(()=>{ if(DATA) render(DATA); }); return; }
-    rollSay((dry?'Comparing':'Writing')+' part '+(at+1)+' of '+parts.length+' — '+parts[at].length+' row(s)…');
+    rollSay((dry?'Comparing':'Writing')+' part '+(at+1)+' of '+parts.length+' — '+parts[at].length+' row(s)'+(tries?' — attempt '+(tries+1):'')+'…');
+    const again=(why)=>{
+      if(tries>=WAIT.length) return fail('Part '+(at+1)+' did not get through after '+(WAIT.length+1)+' attempts — '+why+'. Leave the register a few minutes and press ONCE; do not press again while a part is going');
+      const ms=WAIT[tries++];
+      rollSay('Part '+(at+1)+' of '+parts.length+': '+why+'. The register is still busy with the request before this one. Waiting '+Math.round(ms/1000)+' s and asking for the same part again — a part asked twice is written once.');
+      setTimeout(step,ms);
+    };
     fetch(ST.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
       body:JSON.stringify({token:ST.token,kind:'hrmsSeed',rows:parts[at],dry:dry})})
-      .then(r=>r.json()).then(j=>{
-        if(!j||j.ok===false) return fail((j&&j.error)||'The district refused it.');
+      .then(r=>r.text().then(txt=>{
+        let j=null; try{ j=JSON.parse(txt); }catch(e){}
+        if(!j) return again('Google answered a page and not the register (HTTP '+r.status+')');
+        if(j.ok===false&&/^busy/i.test(String(j.error||''))) return again('the register said it was busy');
+        if(j.ok===false) return fail(j.error||'The district refused it.');
         (j.plans||[]).forEach(p=>merged.plans.push(p));
         Object.keys(merged.counts).forEach(k=>{ merged.counts[k]+=Number((j.counts||{})[k])||0; });
-        merged.total+=Number(j.total)||0; merged.added+=Number(j.added)||0; merged.corrected+=Number(j.corrected)||0;
+        merged.total+=Number(j.total)||0; merged.added+=Number(j.added)||0; merged.corrected+=Number(j.corrected)||0; merged.setRight+=Number(j.setRight)||0;
         (j.issued||[]).forEach(x=>merged.issued.push(x));
-        at++; step();
-      })
-      .catch(err=>fail('It did not get through: '+err));
+        at++; tries=0; step();
+      }))
+      .catch(err=>again('it did not get through: '+err));
   };
   step();
 }
