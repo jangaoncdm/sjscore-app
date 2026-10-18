@@ -204,32 +204,51 @@ function render(){
 }
 
 /* ---------------------------------------------------------------- sign in */
-function vSignin(){
-  return '<div class="signin">' +
+/* THE ENTRY: a hero on the brand canvas, and a sheet that rises from the
+   foot carrying the form. Every field is a filled pill with a leading mark
+   and a label that floats when the field is in use. */
+var MK = {
+  phone:'<svg class="mk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10 18.5h4"/></svg>',
+  lock:'<svg class="mk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10" width="15" height="11" rx="2.5"/><path d="M8 10V7.5a4 4 0 0 1 8 0V10"/></svg>',
+  id:'<svg class="mk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="12" r="2.2"/><path d="M14 10h4M14 14h4"/></svg>',
+  eye:'<svg class="i s" viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  eyeOff:'<svg class="i s" viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 10.6A3 3 0 0 0 13.4 13.4M9.9 5.1A10.5 10.5 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4M6.2 6.2C3.6 8 2 12 2 12s3.5 7 10 7a9.7 9.7 0 0 0 4-.8"/></svg>',
+  arr:'<svg class="i s arr" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
+};
+function fld(id, label, mk, attrs, eye){
+  return '<div class="fld">' + MK[mk] + '<div class="in"><input id="' + id + '" placeholder=" " ' + attrs + '><label for="' + id + '">' + esc(label) + '</label></div>' +
+    (eye ? '<button class="eye" type="button" data-eye="' + id + '" aria-label="Show">' + MK.eye + '</button>' : '') + '</div>';
+}
+function hero(title, sub, small){
+  return '<div class="canvas hero' + (small ? ' sm' : '') + '"><i class="orb a"></i><i class="orb b"></i><i class="orb c"></i><i class="grain"></i>' +
     '<div class="seal"><img src="icons/icon-192.png" alt="Government of Telangana emblem"></div>' +
-    '<div><p class="eyebrow">Government of Telangana · Jangaon</p>' +
-    '<h1 class="display" style="margin-top:6px">District<br>HRMS</h1></div>' +
-    '<div class="field"><label for="iPhone">Mobile number</label><input id="iPhone" type="tel" inputmode="numeric" autocomplete="username" maxlength="13" placeholder="10 digits"></div>' +
-    '<div class="field"><label for="iPin">PIN</label><input id="iPin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="8" placeholder="Your PIN"></div>' +
-    '<button class="btn filled" id="bSignin" data-act="signin">Sign in</button>' +
+    '<p class="gov">Government of Telangana</p><h1>' + title + '</h1>' + (sub ? '<p>' + esc(sub) + '</p>' : '') + '</div>';
+}
+function vSignin(){
+  return '<div class="entry">' + hero('District<br>HRMS', 'Leave, and the service record it is sanctioned against.') +
+    '<div class="sheetin"><div class="grab"></div>' +
+    '<h2>Sign in</h2><p>With the mobile number your office has on the establishment.</p>' +
+    fld('iPhone', 'Mobile number', 'phone', 'type="tel" inputmode="numeric" autocomplete="username" maxlength="13"') +
+    fld('iPin', 'PIN', 'lock', 'type="password" inputmode="numeric" autocomplete="current-password" maxlength="8"', true) +
+    '<button class="btn filled" id="bSignin" data-act="signin">Sign in ' + MK.arr + '</button>' +
     '<div class="msg" id="mSignin" role="alert"></div>' +
-    '<p class="small">Signing in for the first time? Enter your mobile number and press <b>Sign in</b> — you will be asked to choose your own PIN.</p>' +
+    '<div class="or">first time here</div>' +
+    '<button class="first" data-act="firsttime"><span class="lead pri" style="width:38px;height:38px">' + MK.id + '</span><span><b>Set up your own PIN</b><span>Enter your number and press Sign in \u2014 you will be asked for the code your office gave you.</span></span><span class="chev"></span></button>' +
     '<p class="foot">Your office holds the establishment. If your number is not recognised, ask it to check the number and the employee id it has against your name.</p>' +
-    '</div>';
+    '</div></div>';
 }
 function vClaim(){
-  return '<div class="signin">' +
-    '<div><p class="eyebrow">First sign-in</p><h1 class="title-l" id="claimName" style="margin-top:6px">' + esc(S.claimName || 'Choose your PIN') + '</h1>' +
-    '<p class="body" style="margin-top:6px">Your number is on the district roll and has no PIN yet. Set one now — it is yours and the office never sees it.</p></div>' +
-    '<div class="field"><label for="cEmp">Employee ID or enrolment code</label><input id="cEmp" autocomplete="off" placeholder="From your office" data-focus></div>' +
-    '<p class="small">This is how the register knows the number is yours — your employee id, or the <b>six-character code</b> your office was given for you. It is used once and then it is finished with.</p>' +
-    '<div class="two"><div class="field"><label for="cPin">Choose a PIN</label><input id="cPin" type="password" inputmode="numeric" maxlength="8" placeholder="4 to 8 digits"></div>' +
-    '<div class="field"><label for="cPin2">Type it again</label><input id="cPin2" type="password" inputmode="numeric" maxlength="8" placeholder="Once more"></div></div>' +
-    '<button class="btn filled" id="bClaim" data-act="claim">Set my PIN and sign in</button>' +
-    '<button class="btn outl" id="bClaimBack" data-go="signin">Back</button>' +
+  return '<div class="entry">' + hero('<span id="claimName">' + esc(S.claimName || 'Choose your PIN') + '</span>', 'Your number is on the district roll and has no PIN yet. Set one now \u2014 it is yours and the office never sees it.', true) +
+    '<div class="sheetin"><div class="grab"></div>' +
+    '<h2>First sign-in</h2><p>The register needs one thing only you were given, then a PIN of your choosing.</p>' +
+    fld('cEmp', 'Employee ID or enrolment code', 'id', 'autocomplete="off" data-focus') +
+    '<p class="small" style="margin-top:-6px">Your employee id, or the <b>six-character code</b> your office was given for you. It is used once and then it is finished with.</p>' +
+    '<div class="two">' + fld('cPin', 'Choose a PIN', 'lock', 'type="password" inputmode="numeric" maxlength="8"') + fld('cPin2', 'Type it again', 'lock', 'type="password" inputmode="numeric" maxlength="8"') + '</div>' +
+    '<button class="btn filled" id="bClaim" data-act="claim">Set my PIN and sign in ' + MK.arr + '</button>' +
+    '<button class="btn text" id="bClaimBack" data-go="signin">Back</button>' +
     '<div class="msg" id="mClaim" role="alert"></div>' +
     '<p class="foot">A row is claimed once. If a PIN has already been set on your number and it was not you, your office can have it reset.</p>' +
-    '</div>';
+    '</div></div>';
 }
 function signIn(){
   var b = $('bSignin'), ph = ($('iPhone').value || '').replace(/\D/g, '').slice(-10), pin = ($('iPin').value || '').trim();
@@ -803,6 +822,7 @@ function daySheet(k){
 }
 function act(k, b){
   if(k === 'signin') return signIn();
+  if(k === 'firsttime'){ var p = $('iPhone'); if(p && p.value.replace(/\D/g, '').length === 10) return signIn(); if(p) p.focus(); return say('mSignin', 'info', 'Enter your mobile number above and press Sign in. If the row is yours to claim, the register asks for your code next.'); }
   if(k === 'claim') return claim();
   if(k === 'refresh'){ refresh(); toast('Reading from the district…'); return; }
   if(k === 'signout'){ DB.session = null; DB.rows = []; DB.me = null; DB.pend = []; DB.pendAll = 0; DB.cal = null; DB.account = null; DB.record = null; save(); go('signin'); return; }
@@ -821,6 +841,7 @@ function act(k, b){
 }
 $('screen').addEventListener('click', function(e){
   var b;
+  if((b = e.target.closest('[data-eye]'))){ var inp = $(b.getAttribute('data-eye')); var show = inp.type === 'password'; inp.type = show ? 'text' : 'password'; b.innerHTML = show ? MK.eyeOff : MK.eye; b.setAttribute('aria-label', show ? 'Hide' : 'Show'); inp.focus(); return; }
   if((b = e.target.closest('[data-go]'))) return go(b.getAttribute('data-go'));
   if((b = e.target.closest('[data-detail]'))){ S.detail = findRow(b.getAttribute('data-detail')); return go('detail'); }
   if((b = e.target.closest('[data-order]'))){ S.detail = (DB.pend || []).filter(function(r){ return String(r.id) === b.getAttribute('data-order'); })[0]; return go('order'); }
@@ -861,7 +882,7 @@ $('scrim').addEventListener('click', closeSheet);
   var gone = false;
   var off = function(){ if(gone) return; gone = true; w.classList.add('off'); setTimeout(function(){ w.remove(); }, 400); };
   w.addEventListener('click', off);
-  setTimeout(off, 2600);
+  setTimeout(off, 2800);
 })();
 
 load();

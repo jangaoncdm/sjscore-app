@@ -55,35 +55,112 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .num{font-variant-numeric:tabular-nums}
 .hide{display:none!important}
 
+/* ---------- the brand canvas ----------
+   The one gradient the house allows, indigo to teal, with two soft orbs that
+   drift on transform alone — motion that costs nothing to load and nothing on
+   a weak phone. The welcome is the whole screen of it; the sign-in keeps the
+   top of it as a hero and raises a sheet over the rest. */
+.canvas{position:relative;overflow:hidden;color:#fff;background:linear-gradient(160deg,#4A40CE 0%,#3A4BD6 45%,#0E7C86 100%)}
+.canvas .orb{position:absolute;border-radius:50%;filter:blur(2px);opacity:.55;pointer-events:none;will-change:transform}
+.canvas .orb.a{width:62vmax;height:62vmax;left:-26vmax;top:-30vmax;background:radial-gradient(circle at 35% 35%,rgba(255,255,255,.55),rgba(255,255,255,0) 62%);animation:orb-a 16s ease-in-out infinite alternate}
+.canvas .orb.b{width:54vmax;height:54vmax;right:-24vmax;bottom:-22vmax;background:radial-gradient(circle at 60% 60%,rgba(134,214,222,.7),rgba(134,214,222,0) 64%);animation:orb-b 19s ease-in-out infinite alternate}
+.canvas .orb.c{width:26vmax;height:26vmax;right:8vmax;top:12vmax;background:radial-gradient(circle,rgba(197,191,255,.55),rgba(197,191,255,0) 66%);animation:orb-c 13s ease-in-out infinite alternate}
+.canvas .grain{position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.07) 1px,transparent 1.2px);background-size:22px 22px;opacity:.5;pointer-events:none;mask-image:linear-gradient(to bottom,rgba(0,0,0,.9),rgba(0,0,0,.2))}
+@keyframes orb-a{from{transform:translate(0,0) scale(1)}to{transform:translate(9vmax,6vmax) scale(1.12)}}
+@keyframes orb-b{from{transform:translate(0,0) scale(1)}to{transform:translate(-8vmax,-7vmax) scale(1.08)}}
+@keyframes orb-c{from{transform:translate(0,0)}to{transform:translate(-5vmax,9vmax)}}
+
 /* ---------- welcome ----------
-   In front of sign-in on every opening, for people and not for robots: the seal the app ships as
-   its icon, the one gradient, and CSS motion that needs no signal. It goes by itself after 2.6 s
-   and a tap takes it away at once; a handset that asks for reduced motion sees one frame. It is
-   never shown to a driven browser (navigator.webdriver), so the render passes see the app. */
+   In front of sign-in on every opening, for people and not for robots. It
+   goes by itself after 2.8 s and a tap takes it away at once; it is removed
+   from the document, never hidden, so nothing can sit under it. A driven
+   browser (navigator.webdriver) is never shown it, so the render passes see
+   the app. */
 #welcome{position:fixed;inset:0;z-index:90;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
-  padding:40px 28px 36px;overflow:hidden;color:#fff;cursor:pointer;
-  background:linear-gradient(160deg,#4A40CE 0%,#3A4BD6 45%,#0E7C86 100%);transition:opacity .35s var(--ease)}
-#welcome.off{opacity:0;pointer-events:none}
-#welcome .seal{position:relative;width:132px;height:132px;display:grid;place-items:center}
+  padding:40px 28px 36px;cursor:pointer;transition:opacity .4s var(--ease),transform .4s var(--ease)}
+#welcome.off{opacity:0;transform:scale(1.03);pointer-events:none}
+#welcome .seal{position:relative;width:148px;height:148px;display:grid;place-items:center;z-index:1}
 #welcome .halo{position:absolute;inset:0;border-radius:50%}
-#welcome .halo i{position:absolute;inset:0;border-radius:50%;border:2px solid #fff;opacity:0;animation:w-halo 2200ms ease-out 500ms infinite}
-#welcome .halo i:nth-child(2){animation-delay:1200ms}
-#welcome .emb{width:132px;height:132px;border-radius:50%;background:#fff;padding:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);position:relative;z-index:1;animation:w-emb 900ms cubic-bezier(.2,.9,.3,1.2) both}
+#welcome .halo i{position:absolute;inset:0;border-radius:50%;border:1.5px solid rgba(255,255,255,.9);opacity:0;animation:w-halo 2400ms ease-out 600ms infinite}
+#welcome .halo i:nth-child(2){animation-delay:1400ms}
+#welcome .emb{width:148px;height:148px;border-radius:50%;background:#fff;padding:11px;box-shadow:0 18px 50px rgba(0,0,0,.28),0 0 0 10px rgba(255,255,255,.12);position:relative;z-index:1;animation:w-emb 1000ms cubic-bezier(.2,.9,.3,1.15) both}
 #welcome .emb img{width:100%;height:100%;display:block;border-radius:50%}
-#welcome .gov{margin-top:24px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;opacity:.9;animation:w-rise 600ms ease-out 450ms both}
-#welcome h1{margin:8px 0 0;font-size:36px;font-weight:800;letter-spacing:-.04em;line-height:1.05;color:#fff}
-#welcome h1 span{display:inline-block;animation:w-rise 600ms ease-out both;animation-delay:600ms}
-#welcome h1 span:nth-child(2){animation-delay:720ms}#welcome h1 span:nth-child(3){animation-delay:840ms}#welcome h1 span:nth-child(4){animation-delay:960ms}
-#welcome .sub{margin:12px 0 0;font-size:15px;opacity:.92;max-width:28ch;line-height:1.45;animation:w-rise 600ms ease-out 1100ms both}
-#welcome .foot{position:absolute;left:28px;right:28px;bottom:calc(env(safe-area-inset-bottom) + 50px);font-size:12px;opacity:.75;animation:w-fade 400ms ease-out 1300ms both}
-#welcome .prog{position:absolute;left:28px;right:28px;bottom:calc(env(safe-area-inset-bottom) + 36px);height:3px;border-radius:2px;overflow:hidden;background:rgba(255,255,255,.25);animation:w-fade 400ms ease-out 1100ms both}
-#welcome .prog i{display:block;height:100%;width:100%;background:#fff;transform-origin:left;animation:w-prog 1400ms cubic-bezier(.4,0,.2,1) 1200ms both}
-@keyframes w-emb{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
-@keyframes w-halo{0%{opacity:.55;transform:scale(1)}100%{opacity:0;transform:scale(1.9)}}
-@keyframes w-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+#welcome .gov{position:relative;z-index:1;margin-top:28px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;opacity:.9;animation:w-rise 600ms ease-out 500ms both}
+#welcome h1{position:relative;z-index:1;margin:10px 0 0;font-size:44px;font-weight:800;letter-spacing:-.045em;line-height:1;color:#fff}
+#welcome h1 span{display:inline-block;animation:w-rise 650ms var(--ease) both;animation-delay:650ms}
+#welcome h1 span:nth-child(2){animation-delay:790ms}#welcome h1 span:nth-child(3){animation-delay:930ms}
+#welcome .place{position:relative;z-index:1;margin-top:10px;font-size:16px;font-weight:600;letter-spacing:.01em;opacity:.95;animation:w-rise 600ms ease-out 1050ms both}
+#welcome .place::before,#welcome .place::after{content:"";display:inline-block;width:22px;height:1px;background:rgba(255,255,255,.6);vertical-align:middle;margin:0 10px}
+#welcome .chips{position:relative;z-index:1;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:22px}
+#welcome .chips span{display:inline-flex;align-items:center;height:30px;padding:0 12px;border-radius:15px;font-size:12.5px;font-weight:600;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);backdrop-filter:blur(6px);animation:w-pop 520ms cubic-bezier(.2,.9,.3,1.2) both}
+#welcome .chips span:nth-child(1){animation-delay:1250ms}#welcome .chips span:nth-child(2){animation-delay:1400ms}#welcome .chips span:nth-child(3){animation-delay:1550ms}
+#welcome .foot{position:absolute;left:28px;right:28px;bottom:calc(env(safe-area-inset-bottom) + 58px);font-size:12px;opacity:.78;animation:w-fade 400ms ease-out 1500ms both;z-index:1}
+#welcome .prog{position:absolute;left:28px;right:28px;bottom:calc(env(safe-area-inset-bottom) + 40px);height:3px;border-radius:2px;overflow:hidden;background:rgba(255,255,255,.22);animation:w-fade 400ms ease-out 1200ms both;z-index:1}
+#welcome .prog i{display:block;height:100%;width:100%;background:#fff;transform-origin:left;animation:w-prog 1500ms cubic-bezier(.4,0,.2,1) 1300ms both}
+#welcome .hint{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 16px);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;font-family:var(--mono);opacity:0;animation:w-fade 500ms ease-out 2000ms both;z-index:1}
+@keyframes w-emb{from{opacity:0;transform:scale(.6) translateY(8px)}to{opacity:1;transform:none}}
+@keyframes w-halo{0%{opacity:.6;transform:scale(1)}100%{opacity:0;transform:scale(1.95)}}
+@keyframes w-rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@keyframes w-pop{from{opacity:0;transform:scale(.8) translateY(6px)}to{opacity:1;transform:none}}
 @keyframes w-fade{from{opacity:0}to{opacity:1}}
 @keyframes w-prog{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-@media (prefers-reduced-motion:reduce){ #welcome *{animation-duration:1ms!important;animation-iteration-count:1!important} }
+
+/* ---------- sign in and the claim: a hero and a sheet ----------
+   The canvas holds the top of the screen with the seal and the name; the
+   form rises from the foot on a white sheet, as a phone's own sign-in does.
+   Fields are filled pills with a leading mark and a floating label, 52px
+   tall for a thumb; the PIN can be shown. */
+.entry{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;background:var(--surface)}
+.entry .hero{flex:0 0 auto;min-height:38vh;padding:calc(env(safe-area-inset-top) + 28px) 24px 56px;display:flex;flex-direction:column;justify-content:flex-end}
+.entry .hero .seal{width:64px;height:64px;border-radius:50%;background:#fff;padding:5px;box-shadow:0 10px 28px rgba(0,0,0,.22);animation:w-emb 700ms cubic-bezier(.2,.9,.3,1.15) both;position:relative;z-index:1}
+.entry .hero .seal img{width:100%;height:100%;border-radius:50%;display:block}
+.entry .hero .gov{position:relative;z-index:1;margin-top:18px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;opacity:.9;animation:w-rise 500ms ease-out 150ms both}
+.entry .hero h1{position:relative;z-index:1;margin:6px 0 0;font-size:38px;font-weight:800;letter-spacing:-.04em;line-height:1.02;animation:w-rise 550ms var(--ease) 250ms both}
+.entry .hero p{position:relative;z-index:1;margin:8px 0 0;font-size:14.5px;opacity:.9;max-width:30ch;animation:w-rise 550ms var(--ease) 380ms both}
+.entry .hero.sm{min-height:26vh;padding-bottom:48px}
+.entry .hero.sm h1{font-size:28px}
+.entry .sheetin{flex:1;position:relative;margin-top:-30px;background:var(--surface-bright);border-radius:30px 30px 0 0;box-shadow:0 -14px 40px rgba(16,18,28,.14);padding:22px 24px calc(28px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:14px;animation:sheet-up 560ms var(--ease) both;max-width:560px;width:100%;margin-left:auto;margin-right:auto}
+@media (min-width:600px){.entry .sheetin{border-radius:30px;margin-bottom:28px}}
+@keyframes sheet-up{from{opacity:0;transform:translateY(60px)}to{opacity:1;transform:none}}
+.entry .sheetin>*{animation:w-rise 480ms var(--ease) both}
+.entry .sheetin>:nth-child(2){animation-delay:80ms}.entry .sheetin>:nth-child(3){animation-delay:140ms}.entry .sheetin>:nth-child(4){animation-delay:200ms}.entry .sheetin>:nth-child(5){animation-delay:260ms}.entry .sheetin>:nth-child(6){animation-delay:320ms}.entry .sheetin>:nth-child(7){animation-delay:380ms}
+.entry .grab{width:36px;height:4px;border-radius:2px;background:var(--outline-v);margin:-6px auto 2px}
+.entry h2{margin:0;font-size:24px;font-weight:800;letter-spacing:-.4px}
+.entry h2+p{margin:-6px 0 0;color:var(--on-surface-2);font-size:14.5px;line-height:1.45}
+.fld{position:relative;display:flex;align-items:center;gap:12px;min-height:58px;padding:0 14px 0 16px;border-radius:18px;background:var(--surface-low);border:1.5px solid transparent;transition:border-color .18s,background .18s,box-shadow .18s}
+.fld:focus-within{border-color:var(--primary);background:var(--surface-bright);box-shadow:0 0 0 4px var(--primary-container)}
+.fld .mk{width:22px;height:22px;color:var(--on-surface-3);flex:0 0 auto}
+.fld:focus-within .mk{color:var(--primary)}
+.fld .in{flex:1;min-width:0;position:relative;padding-top:14px}
+.fld label{position:absolute;left:0;top:50%;transform:translateY(-50%);font-size:15.5px;color:var(--on-surface-3);pointer-events:none;transition:all .16s var(--ease);transform-origin:left top}
+.fld input{width:100%;border:0;background:none;font:inherit;font-size:17px;color:var(--on-surface);padding:2px 0 8px;outline:none;letter-spacing:.02em}
+.fld input:focus+label,.fld input:not(:placeholder-shown)+label{top:9px;transform:none;font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--on-surface-3)}
+.fld:focus-within input:focus+label{color:var(--primary)}
+.fld input::placeholder{color:transparent}
+.fld .eye{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:var(--on-surface-3);flex:0 0 auto;margin-right:-6px}
+.fld .eye:active{background:var(--surface-mid)}
+.entry .btn.filled{min-height:54px;font-size:16.5px;box-shadow:0 10px 24px -10px rgba(74,64,206,.65)}
+.entry .btn.filled .arr{transition:transform .18s}
+.entry .btn.filled:active .arr{transform:translateX(3px)}
+.entry .or{display:flex;align-items:center;gap:12px;color:var(--on-surface-3);font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-family:var(--mono)}
+.entry .or::before,.entry .or::after{content:"";flex:1;height:1px;background:var(--outline-v)}
+.entry .first{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:18px;background:var(--secondary-container);color:var(--on-secondary-container);text-align:left}
+.entry .first b{display:block;font-size:14.5px}
+.entry .first span{display:block;font-size:12.5px;opacity:.85;margin-top:1px}
+.entry .first .chev{border-color:currentColor;margin-left:auto}
+.entry .foot{margin-top:auto;padding-top:8px}
+
+/* ---------- motion across the app ----------
+   A screen arrives rather than appears; a sheet rises; a pressed card gives.
+   Transform and opacity only, and one frame under reduced motion. */
+#screen>*{animation:s-in .26s var(--ease) both}
+@keyframes s-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.row,.card[data-go],.bal,.btn,.nav button{transition:transform .14s var(--ease),opacity .14s}
+.row:active,.card[data-go]:active,.bal:active{transform:scale(.985)}
+.btn:active{transform:scale(.97)}
+.nav button:active .pill{transform:scale(.92)}
+.nav button .pill{transition:background .18s,transform .14s var(--ease)}
+@media (prefers-reduced-motion:reduce){ #welcome *,.canvas .orb,.entry .sheetin,.entry .sheetin>*,.entry .hero *,#screen>*{animation-duration:1ms!important;animation-iteration-count:1!important;animation-delay:0ms!important} }
 
 /* ---------- the shell: one page, the tab bar fixed at the foot ---------- */
 #screen{max-width:560px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
@@ -238,9 +315,6 @@ svg.i.s{width:20px;height:20px}
 .kv div{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--outline-v);font-size:14px}
 .kv div:first-child{border-top:0}
 .kv span{color:var(--on-surface-2)}.kv b{font-weight:600;text-align:right;min-width:0;overflow-wrap:anywhere}
-.signin{flex:1;display:flex;flex-direction:column;justify-content:center;padding:28px 24px calc(28px + env(safe-area-inset-bottom));gap:14px;max-width:560px;margin:0 auto;width:100%}
-.signin .seal{width:76px;height:76px;border-radius:50%;background:#fff;padding:5px;box-shadow:var(--shadow)}
-.signin .seal img{width:100%;height:100%;border-radius:50%;display:block}
 .away{display:flex;gap:10px;overflow-x:auto;margin:0 -16px;padding:2px 16px 4px;scrollbar-width:none}
 .away::-webkit-scrollbar{display:none}
 .away .p{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:6px;width:72px;font-size:11px;color:var(--on-surface-2);text-align:center;line-height:1.3}
@@ -252,13 +326,16 @@ svg.i.s{width:20px;height:20px}
 </head>
 <body>
 
-<div id="welcome" hidden aria-hidden="true">
+<div id="welcome" class="canvas" hidden aria-hidden="true">
+  <i class="orb a"></i><i class="orb b"></i><i class="orb c"></i><i class="grain"></i>
   <div class="seal"><div class="halo"><i></i><i></i></div><div class="emb"><img src="icons/icon-192.png" alt=""></div></div>
   <div class="gov">Government of Telangana</div>
-  <h1><span>Jangaon</span> <span>District</span><br><span>HRMS</span></h1>
-  <div class="sub">Leave, and the service record it is sanctioned against.</div>
+  <h1><span>District</span> <span>HRMS</span></h1>
+  <div class="place">Jangaon</div>
+  <div class="chips"><span>Leave</span><span>Service record</span><span>Orders</span></div>
   <div class="foot">Collectorate &middot; Jangaon District</div>
   <div class="prog"><i></i></div>
+  <div class="hint">Tap to continue</div>
 </div>
 
 <main id="screen"></main>

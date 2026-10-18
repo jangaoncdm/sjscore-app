@@ -357,7 +357,10 @@ function serve(noConfig){
   await p2.close(); srv2.close();
 
   /* ---- 11. A TOKEN THE REGISTER WILL NOT TAKE ---- */
-  const p3 = await ctx.newPage(); const errs3 = []; p3.on('pageerror', e => errs3.push(String(e)));
+  /* ITS OWN CONTEXT, so no other page of this pass can write a live session
+     back over the dead one planted below */
+  const ctx3 = await br.newContext({ viewport:{ width:390, height:844 } });
+  const p3 = await ctx3.newPage(); const errs3 = []; p3.on('pageerror', e => errs3.push(String(e)));
   await p3.route('**/hrms.district/**', r => r.fulfill({ status:200, contentType:'application/json', body:JSON.stringify({ ok:false, error:'auth' }) }));
   await p3.goto(base + '/', { waitUntil:'domcontentloaded' });
   await p3.evaluate(() => { localStorage.setItem('sjgp-hrms1', JSON.stringify({ session:{ token:'dead', user:{ name:'K. Srinivas Rao', role:'EMP', phone:'9444400001' } }, rows:[] })); });
@@ -368,21 +371,24 @@ function serve(noConfig){
   const gone = await p3.evaluate(() => (JSON.parse(localStorage.getItem('sjgp-hrms1') || '{}').session));
   ck(gone == null, 'AND THE REJECTED TOKEN IS OFF THE HANDSET', String(gone));
   ck(!errs3.length, 'no script error on a refused token');
-  await p3.close();
+  await ctx3.close();
 
   /* ---- 12. THE WELCOME, asked for by name ---- */
-  const p4 = await ctx.newPage(); const errs4 = []; p4.on('pageerror', e => errs4.push(String(e)));
+  const ctx4 = await br.newContext({ viewport:{ width:390, height:844 }, deviceScaleFactor:2 });   /* a fresh handset: nobody signed in */
+  const p4 = await ctx4.newPage(); const errs4 = []; p4.on('pageerror', e => errs4.push(String(e)));
   await p4.goto(base + '/?welcome=1', { waitUntil:'domcontentloaded' }); await p4.waitForTimeout(300);
   ck(await p4.isVisible('#welcome'), 'asked for by name, the welcome draws');
   const emb = await p4.$eval('#welcome .emb img', i => i.complete && i.naturalWidth > 0).catch(() => false);
   ck(emb, 'and the emblem loaded');
-  ck((await p4.$$('#welcome h1 span')).length === 3, 'the words of the name arrive in turn');
+  ck((await p4.$$('#welcome h1 span')).length === 2 && !!(await p4.$('#welcome .place')) && (await p4.$$('#welcome .chips span')).length === 3, 'the words of the name arrive in turn, then the place and the three things it is for');
+  await p4.waitForTimeout(1500);
+  await p4.screenshot({ path: path.join(OUT, '16b-welcome-landed.png') });
   await p4.screenshot({ path: path.join(OUT, '16-welcome.png') });
-  await p4.waitForTimeout(3300);
+  await p4.waitForTimeout(2200);
   ck(!(await p4.$('#welcome')), 'and by four seconds it is GONE FROM THE DOCUMENT');
   ck(await p4.isVisible('#iPhone'), 'with sign in underneath');
   ck(!errs4.length, 'no script error with the welcome');
-  await p4.close();
+  await ctx4.close();
 
   await br.close(); srv.close();
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed   ·   screenshots in Info/hrms-render/');
