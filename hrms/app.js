@@ -132,8 +132,8 @@ function role(){ return String(((DB.session || {}).user || {}).role || '').toUpp
 function canOrder(){ return role() === 'COLLECTOR'; }
 function isHead(){ return role() === 'HOD'; }
 function sees(){ return canOrder() || isHead(); }                       /* who gets the office calendar */
-function roleWord(){ var u = (DB.session || {}).user || {}; return u.desig || (role() === 'COLLECTOR' ? 'Collector & District Magistrate' : role() === 'HOD' ? 'Head of office' : 'Employee'); }
-function cancelledWord(r){ return /set aside|cancelled/i.test(String(r.decidedBy || '')) ? 'Cancelled by the Collector' : 'Withdrawn'; }
+function roleWord(){ var u = (DB.session || {}).user || {}; return u.desig || (role() === 'COLLECTOR' ? 'District Magistrate' : role() === 'HOD' ? 'Head of office' : 'Employee'); }
+function cancelledWord(r){ return /set aside|cancelled/i.test(String(r.decidedBy || '')) ? 'Cancelled by the District Magistrate' : 'Withdrawn'; }
 
 /* ------------------------------------------------------------------ icons */
 var I = {
@@ -370,7 +370,7 @@ function vHome(){
   var pend = rows.filter(function(r){ var s = statusOf(r); return s === 'PENDING' || s === 'RETURNED'; });
   var h = bar('Home', '', '<button class="ic" data-act="refresh" aria-label="Refresh">' + I.refresh + '</button>' + avatarBtn());
   h += '<div class="scroll tabbed">';
-  h += '<div><p class="eyebrow">' + greet + '</p><h2 class="title-l" style="margin-top:2px">' + esc(first(u.name)) + '</h2><p class="small" style="margin-top:2px">' + esc(roleWord()) + ' · ' + DOW[d.getDay()] + ', ' + dmy(t) + '</p></div>';
+  h += '<div><p class="eyebrow">' + greet + '</p><h2 class="title-l" style="margin-top:2px">' + esc(String(u.name || '').replace(/,.*$/, '')) + '</h2><p class="small" style="margin-top:2px">' + esc(roleWord()) + ' · ' + DOW[d.getDay()] + ', ' + dmy(t) + '</p></div>';
 
   if(canOrder()){
     var n = Math.max(Number(DB.pendAll) || 0, (DB.pend || []).length);
@@ -550,7 +550,7 @@ function vRequest(){
   var line = !q.from ? (q.type === 'OH' ? 'Tap the notified day' : 'Tap the first day') : !q.to ? 'Now the last day' : n + (n === 1 ? ' day' : ' days');
   var sub = '', warn = false;
   if(q.type === 'OH') sub = n ? (a.left ? 'leaves you ' + (a.left - 1) + ' of ' + a.cap : 'none left this year') : 'one notified day at a time';
-  else if(q.type === 'ML') sub = n ? (n <= (a.spell || 15) ? 'inside a spell of ' + (a.spell || 15) : 'over ' + (a.spell || 15) + ' at a time — for the Collector under the leave rules') : 'no yearly figure · ' + (a.spell || 15) + ' a spell';
+  else if(q.type === 'ML') sub = n ? (n <= (a.spell || 15) ? 'inside a spell of ' + (a.spell || 15) : 'over ' + (a.spell || 15) + ' at a time — for the District Magistrate under the leave rules') : 'no yearly figure · ' + (a.spell || 15) + ' a spell';
   else if(q.type === 'HQ') sub = 'a permission, not leave · nothing is debited';
   else if(a.credit) sub = n ? 'leaves ' + (a.left - n) + ' at credit' : a.left + ' at credit';
   else if(a.cap) { if(n && n > a.left){ sub = 'you have ' + a.left + ' left · this asks for ' + (n - a.left) + ' more'; warn = true; } else sub = n ? 'leaves you ' + (a.left - n) + ' of ' + a.cap : a.left + ' left of ' + a.cap; }
@@ -597,7 +597,7 @@ function vRequest2(){
   /* the certificate is asked for only where it is wanted */
   if(k === 'ML') h += '<div class="field"><label for="rCert">Medical certificate</label><input id="rCert" value="' + esc(q.cert) + '" placeholder="Who issued it, and the date"></div>';
   if(k !== 'HQ') h += '<div class="card bright"><div class="sw"><span class="txt"><b>I will be away from headquarters</b><span>Permission to leave headquarters is sought with this leave</span></span><button class="tog" role="switch" aria-checked="' + (q.hq ? 'true' : 'false') + '" data-act="hq" aria-label="Away from headquarters"></button></div></div>';
-  h += '<div class="card"><p class="eyebrow">Goes to</p><div class="steps" style="margin-top:4px"><div class="step"><span class="n">1</span><div><b>The Collector &amp; District Magistrate</b><span>For orders, as every application in the district does</span></div></div></div></div>';
+  h += '<div class="card"><p class="eyebrow">Goes to</p><div class="steps" style="margin-top:4px"><div class="step"><span class="n">1</span><div><b>The District Magistrate</b><span>For orders, as every application in the district does</span></div></div></div></div>';
   h += '<button class="btn filled" id="bSend" data-act="send">Send</button>';
   h += '<div class="msg" id="mApply" role="alert"></div>';
   h += '<p class="foot">Nothing is taken from you until it is sanctioned. You can withdraw it while it waits.</p>';
@@ -625,7 +625,7 @@ function send(){
       if(!r || !r.ok){ if(tokenRefused(r)) return; return say('mApply', 'bad', errText(r)); }
       S.req = null;
       go(S.tab === 'leave' ? 'leave' : 'home');
-      toast('Sent to the Collector.');
+      toast('Sent to the District Magistrate.');
       refresh();
     })
     .catch(function(){ busy(b, false);
@@ -643,10 +643,10 @@ function vDetail(){
   h += '<div class="card ' + (st === 'PENDING' || st === 'RETURNED' ? 'tonal' : 'bright') + '"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><p class="eyebrow">' + esc(KIND_NAME[k] || k) + '</p><h2 class="title-l" style="margin-top:4px">' + esc(span(r.fromDate, r.toDate)) + '</h2><p class="body" style="margin-top:2px;color:inherit;opacity:.8">' + (k === 'HQ' ? 'permission' : n + (n === 1 ? ' day' : ' days')) + (String(r.leaveHq) === 'true' && k !== 'HQ' ? ' · leaving headquarters' : '') + '</p></div>' + statusBadge(r) + '</div></div>';
   var steps = [{ cls:'done', t:'Sent', s:'By you, ' + dmy(r.appliedAt) + (hhmm(r.appliedAt) ? ' at ' + hhmm(r.appliedAt) : '') }];
   var by = String(r.decidedBy || '').replace(/\s*\(.*$/, '').replace(/\s*·.*$/, '');
-  if(st === 'PENDING') steps.push({ cls:'busy', t:'With the Collector', s:'Awaiting orders' });
+  if(st === 'PENDING') steps.push({ cls:'busy', t:'With the District Magistrate', s:'Awaiting orders' });
   else if(st === 'RETURNED') steps.push({ cls:'busy', t:'Returned to you for correction', s:'Apply again with the correction' });
-  else if(st === 'APPROVED') steps.push({ cls:'done', t:'Sanctioned', s:'By the Collector' + (r.decidedAt ? ', ' + dmy(r.decidedAt) : '') });
-  else if(st === 'REJECTED') steps.push({ cls:'bad', t:'Refused', s:'By the Collector' + (r.decidedAt ? ', ' + dmy(r.decidedAt) : '') });
+  else if(st === 'APPROVED') steps.push({ cls:'done', t:'Sanctioned', s:'By the District Magistrate' + (r.decidedAt ? ', ' + dmy(r.decidedAt) : '') });
+  else if(st === 'REJECTED') steps.push({ cls:'bad', t:'Refused', s:'By the District Magistrate' + (r.decidedAt ? ', ' + dmy(r.decidedAt) : '') });
   else if(st === 'CANCELLED') steps.push({ cls:'neu', t:cancelledWord(r), s:(r.decidedAt ? dmy(r.decidedAt) : '') });
   else if(st === 'WITHDRAWN') steps.push({ cls:'neu', t:'Withdrawn', s:'By you' + (r.decidedAt ? ', ' + dmy(r.decidedAt) : '') });
   h += '<div class="card bright"><p class="eyebrow" style="margin-bottom:4px">Journey</p><div class="steps">' + steps.map(function(s){ return '<div class="step ' + s.cls + '"><span class="n">' + (s.cls === 'done' ? I.check : s.cls === 'bad' ? I.x : '') + '</span><div><b>' + esc(s.t) + '</b><span>' + esc(s.s) + '</span></div></div>'; }).join('') + '</div></div>';
@@ -659,7 +659,7 @@ function vDetail(){
 }
 function withdraw(){
   var r = S.detail; if(!r) return;
-  sheet('<h2>Withdraw this request?</h2><p>It comes off the Collector’s desk. Nothing was debited, so nothing is returned.</p><div class="two"><button class="btn outl" data-close="1">Keep it</button><button class="btn filled" data-yes="1">Withdraw</button></div>');
+  sheet('<h2>Withdraw this request?</h2><p>It comes off the District Magistrate’s desk. Nothing was debited, so nothing is returned.</p><div class="two"><button class="btn outl" data-close="1">Keep it</button><button class="btn filled" data-yes="1">Withdraw</button></div>');
   $('sheet').querySelector('[data-yes]').addEventListener('click', function(){
     closeSheet();
     post({ kind:'leaveWithdraw', token:DB.session.token, id:r.id })
@@ -784,7 +784,7 @@ function vMe(){
   if(R.status) kv.push(['Present status', R.status]);
   if(kv.length) h += '<div class="hdr"><span class="eyebrow">Service record</span><span class="small">as your office recorded it</span></div><div class="card bright"><div class="kv">' + kv.map(function(x){ return '<div><span>' + esc(x[0]) + '</span><b>' + esc(x[1]) + '</b></div>'; }).join('') + '</div></div>';
   else if(role() !== 'COLLECTOR') h += '<div class="card"><p class="small">Your office has not yet returned your service record in the Base Format. When it does, it appears here.</p></div>';
-  if(R.ctl || R.authCL || R.authOther) h += '<div class="hdr"><span class="eyebrow">As recorded by your office</span></div><div class="card bright"><div class="kv">' + (R.ctl ? '<div><span>Controlling officer</span><b>' + esc(R.ctl) + '</b></div>' : '') + (R.authCL ? '<div><span>Casual leave authority</span><b>' + esc(R.authCL) + '</b></div>' : '') + (R.authOther ? '<div><span>Other leave authority</span><b>' + esc(R.authOther) + '</b></div>' : '') + '</div><p class="small" style="margin-top:8px">On this register every application comes to the Collector for orders.</p></div>';
+  if(R.ctl || R.authCL || R.authOther) h += '<div class="hdr"><span class="eyebrow">As recorded by your office</span></div><div class="card bright"><div class="kv">' + (R.ctl ? '<div><span>Controlling officer</span><b>' + esc(R.ctl) + '</b></div>' : '') + (R.authCL ? '<div><span>Casual leave authority</span><b>' + esc(R.authCL) + '</b></div>' : '') + (R.authOther ? '<div><span>Other leave authority</span><b>' + esc(R.authOther) + '</b></div>' : '') + '</div><p class="small" style="margin-top:8px">On this register every application comes to the District Magistrate for orders.</p></div>';
   h += '<div class="card bright tight">' +
     '<button class="row" data-act="chpin"><span class="lead">' + I.key + '</span><span class="txt"><b>Change PIN</b></span><span class="chev"></span></button>' +
     '<button class="row" data-act="refresh"><span class="lead">' + I.refresh + '</span><span class="txt"><b>Refresh from the district</b>' + (DB.at ? '<span>last read ' + esc(dmy(DB.at)) + (hhmm(DB.at) ? ' at ' + hhmm(DB.at) : '') + '</span>' : '') + '</span></button>' +

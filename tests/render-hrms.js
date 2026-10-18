@@ -150,7 +150,7 @@ function serve(noConfig){
   await page.fill('#cEmp', '2071534');
   await page.click('#bClaim'); await settle(900);
   ck(await page.isVisible('[data-act="newreq"]'), 'the right one sets his PIN and lands him on Home');
-  ck(/Srinivas Rao/.test(await txt('.title-l')), 'greeted by name', await txt('.title-l'));
+  ck(/^K\. Srinivas Rao$/.test((await txt('.title-l')).trim()), 'GREETED BY HIS WHOLE NAME, not its last two words', await txt('.title-l'));
 
   /* ---- 2. THE RAIL IS THE REGISTER'S ACCOUNT, off the Service Register ---- */
   const rail = await page.$$eval('.rail .bal', els => els.map(e => e.textContent.replace(/\s+/g, ' ').trim()));
@@ -187,7 +187,7 @@ function serve(noConfig){
   await page.click('[data-act="hq"]');
   await shot('3b-details');
   await page.click('[data-act="send"]'); await settle(900);
-  ck(/Sent to the Collector/.test(await txt('#toast')), 'SENT TO THE COLLECTOR, and nothing else is said', await txt('#toast'));
+  ck(/Sent to the District Magistrate/.test(await txt('#toast')), 'SENT TO THE DISTRICT MAGISTRATE, and nothing else is said', await txt('#toast'));
   ck(sent.length === 1 && sent[0].type === 'CL' && sent[0].from === '2026-10-27' && sent[0].to === '2026-10-28' && sent[0].days === 2 && sent[0].hq === true,
      'what went on the wire is what he picked', JSON.stringify(sent[0]));
   const lv = E.sheets['Leave'].rows.slice(1).filter(r => String(r[2]) === "'9444400001" || String(r[2]) === '9444400001');
@@ -243,7 +243,7 @@ function serve(noConfig){
   ck(/Opening balances/.test(await txt('#screen')) && /S\. Laxmi/.test(await txt('#screen')), 'the opening balances name who verified them');
   await shot('5-leave');
   await page.click('[data-detail]'); await settle(300);
-  ck(/With the Collector/.test(await txt('.steps')) && /Awaiting orders/.test(await txt('.steps')), 'the request’s journey stands with the Collector');
+  ck(/With the District Magistrate/.test(await txt('.steps')) && /Awaiting orders/.test(await txt('.steps')), 'the request’s journey stands with the District Magistrate');
   ck(await page.isVisible('[data-act="withdraw"]'), 'and he may withdraw it while it waits');
   await shot('6-request');
   await page.click('[data-go="leave"]'); await settle(300);
