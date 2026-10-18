@@ -36,6 +36,28 @@ var DB = { url:SERVER, session:null, me:null, rows:[], account:null, record:null
 /* what the screen is doing — never saved, never the register's */
 var S = { screen:'signin', tab:'home', req:null, calM:0, calY:0, hmM:0, hmY:0, hmScope:'office', detail:null, myM:null, busy:false };
 
+/* INSTALLING IT BESIDE THE OTHER TWO. Chrome offers to install a page only
+   when no installed app already claims its address: the sanitation app at
+   the root of this site claimed everything beneath it, so a phone carrying
+   SJGP was offered "open in SJGP" here and never "install". Its scope is its
+   one page now (manifest.webmanifest at the root, 18.10.2026). The prompt
+   Chrome then fires is kept and offered as a row of this app's own, and an
+   iPhone, which fires none, is told the two taps. */
+var STANDALONE = window.navigator.standalone === true || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+var IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+var INSTALL_EVT = null;
+window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); INSTALL_EVT = e; if(/^(home|me)$/.test(S.screen)) render(); });
+window.addEventListener('appinstalled', function(){ INSTALL_EVT = null; if(/^(home|me)$/.test(S.screen)) render(); });
+function canInstall(){ return !STANDALONE && (!!INSTALL_EVT || IOS); }
+function installRow(){
+  if(!canInstall()) return '';
+  return '<button class="row" data-act="install"><span class="lead pri">' + I.plus + '</span><span class="txt"><b>Add to Home Screen</b><span>Opens like an app, with no address bar</span></span><span class="chev"></span></button>';
+}
+function install(){
+  if(INSTALL_EVT){ var ev = INSTALL_EVT; INSTALL_EVT = null; ev.prompt(); ev.userChoice.then(function(){ render(); }).catch(function(){}); return; }
+  if(IOS) sheet('<h2>Add to Home Screen</h2><p>In Safari, tap the Share button at the foot of the screen, then <b>Add to Home Screen</b>, then <b>Add</b>. The app opens from your home screen like any other.</p><button class="btn text" data-close="1">Close</button>');
+}
+
 /* ------------------------------------------------------------------ store */
 function load(){
   try{ DB = Object.assign(DB, JSON.parse(localStorage.getItem(STORE) || 'null') || {}); }catch(e){}
@@ -398,6 +420,7 @@ function vHome(){
   } else if(!rows.length){
     h += '<div class="card"><p class="body">No application yet. Your leave, when you apply for it, is listed here and under Leave.</p></div>';
   }
+  if(canInstall()) h += '<div class="card bright tight">' + installRow() + '</div>';
   h += '<p class="foot">This register records leave and nothing else. It takes no attendance.</p>';
   h += '</div>';
   return h;
@@ -785,7 +808,7 @@ function vMe(){
   if(kv.length) h += '<div class="hdr"><span class="eyebrow">Service record</span><span class="small">as your office recorded it</span></div><div class="card bright"><div class="kv">' + kv.map(function(x){ return '<div><span>' + esc(x[0]) + '</span><b>' + esc(x[1]) + '</b></div>'; }).join('') + '</div></div>';
   else if(role() !== 'COLLECTOR') h += '<div class="card"><p class="small">Your office has not yet returned your service record in the Base Format. When it does, it appears here.</p></div>';
   if(R.ctl || R.authCL || R.authOther) h += '<div class="hdr"><span class="eyebrow">As recorded by your office</span></div><div class="card bright"><div class="kv">' + (R.ctl ? '<div><span>Controlling officer</span><b>' + esc(R.ctl) + '</b></div>' : '') + (R.authCL ? '<div><span>Casual leave authority</span><b>' + esc(R.authCL) + '</b></div>' : '') + (R.authOther ? '<div><span>Other leave authority</span><b>' + esc(R.authOther) + '</b></div>' : '') + '</div><p class="small" style="margin-top:8px">On this register every application comes to the District Magistrate for orders.</p></div>';
-  h += '<div class="card bright tight">' +
+  h += '<div class="card bright tight">' + installRow() +
     '<button class="row" data-act="chpin"><span class="lead">' + I.key + '</span><span class="txt"><b>Change PIN</b></span><span class="chev"></span></button>' +
     '<button class="row" data-act="refresh"><span class="lead">' + I.refresh + '</span><span class="txt"><b>Refresh from the district</b>' + (DB.at ? '<span>last read ' + esc(dmy(DB.at)) + (hhmm(DB.at) ? ' at ' + hhmm(DB.at) : '') + '</span>' : '') + '</span></button>' +
     '<button class="row" data-act="signout"><span class="lead">' + I.out + '</span><span class="txt"><b>Sign out</b></span></button></div>';
@@ -838,6 +861,7 @@ function act(k, b){
   }
   if(k === 'all') return orderAll();
   if(k === 'chpin') return chpin();
+  if(k === 'install') return install();
 }
 $('screen').addEventListener('click', function(e){
   var b;

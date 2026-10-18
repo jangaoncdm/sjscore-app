@@ -2557,3 +2557,13 @@ workbooks, 769 of them complete, with 313 lines for the offices to correct.
 The console's panel reads the same shape pasted directly, by the code row
 (`parseBaseFormat`, at the top level beside `parseOfficers`, for the reason
 the first `parsePostings` was not).
+
+**Three apps on one site, and the one that claimed them all** (18.10.2026). Chrome
+offers to install a page only when no installed app already claims its
+address. The sanitation app's manifest claimed the scope of the whole site,
+so a phone carrying SJGP was offered *open in SJGP* at `/hrms/` and `/gp/`
+and never *install* — the Collector's phone, and nobody else's, which is
+why 134 Gram Palana officers never saw it. Its scope is its one page now,
+`./index.html`; the start page is inside it and nothing else needs to be. The
+HRMS app keeps the prompt Chrome then fires and offers it as a row of its own
+on Home and under Me, and tells an iPhone the two taps.
