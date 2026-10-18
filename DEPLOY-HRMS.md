@@ -213,8 +213,12 @@ Twenty-six workbooks at once are one paste: run
 
 and it reads every workbook in `hms/HRMS DATA`, writes `_PASTE.tsv` beside
 them for the panel and `_ISSUES.csv` naming every row an office must correct,
-and never writes outside that gitignored folder. The State Audit workbook is an
-older .xls and must be saved as .xlsx first.
+and never writes outside that gitignored folder. For one workbook of the whole
+establishment, and for the one office that returned an old-format .xls:
+
+    python tests/hrms-base-workbook.py convert   # saves every .xls beside itself as .xlsx
+    node tests/hrms-base-seed.js
+    python tests/hrms-base-workbook.py compile   # writes _ALL-EMPLOYEES.xlsx: Base Format, Issues, Summary
 
 **The officers list** of 08.10.2026, in the shape the office keeps it:
 
