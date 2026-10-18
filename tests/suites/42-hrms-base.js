@@ -271,9 +271,16 @@ module.exports = {
       t.eq(u.desig, 'Superintendent', 'and the row-long designation is gone');
       t.eq(cellOf(e, '9444400001', 'EnrolCode'), 'AAAAAA', 'the code already printed for his number still opens his row');
       /* the second shape: a letter name and a real office, but the whole row in the designation */
-      const r2 = seed(e, [Object.assign({}, RAO, { phone:'9444400002', name:'M. Anitha', emp:'E2', desig:'Senior Assistant', gender:'Female' })]);
+      const r2 = seed(e, [Object.assign({}, RAO, { phone:'9444400002', name:'M. Anitha', emp:'', desig:'Senior Assistant', gender:'Female' })]);
       t.eq(r2.setRight, 1, 'a row with the rest of the line written into its designation is set right too');
       t.eq(e.ctx.findByPhone_('9444400002').role, 'EMP', 'and comes down to EMP');
+      /* AND NO SECOND CODE. Her office keeps no employee ids, so the paste
+         gives none; the code already printed for her number is the one she
+         holds, and a re-paste must not mint another over it. On 18.10.2026
+         it did, to eleven employees of two such offices, and the sheets their
+         offices had been handed went dead for them without a word. */
+      t.eq((r2.issued || []).length, 0, 'NO NEW CODE for a row already carrying one, though the paste gave no employee id');
+      t.eq(cellOf(e, '9444400002', 'EnrolCode'), 'BBBBBB', 'the code printed for her number is the one still on the row');
       /* a person's row is still a person's row */
       const no = seed(e, [Object.assign({}, RAO, { phone:'9444400005', name:'Somebody Else', emp:'E9' })], true);
       t.eq(no.plans[0].verdict, 'refused', 'ONE NUMBER UNDER TWO NAMES IS STILL REFUSED where the row is a person\'s');

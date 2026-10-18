@@ -2584,3 +2584,17 @@ not left to press the one button that lengthens the queue. The register
 itself was never at fault: its Audit tab showed nothing written after 06:53,
 so not one of the failed attempts had half-landed. `tests/render-hrms-console.js`
 answers the first part with the 404 page and asserts the same rows go again.
+
+**A code already printed is not printed again** (18.10.2026, found in the
+paste that followed). `hrmsPlan_` marked *issue a code* on every row the
+paste gave no employee id, and nothing cleared the mark when the row turned
+out to be on the roll already — so the write minted a second code over the
+first, and the office's printed sheet went dead for that employee without a
+word. Eleven employees of the two offices that keep no ids were handed dead
+codes by the re-paste. A row on the roll is now issued a code only when it
+has neither a code nor an id nor a PIN, which is what the comment beside it
+had claimed all along; suite 42 pastes an id-less row over one carrying a
+code and asserts the code stands. The codes the console printed on the day
+are the ones on the register, so the download of that paste is the one to
+trust for those employees, and the join that builds the offices' sheets
+reads the downloads oldest first and lets the latest win.

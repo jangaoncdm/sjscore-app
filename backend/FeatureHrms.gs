@@ -569,6 +569,15 @@ function hrmsPlan_(t, v, r, seen){
     return out;
   }
   out.row = mine[0] + 1;
+  /* A CODE ALREADY PRINTED IS NOT PRINTED AGAIN. `issue` was set above for
+     every row the paste gave no employee id, and nothing cleared it when the
+     row turned out to be on the roll already — so the write minted a second
+     code over the first, and the sheet the office had been handed went dead
+     for that employee without a word. On 18.10.2026 the Base Format re-paste
+     did it to eleven of the thirteen employees of two offices that keep no
+     ids. A row on the roll gets a code below only if it has neither a code
+     nor an id nor a PIN. */
+  out.issue = false;
   if(nobody){
     out.changes.push('a row that named nobody is set right: "' + was + '" → ' + name + ', ' + role + ' of ' + office);
   }
