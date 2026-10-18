@@ -2567,3 +2567,20 @@ why 134 Gram Palana officers never saw it. Its scope is its one page now,
 `./index.html`; the start page is inside it and nothing else needs to be. The
 HRMS app keeps the prompt Chrome then fires and offers it as a row of its own
 on Home and under Me, and tells an iPhone the two taps.
+
+**A page from Google is not an answer, and pressing again makes it worse**
+(18.10.2026, the same afternoon). The first part of a paste came back as
+Google's own 404 page — what an Apps Script web app hands back while an
+execution is still running behind it — and the console read the page as the
+answer, said *SyntaxError: JSON.parse*, and stopped. Pressed again, each
+attempt queued one more execution behind the last; by the fourth, a plain
+`op=diag` on the HRMS register took 76 seconds and the sanitation register
+beside it answered in 4. `hrmsSeedPost` now reads the body as text, tells a
+page (and the register's own *busy — try again*) from a refusal, and asks for
+the **same part again** after 20, 45 and 90 seconds before giving up — a part
+asked twice is written once (rule 8), so the retry costs nothing, and the
+screen says what Google answered and that it is waiting, so the Collector is
+not left to press the one button that lengthens the queue. The register
+itself was never at fault: its Audit tab showed nothing written after 06:53,
+so not one of the failed attempts had half-landed. `tests/render-hrms-console.js`
+answers the first part with the 404 page and asserts the same rows go again.

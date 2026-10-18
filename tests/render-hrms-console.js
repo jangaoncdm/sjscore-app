@@ -110,6 +110,9 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   const br=await chromium.launch();
   const ctx=await br.newContext({viewport:{width:1500,height:1000},acceptDownloads:true});
   await ctx.addInitScript(()=>{
+    /* the paste retries a part Google answered with a page; the real waits
+       are 20, 45 and 90 seconds, which a test cannot sit through */
+    window.HRMS_RETRY_MS=[300,300,300];
     localStorage.setItem('sjf5',JSON.stringify({url:'https://mock.district/exec',
       session:{token:'T',user:{name:'Sandeep Kumar Jha',role:'COLLECTOR',phone:'9000000001'}}}));
     /* SIGNED INTO BOTH, as the Collector is: one console, now three registers */
@@ -132,12 +135,20 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
       sjPosts.push(b); return reply({ok:true}); }
     return reply(DASH);
   });
+  let pageOnce=false;
   await page.route('**/mock.hrms/**',async r=>{
     const q=r.request();
     const reply=b=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(b)});
     if(q.method()==='POST'){
       let b={};try{b=JSON.parse(q.postData()||'{}');}catch(e){}
       hPosts.push(b);
+      /* THE FIRST ANSWER IS GOOGLE'S OWN 404 PAGE — what an Apps Script web
+         app hands back while an execution is still running behind it, and
+         what the live register did on 18.10.2026 to the first part of a
+         paste. The console must read it as "busy", not as the answer. */
+      if(b.kind==='hrmsSeed'&&!pageOnce){ pageOnce=true;
+        return r.fulfill({status:404,contentType:'text/html; charset=utf-8',
+          body:'<!DOCTYPE html><html lang="en"><head><title>Error 404 (Not Found)!!1</title></head><body><p>The requested URL was not found on this server.</p></body></html>'}); }
       if(b.kind==='hrmsSeed'){
         /* the answer FeatureHrms.gs actually gives: a proposal that wrote
            nothing, then codes printed once */
@@ -224,9 +235,18 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
 
   /* ---- 5. COMPARE: what actually goes on the wire ---- */
   await page.click('#hrmRead');
-  await page.waitForTimeout(900);
-  const dry=hPosts.find(p=>p.kind==='hrmsSeed'&&p.dry);
+  /* the waiting line is on the screen for the 300 ms before the retry; catch
+     it while it is there rather than at a fixed moment after */
+  let midway='';
+  try{ await page.waitForFunction(()=>/asking for the same part again/.test(document.body.innerText),null,{timeout:1500}); midway=await txt(); }catch(e){ midway=await txt(); }
+  await page.waitForTimeout(1600);
+  const dries=hPosts.filter(p=>p.kind==='hrmsSeed'&&p.dry);
+  const dry=dries[0];
   ck(!!dry,'THE BUTTON POSTS — Compare reaches the district');
+  ck(dries.length===2,'A PAGE FROM GOOGLE IS NOT AN ANSWER: the part it stood in for is asked for again',String(dries.length));
+  ck(dries.length===2&&JSON.stringify(dries[0].rows)===JSON.stringify(dries[1].rows),'the SAME part, row for row — asked twice is written once');
+  ck(/answered a page and not the register \(HTTP 404\)/.test(midway)&&/asking for the same part again/.test(midway),
+     'and the screen said so in words while it waited, naming the status',midway.slice(0,200));
   ck(dry&&dry.token==='THR','under the Collector’s own token for THIS register',dry?dry.token:'');
   ck(!sjPosts.some(p=>p.kind==='hrmsSeed'),'AND NOT A WORD OF IT WENT TO THE SANITATION REGISTER');
   ck(dry&&dry.rows.length===5,'five rows are sent',dry?String(dry.rows.length):'');
