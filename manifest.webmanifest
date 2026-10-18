@@ -4,7 +4,7 @@
   "description": "Official field application of the Jangaon District administration. Attendance, the monthly 100-mark sanitation evaluation of Gram Panchayats, clause evidence and leave, for the Mandal Sanitation Task Force.",
   "id": "in.jangaon.sjscore",
   "start_url": "./index.html",
-  "scope": "./",
+  "scope": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#EFF2F0",
