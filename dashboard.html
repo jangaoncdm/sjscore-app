@@ -1741,7 +1741,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '7be2e98 - 18 Oct 12:27';
+const BUILD_STAMP = 'b88b24c - 18 Oct 12:39';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -4137,7 +4137,7 @@ let TBL_TEXT='', TBL_ROLE='MPO', TBL_PLANS=null, TBL_DONE=null;
 let PST_TEXT='', PST_PLANS=null, PST_DONE=null;
 let LOC_TEXT='', LOC_PLANS=null, LOC_DONE=null;
 let STF_TEXT='', STF_PLANS=null, STF_DONE=null, STF_PINS=null;
-let HRM_TEXT='', HRM_ROLE='HOD', HRM_PLANS=null, HRM_DONE=null, HRM_CODES=null, HRM_CLAIMS=null;
+let HRM_TEXT='', HRM_ROLE='EMP', HRM_PLANS=null, HRM_DONE=null, HRM_CODES=null, HRM_CLAIMS=null, HRM_ASIDE=null;
 /* THE REGISTER'S OWN PRE-FLIGHT. Read once when the Admin screen is opened,
    because it walks Drive and that is not something to do on every poll. */
 let HEALTH=null, HEALTHAT=0;
@@ -4730,6 +4730,27 @@ function hrmsPanels(){
         '<td class="mut">'+esc(o.desig||'—')+'</td><td class="num mut">'+esc(o.phone||'')+'</td>'+
         '<td class="num">'+esc(o.code||o.emp||'—')+'</td></tr>').join('')+
       '</tbody></table></div>')),'rl');
+
+  /* ---- rows that name nobody ---- */
+  const A=HRM_ASIDE;
+  h+=panel('c12','Rows that name nobody',
+    A?(A.dry?A.found+' found':(A.setAside||0)+' set aside'):'',
+    '<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">'+
+    'A paste that reached the console with its tabs turned to spaces on 18.10.2026 was read as the officers list and wrote rows '+
+    'with a <b>date for a name</b> and the <b>employee id for an office</b>. The Base Format pasted again sets those right in place. '+
+    'The ones no paste can reach \u2014 a "number" that was the first ten digits of an employee id \u2014 are set aside here: '+
+    'inactive, the code spent, the reason on the row. <b>Nothing is deleted.</b></div>'+
+    '<div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:11px">'+
+    '<button class="tbtn" id="hrmAsideFind"'+(ROLLBUSY?' disabled':'')+'>Find them</button>'+
+    (A&&A.dry&&A.found?'<button class="tbtn pri" id="hrmAsideGo"'+(ROLLBUSY?' disabled':'')+'>Set them aside</button>':'')+
+    '</div>'+
+    (A&&A.dry&&A.found?'<div class="twrap" style="max-height:260px"><table><thead><tr><th>Row</th><th>What the name cell holds</th><th>What the office cell holds</th><th>Number</th></tr></thead><tbody>'+
+      (A.sample||[]).map(x=>'<tr><td class="num">'+x.row+'</td><td class="mut">'+esc(x.name||'\u2014')+'</td><td class="mut">'+esc(x.office||'\u2014')+'</td><td class="num mut">'+esc(x.phone||'')+'</td></tr>').join('')+
+      '</tbody></table></div><div class="expnote" style="margin-top:8px">The first twenty of '+A.found+'. Paste the Base Format from the file first, so every row it can set right is set right; what is left is what this sets aside.</div>':'')+
+    (A&&!A.dry?'<div style="font-size:13px;color:var(--tx-2);border-left:3px solid var(--st-ok);padding-left:12px">'+(A.setAside||0)+' row(s) set aside and written to Audit.</div>':'')+
+    (A&&A.hodWithRecord&&A.hodWithRecord.length?'<div style="margin-top:12px;font-size:13px;color:var(--amb);line-height:1.7"><b>'+A.hodWithRecord.length+' row(s) stand as head of office with a Base Format record and an enrolment code.</b> '+
+      'Some are heads of office whose own workbook reached them; some were written by the misread paste and corrected before this rule existed. Say which are not heads of office:<br>'+
+      A.hodWithRecord.slice(0,60).map(x=>'\u00b7 '+esc(x.name)+' \u2014 '+esc(x.desig||'\u2014')+', '+esc(x.office||'\u2014')).join('<br>')+'</div>':''),'rl');
   return h;
 }
 
@@ -4764,7 +4785,7 @@ function hrmsWire(){
     hrmsSeedPost(p.rows,false, r=>{
       HRM_PLANS=null;
       HRM_CODES=(r.issued||[]).slice();
-      HRM_DONE=(r.added||0)+' added · '+(r.corrected||0)+' corrected · '+
+      HRM_DONE=(r.added||0)+' added · '+(r.corrected||0)+' corrected'+(r.setRight?' ('+r.setRight+' of them rows that named nobody, set right)':'')+' · '+
         ((r.issued||[]).length)+' enrolment code(s) issued.';
       hrmsPull();
     });
@@ -4789,6 +4810,13 @@ function hrmsWire(){
   };
   const hP=$('#hrmPull');
   if(hP) hP.onclick=()=>hrmsPull();
+  const aF=$('#hrmAsideFind');
+  if(aF) aF.onclick=()=>rollPost({kind:'hrmsSetAside',dry:true}, r=>{ HRM_ASIDE=r; });
+  const aG=$('#hrmAsideGo');
+  if(aG) aG.onclick=()=>{
+    if(!confirm('Set aside '+(HRM_ASIDE?HRM_ASIDE.found:0)+' row(s) that name nobody?\n\nEach is marked inactive, its role brought to EMP, its name prefixed, its enrolment code spent, and the reason written on the row and to Audit. Nothing is deleted.')) return;
+    rollPost({kind:'hrmsSetAside',dry:false}, r=>{ HRM_ASIDE=r; hrmsPull(); });
+  };
 }
 
 /* the rollout list. Read on opening the Admin view, and again after a seed. */
