@@ -128,11 +128,13 @@ function hrmsNum_(v){
 }
 /* the base columns, by header, read off the roll's own first row */
 function hrmsBaseIx_(t){
+  if(t.bix) return t.bix;                      /* read once per request, not once per row */
   var w = Math.max(t.sh.getLastColumn(), 1);
   var head = t.sh.getRange(1, 1, 1, w).getValues()[0]
     .map(function(h){ return String(h).toLowerCase().replace(/[^a-z]/g, ''); });
   var ix = {};
   HRMS_BASE_MAP.forEach(function(x){ ix[x[0]] = head.indexOf(x[1].toLowerCase()); });
+  t.bix = ix;
   return ix;
 }
 /* what the office sent of the Base Format, normalised; null when the paste
@@ -602,7 +604,7 @@ function hrmsWrite_(t, plans, u){
   /* AND THE BASE FORMAT'S COLUMNS, only when a paste carries one — a register
      seeded from the officers list alone keeps its eleven columns */
   const anyBase = plans.some(function(p){ return p.base && p.verdict !== 'refused'; });
-  if(anyBase) ensureHeaders_(sh, HRMS_BASE_HEAD);
+  if(anyBase){ ensureHeaders_(sh, HRMS_BASE_HEAD); t.bix = null; }
   const bix = anyBase ? hrmsBaseIx_(t) : {};
   const width = Math.max(sh.getLastColumn(), U_HEAD.length);
   const putBase = function(row, base){

@@ -4576,6 +4576,43 @@ function rollPost(body,after){
     .catch(err=>{ ROLLBUSY=false; rollSay('It did not get through: '+err,true); });
 }
 
+/* THE ESTABLISHMENT GOES UP IN CHUNKS. The Base Format of the whole district
+   is a thousand rows and 800 KB in one body, planned row by row against the
+   Sheet inside one Apps Script execution; one request for the lot is the
+   shape that times out half way and tells nobody which half. Two hundred and
+   fifty rows a request keeps each well inside the limits, the count moves
+   while the Collector waits, and a chunk that fails costs only itself — the
+   rows before it are on the register and the message says which chunk did
+   not go. A proposal is merged from its chunks the same way. */
+const HRMS_CHUNK=250;
+function hrmsSeedPost(rows,dry,after){
+  if(ROLLBUSY) return;
+  const parts=[]; for(let i=0;i<rows.length;i+=HRMS_CHUNK) parts.push(rows.slice(i,i+HRMS_CHUNK));
+  const merged={ok:true,dry:dry,plans:[],counts:{register:0,correct:0,unchanged:0,refused:0,incomplete:0},total:0,added:0,corrected:0,issued:[]};
+  let at=0;
+  ROLLBUSY=true;
+  const who=(TENANCY[TVIEW]||{}).name||TVIEW, tail=String(ST.url||'').replace(/\/exec$/,'').slice(-10);
+  const fail=(msg)=>{ ROLLBUSY=false;
+    rollSay(msg+(at?'  —  '+at+' of '+parts.length+' part(s) went before it'+(dry?'':', and THOSE ROWS ARE ON THE REGISTER; pasting again finds them and writes nothing twice'):'')+'  ['+who+' · …'+tail+']',true);
+    if(at&&!dry){ after(merged); pullRoll().then(()=>{ if(DATA) render(DATA); }); } };
+  const step=()=>{
+    if(at>=parts.length){ ROLLBUSY=false; after(merged); pullRoll().then(()=>{ if(DATA) render(DATA); }); return; }
+    rollSay((dry?'Comparing':'Writing')+' part '+(at+1)+' of '+parts.length+' — '+parts[at].length+' row(s)…');
+    fetch(ST.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({token:ST.token,kind:'hrmsSeed',rows:parts[at],dry:dry})})
+      .then(r=>r.json()).then(j=>{
+        if(!j||j.ok===false) return fail((j&&j.error)||'The district refused it.');
+        (j.plans||[]).forEach(p=>merged.plans.push(p));
+        Object.keys(merged.counts).forEach(k=>{ merged.counts[k]+=Number((j.counts||{})[k])||0; });
+        merged.total+=Number(j.total)||0; merged.added+=Number(j.added)||0; merged.corrected+=Number(j.corrected)||0;
+        (j.issued||[]).forEach(x=>merged.issued.push(x));
+        at++; step();
+      })
+      .catch(err=>fail('It did not get through: '+err));
+  };
+  step();
+}
+
 /* ============================== THE DISTRICT HRMS ==========================
    Two panels, and they are the whole of standing this register up: the
    establishment goes in, and the rollout says who has taken it up.
@@ -4691,19 +4728,20 @@ function hrmsWire(){
   if(hRead) hRead.onclick=()=>{
     const p=parseEstablishment(HRM_TEXT,HRM_ROLE); if(!p.rows.length) return;
     HRM_DONE=null;
-    rollPost({kind:'hrmsSeed',rows:p.rows,dry:true}, r=>{ HRM_PLANS=r.plans||[]; });
+    hrmsSeedPost(p.rows,true, r=>{ HRM_PLANS=r.plans||[]; });
   };
   const hA=$('#hrmApply');
   if(hA) hA.onclick=()=>{
     const p=parseEstablishment(HRM_TEXT,HRM_ROLE); if(!p.rows.length) return;
     const n=k=>(HRM_PLANS||[]).filter(x=>x.verdict===k).length;
     if(!confirm('Write the establishment to the District HRMS?\n\n'+
+      (p.rows.length>HRMS_CHUNK?'It goes up in '+Math.ceil(p.rows.length/HRMS_CHUNK)+' parts of '+HRMS_CHUNK+' rows; a part that fails costs only itself.\n\n':'')+
       n('register')+' added · '+n('correct')+' corrected · '+n('unchanged')+' already right · '+
       n('refused')+' refused.\n\n'+
       'They are added for LEAVE ONLY: no attendance is asked of anybody, and no notice, debit or lock can reach them.\n'+
       'Each gets a one-time enrolment code — take the file before leaving this page.\n'+
       'Nothing is deleted. Every change is written to the Audit tab.')) return;
-    rollPost({kind:'hrmsSeed',rows:p.rows,dry:false}, r=>{
+    hrmsSeedPost(p.rows,false, r=>{
       HRM_PLANS=null;
       HRM_CODES=(r.issued||[]).slice();
       HRM_DONE=(r.added||0)+' added · '+(r.corrected||0)+' corrected · '+
