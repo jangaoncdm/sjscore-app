@@ -260,6 +260,40 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
 
   const dl=await Promise.all([page.waitForEvent('download'),page.click('#hrmCodes')]).then(a=>a[0]).catch(()=>null);
   ck(!!dl,'the CSV downloads');
+
+  /* ---- 6a. THE BASE FORMAT, pasted as an office's workbook gives it ----
+     A serial column in front of the format, the code row found by its
+     contents and not its position, the Field Guide's own example row left
+     standing by the office and skipped here, a mobile typed into a numeric
+     cell past its .0, and the balance date and office on the wire. */
+  const BASE=[
+    'Base format of officers and employees, Jangaon District.',
+    'Sl\tA1\tA2\tA3\tA4\tA5\tA6\tB1\tB2\tB3\tB4\tB5\tB6\tB7\tB8\tB9\tB10\tB11\tB12\tB13\tB14\tB15\tC1\tC2\tC3\tD1\tD2\tD3\tD4\tD5\tD6\tD7\tD8\tD9\tR1\tX1\tX2',
+    '\tEmployee ID (IFMIS / Treasury)\tFull name as in Service Register\tGender\tDate of birth\tMobile number\tOfficial e-mail\tEmployment category\tDepartment\tDesignation\tOffice (as in letterhead)\tPlace of working\tGazetted or Non-Gazetted\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t',
+    '1\t2071534\tK. Srinivas Rao\tMale\t15-06-1972\t9876543210\t\tRegular\tAgriculture\tDistrict Agriculture Officer\tOffice of the District Agriculture Officer, Jangaon\tDistrict Headquarters\tGazetted\t12-11-1998\t01-07-2025\t\t\t\tNo\tOn duty\tYes\t\tDistrict Collector, Jangaon\tDistrict Collector, Jangaon\tCommissioner\t30-09-2026\t214\t168\t6\t2\t\t2\tS. Laxmi\t30-09-2026\tExample row\t\t0',
+    '2\t1800832\tD. Babu\tMale\t04-04-1974\t9444400031.0\tx@y\tRegular\tIndustries\tAssistant Director\tOffice of the Assistant Director, Handlooms, Jangaon\tJangaon\tGazetted\t29-04-1996\t01-07-2024\t\t\t\tNo\tOn duty\tYes\tJangaon\tCommissioner, Hyderabad\tCommissioner, Hyderabad\tCommissioner, Hyderabad\t30-09-2026\t300\t168\t4\t1\t\t2\tG. Rani, Supdt\t30-09-2026\t\t30-04-2035\t0',
+    '3\t\tM. Anitha\tFemale\t20-04-1977\t9444400032\t\tOutsourcing\tIndustries\tOffice Subordinate\tOffice of the Assistant Director, Handlooms, Jangaon\tJangaon\tNon-Gazetted\t\t01-01-2020\t\t\t\tNo\tOn duty\tYes\t\tAssistant Director\tAssistant Director\tAssistant Director\t\t\t\t3\t1\t0\t1\tG. Rani, Supdt\t30-09-2026\t\t\t2'
+  ].join('\n');
+  const before=hPosts.length;
+  await page.fill('#hrmTbl',BASE);
+  await page.dispatchEvent('#hrmTbl','change');
+  await page.waitForTimeout(500);
+  tA=await txt();
+  ck(/2 line\(s\) read as the Base Format/.test(tA),'THE BASE FORMAT IS RECOGNISED, and two rows go forward — the example row is not one of them',
+    (tA.match(/\d+ line\(s\) read[^<]*/)||[''])[0]);
+  await page.click('#hrmRead');
+  await page.waitForTimeout(900);
+  const bdry=hPosts.slice(before).find(p=>p.kind==='hrmsSeed'&&p.dry);
+  ck(!!bdry,'Compare posts it');
+  const babu=bdry&&bdry.rows.find(r=>r.name==='D. Babu');
+  ck(!!babu&&babu.phone==='9444400031','A MOBILE TYPED INTO A NUMERIC CELL loses its .0 and is ten digits',babu?babu.phone:'');
+  ck(!!babu&&babu.office==='Office of the Assistant Director, Handlooms, Jangaon','THE OFFICE IS B4, read by the code row with the serial column in front',babu?babu.office:'');
+  ck(!!babu&&babu.balAsOn==='30-09-2026'&&babu.el==='300'&&babu.clUsed==='4','and the balance date and the figures travel',babu?[babu.balAsOn,babu.el,babu.clUsed].join('/'):'');
+  ck(!!babu&&babu.dob==='04-04-1974'&&babu.ctl==='Commissioner, Hyderabad','with the date of birth and the controlling officer',babu?babu.dob:'');
+  const ani=bdry&&bdry.rows.find(r=>r.name==='M. Anitha');
+  ck(!!ani&&ani.emp===''&&ani.verifiedOn==='30-09-2026','a row with no employee id still goes, with its verification date',ani?ani.verifiedOn:'');
+  ck(!sjPosts.some(p=>p.kind==='hrmsSeed'),'and none of it went to the sanitation register');
+  await page.screenshot({path:path.join(OUT,'hrms-base-paste-1500.png'),fullPage:true});
   if(dl){
     const f=path.join(OUT,'enrolment-codes.csv'); await dl.saveAs(f);
     const csv=fs.readFileSync(f,'utf8');

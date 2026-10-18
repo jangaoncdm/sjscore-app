@@ -4282,6 +4282,56 @@ function parseOfficers(text, role){
   return { rows, bad, notes };
 }
 
+/* THE BASE FORMAT, as A Section's workbook returns it from every office:
+   thirty-six columns an employee, the code row A1 … X2 above the headings.
+   Pasted from Excel it arrives tab-separated, the dates as displayed. The
+   columns are mapped BY THE CODE ROW and never by position — two offices put
+   a serial column in front of the format, and read by position a man's mobile
+   number was his date of birth. An office that deleted the code row is read
+   by the format's own order. Nothing is folded here: a row is a person. */
+const BASE_CODES = ['A1','A2','A3','A4','A5','A6','B1','B2','B3','B4','B5','B6','B7','B8','B9','B10','B11','B12','B13','B14','B15',
+                    'C1','C2','C3','D1','D2','D3','D4','D5','D6','D7','D8','D9','R1'];
+const BASE_KEYS  = { A1:'emp', A2:'name', A3:'gender', A4:'dob', A5:'phone', A6:'email', B1:'cat', B2:'dept', B3:'desig', B4:'office',
+                     B5:'place', B6:'gaz', B7:'entered', B8:'post', B9:'district', B10:'pay', B11:'ddo', B12:'vacation', B13:'status',
+                     B14:'hqres', B15:'addr', C1:'ctl', C2:'authCL', C3:'authOther', D1:'balAsOn', D2:'el', D3:'hpl', D4:'clUsed',
+                     D5:'ohUsed', D6:'cclUsed', D7:'children', D8:'verifiedBy', D9:'verifiedOn', R1:'remarks' };
+function isBaseFormat(text){
+  return String(text || '').split(/\r?\n/).some(line => { const c = line.split('\t').map(x => x.trim()); return c.indexOf('A1') >= 0 && c.indexOf('A2') >= 0 && c.indexOf('B4') >= 0; })
+      || /Employee ID \(IFMIS/.test(String(text || ''));
+}
+function parseBaseFormat(text, role){
+  const lines = String(text || '').split(/\r?\n/);
+  const rows = [], bad = [], notes = [];
+  let colOf = null, started = false;
+  lines.forEach(line => {
+    if(!line.trim()) return;
+    const cells = line.split('\t').map(c => c.trim());
+    if(!colOf){
+      if(cells.indexOf('A1') >= 0 && cells.indexOf('A2') >= 0){ colOf = {}; cells.forEach((c, i) => { if(BASE_CODES.indexOf(c) >= 0) colOf[c] = i; }); return; }
+      if(/Employee ID/i.test(line) && /Mobile/i.test(line)){ colOf = {}; BASE_CODES.forEach((c, i) => { colOf[c] = i; }); return; }
+      return;                                  /* the title line above the code row */
+    }
+    if(!started && /Employee ID/i.test(line) && /Mobile/i.test(line)) return;   /* the headings under the codes */
+    started = true;
+    const get = c => colOf[c] == null ? '' : (cells[colOf[c]] || '');
+    if(!BASE_CODES.some(c => get(c))) return;
+    if(get('A1') === '2071534' && /srinivas rao/i.test(get('A2'))) return;       /* the Field Guide's example row */
+    let phone = get('A5').replace(/\.0+$/, '').replace(/\D/g, '');
+    if(phone.length === 11 && phone[0] === '0') phone = phone.slice(1);
+    if(phone.length === 12 && phone.slice(0, 2) === '91') phone = phone.slice(2);
+    if(phone.length !== 10){ bad.push({ line:(get('A2') || line.trim()).slice(0, 70), why:'no ten-digit mobile number (' + (get('A5') || 'blank') + ')' }); return; }
+    const r = { role: role || 'EMP' };
+    BASE_CODES.forEach(c => { r[BASE_KEYS[c]] = c === 'A5' ? phone : get(c); });
+    rows.push(r);
+  });
+  if(!colOf) bad.push({ line:'(the whole paste)', why:'no code row (A1 … X2) and no headings were found — paste the Base Format sheet from its first row' });
+  const seen = {};
+  rows.forEach(r => { if(seen[r.phone]) notes.push(r.phone + ' is on two rows — "' + seen[r.phone] + '" and "' + r.name + '". Both are sent; one number is one employee, so the register will refuse the second and name the holder.'); else seen[r.phone] = r.name; });
+  return { rows, bad, notes, base:true };
+}
+/* one door for both shapes */
+function parseEstablishment(text, role){ return isBaseFormat(text) ? parseBaseFormat(text, role) : parseOfficers(text, role); }
+
 /* THE POSTING LIST AND THE ROSTER ARE BOTH READ AT THE TOP LEVEL, beside each
    other. The first cut of parsePostings was declared INSIDE the render function
    that draws its panel: the panel could call it and wireAdmin could not, so the
@@ -4543,13 +4593,16 @@ const HRMS_PILL={register:['ok','to be added'],correct:['warn','to be corrected'
   unchanged:['mut','already right'],refused:['bad','refused']};
 
 function hrmsPanels(){
-  const p = HRM_TEXT.trim() ? parseOfficers(HRM_TEXT, HRM_ROLE) : null;
+  const p = HRM_TEXT.trim() ? parseEstablishment(HRM_TEXT, HRM_ROLE) : null;
   let h='';
   h+=panel('c12','The district establishment',
     'paste the office list · nothing is written until you say so',
     '<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">'+
-    'Paste the district\u2019s own list — <b>serial, section, designation, name, mobile</b>. '+
-    'The <b>section is the office</b>, because leave is sanctioned through one and a department '+
+    'Paste <b>the Base Format</b> an office returned — the whole sheet from its first row, code row and all, '+
+    'thirty-six columns an employee with the Service Register\u2019s balances — or the district\u2019s own '+
+    'officers list, <b>serial, section, designation, name, mobile</b>. The Base Format opens each employee\u2019s '+
+    'leave account at the figures his office verified; '+
+    'the <b>section is the office</b>, because leave is sanctioned through one and a department '+
     'guessed out of a designation would be a fact this page does not have. '+
     'An officer on two rows with the same name is <b>one employee holding two posts</b> and is folded '+
     'into one line with both designations — one man, one leave account. '+
@@ -4560,7 +4613,7 @@ function hrmsPanels(){
     'background:var(--bg-2);color:var(--tx);font:inherit;font-size:13px">'+
     ['HOD','EMP'].map(r=>'<option value="'+r+'"'+(HRM_ROLE===r?' selected':'')+'>'+
       (r==='HOD'?'Heads of office':'Employees')+'</option>').join('')+'</select></div>'+
-    (p?'<div style="margin-bottom:9px;font-size:12px;color:var(--tx-3)">'+p.rows.length+' line(s) read'+
+    (p?'<div style="margin-bottom:9px;font-size:12px;color:var(--tx-3)">'+p.rows.length+' line(s) read'+(p.base?' as the Base Format':' as the officers list')+
       (p.bad.length?' · <span style="color:var(--red)">'+p.bad.length+' not understood</span>':'')+
       '</div>':'')+
     '<textarea id="hrmTbl" rows="6" placeholder="Paste the district officers list here"'+
@@ -4592,7 +4645,8 @@ function hrmsPanels(){
         return '<tr><td>'+esc(x.office||'—')+'</td><td>'+esc(x.name||'—')+'</td>'+
           '<td class="mut">'+esc(x.desig||'—')+'</td><td class="num mut">'+esc(x.phone||'')+'</td>'+
           '<td><span class="pill '+V[0]+'">'+esc(V[1])+'</span></td>'+
-          '<td style="color:var(--tx-2)">'+esc((x.changes&&x.changes.length)?x.changes.join('; '):(x.why||'—'))+'</td></tr>';
+          '<td style="color:var(--tx-2)">'+esc((x.changes&&x.changes.length)?x.changes.join('; '):(x.why||'—'))+
+          (x.incomplete&&x.incomplete.length?'<br><span style="color:var(--amb)">to complete: '+esc(x.incomplete.join(', '))+'</span>':'')+'</td></tr>';
       }).join('')+'</tbody></table></div>'+
       '<div class="expnote" style="margin-top:9px"><b>This register takes leave and nothing else.</b> '+
       'Nobody on it is asked to mark attendance, so no reminder, no show-cause notice, no casual-leave debit and '+
@@ -4635,13 +4689,13 @@ function hrmsWire(){
   if(hC) hC.onclick=()=>{ HRM_TEXT=''; HRM_PLANS=null; HRM_DONE=null; if(DATA) render(DATA); };
   const hRead=$('#hrmRead');
   if(hRead) hRead.onclick=()=>{
-    const p=parseOfficers(HRM_TEXT,HRM_ROLE); if(!p.rows.length) return;
+    const p=parseEstablishment(HRM_TEXT,HRM_ROLE); if(!p.rows.length) return;
     HRM_DONE=null;
     rollPost({kind:'hrmsSeed',rows:p.rows,dry:true}, r=>{ HRM_PLANS=r.plans||[]; });
   };
   const hA=$('#hrmApply');
   if(hA) hA.onclick=()=>{
-    const p=parseOfficers(HRM_TEXT,HRM_ROLE); if(!p.rows.length) return;
+    const p=parseEstablishment(HRM_TEXT,HRM_ROLE); if(!p.rows.length) return;
     const n=k=>(HRM_PLANS||[]).filter(x=>x.verdict===k).length;
     if(!confirm('Write the establishment to the District HRMS?\n\n'+
       n('register')+' added · '+n('correct')+' corrected · '+n('unchanged')+' already right · '+

@@ -344,6 +344,68 @@ const CL_OPENING_BALANCE = 6;
    does not undo what the Collector has already granted. */
 const OH_REDUCED_YEAR = 2026;
 const OH_REDUCED_BALANCE = 3;
+/* CHILD CARE LEAVE is a figure for the whole of a woman's service, not for a
+   year — 180 days under the state's orders — and the Base Format carries
+   what she has taken of it up to the balance date (column D6). */
+const CCL_TOTAL_DAYS = 180;
+
+/* THE SERVICE REGISTER'S FIGURE BEATS THE OPENING TABLE (District HRMS,
+   18.10.2026). The District HRMS was pro-rated to a quarter because it had
+   nothing better: the register opened in October with no record of what
+   anybody had already taken. The Base Format changed that — every office
+   returns, per employee, the earned and half pay leave AT CREDIT and the
+   casual leave, optional holidays and child care leave ALREADY AVAILED, as on
+   a date, verified by a named official. Where a row carries that, it is the
+   truth the sanction is measured against: the year's casual leave is the
+   year's fifteen less what the Service Register says he took before the
+   register knew him, and earned leave is a balance at credit and not a yearly
+   grant at all.
+
+   Read off the Users row by header, so the two registers that never carry
+   these columns answer null here and nothing about them moves. Everything
+   after the balance date is counted off the Leave tab as before; what fell
+   before it is the office's figure and is not counted twice. */
+function leaveOpening_(phone, type, year){
+  const p = phone10_(phone); if(p.length !== 10) return null;
+  const t = uidx_(), sh = t.sh;
+  const head = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0]
+    .map(h => String(h).toLowerCase().replace(/[^a-z]/g, ''));
+  const ix = n => head.indexOf(n);
+  if(ix('balason') < 0) return null;                 /* this register carries no opening figures */
+  const v = sh.getDataRange().getValues();
+  let row = null;
+  for(let i = 1; i < v.length; i++){
+    if(phone10_(v[i][t.ix.phone]) !== p) continue;
+    if(String(v[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
+    if(!dateText_(v[i][ix('balason')])) continue;
+    row = v[i]; break;
+  }
+  if(!row) return null;
+  const asOn = dateText_(row[ix('balason')]);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(asOn)) return null;
+  const num = n => { const i = ix(n); if(i < 0) return null; const s = String(row[i] == null ? '' : row[i]).trim();
+                     if(s === '') return null; const x = Number(s); return isFinite(x) ? x : null; };
+  const y = String(Number(year) || asOn.slice(0, 4));
+  const T = String(type || '').toUpperCase();
+  /* the yearly kinds: the office's figure is what he took of THIS year before
+     the balance date, so it only applies to applications in that year */
+  if(T === 'CL' || T === 'OH'){
+    if(asOn.slice(0, 4) !== y) return null;
+    const u = num(T === 'CL' ? 'clused' : 'ohused'); if(u == null) return null;
+    const cap = T === 'CL' ? ((tenant_().entitlement || LEAVE_ENTITLEMENT).CL || 15) : entitlement_('OH', y);
+    return { cap:cap, used:u, floor:asOn, yearly:true, asOn:asOn };
+  }
+  /* the balances at credit: a running figure, whatever the year */
+  if(T === 'EL' || T === 'HPL'){
+    const c = num(T === 'EL' ? 'elcredit' : 'hplcredit'); if(c == null) return null;
+    return { cap:c, used:0, floor:asOn, yearly:false, asOn:asOn, credit:true };
+  }
+  if(T === 'CCL'){
+    const u = num('cclused'); if(u == null) return null;
+    return { cap:CCL_TOTAL_DAYS, used:u, floor:asOn, yearly:false, asOn:asOn };
+  }
+  return null;
+}
 /* A YEAR'S LEAVE IS THE YEAR'S. A register that opens in September does not
    grant a full year of casual leave for the three months it covers, so the
    opening year is PRO-RATED to the months the register actually runs for —
@@ -8248,11 +8310,16 @@ function decideOneLeave_(id, want, remarks, u){
   if(want === 'APPROVED'){
     const type = String(found.row[m.ix.type] || '');
     const yr = Number(String(dateText_(found.row[m.ix.fromDate])).slice(0,4));
-    const ent = entitlement_(type, yr);
+    const ph = phone10_(found.row[m.ix.phone]);
+    /* THE SERVICE REGISTER'S FIGURE, WHERE THE OFFICE SUPPLIED ONE (District
+       HRMS, 18.10.2026): the cap is the year's full allowance or the balance
+       at credit, what he took before the balance date is the office's figure,
+       and only what the register sanctioned after that date is added to it. */
+    const op = leaveOpening_(ph, type, yr);
+    const ent = op ? op.cap : entitlement_(type, yr);
     const want_ = Number(found.row[m.ix.days]) || 0;
-    let used = 0;
+    let used = op ? op.used : 0;
     if(ent > 0){
-      const ph = phone10_(found.row[m.ix.phone]);
       const all = sh.getDataRange().getValues();
       const counted = {};
       for(let i = 1; i < all.length; i++){
@@ -8260,7 +8327,9 @@ function decideOneLeave_(id, want, remarks, u){
         if(phone10_(all[i][m.ix.phone]) !== ph) continue;
         if(String(all[i][m.ix.type]) !== type) continue;
         if(String(all[i][m.ix.status]) !== 'APPROVED') continue;
-        if(Number(String(dateText_(all[i][m.ix.fromDate])).slice(0,4)) !== yr) continue;
+        const f_ = String(dateText_(all[i][m.ix.fromDate]));
+        if(op && f_ <= op.floor) continue;                 /* before the balance date: the office's figure already holds it */
+        if((!op || op.yearly) && Number(f_.slice(0,4)) !== yr) continue;
         /* ONE SPELL, ONE DEBIT TO THE YEAR. A duplicated row is not a second
            absence, and counting it twice refuses an officer leave he still
            holds — the same arithmetic that decides loss of pay. */
@@ -8270,8 +8339,11 @@ function decideOneLeave_(id, want, remarks, u){
         used += Number(all[i][m.ix.days]) || 0;
       }
       if(used + want_ > ent)
-        return { ok:false, error:'That would exceed the year\'s ' + type + ': ' + ent +
-          ' for ' + yr + ', ' + used + ' already sanctioned, ' + want_ + ' now sought.' };
+        return { ok:false, error: op && op.credit
+          ? 'That would exceed the ' + type + ' at credit: ' + ent + ' as on ' + dmy_(op.asOn) + ', ' +
+            used + ' taken since, ' + want_ + ' now sought.'
+          : 'That would exceed the year\'s ' + type + ': ' + ent +
+            ' for ' + yr + ', ' + used + ' already ' + (op ? 'availed' : 'sanctioned') + ', ' + want_ + ' now sought.' };
     }
   }
   const when = new Date().toISOString();

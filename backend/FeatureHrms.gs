@@ -73,6 +73,85 @@ var HRMS_SEED_COLS = ['Office','Designation','EmpId'];
  *
  * The alphabet leaves out O/0, I/1, S/5 and B/8, because this is read off a
  * printed sheet and typed on a phone by a man who did not write it. */
+/* THE BASE FORMAT (A Section's workbook to every Head of Office, returned
+   through October 2026): thirty-six columns per officer and employee, taken
+   from the Service Register and the last pay slip. What the module keeps of
+   it, by header, beside the eleven columns Code.gs already reads. None of it
+   is on U_HEAD — that array is three registers' — so the module makes its own
+   room on the write path alone, as it does for the enrolment code. The
+   workbook's own column codes are kept in the comments so a reader with the
+   Field Guide open can follow. */
+var HRMS_BASE_MAP = [
+  ['gender','Gender'],          /* A3 */   ['dob','DOB'],              /* A4 */
+  ['cat','Category'],           /* B1 */   ['dept','Department'],      /* B2 */
+  ['place','Place'],            /* B5 */   ['gaz','Gazetted'],         /* B6 */
+  ['entered','EnteredOn'],      /* B7 */   ['post','PostOn'],          /* B8 */
+  ['district','DistrictOn'],    /* B9 */   ['pay','PayScale'],         /* B10 */
+  ['ddo','DDO'],                /* B11 */  ['vacation','Vacation'],    /* B12 */
+  ['status','Status'],          /* B13 */  ['hqres','HqResident'],     /* B14 */
+  ['addr','Address'],           /* B15 */  ['ctl','Controller'],       /* C1 */
+  ['authCL','AuthCL'],          /* C2 */   ['authOther','AuthOther'],  /* C3 */
+  ['balAsOn','BalAsOn'],        /* D1 */   ['el','ELCredit'],          /* D2 */
+  ['hpl','HPLCredit'],          /* D3 */   ['clUsed','CLUsed'],        /* D4 */
+  ['ohUsed','OHUsed'],          /* D5 */   ['cclUsed','CCLUsed'],      /* D6 */
+  ['children','Children'],      /* D7 */   ['verifiedBy','VerifiedBy'],/* D8 */
+  ['verifiedOn','VerifiedOn'],  /* D9 */   ['remarks','HrRemarks']     /* R1 */
+];
+var HRMS_BASE_HEAD = HRMS_BASE_MAP.map(function(x){ return x[1]; });
+var HRMS_DATE_KEYS = { dob:1, entered:1, post:1, district:1, balAsOn:1, verifiedOn:1 };
+var HRMS_NUM_KEYS  = { el:1, hpl:1, clUsed:1, ohUsed:1, cclUsed:1, children:1 };
+/* how long the office calendar is remembered, per scope */
+var HRMS_CAL_CACHE_S = 600;
+
+/* A DATE ARRIVES THREE WAYS and is kept one way. The console pastes what Excel
+   displays — 15-06-1972, or 15.06.1972 on a machine set that way — a reader of
+   the workbook sends the serial Excel stores, and a re-paste of the register's
+   own export sends ISO. Anything else is not a date and is kept as nothing
+   rather than guessed at: a wrong date of birth is a wrong superannuation. */
+function hrmsDate_(v){
+  if(v == null || v === '') return '';
+  if(v instanceof Date) return dateText_(v);
+  var s = String(v).trim().replace(/^'/, '');
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return m[1] + '-' + m[2] + '-' + m[3];
+  m = s.match(/^(\d{1,2})[-./](\d{1,2})[-./](\d{4})$/);
+  if(m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  if(/^\d{4,6}(\.\d+)?$/.test(s)){                       /* an Excel serial: days since 30.12.1899 */
+    var n = Number(s); if(n > 20000 && n < 80000){
+      var d = new Date(Date.UTC(1899, 11, 30) + Math.round(n) * 86400000);
+      return d.toISOString().slice(0, 10); }
+  }
+  return '';
+}
+function hrmsNum_(v){
+  if(v == null || v === '') return '';
+  var n = Number(String(v).trim().replace(/,/g, '')); return isFinite(n) ? n : '';
+}
+/* the base columns, by header, read off the roll's own first row */
+function hrmsBaseIx_(t){
+  var w = Math.max(t.sh.getLastColumn(), 1);
+  var head = t.sh.getRange(1, 1, 1, w).getValues()[0]
+    .map(function(h){ return String(h).toLowerCase().replace(/[^a-z]/g, ''); });
+  var ix = {};
+  HRMS_BASE_MAP.forEach(function(x){ ix[x[0]] = head.indexOf(x[1].toLowerCase()); });
+  return ix;
+}
+/* what the office sent of the Base Format, normalised; null when the paste
+   was the older five-column officers list and carries none of it */
+function hrmsBase_(r){
+  var out = null;
+  HRMS_BASE_MAP.forEach(function(x){
+    var k = x[0]; if(r[k] == null || String(r[k]).trim() === '') return;
+    var val = HRMS_DATE_KEYS[k] ? hrmsDate_(r[k]) : HRMS_NUM_KEYS[k] ? hrmsNum_(r[k]) : String(r[k]).trim().slice(0, 300);
+    if(val === '') return;
+    out = out || {}; out[k] = val;
+  });
+  /* THE VERIFICATION DATE STANDS IN FOR A BLANK BALANCE DATE: the format asks
+     for both and a hundred rows gave only the second. The figures were
+     verified on that day, so that is the day they stand as on. */
+  if(out && !out.balAsOn && out.verifiedOn) out.balAsOn = out.verifiedOn;
+  return out;
+}
+
 var HRMS_CODE_HEAD  = 'EnrolCode';
 var HRMS_CODE_CHARS = 'ACDEFGHJKLMNPQRTUVWXYZ23469';
 var HRMS_CODE_LEN   = 6;
@@ -171,9 +250,20 @@ function feature_hrms(){
       /* WHAT ONE EMPLOYEE SEES: his own applications and what the year has
          left him. Bounded — it never walks the whole register. */
       hrms: function(p, u){
+        var rows = hrmsMine_(u.phone);
+        var year = String(new Date().getFullYear());
         return json_({ ok:true, me:{ name:u.name, role:u.role, phone:u.phone,
                                      office:u.mandal, desig:u.desig || '' },
-                       rows:hrmsMine_(u.phone),
+                       rows:rows,
+                       /* HIS ACCOUNT, THE SANCTION'S OWN ARITHMETIC (18.10.2026): the
+                          Service Register's figures where his office supplied them,
+                          the pro-rated table where it did not, and what the register
+                          has sanctioned since — the same leaveOpening_ the order
+                          measures against, so the screen cannot argue with it. */
+                       account:hrmsAccount_(u, rows, year),
+                       record:hrmsRecord_(u.phone),
+                       today:today_(),
+                       holidays:hrmsHolidays_(year),
                        /* THE YEAR'S FIGURE, NOT THE TABLE'S. This sent
                           tenant_().entitlement — the full twelve months — so a
                           register adopted in October would have shown every
@@ -194,6 +284,20 @@ function feature_hrms(){
                        year:String(new Date().getFullYear()),
                        /* IT IS A LEAVE REGISTER AND NOTHING ELSE */
                        attendance:false, sanction:false });
+      },
+
+      /* WHO IS AWAY — the office's calendar for its head, the district's for the
+         Collector (asked 18.10.2026: a heat map to each head of office of his
+         own people on leave, and to the Collector on the home screen). A cell
+         is the people whose SANCTIONED leave covers the day; nothing awaiting
+         orders is on it. Bounded like everything else here: the tail of the
+         Leave tab, folded by application, remembered ten minutes per scope. An
+         employee is refused — his own days are already in his own rows. */
+      hrmsCalendar: function(p, u){
+        if(u.role !== 'COLLECTOR' && u.role !== 'HOD')
+          return json_({ ok:false, error:'The calendar is read by the head of an office or the Collector.' });
+        var year = Number(p.year); if(!(year > 2000 && year < 2100)) year = Number(String(today_()).slice(0, 4));
+        return json_(hrmsCalendar_(u, year));
       },
 
       /* who has not yet claimed a PIN — the district's own rollout list */
@@ -367,19 +471,31 @@ function hrmsMine_(phone){
   return leaveFold_ ? leaveFold_(out) : out;
 }
 
-/* ------------------------------------------------------------- the seeding */
+/* ------------------------------------------------------------- the seeding
+   Two shapes arrive here. The five-column officers list of 08.10.2026 —
+   section, designation, name, mobile — and, from 18.10.2026, the BASE FORMAT
+   the offices return: the same four and thirty-two more, the Service
+   Register's own figures among them. One plan serves both: a row that carries
+   base fields has them compared and written; a row that does not is the
+   officers list exactly as before. */
 function hrmsPlan_(t, v, r, seen){
   const name = String(r.name || '').trim();
   const office = String(r.office || '').trim();
   const desig = String(r.desig || '').trim();
   const emp = String(r.emp || '').trim();
+  const email = String(r.email || '').trim();
   const phone = phone10_(r.phone || '');
-  const role = String(r.role || 'EMP').trim().toUpperCase();
+  let role = String(r.role || 'EMP').trim().toUpperCase();
+  const base = hrmsBase_(r);
   const out = { name:name, office:office, desig:desig, emp:emp, phone:phone, role:role, changes:[] };
 
   if(phone.length !== 10){ out.verdict = 'refused'; out.why = 'a mobile number is ten digits'; return out; }
   if(!name){ out.verdict = 'refused'; out.why = 'a name is needed — the roll is read by people'; return out; }
   if(!office){ out.verdict = 'refused'; out.why = 'an office is needed — leave is sanctioned through one'; return out; }
+  /* A NAME THAT IS A POST IS NOT A PERSON. "AC (Rev.) Sir (I/c)" was on the
+     district's list against the Welfare Officer's chair; leave is applied for
+     by a person and the register must hold his name. */
+  if(/\bsir\b/i.test(name)){ out.verdict = 'refused'; out.why = '"' + name + '" is a post and not a person — the officer\u2019s own name is needed'; return out; }
   /* AN EMPLOYEE ID IS WHAT HE CLAIMS HIS ROW WITH — AND WHERE THE OFFICE HAS
      NONE, AN ENROLMENT CODE IS. This used to be a refusal, and the district's
      own list of officers has no such column, so the whole establishment would
@@ -387,6 +503,26 @@ function hrmsPlan_(t, v, r, seen){
      it. The second factor is not dropped; it is issued. */
   if(!emp) out.issue = true;
   if(!rank_()[role]){ out.verdict = 'refused'; out.why = 'no such role on this register: ' + role; return out; }
+  /* THE BASE FORMAT'S OWN COMPLETENESS, where it was sent: the mandatory
+     columns the Field Guide marks in red. Missing ones are named, and the row
+     still goes on — a man with a blank date of birth can still apply for a
+     day's leave — but the office is told what to complete. */
+  if(base){
+    const miss = [];
+    [['gender','gender'],['dob','date of birth'],['cat','employment category'],['dept','department'],
+     ['place','place of working'],['gaz','gazetted or not'],['post','date of joining the present post'],
+     ['status','present status'],['ctl','controlling officer'],['authCL','casual-leave authority'],
+     ['authOther','other-leave authority'],['balAsOn','balance date'],['verifiedBy','who verified the Service Register']]
+      .forEach(function(x){ if(!base[x[0]]) miss.push(x[1]); });
+    if(!desig) miss.push('designation');
+    if(miss.length) out.incomplete = miss;
+    /* the balance date is what the opening figures hang on: without it they
+       are figures as on nothing, and the sanction would read them as today's */
+    if(!base.balAsOn && (base.el != null || base.hpl != null || base.clUsed != null || base.ohUsed != null || base.cclUsed != null)){
+      out.verdict = 'refused'; out.why = 'leave balances were given with no date they stand as on (column D1) — the figures cannot be opened'; return out;
+    }
+    out.base = base;
+  }
 
   /* the same number earlier in this very paste. A second CHARGE held by the
      same man is folded before it gets here — one employee is one leave
@@ -405,6 +541,7 @@ function hrmsPlan_(t, v, r, seen){
   if(!mine.length){
     out.verdict = 'register';
     out.changes.push('added as ' + role + ' of ' + office);
+    if(base) out.changes.push(base.balAsOn ? 'service record and balances as on ' + dmy_(base.balAsOn) : 'service record');
     if(out.issue) out.changes.push('an enrolment code will be issued');
     return out;
   }
@@ -415,10 +552,26 @@ function hrmsPlan_(t, v, r, seen){
     return out;
   }
   out.row = mine[0] + 1;
+  /* A HEAD OF OFFICE IS NOT DEMOTED BY HIS OWN OFFICE'S WORKBOOK. The 68
+     district officers went on as HOD from the officers list; each appears
+     again in his office's Base Format, where every row arrives as EMP. The
+     higher standing stays, and the row gains his office and his record. */
+  const wasRole = cell_(v[mine[0]], t.ix.role).toUpperCase();
+  if((rank_()[wasRole] || 0) > (rank_()[role] || 0)){ role = wasRole; out.role = role; }
   if(was !== name) out.changes.push('name "' + was + '" → "' + name + '"');
   if(t.ix.mandal >= 0 && cell_(v[mine[0]], t.ix.mandal) !== office) out.changes.push('office → ' + office);
   if(t.ix.designation >= 0 && desig && cell_(v[mine[0]], t.ix.designation) !== desig) out.changes.push('designation → ' + desig);
-  if(t.ix.empid >= 0 && emp && cell_(v[mine[0]], t.ix.empid) !== emp) out.changes.push('employee id → ' + emp);
+  if(t.ix.empid >= 0 && emp && cell_(v[mine[0]], t.ix.empid) !== emp) out.changes.push('employee id → ' + emp);
+  if(t.ix.email >= 0 && email && cell_(v[mine[0]], t.ix.email) !== email) out.changes.push('e-mail → ' + email);
+  if(base){
+    const bix = hrmsBaseIx_(t); let diff = 0;
+    Object.keys(base).forEach(function(k){
+      const i = bix[k]; const have = i >= 0 ? v[mine[0]][i] : undefined;
+      const now = HRMS_DATE_KEYS[k] ? hrmsDate_(have) : String(have == null ? '' : have).trim();
+      if(String(now) !== String(base[k])) diff++;
+    });
+    if(diff) out.changes.push(base.balAsOn ? 'service record and balances as on ' + dmy_(base.balAsOn) + ' (' + diff + ' field' + (diff === 1 ? '' : 's') + ')' : 'service record (' + diff + ' field' + (diff === 1 ? '' : 's') + ')');
+  }
   /* A ROW ALREADY ON THE ROLL WITH NO WAY TO CLAIM IT gets a code on this
      paste rather than on a later one — the office pastes the list it has, and
      an employee who cannot claim his row is the fault being cured. Once: a
@@ -434,8 +587,8 @@ function hrmsPlan_(t, v, r, seen){
 }
 
 function hrmsCounts_(plans){
-  const c = { register:0, correct:0, unchanged:0, refused:0 };
-  plans.forEach(function(p){ if(c[p.verdict] != null) c[p.verdict]++; });
+  const c = { register:0, correct:0, unchanged:0, refused:0, incomplete:0 };
+  plans.forEach(function(p){ if(c[p.verdict] != null) c[p.verdict]++; if(p.incomplete) c.incomplete++; });
   return c;
 }
 
@@ -446,15 +599,35 @@ function hrmsWrite_(t, plans, u){
   /* the column before the first row is written, or a code would have nowhere
      to go and the office would be handed an establishment it cannot claim */
   const ci = plans.some(function(p){ return p.issue; }) ? hrmsCodeCol_(t) : -1;
+  /* AND THE BASE FORMAT'S COLUMNS, only when a paste carries one — a register
+     seeded from the officers list alone keeps its eleven columns */
+  const anyBase = plans.some(function(p){ return p.base && p.verdict !== 'refused'; });
+  if(anyBase) ensureHeaders_(sh, HRMS_BASE_HEAD);
+  const bix = anyBase ? hrmsBaseIx_(t) : {};
+  const width = Math.max(sh.getLastColumn(), U_HEAD.length);
+  const putBase = function(row, base){
+    Object.keys(base).forEach(function(k){
+      const i = bix[k]; if(i == null || i < 0) return;
+      while(row.length <= i) row.push('');
+      row[i] = HRMS_DATE_KEYS[k] ? "'" + base[k] : base[k];
+    });
+  };
+  /* CORRECTIONS GO BACK IN ONE BLOCK TOO. A thousand rows re-pasted with the
+     Base Format is thirty cells each; written cell by cell that is thirty
+     thousand round trips and an execution that dies half way through, leaving
+     a roll nobody can tell the state of. The whole tab is read once, changed
+     in memory and written once, under the lock the caller already holds. */
+  const all = sh.getDataRange().getValues();
+  let touched = false;
   plans.forEach(function(p){
     if(p.verdict === 'refused' || p.verdict === 'unchanged') return;
     if(p.verdict === 'register'){
-      const width = Math.max(sh.getLastColumn(), U_HEAD.length);
       const row = new Array(width).fill('');
       const put = function(k, val){ if(t.ix[k] >= 0) row[t.ix[k]] = val; };
       put('phone', "'" + p.phone); put('name', p.name); put('role', p.role);
       put('mandal', p.office); put('gp', '');
       put('designation', p.desig); put('empid', p.emp);
+      if(p.base) putBase(row, p.base);
       /* NO PIN. He sets his own, and a seeded PIN would be one more secret
          the office has to carry to five thousand people. */
       put('hash', ''); put('initpin', ''); put('active', 'TRUE');
@@ -464,24 +637,37 @@ function hrmsWrite_(t, plans, u){
         row[ci] = p.code;
         issued.push({ name:p.name, office:p.office, desig:p.desig, phone:p.phone, code:p.code });
       }
-      fresh.push(row);
+      while(row.length < width) row.push('');
+      fresh.push(row.slice(0, width));
       added++;
       return;
     }
     if(p.row){
-      const i = p.row - 1;
-      if(t.ix.name >= 0 && p.name) sh.getRange(i + 1, t.ix.name + 1).setValue(p.name);
-      if(t.ix.mandal >= 0 && p.office) sh.getRange(i + 1, t.ix.mandal + 1).setValue(p.office);
-      if(t.ix.designation >= 0 && p.desig) sh.getRange(i + 1, t.ix.designation + 1).setValue(p.desig);
-      if(t.ix.empid >= 0 && p.emp) sh.getRange(i + 1, t.ix.empid + 1).setValue(p.emp);
+      const i = p.row - 1, row = all[i];
+      while(row.length < width) row.push('');
+      if(t.ix.name >= 0 && p.name) row[t.ix.name] = p.name;
+      if(t.ix.role >= 0 && p.role) row[t.ix.role] = p.role;
+      if(t.ix.mandal >= 0 && p.office) row[t.ix.mandal] = p.office;
+      if(t.ix.designation >= 0 && p.desig) row[t.ix.designation] = p.desig;
+      if(t.ix.empid >= 0 && p.emp) row[t.ix.empid] = p.emp;
+      if(p.base) putBase(row, p.base);
       if(p.issue && ci >= 0){
         p.code = hrmsCode_();
-        sh.getRange(i + 1, ci + 1).setValue(p.code);
+        while(row.length <= ci) row.push('');
+        row[ci] = p.code;
         issued.push({ name:p.name, office:p.office, desig:p.desig, phone:p.phone, code:p.code });
       }
+      /* the number keeps its apostrophe, or a re-written cell turns numeric */
+      if(t.ix.phone >= 0 && /^\d+$/.test(String(row[t.ix.phone]))) row[t.ix.phone] = "'" + row[t.ix.phone];
+      touched = true;
       corrected++;
     }
   });
+  if(touched){
+    const w2 = Math.max.apply(null, all.map(function(r){ return r.length; }).concat([width]));
+    all.forEach(function(r){ while(r.length < w2) r.push(''); });
+    sh.getRange(1, 1, all.length, w2).setValues(all);
+  }
   /* WRITTEN IN ONE BLOCK. Five thousand appendRow calls is five thousand
      round trips to the Sheet and an execution that times out half way
      through, leaving an establishment nobody can tell the state of. */
@@ -493,6 +679,154 @@ function hrmsWrite_(t, plans, u){
      of them, exactly as it records that a PIN was set and never the PIN */
   admAudit_('HRMS ESTABLISHMENT SEEDED', tenant_().key,
     added + ' added · ' + corrected + ' corrected · ' + issued.length +
-    ' enrolment code(s) issued · by ' + u.name);
+    ' enrolment code(s) issued' + (anyBase ? ' · with the Base Format' : '') + ' · by ' + u.name);
   return { added:added, corrected:corrected, issued:issued };
+}
+
+/* ----------------------------------------------------- his record and account
+   WHAT THE SERVICE REGISTER SAYS OF HIM, off his own row: nothing another
+   employee could read, because op=hrms answers the token's own officer alone. */
+function hrmsRecord_(phone){
+  const t = uidx_(), bix = hrmsBaseIx_(t);
+  const v = t.sh.getDataRange().getValues(), p = phone10_(phone);
+  for(let i = 1; i < v.length; i++){
+    if(phone10_(v[i][t.ix.phone]) !== p) continue;
+    if(String(v[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
+    const out = { empId: t.ix.empid >= 0 ? cell_(v[i], t.ix.empid) : '', email: t.ix.email >= 0 ? cell_(v[i], t.ix.email) : '' };
+    Object.keys(bix).forEach(function(k){
+      const j = bix[k]; if(j < 0) return;
+      const raw = v[i][j];
+      out[k] = HRMS_DATE_KEYS[k] ? hrmsDate_(raw) : HRMS_NUM_KEYS[k] ? hrmsNum_(raw) : String(raw == null ? '' : raw).trim();
+    });
+    /* superannuation at sixty-one, as the workbook's own column X1 computes it:
+       the last day of the month the sixty-first birthday falls in, or the day
+       before it when born on the first (the state's rule) */
+    if(out.dob){
+      const d = new Date(out.dob + 'T00:00:00Z');
+      if(!isNaN(d)){
+        const y = d.getUTCFullYear() + 61, m = d.getUTCMonth(), day = d.getUTCDate();
+        const last = day === 1 ? new Date(Date.UTC(y, m, 0)) : new Date(Date.UTC(y, m + 1, 0));
+        out.retire = last.toISOString().slice(0, 10);
+      }
+    }
+    return out;
+  }
+  return null;
+}
+
+/* THE KINDS OF LEAVE AN EMPLOYEE IS OFFERED, and what each stands at. The
+   sanction's own arithmetic (leaveOpening_ in Code.gs) is read first, so the
+   figure on his screen is the figure the order will measure against; where
+   his office has supplied no Service Register figure, the tenant's table —
+   pro-rated for the opening year — stands as before. Half pay leave and child
+   care leave are offered only where the record carries them: they are not on
+   the tenant's table and a nought there would read as "none left". */
+var HRMS_KINDS = ['CL','EL','HPL','OH','CCL','ML','HQ'];
+function hrmsAccount_(u, rows, year){
+  const y = String(year), out = { year:y, types:{} };
+  const rec = hrmsRecord_(u.phone) || {};
+  out.asOn = rec.balAsOn || ''; out.verifiedBy = rec.verifiedBy || ''; out.verifiedOn = rec.verifiedOn || '';
+  const sinceOf = function(type, op, want){
+    /* days of this kind sanctioned (or awaiting) after the balance date — in
+       the year for the yearly kinds, whenever for a balance at credit */
+    let n = 0;
+    (rows || []).forEach(function(r){
+      if(String(r.type).toUpperCase() !== type) return;
+      if(String(r.status || 'PENDING').toUpperCase() !== want) return;
+      const f = String(r.fromDate || '');
+      if(op && f <= op.floor) return;
+      if((!op || op.yearly) && f.slice(0, 4) !== y) return;
+      n += type === 'HQ' ? 1 : (Number(r.days) || 0);
+    });
+    return n;
+  };
+  HRMS_KINDS.forEach(function(k){
+    const op = leaveOpening_(u.phone, k, y);
+    if(k === 'HPL' && !op) return;                                  /* not carried: not offered */
+    if(k === 'CCL' && !op && String(rec.gender || '').toLowerCase() !== 'female') return;
+    const cap = op ? op.cap : (k === 'HPL' ? 0 : k === 'CCL' ? CCL_TOTAL_DAYS : entitlement_(k, y));
+    const used = (op ? op.used : 0) + sinceOf(k, op, 'APPROVED');
+    const o = { cap:cap, used:used, left:cap > 0 ? Math.max(0, cap - used) : 0,
+                awaiting:sinceOf(k, op, 'PENDING'), opening:op ? op.used : 0,
+                credit:!!(op && op.credit), yearly: op ? !!op.yearly : (k === 'CL' || k === 'OH'),
+                asOn: op ? op.asOn : '' };
+    if(k === 'ML') o.spell = ML_MAX_SPELL;
+    if(k === 'HQ') o.permission = true;
+    out.types[k] = o;
+  });
+  return out;
+}
+
+/* the year's holidays, for the calendar on the phone — the order's dates and
+   the Gregorian second Saturdays, as isWorkingDay_ reads them */
+function hrmsHolidays_(year){
+  const set = holidaySet_(), out = {};
+  Object.keys(set).forEach(function(d){ if(d.slice(0, 4) === String(year) || d.slice(0, 4) === String(Number(year) + 1)) out[d] = set[d]; });
+  return out;
+}
+
+/* ------------------------------------------------------------ who is away
+   One walk of the Leave tab's tail, folded by application, for the year:
+   per day, how many people's sanctioned leave covers it; who is away today;
+   how many applications are waiting. The head of an office sees his office
+   — the rows whose office is his — and the Collector the district. */
+function hrmsCalendar_(u, year){
+  const office = u.role === 'HOD' ? String(u.mandal || '') : '';
+  const key = 'hrcal_' + (office ? 'o:' + office.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40) : 'd') + '_' + year;
+  try{ const c = cache_().get(key); if(c) return JSON.parse(c); }catch(err){}
+  const today = today_();
+  const sh = sheet_('Leave', L_HEAD), m = headMap_(sh, L_HEAD);
+  const lastRow = sh.getLastRow();
+  const days = {}, away = [];
+  let pending = 0;
+  const same = function(a, b){ return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase(); };
+  if(lastRow >= 2){
+    const start = Math.max(2, lastRow - HRMS_TAIL_ROWS);
+    const v = sh.getRange(start, 1, lastRow - start + 1, sh.getLastColumn()).getValues();
+    /* AN ORDER IS PASSED ON THE APPLICATION, NOT ON A ROW (25.08.2026): an
+       application may stand on two rows, one decided and its twin PENDING,
+       and the DECIDED one is the application. Folded first, counted after —
+       walked newest-first the PENDING twin was found first and the sanctioned
+       leave under it vanished from the calendar. */
+    const byId = {}, order = [];
+    for(let i = 0; i < v.length; i++){
+      const r = v[i];
+      if(office && !same(r[m.ix.mandal], office)) continue;
+      const id = String(r[m.ix.id] || '').trim(); if(!id) continue;
+      const st0 = String(r[m.ix.status] || 'PENDING').toUpperCase();
+      if(!byId[id]){ byId[id] = r; order.push(id); }
+      else if(String(byId[id][m.ix.status] || 'PENDING').toUpperCase() === 'PENDING' && st0 !== 'PENDING') byId[id] = r;
+    }
+    for(let j = 0; j < order.length; j++){
+      const r = byId[order[j]];
+      const st = String(r[m.ix.status] || 'PENDING').toUpperCase();
+      if(st === 'PENDING'){ pending++; continue; }
+      if(st !== 'APPROVED') continue;
+      const from = dateText_(r[m.ix.fromDate]), to = dateText_(r[m.ix.toDate]);
+      let span = spanDays_(from, to); if(!(span > 0)) continue; if(span > 400) span = 400;
+      const t0 = Date.parse(from + 'T00:00:00Z');
+      for(let d = 0; d < span; d++){
+        const dt = new Date(t0 + d * 86400000);
+        if(dt.getUTCFullYear() !== year) continue;
+        const k = dt.toISOString().slice(0, 10);
+        days[k] = (days[k] || 0) + 1;
+      }
+      if(from <= today && to >= today && away.length < 80)
+        away.push({ name:String(r[m.ix.name] || ''), type:String(r[m.ix.type] || ''), from:from, to:to,
+                    office:String(r[m.ix.mandal] || '') });
+    }
+  }
+  /* the roll the figure is read against */
+  const t = uidx_(), uv = t.sh.getDataRange().getValues();
+  let roll = 0; const ph = {};
+  for(let i = 1; i < uv.length; i++){
+    if(String(uv[i][t.ix.active]).toUpperCase() === 'FALSE') continue;
+    const role = cell_(uv[i], t.ix.role).toUpperCase(); if(role === 'COLLECTOR') continue;
+    if(office && !same(uv[i][t.ix.mandal], office)) continue;
+    const p = phone10_(uv[i][t.ix.phone]); if(!p || ph[p]) continue; ph[p] = 1; roll++;
+  }
+  const out = { ok:true, year:year, today:today, scope: office ? 'office' : 'district', office:office,
+                roll:roll, days:days, away:away, pending:pending, at:new Date().toISOString() };
+  try{ cache_().put(key, JSON.stringify(out), HRMS_CAL_CACHE_S); }catch(err){}
+  return out;
 }

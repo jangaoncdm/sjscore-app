@@ -1,79 +1,65 @@
 /* DISTRICT HRMS — the employee's own app. Leave, and nothing else.
  *
- * Ordered 05.10.2026. It is its OWN page and not a third copy of the field
- * app: that app carries nineteen tenant branches and an attendance gate that
- * four hundred and eighteen serving officers depend on every morning, and
- * adding a third register to it would put their register at risk to give this
- * one a screen it does not need. Everything here is leave.
+ * Ordered 05.10.2026; rebuilt 18.10.2026 on the draft the Collector passed
+ * that morning: "move forward with that, use motion animation as stated in
+ * welcome page and create entire app", and the same hour, "heatmap to each
+ * head of office related to their officers in leave and also to collector on
+ * homescreen".
  *
- * THE PIN IS THE EMPLOYEE'S. The district seeds the establishment and he
- * claims his own row the first time, with the employee id his office holds.
- * The server decides all of it (rule 6); this page only asks.
+ * It is its OWN page and not a third copy of the field app: that app carries
+ * nineteen tenant branches and an attendance gate that four hundred serving
+ * officers depend on every morning. Everything here is leave.
  *
- * AND IT IS HONEST ABOUT THE NETWORK. The field app marks attendance offline
- * because a mark is a fact the handset can hold until there is a line. An
- * application for leave is not: it is a request for orders, and queueing one
- * silently would have an employee believe he had applied when the district
- * had never heard of it. So this says plainly when it cannot reach the
- * register, and nothing is ever shown as sent that was not.
+ * THE SERVER DECIDES (rule 6). Every figure on the rail is the register's —
+ * op=hrms answers his account from the same leaveOpening_ the sanction is
+ * measured against — and this page only asks. Where it works something out
+ * for itself (the days between two dates, what a request would leave him) it
+ * is so he knows before he asks; the district still refuses at sanction.
+ *
+ * AND IT IS HONEST ABOUT THE NETWORK. An application for leave is a request
+ * for orders, not a fact a handset can hold, so nothing is queued and nothing
+ * is ever shown as sent that the district did not take.
  */
 'use strict';
 
+var APP_VERSION = '2.0.0';
 var SERVER = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
 var STORE = 'sjgp-hrms1';          /* browser storage is per DOMAIN, not per
                                       folder: three apps on one origin need
-                                      three keys or they sign each other out */
+                                      three keys or they sign each other out.
+                                      The console reads this key for the
+                                      Collector's HRMS sign-in, so it stays. */
 
 var $ = function(id){ return document.getElementById(id); };
-var DB = { url:SERVER, session:null, me:null, rows:[], ent:null, at:'', pend:[], pendAll:0 };
+var DB = { url:SERVER, session:null, me:null, rows:[], account:null, record:null, holidays:{}, today:'',
+           at:'', pend:[], pendAll:0, cal:null, calAt:'' };
+/* what the screen is doing — never saved, never the register's */
+var S = { screen:'signin', tab:'home', req:null, calM:0, calY:0, hmM:0, hmY:0, hmScope:'office', detail:null, myM:null, busy:false };
 
 /* ------------------------------------------------------------------ store */
 function load(){
-  try{ DB = JSON.parse(localStorage.getItem(STORE) || 'null') || DB; }catch(e){}
-  /* THE ADDRESS THE DISTRICT PUBLISHES BEATS THE ONE A PHONE REMEMBERED.
-     The field app learned this the hard way: an address stored once lived on
-     for ever, and a button pressed today called a deployment made weeks ago. */
+  try{ DB = Object.assign(DB, JSON.parse(localStorage.getItem(STORE) || 'null') || {}); }catch(e){}
+  /* THE ADDRESS THE DISTRICT PUBLISHES BEATS THE ONE A PHONE REMEMBERED. */
   if(SERVER) DB.url = SERVER;
-  DB.rows = DB.rows || [];
+  DB.rows = DB.rows || []; DB.pend = DB.pend || []; DB.holidays = DB.holidays || {};
 }
 function save(){ try{ localStorage.setItem(STORE, JSON.stringify(DB)); }catch(e){} }
 
-/* NOBODY IS EVER SHOWN THE WORD 'auth'.
-   It is the register's internal word for "this token is not one of mine", and
-   it was being printed to the screen exactly as it arrived — reported from the
-   district on 09.10.2026 as "i am getting auth error", which is the whole of
-   what the app told him. It says nothing about what happened and nothing about
-   what to do, and it is the same uselessness as a decoder that says only "no
-   code found".
-
-   AND A REJECTED TOKEN IS TAKEN OFF THE HANDSET. A session the district will
-   not accept is not a session; leaving it in the store means every screen goes
-   on sending it and every screen goes on failing, and the man has no way back
-   to the sign-in he needs. He loses nothing — the token is all that is
-   dropped, never his unsent work. */
+/* NOBODY IS EVER SHOWN THE WORD 'auth', and A REJECTED TOKEN IS TAKEN OFF THE
+   HANDSET — a session the district will not accept is not a session, and
+   leaving it in the store means every screen goes on failing with no way back
+   to the sign-in he needs. He loses the token and nothing else. */
 var AUTH_GONE = 'This device is no longer signed in to the register — the sign-in had '
               + 'expired, or it was made before the register was stood up. Sign in again '
               + 'below; nothing of yours is lost.';
-
-/* A TOKEN THE REGISTER WILL NOT TAKE IS NOT A MESSAGE, IT IS A STATE.
-   Printing the word was only half the fault. refresh() swallowed a refusal
-   whole — `if(!r || !r.ok) return;` — so a handset carrying a dead session sat
-   on a home screen that never updated, never explained itself, and offered no
-   way back to the sign-in it needed, because home() shows the sign-in screen
-   only when there is no session at all. Every screen went on sending the same
-   token and every screen went on failing in silence.
-
-   So the session comes off the handset and he is put back where he can do
-   something. He loses the token and nothing else. */
 function tokenRefused(r){
   if(!r || String(r.error || '') !== 'auth') return false;
-  DB.session = null; DB.me = null; DB.pend = []; DB.pendAll = 0;
+  DB.session = null; DB.me = null; DB.pend = []; DB.pendAll = 0; DB.cal = null;
   save();
-  show('vSignin');
+  go('signin');
   say('mSignin', 'bad', AUTH_GONE);
   return true;
 }
-/* and nobody is ever shown the register's own word for it */
 function errText(r){
   var e = String((r && r.error) || '');
   if(e === 'auth') return AUTH_GONE;
@@ -81,453 +67,818 @@ function errText(r){
 }
 
 /* ------------------------------------------------------------------- wire */
-/* AN APP WITH NO ADDRESS MUST NOT BLAME THE OFFICER'S SIGNAL.
-   The boot guard says plainly that config.js has not been written — and then
-   the employee presses the only button on the screen, the POST goes to the
-   page itself, the browser answers 405, and the catch replaces that honest
-   sentence with 'Try again where there is a line.' He is then told the fault
-   is his network, on a register that was never stood up, and he will try
-   again at a better signal for ever. Rendered against the live /hrms/ with
-   no config published, which is exactly the state the printed install card
-   sends him to today.
-
-   It RESOLVES rather than rejects, with the shape every caller here already
-   reads — `if(!r || !r.ok) … r.error` — so sign-in, the claim, the refresh,
-   the application and the Collector's orders all say the true thing without
-   one of them being touched. */
+/* AN APP WITH NO ADDRESS MUST NOT BLAME THE OFFICER'S SIGNAL: it resolves
+   rather than rejects, with the shape every caller reads. */
 var NO_ADDR = 'This app has no district address yet, so there is nothing to sign in to. ' +
               'It is not your signal — the register has not been stood up.';
 function post(body){
   if(!DB.url) return Promise.resolve({ ok:false, error:NO_ADDR });
-  return fetch(DB.url, { method:'POST',
-    headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+  return fetch(DB.url, { method:'POST', headers:{ 'Content-Type':'text/plain;charset=utf-8' },
     body:JSON.stringify(body) }).then(function(r){ return r.json(); });
 }
 function get(params){
   if(!DB.url) return Promise.resolve({ ok:false, error:NO_ADDR });
   var q = Object.keys(params).map(function(k){
     return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
-  return fetch(DB.url + '?' + q + '&t=' + Date.now(), { cache:'no-store' })
-    .then(function(r){ return r.json(); });
+  return fetch(DB.url + '?' + q + '&t=' + Date.now(), { cache:'no-store' }).then(function(r){ return r.json(); });
 }
-function say(el, kind, text){
-  var m = $(el);
-  m.className = 'msg on ' + kind;
-  m.textContent = text;
-}
-function clear(el){ var m = $(el); m.className = 'msg'; m.textContent = ''; }
+function say(el, kind, text){ var m = $(el); if(!m) return; m.className = 'msg on ' + kind; m.textContent = text; }
+function clear(el){ var m = $(el); if(!m) return; m.className = 'msg'; m.textContent = ''; }
 function busy(b, on, word){
+  if(!b) return;
   b.disabled = on;
   if(on){ b.dataset.was = b.textContent; b.textContent = word || 'Working…'; }
   else if(b.dataset.was) b.textContent = b.dataset.was;
 }
+function toast(t){ var e = $('toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast._t); toast._t = setTimeout(function(){ e.classList.remove('on'); }, 2600); }
 
-function show(v){
-  /* EVERY SCREEN, OR THE ONE LEFT OUT NEVER OPENS. vOrders was added and not
-     listed here: its contents rendered, its buttons were in the DOM and
-     bound, and the section stayed hidden — the same shape of silence as a
-     parser declared inside the function that draws its panel. */
-  ['vSignin','vClaim','vHome','vOrders','vApply'].forEach(function(x){
-    $(x).classList.toggle('hide', x !== v); });
+/* ------------------------------------------------------------- the words */
+var KIND_NAME = { CL:'Casual leave', EL:'Earned leave', HPL:'Half pay leave', OH:'Optional holiday',
+                  CCL:'Child care leave', ML:'Medical leave', HQ:'Permission to leave headquarters' };
+var KIND_ORDER = ['CL','EL','HPL','OH','CCL','ML','HQ'];
+var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var MONL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+var DOW = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+/* Annexure-II of G.O.Rt.No.1715 dt. 06.12.2025 — the only dates an optional
+   holiday may name; the register's copy of the same list refuses any other */
+var TS_OPTIONAL_2026 = {
+  '2026-01-01':'New Year Day', '2026-01-03':'Birthday of Hazrath Ali (R.A)', '2026-01-16':'Kanumu',
+  '2026-01-17':'Shab-e-Meraj', '2026-01-23':'Sri Panchami', '2026-02-04':'Shab-e-Barat',
+  '2026-03-10':'Shahadat Hzt Ali (R.A.)', '2026-03-13':'Jumuatul Wada', '2026-03-17':'Shab-e-Qader',
+  '2026-03-31':'Mahaveer Jayanthi', '2026-04-14':'Tamil New Year’s Day', '2026-04-20':'Basava Jayanthi',
+  '2026-05-01':'Buddha Purnima', '2026-06-04':'Eid-e-Ghadeer', '2026-06-25':'9th Moharram',
+  '2026-07-16':'Ratha Yathra', '2026-08-04':'Arbayeen', '2026-08-15':'Parsi New Year’s Day',
+  '2026-08-21':'Varalakshmi Vratham', '2026-08-28':'Sravana Purnima / Rakhi Purnima',
+  '2026-09-23':'Yaz Dahum Shareef', '2026-10-19':'Maharnavami',
+  '2026-10-26':'Birthday of Hzt. Syed Mohammed Juvanpuri Mahdi Ma’ud (A.S.)',
+  '2026-11-08':'Naraka Chaturdhi', '2026-12-24':'Christmas Eve', '2026-12-26':'Birthday of Hazrath Ali'
+};
+
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
+function iso(v){ return String(v || '').slice(0, 10); }
+/* THE DISTRICT'S DAY, NOT THE HANDSET'S (rule 1): op=hrms carries today */
+function today(){ return DB.today || new Date().toISOString().slice(0, 10); }
+function yearNow(){ return Number(today().slice(0, 4)); }
+function dmy(d){ var p = iso(d).split('-'); return p.length === 3 ? Number(p[2]) + ' ' + MON[Number(p[1]) - 1] + (p[0] !== String(yearNow()) ? ' ' + p[0] : '') : ''; }
+function dmyFull(d){ var p = iso(d).split('-'); return p.length === 3 ? p[2] + '.' + p[1] + '.' + p[0] : String(d || ''); }
+function span(a, b){ return iso(a) === iso(b) ? dmy(a) : dmy(a) + ' – ' + dmy(b); }
+function daysBetween(a, b){ if(!a || !b) return 0; var x = Date.parse(iso(a) + 'T00:00:00Z'), y = Date.parse(iso(b) + 'T00:00:00Z'); return isNaN(x) || isNaN(y) || y < x ? 0 : Math.round((y - x) / 864e5) + 1; }
+function hhmm(t){ var m = String(t || '').match(/T(\d{2}):(\d{2})/); if(!m) return ''; var h = Number(m[1]); /* the register keeps UTC; the district reads IST */
+  if(/Z$/.test(String(t))){ var mm = Number(m[2]) + 30; h = (h + 5 + Math.floor(mm / 60)) % 24; return ('0' + h).slice(-2) + ':' + ('0' + (mm % 60)).slice(-2); } return m[1] + ':' + m[2]; }
+function ini(name){ var w = String(name || '').replace(/[^A-Za-z .]/g, ' ').trim().split(/[\s.]+/).filter(Boolean); return ((w[0] || '?')[0] + (w.length > 1 ? w[w.length - 1][0] : '')).toUpperCase(); }
+function first(name){ var s = String(name || '').replace(/,.*$/, '').replace(/\(.*?\)/g, '').trim(); var w = s.split(/\s+/); return w.length > 2 ? w.slice(-2).join(' ') : s; }
+function statusOf(r){ return String(r.status || 'PENDING').toUpperCase(); }
+function role(){ return String(((DB.session || {}).user || {}).role || '').toUpperCase(); }
+function canOrder(){ return role() === 'COLLECTOR'; }
+function isHead(){ return role() === 'HOD'; }
+function sees(){ return canOrder() || isHead(); }                       /* who gets the office calendar */
+function roleWord(){ var u = (DB.session || {}).user || {}; return u.desig || (role() === 'COLLECTOR' ? 'Collector & District Magistrate' : role() === 'HOD' ? 'Head of office' : 'Employee'); }
+function cancelledWord(r){ return /set aside|cancelled/i.test(String(r.decidedBy || '')) ? 'Cancelled by the Collector' : 'Withdrawn'; }
+
+/* ------------------------------------------------------------------ icons */
+var I = {
+  home:'<svg class="i" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
+  leaf:'<svg class="i" viewBox="0 0 24 24"><path d="M4 20c0-9 5-14 16-16-1 11-6 16-16 16z"/><path d="M4 20c3-5 7-9 12-12"/></svg>',
+  cal:'<svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+  inbox:'<svg class="i" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 14h5l1.5 2h3L15 14h5"/></svg>',
+  me:'<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>',
+  plus:'<svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  back:'<svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+  close:'<svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  chevL:'<svg class="i s" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+  chevR:'<svg class="i s" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
+  check:'<svg class="i s" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>',
+  clock:'<svg class="i s" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  x:'<svg class="i s" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  sun:'<svg class="i s" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+  key:'<svg class="i s" viewBox="0 0 24 24"><circle cx="8" cy="14" r="4"/><path d="M11 11l9-9M16 6l2 2M18 4l2 2"/></svg>',
+  out:'<svg class="i s" viewBox="0 0 24 24"><path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H9"/></svg>',
+  refresh:'<svg class="i s" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg>'
+};
+
+/* ------------------------------------------------------------- the shell */
+function tabs(){
+  var nav = $('nav');
+  var on = !!(DB.session && DB.session.token) && ['home','leave','calendar','inbox','me'].indexOf(S.screen) >= 0;
+  nav.classList.toggle('hide', !on);
+  if(!on) return;
+  var t = [ ['home','Home',I.home], ['leave','Leave',I.leaf], ['calendar','Calendar',I.cal] ];
+  if(canOrder()) t.push(['inbox','Inbox',I.inbox]);
+  t.push(['me','Me',I.me]);
+  var n = (DB.pend || []).length;
+  nav.innerHTML = t.map(function(x){
+    return '<button data-tab="' + x[0] + '"' + (S.tab === x[0] ? ' aria-current="page"' : '') + '>' +
+      '<span class="pill">' + x[2] + '</span><span>' + x[1] + '</span>' +
+      (x[0] === 'inbox' && n ? '<span class="cnt">' + n + '</span>' : '') + '</button>';
+  }).join('');
+}
+function bar(title, left, right){ return '<div class="bar">' + (left || '') + '<h1>' + esc(title) + '</h1>' + (right || '') + '</div>'; }
+function avatarBtn(){ var u = (DB.session || {}).user || {}; return '<button class="ic" data-go="me" aria-label="Me"><span class="avatar">' + esc(ini(u.name)) + '</span></button>'; }
+function backBtn(to){ return '<button class="ic" data-go="' + to + '" aria-label="Back">' + I.back + '</button>'; }
+
+function go(s){
+  if(s !== 'inbox') S.inboxMsg = null;
+  S.screen = s;
+  if(['home','leave','calendar','inbox','me'].indexOf(s) >= 0) S.tab = s;
+  if(s === 'inbox' && !canOrder()) S.screen = 'home';
+  render();
+}
+function render(){
+  var v = S.screen, h = '';
+  if(!(DB.session && DB.session.token) && v !== 'claim') v = S.screen = 'signin';
+  if(v === 'signin') h = vSignin();
+  else if(v === 'claim') h = vClaim();
+  else if(v === 'home') h = vHome();
+  else if(v === 'leave') h = vLeave();
+  else if(v === 'calendar') h = vCalendar();
+  else if(v === 'inbox') h = vInbox();
+  else if(v === 'order') h = vOrder();
+  else if(v === 'me') h = vMe();
+  else if(v === 'request') h = vRequest();
+  else if(v === 'request2') h = vRequest2();
+  else if(v === 'detail') h = vDetail();
+  $('screen').innerHTML = h;
+  tabs();
   window.scrollTo(0, 0);
+  var f = $('screen').querySelector('[data-focus]'); if(f) try{ f.focus(); }catch(e){}
 }
 
 /* ---------------------------------------------------------------- sign in */
+function vSignin(){
+  return '<div class="signin">' +
+    '<div class="seal"><img src="icons/icon-192.png" alt="Government of Telangana emblem"></div>' +
+    '<div><p class="eyebrow">Government of Telangana · Jangaon</p>' +
+    '<h1 class="display" style="margin-top:6px">District<br>HRMS</h1></div>' +
+    '<div class="field"><label for="iPhone">Mobile number</label><input id="iPhone" type="tel" inputmode="numeric" autocomplete="username" maxlength="13" placeholder="10 digits"></div>' +
+    '<div class="field"><label for="iPin">PIN</label><input id="iPin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="8" placeholder="Your PIN"></div>' +
+    '<button class="btn filled" id="bSignin" data-act="signin">Sign in</button>' +
+    '<div class="msg" id="mSignin" role="alert"></div>' +
+    '<p class="small">Signing in for the first time? Enter your mobile number and press <b>Sign in</b> — you will be asked to choose your own PIN.</p>' +
+    '<p class="foot">Your office holds the establishment. If your number is not recognised, ask it to check the number and the employee id it has against your name.</p>' +
+    '</div>';
+}
+function vClaim(){
+  return '<div class="signin">' +
+    '<div><p class="eyebrow">First sign-in</p><h1 class="title-l" id="claimName" style="margin-top:6px">' + esc(S.claimName || 'Choose your PIN') + '</h1>' +
+    '<p class="body" style="margin-top:6px">Your number is on the district roll and has no PIN yet. Set one now — it is yours and the office never sees it.</p></div>' +
+    '<div class="field"><label for="cEmp">Employee ID or enrolment code</label><input id="cEmp" autocomplete="off" placeholder="From your office" data-focus></div>' +
+    '<p class="small">This is how the register knows the number is yours — your employee id, or the <b>six-character code</b> your office was given for you. It is used once and then it is finished with.</p>' +
+    '<div class="two"><div class="field"><label for="cPin">Choose a PIN</label><input id="cPin" type="password" inputmode="numeric" maxlength="8" placeholder="4 to 8 digits"></div>' +
+    '<div class="field"><label for="cPin2">Type it again</label><input id="cPin2" type="password" inputmode="numeric" maxlength="8" placeholder="Once more"></div></div>' +
+    '<button class="btn filled" id="bClaim" data-act="claim">Set my PIN and sign in</button>' +
+    '<button class="btn outl" id="bClaimBack" data-go="signin">Back</button>' +
+    '<div class="msg" id="mClaim" role="alert"></div>' +
+    '<p class="foot">A row is claimed once. If a PIN has already been set on your number and it was not you, your office can have it reset.</p>' +
+    '</div>';
+}
 function signIn(){
-  var b = $('bSignin'), ph = $('iPhone').value.replace(/\D/g, '').slice(-10), pin = $('iPin').value.trim();
+  var b = $('bSignin'), ph = ($('iPhone').value || '').replace(/\D/g, '').slice(-10), pin = ($('iPin').value || '').trim();
   clear('mSignin');
   if(ph.length !== 10) return say('mSignin', 'bad', 'A mobile number is ten digits.');
+  S.phone = ph;
   busy(b, true, 'Signing in…');
   post({ kind:'login', u:ph, p:pin })
     .then(function(r){
       busy(b, false);
       /* HIS ROW IS HIS TO CLAIM, and the register says so rather than sending
          five thousand people to telephone an office on the first morning. */
-      if(r && r.needPin){
-        $('claimName').textContent = r.name ? 'Welcome, ' + r.name : 'Choose your PIN';
-        $('cEmp').value = ''; $('cPin').value = ''; $('cPin2').value = '';
-        clear('mClaim');
-        show('vClaim');
-        return;
-      }
+      if(r && r.needPin){ S.claimName = r.name ? 'Welcome, ' + r.name : 'Choose your PIN'; go('claim'); return; }
       if(!r || !r.ok) return say('mSignin', 'bad', errText(r));
       DB.session = { token:r.token, user:r.user };
       save();
-      $('iPin').value = '';
-      home(true);
+      go('home'); refresh();
     })
     .catch(function(){ busy(b, false);
       say('mSignin', 'bad', 'The district could not be reached. Try again where there is a line.'); });
 }
-
 function claim(){
   var b = $('bClaim');
-  var ph = $('iPhone').value.replace(/\D/g, '').slice(-10);
-  var emp = $('cEmp').value.trim(), p1 = $('cPin').value.trim(), p2 = $('cPin2').value.trim();
+  var emp = ($('cEmp').value || '').trim(), p1 = ($('cPin').value || '').trim(), p2 = ($('cPin2').value || '').trim();
   clear('mClaim');
   if(!emp) return say('mClaim', 'bad', 'Your employee id, or the enrolment code your office was given for you, is needed — it is how the register knows the number is yours.');
   if(!/^\d{4,8}$/.test(p1)) return say('mClaim', 'bad', 'A PIN is four to eight digits.');
   if(p1 !== p2) return say('mClaim', 'bad', 'The two PINs are not the same.');
   busy(b, true, 'Setting…');
-  post({ kind:'claimPin', u:ph, emp:emp, pin:p1 })
+  post({ kind:'claimPin', u:S.phone, emp:emp, pin:p1 })
     .then(function(r){
       busy(b, false);
       if(!r || !r.ok){ if(tokenRefused(r)) return; return say('mClaim', 'bad', errText(r)); }
       DB.session = { token:r.token, user:r.user };
       save();
-      home(true);
+      go('home'); refresh();
     })
     .catch(function(){ busy(b, false);
       say('mClaim', 'bad', 'The district could not be reached. Try again where there is a line.'); });
 }
 
-/* ------------------------------------------------------------------- home */
-function home(pull){
-  if(!DB.session) return show('vSignin');
-  var u = DB.session.user || {};
-  $('hName').textContent = String(u.name || '').replace(/,.*$/, '');
-  $('hWho').textContent = [u.desig || roleName(u.role), u.mandal].filter(Boolean).join(' · ');
-  /* THE ORDERS ARE THE COLLECTOR'S. The button is hidden from everyone else
-     as a courtesy; op=hrmsPending and leaveDecision both re-check the role on
-     the server, because hiding a button is not a rule (rule 6). */
-  $('bOrders').className = canOrder() ? 'btn' : 'btn hide';
-  show('vHome');
-  draw();
-  if(pull !== false) refresh();
-}
-function canOrder(){
-  return String(((DB.session || {}).user || {}).role || '').toUpperCase() === 'COLLECTOR';
-}
-function roleName(r){
-  return r === 'HOD' ? 'Head of office' : r === 'COLLECTOR' ? 'Collector' : 'Employee';
-}
+/* ---------------------------------------------------------------- reading */
 function refresh(){
   if(!DB.session) return;
   get({ op:'hrms', token:DB.session.token })
     .then(function(r){
       if(!r || !r.ok){ tokenRefused(r); return; }
-      DB.rows = r.rows || []; DB.ent = r.entitlement || null;
-      DB.me = r.me || null; DB.at = new Date().toISOString();
-      save(); draw();
+      DB.rows = r.rows || []; DB.account = r.account || null; DB.record = r.record || null;
+      DB.holidays = r.holidays || {}; DB.today = r.today || ''; DB.me = r.me || null;
+      if(r.me && DB.session && DB.session.user){ DB.session.user.desig = r.me.desig || DB.session.user.desig; }
+      DB.at = new Date().toISOString();
+      save(); if(/^(home|leave|calendar|detail)$/.test(S.screen)) render();
     })
     .catch(function(){});
   if(canOrder()) pending();
+  if(sees()) calendar();
 }
-
-/* ---------------------------------------------------- the Collector's orders
-   Every order on every one of these registers is passed in the app —
-   leaveDecision has always been the field app's, and the console only shows
-   the waiting list. This app had none, so there was no way on earth to
-   sanction a single application on the register whose whole purpose is leave.
-
-   THE LIST IS BOUNDED (op=hrmsPending walks the tail), because the console's
-   own payload reads the Leave tab whole, which is right at 284 officers and is
-   not at five thousand. */
 function pending(){
   if(!DB.session || !canOrder()) return;
   get({ op:'hrmsPending', token:DB.session.token })
     .then(function(r){
       if(!r || !r.ok) return;
-      /* HOW MANY ARE WAITING IN ALL, not merely how many fit. The server
-         sends the oldest 300 and counts the rest, and the screen threw that
-         count away — so a desk 450 deep read as 300, and by the order of
-         08.10.2026 the Collector is the only person who may sanction any of
-         them, so he would have believed he had seen his whole desk. */
+      /* how many are waiting IN ALL, not merely how many fit */
       DB.pend = r.rows || []; DB.pendAll = Number(r.total) || DB.pend.length;
-      save(); drawOrders();
+      save(); if(/^(home|inbox)$/.test(S.screen)) render(); else tabs();
     })
     .catch(function(){});
 }
-function drawOrders(){
-  var n = (DB.pend || []).length;
-  var b = $('bOrdersN'); if(b) b.textContent = n ? '  ·  ' + n : '';
-  var c = $('oCount');
-  var tot = Math.max(Number(DB.pendAll) || 0, n);
-  if(c) c.textContent = !n ? 'Nothing is waiting.'
-      : tot > n ? tot + ' waiting in all · the oldest ' + n + ' are shown, and more come up as you pass them'
-                : n + ' application' + (n === 1 ? '' : 's') + ' on your desk';
-  var all = $('bAll'); if(all) all.className = n > 1 ? 'btn' : 'btn hide';
-  var list = $('oList'); if(!list) return;
-  list.innerHTML = n ? DB.pend.map(function(r){
-    var waited = Math.round((Date.now() - new Date(r.appliedAt).getTime()) / 36e5);
-    return '<div class="app"><div class="t"><b>' + esc(r.name || r.phone) + '</b>' +
-      '<span class="pill warn">' + (isFinite(waited) ? waited + 'h' : 'waiting') + '</span></div>' +
-      '<div class="d">' + esc([r.desig, r.office].filter(Boolean).join(' · ')) +
-      (r.desig || r.office ? '<br>' : '') +
-      esc(LEAVE_NAME[String(r.type).toUpperCase()] || r.type) + ' · ' +
-      esc(dmy(r.fromDate)) + ' to ' + esc(dmy(r.toDate)) + ' · ' + (Number(r.days) || 0) + ' day(s)' +
-      (r.reason ? '<br>' + esc(r.reason) : '') + '</div>' +
-      '<div class="row2" style="margin-top:9px">' +
-      '<button class="btn" data-ok="' + esc(r.id) + '">Sanction</button>' +
-      '<button class="btn ghost" data-no="' + esc(r.id) + '">Refuse</button>' +
-      '</div></div>';
-  }).join('') : '<div class="empty">Nothing waiting.</div>';
-
-  list.querySelectorAll('[data-ok]').forEach(function(el){
-    el.addEventListener('click', function(){ order(el.getAttribute('data-ok'), 'APPROVED', ''); }); });
-  list.querySelectorAll('[data-no]').forEach(function(el){
-    el.addEventListener('click', function(){
-      /* A REFUSAL CARRIES ITS OWN WORDS. They travel back to the employee and
-         stand on the register, so they cannot be empty. */
-      var why = window.prompt('Why is it refused? These words go to the employee and onto the register.');
-      if(why == null) return;
-      if(!String(why).trim()) return say('mOrders', 'bad', 'A refusal needs its reason — it is what the employee is told.');
-      order(el.getAttribute('data-no'), 'REJECTED', String(why).trim());
-    }); });
-}
-function order(id, status, remarks){
-  clear('mOrders');
-  post({ kind:'leaveDecision', token:DB.session.token, id:id, status:status, remarks:remarks })
+function calendar(){
+  if(!DB.session || !sees()) return;
+  get({ op:'hrmsCalendar', token:DB.session.token, year:String(S.hmY || yearNow()) })
     .then(function(r){
-      if(!r || !r.ok){ if(tokenRefused(r)) return; return say('mOrders', 'bad', errText(r)); }
-      say('mOrders', 'ok', status === 'APPROVED' ? 'Sanctioned.' : 'Refused, and the employee is told why.');
-      pending();
+      if(!r || !r.ok) return;
+      DB.cal = r; DB.calAt = new Date().toISOString();
+      save(); if(/^(home|calendar)$/.test(S.screen)) render();
     })
-    /* A LOST LINE IS NOT PROOF THAT NO ORDER WAS PASSED, and a single order
-       is no different from a batch: the write may have gone through and only
-       the answer been lost on the way back, and on a register that debits a
-       man's casual leave an assurance of that kind must not be invented. The
-       register is re-read, which is the only thing that knows. */
-    .catch(function(){
-      say('mOrders', 'bad', 'The line dropped before the district answered, so it is NOT KNOWN ' +
-        'whether this order was passed. The list is re-read below; if the application is still ' +
-        'on it, no order has been passed on it.');
-      pending();
-    });
-}
-/* SANCTION ALL IS SENT IN BATCHES, and that is not an optimisation.
-
-   By the Collector's order of 08.10.2026 every application in the district
-   comes to him, so this is the ordinary path and not the rare one.
-   decideOneLeave_ re-reads the Leave tab and writes four cells for each
-   application in turn, so two hundred in one request is minutes of Apps
-   Script time on a register carrying thousands of leave rows — and
-   leaveDecision slices b.ids to 200 regardless, so 'Sanction all 300' passed
-   two hundred and said nothing whatever about the other hundred. Batches of
-   twenty-five keep every request well inside the limits, move the count while
-   he waits, and cost only their own batch when one fails.
-
-   AND A FAILED BATCH IS NEVER REPORTED AS 'NOTHING WAS PASSED'. The old
-   message asserted exactly that, which on a timeout is a false assurance
-   about casual leave already debited: the orders may well have been written
-   and only the answer lost on the way back. It now says what is certain, says
-   plainly what is not, and re-reads the register — which is the only thing
-   that actually knows. */
-var ORDER_BATCH = 25;
-function orderAll(){
-  var ids = (DB.pend || []).map(function(r){ return r.id; })
-            .filter(function(x){ return !!String(x || '').trim(); });
-  if(!ids.length) return;
-  var tot = Math.max(Number(DB.pendAll) || 0, ids.length);
-  if(!window.confirm('Sanction ' + ids.length + ' of them?\n\n' +
-    (tot > ids.length ? tot + ' are waiting in all; these are the oldest ' + ids.length +
-      '. The rest come up when you refresh.\n\n' : '') +
-    'Each still answers its own checks in turn, so one that cannot be sanctioned is refused BY NAME ' +
-    'and stays waiting for your own look. Refusals are never passed this way.')) return;
-  clear('mOrders');
-  var b = $('bAll'); busy(b, true, 'Passing\u2026');
-
-  var done = 0, refused = [], sent = 0;
-  function finish(lost){
-    busy(b, false);
-    var bits = [];
-    if(done) bits.push(done + ' sanctioned');
-    if(refused.length) bits.push(refused.length + ' could not be and are still waiting (' +
-      refused.slice(0, 3).map(function(x){ return x.error; }).join('; ') +
-      (refused.length > 3 ? '; \u2026' : '') + ')');
-    /* NEVER 'NO ORDER HAS BEEN PASSED' when we cannot know it */
-    if(lost) bits.push('AND ' + lost + ' COULD NOT BE CONFIRMED \u2014 the district may or may not ' +
-      'have passed them before the line dropped. The list below is re-read from the register, ' +
-      'which is the only thing that knows; whatever is still on it was not sanctioned.');
-    say('mOrders', lost ? 'bad' : refused.length ? 'info' : 'ok',
-        bits.join(' · ') || 'Nothing was passed.');
-    pending();
-  }
-  function step(){
-    if(sent >= ids.length) return finish(0);
-    var part = ids.slice(sent, sent + ORDER_BATCH);
-    sent += part.length;
-    say('mOrders', 'info', 'Passing orders\u2026 ' + sent + ' of ' + ids.length + '.');
-    return post({ kind:'leaveDecision', token:DB.session.token, ids:part, status:'APPROVED' })
-      .then(function(r){
-        if(!r || !r.ok){
-          /* the district ANSWERED and refused the batch, so nothing of it was
-             written — that is certain, and not the same as a lost line */
-          refused.push({ error:errText(r) });
-          return finish(0);
-        }
-        done += Number(r.done) || 0;
-        refused = refused.concat(r.refused || []);
-        return step();
-      })
-      .catch(function(){ return finish(part.length); });
-  }
-  step();
+    .catch(function(){});
 }
 
-var LEAVE_NAME = { CL:'Casual leave', EL:'Earned leave', ML:'Medical leave',
-                   HQ:'Permission to leave headquarters', OH:'Optional holiday' };
+/* ---------------------------------------------------------------- account */
+function acct(){ return (DB.account && DB.account.types) || {}; }
+function balCard(k, selectable){
+  var a = acct()[k]; if(!a || k === 'HQ') return '';
+  var v, s, m = '';
+  if(k === 'ML'){ v = '<span class="v">' + a.used + '<small>taken</small></span>'; s = 'no yearly limit · ' + (a.spell || 15) + ' a spell'; }
+  else if(a.credit){ v = '<span class="v">' + a.left + '<small>days</small></span>'; s = 'at credit' + (a.used ? ' · ' + a.used + ' taken since ' + dmyFull(a.asOn) : (a.asOn ? ' as on ' + dmyFull(a.asOn) : '')); m = '<div class="m"><i style="width:' + Math.round(Math.min(1, a.left / 300) * 100) + '%"></i></div>'; }
+  else { var pct = a.cap ? a.left / a.cap : 0; v = '<span class="v">' + a.left + '<small>of ' + a.cap + '</small></span>'; s = a.used + ' ' + (k === 'CCL' ? 'taken in service' : 'taken this year'); m = '<div class="m"><i class="' + (pct <= .2 ? (a.left ? 'lo' : 'out') : '') + '" style="width:' + Math.round(pct * 100) + '%"></i></div>'; }
+  if(a.awaiting) s += ' · ' + a.awaiting + ' awaiting';
+  var tag = selectable ? 'button' : 'div';
+  return '<' + tag + ' class="bal' + (selectable && S.req && S.req.type === k ? ' sel' : '') + '"' + (selectable ? ' data-kind="' + k + '"' : '') + '><span class="k">' + esc(KIND_NAME[k] || k) + '</span>' + v + m + '<span class="s">' + esc(s) + '</span></' + tag + '>';
+}
+function rail(selectable){
+  var keys = KIND_ORDER.filter(function(k){ return acct()[k] && k !== 'HQ'; });
+  if(!keys.length) return '<div class="card"><p class="small">' + (DB.at ? 'The district has not sent your account yet.' : 'Reading your account from the district…') + '</p></div>';
+  return '<div class="rail">' + keys.map(function(k){ return balCard(k, selectable); }).join('') + '</div>';
+}
+function statusBadge(r){
+  var st = statusOf(r);
+  return st === 'APPROVED' ? '<span class="badge ok">Sanctioned</span>' : st === 'REJECTED' ? '<span class="badge err">Refused</span>'
+       : st === 'WITHDRAWN' ? '<span class="badge neu">Withdrawn</span>' : st === 'CANCELLED' ? '<span class="badge neu">' + esc(cancelledWord(r)) + '</span>'
+       : st === 'RETURNED' ? '<span class="badge warn">Returned to you</span>' : '<span class="badge warn">Awaiting orders</span>';
+}
+function reqRow(r){
+  var st = statusOf(r), k = String(r.type || '').toUpperCase();
+  var lead = st === 'APPROVED' ? 'ok' : st === 'REJECTED' ? 'err' : (st === 'PENDING' || st === 'RETURNED') ? 'warn' : '';
+  var ic = st === 'APPROVED' ? I.check : st === 'REJECTED' ? I.x : st === 'PENDING' || st === 'RETURNED' ? I.clock : I.x;
+  var d = Number(r.days) || daysBetween(r.fromDate, r.toDate);
+  return '<button class="row" data-detail="' + esc(r.id) + '"><span class="lead ' + lead + '">' + ic + '</span><span class="txt"><b>' + esc(KIND_NAME[k] || k) + '</b><span>' + esc(span(r.fromDate, r.toDate)) + (k === 'HQ' ? '' : ' · ' + d + (d === 1 ? ' day' : ' days')) + '</span></span><span class="trail">' + statusBadge(r) + '<span class="chev"></span></span></button>';
+}
+function sortedRows(){ return (DB.rows || []).slice().sort(function(a, b){ return String(b.fromDate).localeCompare(String(a.fromDate)) || String(b.appliedAt).localeCompare(String(a.appliedAt)); }); }
 
-function used(type, year){
-  /* ONE APPLICATION IS ONE LINE, and a withdrawn or refused one is not leave
-     taken. The twin-row rule of 25.08.2026 is folded by the register before
-     these rows ever reach this page. */
-  var n = 0;
+/* ---------------------------------------------------------------- home */
+function vHome(){
+  var u = (DB.session || {}).user || {};
+  var t = today(), d = new Date(t + 'T00:00:00'), hour = new Date().getHours();
+  var greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  var rows = sortedRows();
+  var next = rows.filter(function(r){ return statusOf(r) === 'APPROVED' && iso(r.toDate) >= t; }).sort(function(a, b){ return String(a.fromDate).localeCompare(String(b.fromDate)); })[0];
+  var pend = rows.filter(function(r){ var s = statusOf(r); return s === 'PENDING' || s === 'RETURNED'; });
+  var h = bar('Home', '', '<button class="ic" data-act="refresh" aria-label="Refresh">' + I.refresh + '</button>' + avatarBtn());
+  h += '<div class="scroll tabbed">';
+  h += '<div><p class="eyebrow">' + greet + '</p><h2 class="title-l" style="margin-top:2px">' + esc(first(u.name)) + '</h2><p class="small" style="margin-top:2px">' + esc(roleWord()) + ' · ' + DOW[d.getDay()] + ', ' + dmy(t) + '</p></div>';
+
+  if(canOrder()){
+    var n = Math.max(Number(DB.pendAll) || 0, (DB.pend || []).length);
+    h += '<button class="card tonal" data-go="inbox" style="display:flex;align-items:center;gap:14px;text-align:left;width:100%"><span class="lead pri" style="background:rgba(255,255,255,.35)">' + I.inbox + '</span><span style="flex:1;min-width:0"><b style="display:block;font-size:16px">' + (n ? n + ' application' + (n === 1 ? '' : 's') + ' for your orders' : 'Nothing awaiting your orders') + '</b><span style="font-size:13px;opacity:.85">' + (n ? 'Open the inbox to pass them.' : 'The desk is clear.') + '</span></span><span class="chev" style="border-color:currentColor"></span></button>';
+  }
+  /* THE HEAT MAP ON THE HOME SCREEN (asked 18.10.2026): the head of an
+     office sees his own people on leave this month; the Collector the
+     district. The figures are the register's sanctioned leave and nothing
+     awaiting orders. */
+  if(sees()) h += heatCard(true);
+
+  if(acct().CL || acct().EL || acct().ML){
+    h += '<div class="hdr"><span class="eyebrow">Your leave · ' + yearNow() + '</span><button data-go="leave">Account</button></div>' + rail(false);
+  }
+  h += '<button class="btn filled" data-act="newreq">' + I.plus + ' Request leave</button>';
+  if(next || pend.length){
+    h += '<div class="hdr"><span class="eyebrow">Coming up</span></div><div class="card bright tight">';
+    if(next) h += reqRow(next);
+    pend.forEach(function(r){ if(r !== next) h += reqRow(r); });
+    h += '</div>';
+  }
+  var recent = rows.filter(function(r){ var s = statusOf(r); return s !== 'PENDING' && s !== 'RETURNED' && r !== next; }).slice(0, 3);
+  if(recent.length){
+    h += '<div class="hdr"><span class="eyebrow">Recent</span><button data-go="leave">All requests</button></div><div class="card bright tight">' + recent.map(reqRow).join('') + '</div>';
+  } else if(!rows.length){
+    h += '<div class="card"><p class="body">No application yet. Your leave, when you apply for it, is listed here and under Leave.</p></div>';
+  }
+  h += '<p class="foot">This register records leave and nothing else. It takes no attendance.</p>';
+  h += '</div>';
+  return h;
+}
+
+/* ---------------------------------------------------------------- leave */
+function myMonths(y){
+  var m = [0,0,0,0,0,0,0,0,0,0,0,0], w = [0,0,0,0,0,0,0,0,0,0,0,0];
   (DB.rows || []).forEach(function(r){
-    if(String(r.type).toUpperCase() !== type) return;
-    if(String(r.status).toUpperCase() !== 'APPROVED') return;
-    if(String(r.fromDate || '').slice(0, 4) !== String(year)) return;
-    n += Number(r.days) || 0;
+    var st = statusOf(r); if(st !== 'APPROVED' && st !== 'PENDING') return;
+    if(String(r.type).toUpperCase() === 'HQ') return;
+    var a = Date.parse(iso(r.fromDate) + 'T00:00:00Z'), n = daysBetween(r.fromDate, r.toDate); if(!n) return;
+    var days = Number(r.days) || n;
+    for(var i = 0; i < n; i++){ var d = new Date(a + i * 864e5); if(d.getUTCFullYear() !== y) continue; (st === 'APPROVED' ? m : w)[d.getUTCMonth()] += days / n; }
   });
-  return n;
+  var rd = function(x){ return Math.round(x * 10) / 10; };
+  return { taken:m.map(rd), awaiting:w.map(rd) };
 }
-function draw(){
-  var year = new Date().getFullYear();
-  var ent = DB.ent || {};
-  var bal = $('hBal');
-  var keys = Object.keys(ent).filter(function(k){ return k !== 'HQ'; });
-  bal.innerHTML = keys.length ? keys.map(function(k){
-    var cap = Number(ent[k]) || 0, u = used(k, year);
-    /* MEDICAL LEAVE ANSWERS TO NO YEARLY FIGURE, so it is never shown as a
-       balance — a nought there reads as "none left", which is the opposite of
-       what the rule says. */
-    var right = cap ? (Math.max(0, cap - u) + ' left of ' + cap) : (u + ' taken · no yearly limit');
-    return '<div><b>' + (cap ? Math.max(0, cap - u) : u) + '</b><span>' +
-           esc(LEAVE_NAME[k] || k) + '<br>' + esc(right) + '</span></div>';
-  }).join('') : '<div class="empty" style="grid-column:1/-1">Not read from the district yet.</div>';
-
-  var list = $('hList'), rows = (DB.rows || []).slice().sort(function(a, b){
-    return String(b.fromDate).localeCompare(String(a.fromDate)); });
-  list.innerHTML = rows.length ? rows.map(function(r){
-    var st = String(r.status || 'PENDING').toUpperCase();
-    var pill = st === 'APPROVED' ? 'ok' : st === 'REJECTED' ? 'bad'
-             : st === 'WITHDRAWN' ? 'mut' : 'warn';
-    var word = st === 'PENDING' ? 'awaiting orders' : st.toLowerCase();
-    return '<div class="app"><div class="t"><b>' + esc(LEAVE_NAME[String(r.type).toUpperCase()] || r.type) +
-      '</b><span class="pill ' + pill + '">' + esc(word) + '</span></div>' +
-      '<div class="d">' + esc(dmy(r.fromDate)) + ' to ' + esc(dmy(r.toDate)) +
-      ' · ' + (Number(r.days) || 0) + ' day(s)' +
-      (r.reason ? '<br>' + esc(r.reason) : '') +
-      (st === 'REJECTED' && r.remarks ? '<br><b>' + esc(r.remarks) + '</b>' : '') +
-      '</div></div>';
-  }).join('') : '<div class="empty">Nothing yet.</div>';
+var binDays = function(v){ return v <= 0 ? 'k0' : v < 2 ? 'k1' : v < 4 ? 'k2' : v < 6 ? 'k3' : v < 10 ? 'k4' : 'k5'; };
+function monthStrip(taken, awaiting, cur, attr){
+  return '<div class="months">' + taken.map(function(v, i){
+    var a = awaiting[i] || 0, cls = 'm ' + binDays(v) + (a > 0 && v <= 0 ? ' w' : '') + (i === cur ? ' cur' : '');
+    return '<button class="' + cls + '" ' + attr + '="' + i + '" aria-label="' + MONL[i] + '"><span>' + MON[i].charAt(0) + '</span><b>' + (v > 0 ? v : (a > 0 ? '?' : '')) + '</b></button>';
+  }).join('') + '</div>';
 }
-function esc(s){
-  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
-    return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; });
-}
-function dmy(d){
-  var p = String(d || '').split('-');
-  return p.length === 3 ? p[2] + '.' + p[1] + '.' + p[0] : String(d || '');
-}
-
-/* ------------------------------------------------------------------ apply */
-function openApply(){
-  var sel = $('aType'), ent = DB.ent || { CL:15, EL:30, ML:0, HQ:0 };
-  sel.innerHTML = Object.keys(ent).map(function(k){
-    return '<option value="' + k + '">' + esc(LEAVE_NAME[k] || k) + '</option>'; }).join('');
-  $('aFrom').value = ''; $('aTo').value = ''; $('aReason').value = ''; $('aAddr').value = '';
-  $('aHq').checked = false; $('aCert').value = '';
-  certBox();
-  clear('mApply');
-  note();
-  show('vApply');
-}
-/* THE CERTIFICATE IS ASKED FOR ONLY WHERE IT IS WANTED. A form that asks
-   everybody for a medical certificate is a form that teaches people to leave
-   boxes empty, and an empty box on an application that NEEDED one is worse
-   than no box at all. */
-function certBox(){
-  var ml = $('aType').value === 'ML';
-  $('aCertWrap').className = ml ? '' : 'hide';
-  if(!ml) $('aCert').value = '';
-}
-
-/* WHAT THIS APPLICATION WOULD LEAVE HIM, against the dates he has actually
-   picked — the rule the leave card carries on the other registers. The
-   district still refuses at sanction anything that would breach the year;
-   this is so he knows before he asks. */
-function note(){
-  var t = $('aType').value, f = $('aFrom').value, to = $('aTo').value;
-  var ent = DB.ent || {}, cap = Number(ent[t]) || 0;
-  var year = (f || '').slice(0, 4) || String(new Date().getFullYear());
-  var n = days(f, to);
-  var bits = [];
-  if(n) bits.push(n + ' day(s)');
-  if(cap){
-    var left = Math.max(0, cap - used(t, year));
-    bits.push(n ? (n <= left ? 'this would leave you ' + (left - n) + ' of ' + cap
-                             : 'you have ' + left + ' left of ' + cap + ' — this asks for more')
-                : left + ' left of ' + cap + ' this year');
-  } else if(t === 'ML'){
-    bits.push('medical leave answers to no yearly figure, but a spell of it is capped');
-  } else if(t === 'HQ'){
-    bits.push('a permission, not leave — nothing is debited');
+function vLeave(){
+  var y = yearNow(), mm = myMonths(y), tot = Math.round(mm.taken.reduce(function(a, b){ return a + b; }, 0) * 10) / 10;
+  var A = DB.account || {};
+  var h = bar('Leave', '', avatarBtn());
+  h += '<div class="scroll tabbed">';
+  h += '<div class="hdr"><span class="eyebrow">Account · ' + y + '</span>' + (A.asOn ? '<span class="small">as on ' + dmyFull(A.asOn) + '</span>' : '') + '</div>' + rail(false);
+  h += '<div class="card bright"><div style="display:flex;justify-content:space-between;align-items:baseline"><h3 class="title-m">Your year, month by month</h3><span class="small num">' + tot + ' days</span></div>' +
+       '<div style="margin-top:12px">' + monthStrip(mm.taken, mm.awaiting, S.myM, 'data-mym') + '</div>' +
+       (S.myM != null ? '<p class="body" style="margin-top:10px;font-size:14px">' + esc(MONL[S.myM]) + ': ' + (mm.taken[S.myM] ? '<b>' + mm.taken[S.myM] + ' day' + (mm.taken[S.myM] === 1 ? '' : 's') + '</b> sanctioned' : 'nothing sanctioned') + (mm.awaiting[S.myM] ? ', ' + mm.awaiting[S.myM] + ' awaiting orders' : '') + '.</p>' : '') +
+       '<div class="leg" style="margin-top:10px"><span><i style="background:var(--hm0)"></i>none</span><span><i style="background:var(--hm1)"></i>1</span><span><i style="background:var(--hm2)"></i>2–3</span><span><i style="background:var(--hm3)"></i>4–5</span><span><i style="background:var(--hm4)"></i>6–9</span><span><i style="background:var(--hm5)"></i>10+</span><span><i style="box-shadow:inset 0 0 0 2px var(--warn);background:var(--hm0)"></i>awaiting</span></div></div>';
+  h += '<button class="btn filled" data-act="newreq">' + I.plus + ' Request leave</button>';
+  var rows = sortedRows();
+  h += '<div class="hdr"><span class="eyebrow">Requests</span><span class="small num">' + rows.length + '</span></div><div class="card bright tight">' + (rows.length ? rows.map(reqRow).join('') : '<div class="empty">Nothing yet.</div>') + '</div>';
+  if(A.asOn){
+    var R = DB.record || {}, kv = [];
+    if(acct().EL && acct().EL.credit) kv.push(['Earned leave at credit', (R.el != null && R.el !== '' ? R.el : acct().EL.cap) + ' days']);
+    if(acct().HPL) kv.push(['Half pay leave at credit', (R.hpl != null && R.hpl !== '' ? R.hpl : acct().HPL.cap) + ' days']);
+    if(acct().CL) kv.push(['Casual leave availed up to ' + dmyFull(A.asOn), acct().CL.opening + ' days']);
+    if(acct().OH) kv.push(['Optional holidays availed', String(acct().OH.opening)]);
+    if(acct().CCL) kv.push(['Child care leave availed in service', acct().CCL.opening + ' days']);
+    kv.push(['From the Service Register as on', dmyFull(A.asOn)]);
+    if(A.verifiedBy) kv.push(['Verified by', A.verifiedBy + (A.verifiedOn ? ', ' + dmyFull(A.verifiedOn) : '')]);
+    h += '<div class="card"><h3 class="title-m">Opening balances</h3><div class="kv" style="margin-top:6px">' + kv.map(function(x){ return '<div><span>' + esc(x[0]) + '</span><b>' + esc(x[1]) + '</b></div>'; }).join('') + '</div></div>';
   }
-  $('aNote').textContent = bits.join(' · ') || 'Pick the dates.';
+  h += '</div>';
+  return h;
 }
-function days(f, t){
-  if(!f || !t) return 0;
-  var a = new Date(f + 'T00:00:00'), b = new Date(t + 'T00:00:00');
-  if(isNaN(a) || isNaN(b) || b < a) return 0;
-  return Math.round((b - a) / 86400000) + 1;
+
+/* ------------------------------------------------------------- calendar */
+function monthGrid(y, m, cellFn){
+  var firstD = new Date(Date.UTC(y, m, 1)), dow = (firstD.getUTCDay() + 6) % 7, days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  var h = '<div class="g">' + ['M','T','W','T','F','S','S'].map(function(d){ return '<span class="dw">' + d + '</span>'; }).join('');
+  for(var i = 0; i < dow; i++) h += '<span class="d o"></span>';
+  for(var d = 1; d <= days; d++){
+    var k = y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    var sun = new Date(Date.UTC(y, m, d)).getUTCDay() === 0;
+    h += cellFn(k, d, sun, DB.holidays[k]);
+  }
+  return h + '</div>';
+}
+/* THE OFFICE CALENDAR BINS AGAINST ITS OWN BUSIEST DAY, as the console's
+   fortnight tints a figure by its share of its own column's high: a cell is
+   one of five steps of the year's peak, and the legend prints the thresholds
+   it used. An office of twenty and a district of a thousand cannot share
+   fixed thresholds — on the console's 284-officer bins the district was one
+   colour from end to end. */
+function calBins(days){
+  var mx = 0; Object.keys(days || {}).forEach(function(k){ if(!DB.holidays[k] && new Date(k + 'T00:00:00Z').getUTCDay() !== 0) mx = Math.max(mx, days[k]); });
+  /* an office whose busiest day is five or fewer is read in whole people */
+  var t = mx <= 5 ? [1, 2, 3, 4] : [.2, .4, .6, .8].map(function(q){ return Math.max(1, Math.ceil(mx * q)); });
+  return { mx:mx, t:t,
+    bin:function(v){ return v <= 0 ? 'k0' : v <= t[0] ? 'k1' : v <= t[1] ? 'k2' : v <= t[2] ? 'k3' : v <= t[3] ? 'k4' : 'k5'; },
+    label:function(i){ var lo = i === 0 ? 1 : t[i - 1] + 1; return i === 4 ? (t[3] + 1) + '+' : lo >= t[i] ? String(t[i]) : lo + '–' + t[i]; } };
+}
+function mine(){
+  var out = {};
+  (DB.rows || []).forEach(function(r){ var st = statusOf(r); if(st !== 'APPROVED' && st !== 'PENDING') return;
+    var a = Date.parse(iso(r.fromDate) + 'T00:00:00Z'), n = daysBetween(r.fromDate, r.toDate);
+    for(var i = 0; i < n; i++) out[new Date(a + i * 864e5).toISOString().slice(0, 10)] = st; });
+  return out;
+}
+function heatCard(compact){
+  var C = DB.cal, y = S.hmY || yearNow(), m = compact ? Number(today().slice(5, 7)) - 1 : S.hmM;
+  var scopeWord = isHead() ? 'Your office' : 'The district';
+  if(!C) return '<div class="card bright"><p class="eyebrow">' + esc(scopeWord) + ' on leave</p><p class="small" style="margin-top:6px">Reading the calendar from the district…</p></div>';
+  var B = calBins(C.days), monthTot = 0, peak = { n:0 };
+  var grid = monthGrid(y, m, function(k, d, sun, hol){
+    var n = C.days[k] || 0; if(!sun && !hol){ monthTot += n; if(n > peak.n) peak = { n:n, k:k }; }
+    var cls = 'd ' + (sun || hol ? 'off' : B.bin(n)) + (hol ? ' hol' : '') + (k === today() ? ' today' : '');
+    return '<button class="' + cls + '" data-day="' + k + '" aria-label="' + dmy(k) + (hol ? ', ' + esc(hol) : '') + '">' + d + (n && !sun && !hol ? '<small>' + n + '</small>' : '') + '</button>';
+  });
+  var h = '<div class="card bright cal' + (compact ? ' mini' : '') + '">';
+  if(compact) h += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><div><p class="eyebrow">' + esc(scopeWord) + ' on leave · ' + MONL[m] + '</p><p class="small">' + (C.away || []).length + ' away today of ' + C.roll + (C.pending ? ' · ' + C.pending + ' awaiting orders' : '') + '</p></div><button class="btn text" style="width:auto;padding:0 8px" data-go="calendar">Open</button></div>';
+  else h += '<div class="mh"><button data-hm="-1" aria-label="Previous month">' + I.chevL + '</button><b>' + MONL[m] + ' ' + y + '</b><button data-hm="1" aria-label="Next month">' + I.chevR + '</button></div>';
+  h += grid;
+  h += '<div class="leg" style="margin-top:8px"><span>Away:</span><span><i style="background:var(--hm0)"></i>0</span>' + [1,2,3,4,5].map(function(i){ return '<span><i style="background:var(--hm' + i + ')"></i>' + B.label(i - 1) + '</span>'; }).join('') + '</div>';
+  if(!compact) h += '<p class="small" style="margin-top:8px"><b class="num">' + monthTot.toLocaleString('en-IN') + ' officer-days</b> of sanctioned leave in ' + MONL[m] + (peak.n ? '; the busiest day is <b>' + dmy(peak.k) + '</b> with ' + peak.n + ' away' : '') + '. A cell counts the people whose sanctioned leave covers that day, of ' + Number(C.roll || 0).toLocaleString('en-IN') + ' on the roll. Nothing awaiting orders is on it.</p>';
+  h += '</div>';
+  return h;
+}
+function vCalendar(){
+  var own = !sees() || S.hmScope === 'mine';
+  var y = S.hmY || yearNow(), t = today();
+  var h = bar(own ? 'Calendar' : 'Who is away', '', avatarBtn());
+  h += '<div class="scroll tabbed">';
+  if(sees()) h += '<div class="chips"><button class="chip' + (!own ? ' on' : '') + '" data-scope="office">' + (isHead() ? 'My office' : 'The district') + '</button><button class="chip' + (own ? ' on' : '') + '" data-scope="mine">My own</button></div>';
+  if(own){
+    var M = mine();
+    h += '<div class="card bright cal"><div class="mh"><button data-hm="-1" aria-label="Previous month">' + I.chevL + '</button><b>' + MONL[S.hmM] + ' ' + y + '</b><button data-hm="1" aria-label="Next month">' + I.chevR + '</button></div>';
+    h += monthGrid(y, S.hmM, function(k, d, sun, hol){
+      var cls = 'd' + (sun ? ' off' : '') + (hol ? ' off hol' : '') + (k === t ? ' today' : '') + (M[k] === 'APPROVED' ? ' in' : M[k] === 'PENDING' ? ' mine' : '');
+      return '<span class="' + cls + '" title="' + esc(hol || '') + '">' + d + '</span>';
+    });
+    h += '<div class="leg" style="margin-top:8px"><span><i style="background:var(--primary-container)"></i>your sanctioned leave</span><span><i style="box-shadow:inset 0 0 0 2px var(--primary);background:var(--surface-bright)"></i>awaiting orders</span><span><i style="background:var(--surface-low)"></i>holiday · Sunday</span><span><i style="box-shadow:inset 0 0 0 2px var(--warn);background:var(--surface-bright)"></i>today</span></div></div>';
+    var hol = Object.keys(DB.holidays).filter(function(k){ return k.slice(0, 4) === String(y) && Number(k.slice(5, 7)) - 1 === S.hmM; }).sort();
+    h += '<div class="hdr"><span class="eyebrow">Holidays this month</span></div><div class="card bright tight">' + (hol.length ? hol.map(function(k){ return '<div class="row" style="min-height:48px"><span class="lead" style="width:36px;height:36px">' + I.sun + '</span><span class="txt"><b>' + esc(DB.holidays[k]) + '</b><span>' + dmy(k) + '</span></span></div>'; }).join('') : '<div class="empty">None declared.</div>') + '</div>';
+  } else {
+    h += heatCard(false);
+    var C = DB.cal;
+    if(C){
+      var mt = [0,0,0,0,0,0,0,0,0,0,0,0];
+      Object.keys(C.days || {}).forEach(function(k){ if(k.slice(0, 4) !== String(y)) return; if(DB.holidays[k] || new Date(k + 'T00:00:00Z').getUTCDay() === 0) return; mt[Number(k.slice(5, 7)) - 1] += C.days[k]; });
+      var mx = Math.max.apply(null, mt.concat([0]));
+      h += '<div class="card bright"><div style="display:flex;justify-content:space-between;align-items:baseline"><h3 class="title-m">The year, month by month</h3><span class="small">officer-days</span></div><div class="months" style="margin-top:12px">' +
+        mt.map(function(v, i){ var q = mx ? v / mx : 0, cls = 'm ' + (v <= 0 ? 'k0' : q < .25 ? 'k1' : q < .45 ? 'k2' : q < .65 ? 'k3' : q < .85 ? 'k4' : 'k5') + (i === S.hmM ? ' cur' : ''); return '<button class="' + cls + '" data-hmgo="' + i + '" aria-label="' + MONL[i] + '"><span>' + MON[i].charAt(0) + '</span><b>' + (v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v) + '</b></button>'; }).join('') + '</div></div>';
+      var away = C.away || [];
+      h += '<div class="hdr"><span class="eyebrow">Away today · ' + dmy(t) + '</span><span class="small num">' + away.length + '</span></div><div class="card bright tight">' +
+        (away.length ? away.map(function(p){ return '<div class="row"><span class="lead">' + esc(ini(p.name)) + '</span><span class="txt"><b>' + esc(p.name) + '</b><span>' + esc((KIND_NAME[String(p.type).toUpperCase()] || p.type) + ' to ' + dmy(p.to) + (isHead() || !p.office ? '' : ' · ' + p.office)) + '</span></span></div>'; }).join('') : '<div class="empty">Nobody on sanctioned leave today.</div>') + '</div>';
+    }
+  }
+  h += '</div>';
+  return h;
+}
+
+/* ------------------------------------------------------------- request */
+function newReq(){ S.req = { type:'CL', from:'', to:'', reason:'', addr:'', hq:false, cert:'' }; var t = today(); S.calY = Number(t.slice(0, 4)); S.calM = Number(t.slice(5, 7)) - 1; go('request'); }
+function vRequest(){
+  var q = S.req || (S.req = { type:'CL', from:'', to:'', reason:'', addr:'', hq:false, cert:'' });
+  var a = acct()[q.type] || {}, t = today();
+  var h = bar('Request leave', '', '<button class="ic" data-go="' + S.tab + '" aria-label="Close">' + I.close + '</button>');
+  h += '<div class="scroll">';
+  h += '<p class="eyebrow">1 of 2 · Kind and dates</p>' + rail(true);
+  if(acct().HQ) h += '<div class="chips"><button class="chip' + (q.type === 'HQ' ? ' on' : '') + '" data-kind="HQ">Permission to leave headquarters only</button></div>';
+  var n = daysBetween(q.from, q.to);
+  var line = !q.from ? (q.type === 'OH' ? 'Tap the notified day' : 'Tap the first day') : !q.to ? 'Now the last day' : n + (n === 1 ? ' day' : ' days');
+  var sub = '', warn = false;
+  if(q.type === 'OH') sub = n ? (a.left ? 'leaves you ' + (a.left - 1) + ' of ' + a.cap : 'none left this year') : 'one notified day at a time';
+  else if(q.type === 'ML') sub = n ? (n <= (a.spell || 15) ? 'inside a spell of ' + (a.spell || 15) : 'over ' + (a.spell || 15) + ' at a time — for the Collector under the leave rules') : 'no yearly figure · ' + (a.spell || 15) + ' a spell';
+  else if(q.type === 'HQ') sub = 'a permission, not leave · nothing is debited';
+  else if(a.credit) sub = n ? 'leaves ' + (a.left - n) + ' at credit' : a.left + ' at credit';
+  else if(a.cap) { if(n && n > a.left){ sub = 'you have ' + a.left + ' left · this asks for ' + (n - a.left) + ' more'; warn = true; } else sub = n ? 'leaves you ' + (a.left - n) + ' of ' + a.cap : a.left + ' left of ' + a.cap; }
+  if(n && a.credit && n > a.left){ warn = true; sub = a.left + ' at credit · this asks for ' + (n - a.left) + ' more'; }
+  h += '<div class="card ' + (warn ? 'warn' : 'tonal') + '" style="display:flex;justify-content:space-between;align-items:baseline;gap:10px"><b style="font-size:20px;font-weight:800;letter-spacing:-.3px">' + esc(line) + '</b><span style="font-size:13px;opacity:.9;text-align:right">' + esc(sub) + '</span></div>';
+  h += '<div class="card bright cal"><div class="mh"><button data-cm="-1" aria-label="Previous month">' + I.chevL + '</button><b>' + MONL[S.calM] + ' ' + S.calY + '</b><button data-cm="1" aria-label="Next month">' + I.chevR + '</button></div>';
+  var M = mine();
+  h += monthGrid(S.calY, S.calM, function(k, d, sun, hol){
+    var cls = 'd' + (sun ? ' off' : '') + (hol ? ' hol' : '') + (k === t ? ' today' : '');
+    if(q.from && q.to && k > q.from && k < q.to) cls += ' in';
+    if(k === q.from) cls += ' a'; if(k === q.to) cls += ' b';
+    if(k < t) cls += ' gone';
+    if(q.type === 'OH' && TS_OPTIONAL_2026[k]) cls += ' oh';
+    if(M[k] && k !== q.from && k !== q.to) cls += ' mine';
+    return '<button class="' + cls + '" data-pick="' + k + '" aria-label="' + dmy(k) + (hol ? ', ' + esc(hol) : '') + (TS_OPTIONAL_2026[k] ? ', ' + esc(TS_OPTIONAL_2026[k]) : '') + '">' + d + '</button>';
+  });
+  h += '<div class="leg" style="margin-top:6px"><span><i style="background:var(--surface-low)"></i>holiday · Sunday</span><span><i style="box-shadow:inset 0 0 0 2px var(--warn);background:var(--surface-bright)"></i>today</span><span><i style="box-shadow:inset 0 0 0 2px var(--primary);background:var(--surface-bright)"></i>your leave</span>' + (q.type === 'OH' ? '<span><i style="box-shadow:inset 0 0 0 1.5px var(--secondary);background:var(--surface-bright)"></i>notified optional holiday</span>' : '') + '</div>';
+  if(q.type === 'OH' && q.from) h += '<p class="small" style="margin-top:4px">' + esc(TS_OPTIONAL_2026[q.from] || '') + '</p>';
+  h += '</div>';
+  h += '<button class="btn filled" data-act="next"' + (n ? '' : ' disabled') + '>Continue</button>';
+  h += '</div>';
+  return h;
+}
+function pick(k){
+  var q = S.req, t = today();
+  if(k < t) return toast('A day already gone cannot be applied for.');
+  if(q.type === 'OH'){
+    if(!TS_OPTIONAL_2026[k]) return toast('An optional holiday is one of the notified days. They are outlined.');
+    q.from = q.to = k; render(); return;
+  }
+  if(!q.from || (q.from && q.to)){ q.from = k; q.to = ''; }
+  else if(k < q.from){ q.to = q.from; q.from = k; }
+  else q.to = k;
+  render();
+}
+function vRequest2(){
+  var q = S.req, n = daysBetween(q.from, q.to), k = q.type;
+  var h = bar('Request leave', backBtn('request'), '<button class="ic" data-go="' + S.tab + '" aria-label="Close">' + I.close + '</button>');
+  h += '<div class="scroll">';
+  h += '<p class="eyebrow">2 of 2 · Details and send</p>';
+  h += '<div class="card tonal"><p class="eyebrow">' + esc(KIND_NAME[k] || k) + '</p><h2 class="title-l" style="margin-top:4px">' + esc(span(q.from, q.to)) + '</h2><p class="body" style="color:inherit;opacity:.85;margin-top:2px">' + (k === 'HQ' ? 'permission sought' : n + (n === 1 ? ' day' : ' days')) + '</p></div>';
+  h += '<div class="field"><label for="rReason">Reason</label><textarea id="rReason" rows="2" placeholder="Briefly, in your own words" data-focus>' + esc(q.reason) + '</textarea></div>';
+  h += '<div class="field"><label for="rAddr">Address while on leave</label><input id="rAddr" value="' + esc(q.addr) + '" placeholder="Where you may be reached"></div>';
+  /* the certificate is asked for only where it is wanted */
+  if(k === 'ML') h += '<div class="field"><label for="rCert">Medical certificate</label><input id="rCert" value="' + esc(q.cert) + '" placeholder="Who issued it, and the date"></div>';
+  if(k !== 'HQ') h += '<div class="card bright"><div class="sw"><span class="txt"><b>I will be away from headquarters</b><span>Permission to leave headquarters is sought with this leave</span></span><button class="tog" role="switch" aria-checked="' + (q.hq ? 'true' : 'false') + '" data-act="hq" aria-label="Away from headquarters"></button></div></div>';
+  h += '<div class="card"><p class="eyebrow">Goes to</p><div class="steps" style="margin-top:4px"><div class="step"><span class="n">1</span><div><b>The Collector &amp; District Magistrate</b><span>For orders, as every application in the district does</span></div></div></div></div>';
+  h += '<button class="btn filled" id="bSend" data-act="send">Send</button>';
+  h += '<div class="msg" id="mApply" role="alert"></div>';
+  h += '<p class="foot">Nothing is taken from you until it is sanctioned. You can withdraw it while it waits.</p>';
+  h += '</div>';
+  return h;
 }
 function send(){
-  var b = $('bSend');
-  var t = $('aType').value, f = $('aFrom').value, to = $('aTo').value;
+  var q = S.req, b = $('bSend');
+  q.reason = ($('rReason') || {}).value || q.reason; q.addr = ($('rAddr') || {}).value || q.addr; q.cert = ($('rCert') || {}).value || q.cert;
   clear('mApply');
-  if(!f || !to) return say('mApply', 'bad', 'Both dates are needed.');
-  if(days(f, to) < 1) return say('mApply', 'bad', 'The last day falls before the first.');
-  if(!$('aReason').value.trim()) return say('mApply', 'bad', 'A reason is needed — the orders are passed on it.');
+  var n = daysBetween(q.from, q.to);
+  if(!q.from || !q.to || n < 1) return say('mApply', 'bad', 'Both dates are needed.');
+  if(!String(q.reason).trim()){ say('mApply', 'bad', 'A reason is needed — the orders are passed on it.'); var t = $('rReason'); if(t) t.focus(); return; }
   busy(b, true, 'Sending…');
   /* EVERY SUBMISSION CARRIES A FRESH ID (rule 5), so a double tap raises two
      independent applications and the SERVER refuses the overlap — and a
      re-send of the SAME id is a retry and is written once. */
   post({ kind:'leave', token:DB.session.token, leave:{
     id:'HR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
-    type:t, from:f, to:to, days:days(f, to),
-    reason:$('aReason').value.trim(), address:$('aAddr').value.trim(),
-    hq:$('aHq').checked === true, cert:$('aCert').value.trim() } })
+    type:q.type, from:q.from, to:q.to, days:q.type === 'HQ' ? 1 : n,
+    reason:String(q.reason).trim(), address:String(q.addr || '').trim(),
+    hq:q.type === 'HQ' || q.hq === true, cert:String(q.cert || '').trim() } })
     .then(function(r){
       busy(b, false);
       if(!r || !r.ok){ if(tokenRefused(r)) return; return say('mApply', 'bad', errText(r)); }
-      say('mApply', 'ok', 'Sent for orders.');
+      S.req = null;
+      go(S.tab === 'leave' ? 'leave' : 'home');
+      toast('Sent to the Collector.');
       refresh();
-      setTimeout(function(){ home(false); refresh(); }, 700);
     })
     .catch(function(){ busy(b, false);
-      /* NOTHING IS SHOWN AS SENT THAT WAS NOT. An application is a request for
-         orders, not a fact a handset can hold. */
-      say('mApply', 'bad', 'It did not reach the district, so nothing has been applied for. ' +
-        'Try again where there is a line.'); });
+      /* NOTHING IS SHOWN AS SENT THAT WAS NOT */
+      say('mApply', 'bad', 'It did not reach the district, so nothing has been applied for. Try again where there is a line.'); });
 }
 
-/* ------------------------------------------------------------------- boot */
-load();
-$('bSignin').addEventListener('click', signIn);
-$('iPin').addEventListener('keydown', function(e){ if(e.key === 'Enter') signIn(); });
-$('bClaim').addEventListener('click', claim);
-$('bClaimBack').addEventListener('click', function(){ show('vSignin'); });
-$('bApply').addEventListener('click', openApply);
-$('bOrders').addEventListener('click', function(){ show('vOrders'); drawOrders(); pending(); });
-$('bOrdersBack').addEventListener('click', function(){ home(false); });
-$('bAll').addEventListener('click', orderAll);
-$('bCancel').addEventListener('click', function(){ home(false); });
-$('bSend').addEventListener('click', send);
-$('bRefresh').addEventListener('click', refresh);
-['aType','aFrom','aTo'].forEach(function(id){ $(id).addEventListener('change', note); });
-$('aType').addEventListener('change', certBox);
-$('bOut').addEventListener('click', function(){
-  DB.session = null; DB.rows = []; DB.me = null; DB.pend = []; DB.pendAll = 0; save();
-  $('iPhone').value = ''; $('iPin').value = '';
-  show('vSignin');
-});
+/* -------------------------------------------------------------- detail */
+function findRow(id){ return (DB.rows || []).filter(function(r){ return String(r.id) === String(id); })[0] || null; }
+function vDetail(){
+  var r = S.detail && findRow(S.detail.id) || S.detail; if(!r) return vLeave();
+  var st = statusOf(r), k = String(r.type || '').toUpperCase(), n = Number(r.days) || daysBetween(r.fromDate, r.toDate);
+  var h = bar('Request', backBtn(S.tab), '');
+  h += '<div class="scroll">';
+  h += '<div class="card ' + (st === 'PENDING' || st === 'RETURNED' ? 'tonal' : 'bright') + '"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><p class="eyebrow">' + esc(KIND_NAME[k] || k) + '</p><h2 class="title-l" style="margin-top:4px">' + esc(span(r.fromDate, r.toDate)) + '</h2><p class="body" style="margin-top:2px;color:inherit;opacity:.8">' + (k === 'HQ' ? 'permission' : n + (n === 1 ? ' day' : ' days')) + (String(r.leaveHq) === 'true' && k !== 'HQ' ? ' · leaving headquarters' : '') + '</p></div>' + statusBadge(r) + '</div></div>';
+  var steps = [{ cls:'done', t:'Sent', s:'By you, ' + dmy(r.appliedAt) + (hhmm(r.appliedAt) ? ' at ' + hhmm(r.appliedAt) : '') }];
+  var by = String(r.decidedBy || '').replace(/\s*\(.*$/, '').replace(/\s*·.*$/, '');
+  if(st === 'PENDING') steps.push({ cls:'busy', t:'With the Collector', s:'Awaiting orders' });
+  else if(st === 'RETURNED') steps.push({ cls:'busy', t:'Returned to you for correction', s:'Apply again with the correction' });
+  else if(st === 'APPROVED') steps.push({ cls:'done', t:'Sanctioned', s:'By the Collector' + (r.decidedAt ? ', ' + dmy(r.decidedAt) : '') });
+  else if(st === 'REJECTED') steps.push({ cls:'bad', t:'Refused', s:'By the Collector' + (r.decidedAt ? ', ' + dmy(r.decidedAt) : '') });
+  else if(st === 'CANCELLED') steps.push({ cls:'neu', t:cancelledWord(r), s:(r.decidedAt ? dmy(r.decidedAt) : '') });
+  else if(st === 'WITHDRAWN') steps.push({ cls:'neu', t:'Withdrawn', s:'By you' + (r.decidedAt ? ', ' + dmy(r.decidedAt) : '') });
+  h += '<div class="card bright"><p class="eyebrow" style="margin-bottom:4px">Journey</p><div class="steps">' + steps.map(function(s){ return '<div class="step ' + s.cls + '"><span class="n">' + (s.cls === 'done' ? I.check : s.cls === 'bad' ? I.x : '') + '</span><div><b>' + esc(s.t) + '</b><span>' + esc(s.s) + '</span></div></div>'; }).join('') + '</div></div>';
+  if(r.remarks && (st === 'REJECTED' || st === 'CANCELLED' || st === 'RETURNED')) h += '<div class="card flag"><p class="eyebrow">Remarks</p><p class="body" style="color:inherit;margin-top:4px">' + esc(r.remarks) + '</p></div>';
+  h += '<div class="card"><div class="kv"><div><span>Reason</span><b style="font-weight:500;text-align:left;max-width:60%">' + esc(r.reason || '—') + '</b></div>' + (r.address ? '<div><span>Address while on leave</span><b style="font-weight:500">' + esc(r.address) + '</b></div>' : '') + (r.certificate ? '<div><span>Medical certificate</span><b style="font-weight:500">' + esc(r.certificate) + '</b></div>' : '') + '<div><span>Application</span><b class="num">' + esc(r.id) + '</b></div></div></div>';
+  if(st === 'PENDING' || st === 'RETURNED') h += '<button class="btn outl" data-act="withdraw">Withdraw this request</button>';
+  h += '<div class="msg" id="mDetail" role="alert"></div>';
+  h += '</div>';
+  return h;
+}
+function withdraw(){
+  var r = S.detail; if(!r) return;
+  sheet('<h2>Withdraw this request?</h2><p>It comes off the Collector’s desk. Nothing was debited, so nothing is returned.</p><div class="two"><button class="btn outl" data-close="1">Keep it</button><button class="btn filled" data-yes="1">Withdraw</button></div>');
+  $('sheet').querySelector('[data-yes]').addEventListener('click', function(){
+    closeSheet();
+    post({ kind:'leaveWithdraw', token:DB.session.token, id:r.id })
+      .then(function(x){
+        if(!x || !x.ok){ if(tokenRefused(x)) return; return say('mDetail', 'bad', errText(x)); }
+        var row = findRow(r.id); if(row){ row.status = 'WITHDRAWN'; row.decidedAt = new Date().toISOString(); }
+        save(); toast('Withdrawn.'); go(S.tab); refresh();
+      })
+      .catch(function(){ say('mDetail', 'bad', 'The line dropped before the district answered. Refresh to see whether it was withdrawn.'); });
+  });
+}
 
+/* --------------------------------------------------------------- inbox */
+function waitedWord(at){ var h = (Date.now() - Date.parse(at)) / 36e5; if(!isFinite(h)) return 'waiting'; return h < 1 ? 'just now' : h < 24 ? Math.round(h) + ' h' : Math.round(h / 24) + ' d'; }
+function inboxRow(r){
+  var k = String(r.type || '').toUpperCase(), d = Number(r.days) || daysBetween(r.fromDate, r.toDate);
+  return '<button class="row" data-order="' + esc(r.id) + '"><span class="lead">' + esc(ini(r.name)) + '</span><span class="txt"><b>' + esc(r.name || r.phone) + '</b><span>' + esc((KIND_NAME[k] || k) + ' · ' + (k === 'HQ' ? 'permission' : d + (d === 1 ? ' day' : ' days')) + ' · ' + span(r.fromDate, r.toDate)) + '</span><span style="color:var(--on-surface-3)">' + esc([r.desig, String(r.office || '').replace(/^Office of the /, '')].filter(Boolean).join(' · ')) + '</span></span><span class="trail"><span class="badge neu">' + esc(waitedWord(r.appliedAt)) + '</span><span class="chev"></span></span></button>';
+}
+function vInbox(){
+  var rows = DB.pend || [], tot = Math.max(Number(DB.pendAll) || 0, rows.length);
+  var h = bar('Inbox', '', '<button class="ic" data-act="refresh" aria-label="Refresh">' + I.refresh + '</button>' + avatarBtn());
+  h += '<div class="scroll tabbed">';
+  h += '<div class="hdr"><span class="eyebrow">Awaiting your orders</span><span class="small num" id="oCount">' + (!rows.length ? '' : tot > rows.length ? tot + ' in all · the oldest ' + rows.length + ' shown' : tot) + '</span></div>';
+  if(rows.length){
+    h += '<div class="card bright tight">' + rows.map(inboxRow).join('') + '</div>';
+    if(rows.length > 1) h += '<button class="btn tonal" id="bAll" data-act="all">Sanction all ' + rows.length + '</button>';
+    h += '<p class="small" style="padding:0 6px">Each still answers its own checks: one that cannot be sanctioned is refused by name and stays here. Refusals are never passed over a list.</p>';
+  } else h += '<div class="card" style="text-align:center;padding:28px 16px"><p class="body">Nothing is waiting.</p></div>';
+  h += '<div class="msg' + (S.inboxMsg ? ' on ' + S.inboxMsg.kind : '') + '" id="mOrders" role="alert">' + esc(S.inboxMsg ? S.inboxMsg.text : '') + '</div>';
+  h += '<p class="foot">An order is passed on the application, not on a row. Nothing is destroyed: a refusal keeps the application and its words on the register.</p>';
+  h += '</div>';
+  return h;
+}
+function vOrder(){
+  var r = S.detail; if(!r) return vInbox();
+  var k = String(r.type || '').toUpperCase(), d = Number(r.days) || daysBetween(r.fromDate, r.toDate);
+  var h = bar('Application', backBtn('inbox'), '');
+  h += '<div class="scroll">';
+  h += '<div class="card bright" style="display:flex;gap:14px;align-items:center"><span class="lead" style="width:52px;height:52px;font-size:17px">' + esc(ini(r.name)) + '</span><div style="min-width:0"><h2 class="title-m">' + esc(r.name || r.phone) + '</h2><p class="small">' + esc(r.desig || '') + (r.desig && r.office ? '<br>' : '') + esc(r.office || '') + '</p></div></div>';
+  h += '<div class="card bright"><p class="eyebrow">Asks for</p><h2 class="title-l" style="margin-top:4px">' + esc(KIND_NAME[k] || k) + '</h2><p class="body" style="margin-top:2px">' + esc(span(r.fromDate, r.toDate)) + (k === 'HQ' ? '' : ' · <b>' + d + (d === 1 ? ' day' : ' days') + '</b>') + '</p>' +
+       '<div class="kv" style="margin-top:10px"><div><span>Reason</span><b style="font-weight:500;text-align:left;max-width:60%">' + esc(r.reason || '—') + '</b></div>' + (r.address ? '<div><span>Address while on leave</span><b style="font-weight:500">' + esc(r.address) + '</b></div>' : '') + (r.certificate ? '<div><span>Certificate</span><b style="font-weight:500">' + esc(r.certificate) + '</b></div>' : '') + '<div><span>Leaving headquarters</span><b>' + (String(r.leaveHq) === 'true' ? 'Yes, permission sought' : 'No') + '</b></div><div><span>Applied</span><b>' + esc(dmy(r.appliedAt)) + (hhmm(r.appliedAt) ? ' at ' + hhmm(r.appliedAt) : '') + '</b></div></div></div>';
+  h += '<div class="card"><p class="small">The register checks the balance, the overlap and the medical spell when the order is passed, and refuses by name anything that fails.</p></div>';
+  h += '<div class="field"><label for="oRem">Remarks (needed to refuse; they go to the employee)</label><textarea id="oRem" rows="2" placeholder="In your own words"></textarea></div>';
+  h += '<div class="two"><button class="btn err" data-act="refuse">Refuse</button><button class="btn filled" data-act="sanction">Sanction</button></div>';
+  h += '<div class="msg" id="mOrder" role="alert"></div>';
+  h += '<p class="foot">An order is passed on the application, not on a row. Nothing is destroyed.</p>';
+  h += '</div>';
+  return h;
+}
+function order(id, status, remarks){
+  clear('mOrder');
+  post({ kind:'leaveDecision', token:DB.session.token, id:id, status:status, remarks:remarks })
+    .then(function(r){
+      if(!r || !r.ok){ if(tokenRefused(r)) return; return say('mOrder', 'bad', errText(r)); }
+      DB.pend = (DB.pend || []).filter(function(x){ return String(x.id) !== String(id); }); save();
+      go('inbox'); toast(status === 'APPROVED' ? 'Sanctioned.' : 'Refused, and the employee is told why.');
+      pending(); if(sees()) calendar();
+    })
+    /* A LOST LINE IS NOT PROOF THAT NO ORDER WAS PASSED */
+    .catch(function(){
+      say('mOrder', 'bad', 'The line dropped before the district answered, so it is NOT KNOWN whether this order was passed. ' +
+        'Go back to the inbox, which is re-read from the register; if the application is still on it, no order has been passed on it.');
+      pending();
+    });
+}
+var ORDER_BATCH = 25;
+function orderAll(){
+  var ids = (DB.pend || []).map(function(r){ return r.id; }).filter(function(x){ return !!String(x || '').trim(); });
+  if(!ids.length) return;
+  var tot = Math.max(Number(DB.pendAll) || 0, ids.length);
+  sheet('<h2>Sanction ' + ids.length + ' of them?</h2><p>' + (tot > ids.length ? tot + ' are waiting in all; these are the oldest ' + ids.length + '. The rest come up when you refresh. ' : '') +
+    'Each still answers its own checks in turn, so one that cannot be sanctioned is refused by name and stays waiting for your own look. Refusals are never passed this way.</p>' +
+    '<div class="two"><button class="btn outl" data-close="1">Not now</button><button class="btn filled" data-yes="1">Sanction all</button></div>');
+  $('sheet').querySelector('[data-yes]').addEventListener('click', function(){
+    closeSheet();
+    var b = $('bAll'); busy(b, true, 'Passing…');
+    var done = 0, refused = [], sent = 0;
+    function finish(lost){
+      busy(b, false);
+      var bits = [];
+      if(done) bits.push(done + ' sanctioned');
+      if(refused.length) bits.push(refused.length + ' could not be and are still waiting (' + refused.slice(0, 3).map(function(x){ return x.error; }).join('; ') + (refused.length > 3 ? '; …' : '') + ')');
+      if(lost) bits.push('AND ' + lost + ' COULD NOT BE CONFIRMED — the district may or may not have passed them before the line dropped. The list is re-read from the register, which is the only thing that knows; whatever is still on it was not sanctioned.');
+      /* kept on the screen's state, because the re-read below redraws the
+         inbox and a message written straight into the page would go with it */
+      S.inboxMsg = { kind: lost ? 'bad' : refused.length ? 'info' : 'ok', text: bits.join(' · ') || 'Nothing was passed.' };
+      say('mOrders', S.inboxMsg.kind, S.inboxMsg.text);
+      pending(); if(sees()) calendar();
+    }
+    function step(){
+      if(sent >= ids.length) return finish(0);
+      var part = ids.slice(sent, sent + ORDER_BATCH); sent += part.length;
+      say('mOrders', 'info', 'Passing orders… ' + sent + ' of ' + ids.length + '.');
+      return post({ kind:'leaveDecision', token:DB.session.token, ids:part, status:'APPROVED' })
+        .then(function(r){
+          if(!r || !r.ok){ refused.push({ error:errText(r) }); return finish(0); }
+          done += Number(r.done) || 0; refused = refused.concat(r.refused || []);
+          return step();
+        })
+        .catch(function(){ return finish(part.length); });
+    }
+    step();
+  });
+}
+
+/* ------------------------------------------------------------------ me */
+function yearsBetween(a, b){ var x = new Date(a + 'T00:00:00Z'), y = new Date(b + 'T00:00:00Z'); if(isNaN(x) || isNaN(y)) return ''; var m = (y.getUTCFullYear() - x.getUTCFullYear()) * 12 + y.getUTCMonth() - x.getUTCMonth(); if(y.getUTCDate() < x.getUTCDate()) m--; if(m < 0) return ''; return Math.floor(m / 12) + ' years ' + (m % 12) + ' months'; }
+function vMe(){
+  var u = (DB.session || {}).user || {}, R = DB.record || {}, t = today();
+  var h = bar('Me', '', '');
+  h += '<div class="scroll tabbed">';
+  h += '<div class="card bright" style="display:flex;gap:14px;align-items:center"><span class="avatar" style="width:56px;height:56px;font-size:18px">' + esc(ini(u.name)) + '</span><div style="min-width:0"><h2 class="title-m">' + esc(u.name) + '</h2><p class="small">' + esc(roleWord()) + (u.mandal ? '<br>' + esc(u.mandal) : '') + '</p></div></div>';
+  var kv = [];
+  if(R.empId) kv.push(['Employee ID', R.empId]);
+  if(R.dept) kv.push(['Department', R.dept]);
+  if(R.cat || R.gaz) kv.push(['Category', [R.cat, R.gaz].filter(Boolean).join(' · ')]);
+  if(R.place) kv.push(['Place of working', R.place]);
+  if(R.entered) kv.push(['Entered Government service', dmyFull(R.entered) + (yearsBetween(R.entered, t) ? ' · ' + yearsBetween(R.entered, t) : '')]);
+  if(R.post) kv.push(['Joined the present post', dmyFull(R.post)]);
+  if(R.dob) kv.push(['Date of birth', dmyFull(R.dob)]);
+  if(R.retire) kv.push(['Superannuation', dmyFull(R.retire) + (yearsBetween(t, R.retire) ? ' · in ' + yearsBetween(t, R.retire) : '')]);
+  if(R.status) kv.push(['Present status', R.status]);
+  if(kv.length) h += '<div class="hdr"><span class="eyebrow">Service record</span><span class="small">as your office recorded it</span></div><div class="card bright"><div class="kv">' + kv.map(function(x){ return '<div><span>' + esc(x[0]) + '</span><b>' + esc(x[1]) + '</b></div>'; }).join('') + '</div></div>';
+  else if(role() !== 'COLLECTOR') h += '<div class="card"><p class="small">Your office has not yet returned your service record in the Base Format. When it does, it appears here.</p></div>';
+  if(R.ctl || R.authCL || R.authOther) h += '<div class="hdr"><span class="eyebrow">As recorded by your office</span></div><div class="card bright"><div class="kv">' + (R.ctl ? '<div><span>Controlling officer</span><b>' + esc(R.ctl) + '</b></div>' : '') + (R.authCL ? '<div><span>Casual leave authority</span><b>' + esc(R.authCL) + '</b></div>' : '') + (R.authOther ? '<div><span>Other leave authority</span><b>' + esc(R.authOther) + '</b></div>' : '') + '</div><p class="small" style="margin-top:8px">On this register every application comes to the Collector for orders.</p></div>';
+  h += '<div class="card bright tight">' +
+    '<button class="row" data-act="chpin"><span class="lead">' + I.key + '</span><span class="txt"><b>Change PIN</b></span><span class="chev"></span></button>' +
+    '<button class="row" data-act="refresh"><span class="lead">' + I.refresh + '</span><span class="txt"><b>Refresh from the district</b>' + (DB.at ? '<span>last read ' + esc(dmy(DB.at)) + (hhmm(DB.at) ? ' at ' + hhmm(DB.at) : '') + '</span>' : '') + '</span></button>' +
+    '<button class="row" data-act="signout"><span class="lead">' + I.out + '</span><span class="txt"><b>Sign out</b></span></button></div>';
+  h += '<p class="foot">District HRMS · Jangaon · version ' + APP_VERSION + '</p>';
+  h += '</div>';
+  return h;
+}
+function chpin(){
+  sheet('<h2>Change PIN</h2><div class="field"><label for="pOld">Current PIN</label><input id="pOld" type="password" inputmode="numeric" maxlength="8"></div>' +
+    '<div class="two" style="margin-top:10px"><div class="field"><label for="pNew">New PIN</label><input id="pNew" type="password" inputmode="numeric" maxlength="8" placeholder="4 to 8 digits"></div><div class="field"><label for="pNew2">Again</label><input id="pNew2" type="password" inputmode="numeric" maxlength="8"></div></div>' +
+    '<div class="msg" id="mPin" role="alert" style="margin-top:10px"></div>' +
+    '<div class="two" style="margin-top:12px"><button class="btn outl" data-close="1">Not now</button><button class="btn filled" data-yes="1">Change</button></div>');
+  $('sheet').querySelector('[data-yes]').addEventListener('click', function(){
+    var o = $('pOld').value.trim(), a = $('pNew').value.trim(), b = $('pNew2').value.trim();
+    clear('mPin');
+    if(!/^\d{4,8}$/.test(a)) return say('mPin', 'bad', 'A PIN is four to eight digits.');
+    if(a !== b) return say('mPin', 'bad', 'The two PINs are not the same.');
+    post({ kind:'chpass', token:DB.session.token, old:o, newp:a })
+      .then(function(r){ if(!r || !r.ok){ if(tokenRefused(r)) return; return say('mPin', 'bad', errText(r)); } closeSheet(); toast('PIN changed.'); })
+      .catch(function(){ say('mPin', 'bad', 'The district could not be reached. Try again where there is a line.'); });
+  });
+}
+
+/* -------------------------------------------------------- sheet and wiring */
+function sheet(html){ $('sheet').innerHTML = '<div class="handle"></div>' + html; $('sheet').classList.add('on'); $('scrim').classList.add('on');
+  $('sheet').querySelectorAll('[data-close]').forEach(function(b){ b.addEventListener('click', closeSheet); }); }
+function closeSheet(){ $('sheet').classList.remove('on'); $('scrim').classList.remove('on'); }
+function daySheet(k){
+  var C = DB.cal || { days:{}, away:[] }, n = C.days[k] || 0, t = today();
+  var who = k === t ? (C.away || []) : [];
+  sheet('<h2>' + esc(dmy(k)) + '</h2><p>' + (n ? '<b>' + n + '</b> on sanctioned leave that day.' : 'Nobody on sanctioned leave.') + (DB.holidays[k] ? ' ' + esc(DB.holidays[k]) + '.' : '') + '</p>' +
+    (who.length ? '<div class="card bright tight" style="margin-bottom:10px">' + who.slice(0, 12).map(function(p){ return '<div class="row"><span class="lead">' + esc(ini(p.name)) + '</span><span class="txt"><b>' + esc(p.name) + '</b><span>' + esc((KIND_NAME[String(p.type).toUpperCase()] || p.type) + ' to ' + dmy(p.to)) + '</span></span></div>'; }).join('') + (who.length > 12 ? '<div class="row" style="min-height:40px"><span class="txt"><span>and ' + (who.length - 12) + ' more</span></span></div>' : '') + '</div>' : '') +
+    '<button class="btn text" data-close="1">Close</button>');
+}
+function act(k, b){
+  if(k === 'signin') return signIn();
+  if(k === 'claim') return claim();
+  if(k === 'refresh'){ refresh(); toast('Reading from the district…'); return; }
+  if(k === 'signout'){ DB.session = null; DB.rows = []; DB.me = null; DB.pend = []; DB.pendAll = 0; DB.cal = null; DB.account = null; DB.record = null; save(); go('signin'); return; }
+  if(k === 'newreq') return newReq();
+  if(k === 'next'){ if(S.req && S.req.to) go('request2'); return; }
+  if(k === 'hq'){ S.req.hq = !S.req.hq; b.setAttribute('aria-checked', S.req.hq ? 'true' : 'false'); return; }
+  if(k === 'send') return send();
+  if(k === 'withdraw') return withdraw();
+  if(k === 'sanction' || k === 'refuse'){
+    var rem = (($('oRem') || {}).value || '').trim();
+    if(k === 'refuse' && !rem){ say('mOrder', 'bad', 'Remarks are needed to refuse. They go to the employee.'); $('oRem').focus(); return; }
+    return order(S.detail.id, k === 'sanction' ? 'APPROVED' : 'REJECTED', rem);
+  }
+  if(k === 'all') return orderAll();
+  if(k === 'chpin') return chpin();
+}
+$('screen').addEventListener('click', function(e){
+  var b;
+  if((b = e.target.closest('[data-go]'))) return go(b.getAttribute('data-go'));
+  if((b = e.target.closest('[data-detail]'))){ S.detail = findRow(b.getAttribute('data-detail')); return go('detail'); }
+  if((b = e.target.closest('[data-order]'))){ S.detail = (DB.pend || []).filter(function(r){ return String(r.id) === b.getAttribute('data-order'); })[0]; return go('order'); }
+  if((b = e.target.closest('[data-kind]'))){ if(S.req){ S.req.type = b.getAttribute('data-kind'); S.req.from = S.req.to = ''; render(); } return; }
+  if((b = e.target.closest('[data-pick]'))) return pick(b.getAttribute('data-pick'));
+  if((b = e.target.closest('[data-cm]'))){ S.calM += Number(b.getAttribute('data-cm')); if(S.calM < 0){ S.calM = 11; S.calY--; } if(S.calM > 11){ S.calM = 0; S.calY++; } return render(); }
+  if((b = e.target.closest('[data-hm]'))){ S.hmM += Number(b.getAttribute('data-hm')); if(S.hmM < 0){ S.hmM = 11; S.hmY = (S.hmY || yearNow()) - 1; calendar(); } if(S.hmM > 11){ S.hmM = 0; S.hmY = (S.hmY || yearNow()) + 1; calendar(); } return render(); }
+  if((b = e.target.closest('[data-hmgo]'))){ S.hmM = Number(b.getAttribute('data-hmgo')); return render(); }
+  if((b = e.target.closest('[data-mym]'))){ var m = Number(b.getAttribute('data-mym')); S.myM = S.myM === m ? null : m; return render(); }
+  if((b = e.target.closest('[data-scope]'))){ S.hmScope = b.getAttribute('data-scope'); return render(); }
+  if((b = e.target.closest('[data-day]'))) return daySheet(b.getAttribute('data-day'));
+  if((b = e.target.closest('[data-act]'))) return act(b.getAttribute('data-act'), b);
+});
+$('screen').addEventListener('keydown', function(e){
+  if(e.key !== 'Enter') return;
+  if(e.target.id === 'iPin') signIn();
+  if(e.target.id === 'cPin2') claim();
+});
+$('screen').addEventListener('input', function(e){
+  if(!S.req) return;
+  if(e.target.id === 'rReason') S.req.reason = e.target.value;
+  if(e.target.id === 'rAddr') S.req.addr = e.target.value;
+  if(e.target.id === 'rCert') S.req.cert = e.target.value;
+});
+$('nav').addEventListener('click', function(e){ var b = e.target.closest('[data-tab]'); if(b) go(b.getAttribute('data-tab')); });
+$('scrim').addEventListener('click', closeSheet);
+
+/* ------------------------------------------------------------------- boot */
+/* THE WELCOME. In front of sign-in on every opening, 2.6 s and gone, or gone
+   on a tap. It is for people: a driven browser (the render passes) is never
+   shown it, so a pass sees the app and not a splash. It is removed from the
+   document, not hidden, so nothing can sit under it afterwards. */
+(function welcome(){
+  var w = $('welcome'); if(!w) return;
+  var driven = !!navigator.webdriver && !/[?&]welcome=1/.test(location.search);
+  if(driven){ w.remove(); return; }
+  w.hidden = false; w.setAttribute('aria-hidden', 'false');
+  var gone = false;
+  var off = function(){ if(gone) return; gone = true; w.classList.add('off'); setTimeout(function(){ w.remove(); }, 400); };
+  w.addEventListener('click', off);
+  setTimeout(off, 2600);
+})();
+
+load();
+var t0 = today(); S.hmY = Number(t0.slice(0, 4)); S.hmM = Number(t0.slice(5, 7)) - 1; S.calY = S.hmY; S.calM = S.hmM;
+S.hmScope = 'office';
 if(!DB.url){
-  show('vSignin');
+  S.screen = 'signin'; render();
   say('mSignin', 'bad', 'This app has no district address. config.js has not been written — see DEPLOY-HRMS.md.');
 } else if(DB.session && DB.session.token){
-  home(true);
+  S.screen = 'home'; S.tab = 'home'; render(); refresh();
 } else {
-  show('vSignin');
+  S.screen = 'signin'; render();
+}
+/* every few minutes while the app is open, so an order passed on the desk
+   reaches the phone without a tap */
+setInterval(function(){ if(document.visibilityState === 'visible' && DB.session) refresh(); }, 180000);
+document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'visible' && DB.session && DB.at && Date.now() - Date.parse(DB.at) > 60000) refresh(); });
+if('serviceWorker' in navigator && location.protocol !== 'file:' && !navigator.webdriver){
+  try{ navigator.serviceWorker.register('sw.js'); }catch(e){}
 }

@@ -2476,3 +2476,84 @@ it is the app's and not the console's validated series. Suite 40 holds the
 server half of the distance; `tests/render-days.js` asserts both rows, the
 amber tile for the mark seven kilometres out, the queued mark measured off
 the phone, and that no legend and no note stand under any of it.
+
+## The District HRMS, rebuilt on the Base Format
+
+**Ordered 18.10.2026**, off a tap-through draft passed the same morning:
+*"move forward with that, use motion animation as stated in welcome page and
+create entire app now"*, and an hour later, *"heatmap to each head of office
+related to their officer in leave and also to collector on homescreen."*
+
+**The app is the draft, on the live register.** `hrms/index.html` and
+`hrms/app.js` are rebuilt whole: the welcome the field app has (the seal,
+the words arriving in turn, 2.6 seconds or a tap, removed from the document,
+never shown to a driven browser), a home that answers *what do I have, what
+is coming, what needs me*, a rail of balances, a request in two taps on a
+calendar and one screen of details, every request with its journey, the
+employee's own year month by month on the console's heat ramp, his service
+record under Me, the Collector's inbox with sanction, refusal with words and
+sanction-all in batches of twenty-five, and `hrms/sw.js` so it opens with no
+signal. Every screen is drawn from the register's answer; the page works out
+only what he should know before he asks. `tests/render-hrms.js` drives all of
+it against the real backend in the mock, 83 checks, three roles.
+
+**THE SERVICE REGISTER'S FIGURE BEATS THE OPENING TABLE.** The register was
+pro-rated to a quarter because it had nothing better. The Base Format — A
+Section's workbook, thirty-six columns an employee, returned by twenty-six
+offices through October — carries the earned and half pay leave AT CREDIT and
+the casual leave, optional holidays and child care leave ALREADY AVAILED, as
+on a date, verified by a named official. `leaveOpening_` in Code.gs reads
+those columns off the Users row **by header**: casual leave becomes the year's
+fifteen less what the office recorded, counted after the balance date; earned
+and half pay leave become balances at credit; child care leave is 180 days of
+service. `decideOneLeave_` measures the sanction against it and `op=hrms`
+draws the rail from it — **one function, so the screen cannot argue with the
+order**. The two registers that never carry these columns answer null there
+and nothing about their leave moves; an HRMS officer whose office has not yet
+returned him keeps the pro-rated four. Suite 42 holds every figure; suite 34's
+pro-rating assertions still hold for the row with no Base Format.
+
+**The module makes its own columns, on the write path alone.** `HRMS_BASE_MAP`
+in `FeatureHrms.gs` names the twenty-eight columns the format brings and the
+workbook codes they came from; none is on `U_HEAD`. A dry run writes nothing,
+not even a header. Dates arrive three ways — the console's dd-mm-yyyy, a
+reader's Excel serial, a re-paste's ISO — and are kept one way; a figure given
+with no date it stands as on is refused by column, and the verification date
+stands in for a blank balance date, because a hundred rows gave only that. A
+head of office is **not demoted** by his own office's workbook, where every
+row arrives as EMP: the higher standing stays and the row gains his office,
+which is what puts his own people on his calendar. Corrections go back to the
+Sheet **in one block**: a thousand rows re-pasted is thirty cells each, and
+written cell by cell that is an execution that dies half way through a roll
+nobody can then tell the state of.
+
+**Who is away is the office's for its head and the district's for the
+Collector.** `op=hrmsCalendar` walks the tail of the Leave tab once for the
+year, folded by application: per day, the people whose **sanctioned** leave
+covers it, who is away today, how many applications are waiting. The head of
+an office reads the rows whose office is his; an employee is refused, because
+his own days are in his own rows. Cached ten minutes per scope. On the phone
+it is a month at a time, binned against the year's own busiest day with the
+thresholds printed in the legend, because an office of twenty and a district
+of a thousand cannot share the console's fixed bins — on those the district
+was one colour from end to end. It is on the home screen for both, and under
+Calendar with the year as a twelve-month strip and the day's names.
+
+**Every application still comes to the Collector** (08.10.2026). The Base
+Format records a controlling officer and two sanctioning authorities per
+employee; the app shows them under Me *as recorded by your office* and sends
+the application to the Collector. Routing to a head of office is not built,
+and `canApproveLeave_` is still where it would go, under a further written
+order.
+
+**The workbooks never enter the repository.** `tests/hrms-base-seed.js`
+reads every `.xlsx` in `hms/HRMS DATA` (gitignored) and writes one paste
+and one issues sheet **into that folder and nowhere else**. It finds the code
+row by its contents, because two offices put a serial column in front of the
+format and read by position a man's mobile number was his date of birth; it
+reads a mobile typed into a numeric cell past its `.0`; and it names the
+one `.xls` it does not read. On 18.10.2026 it read 1,081 employees from 25
+workbooks, 769 of them complete, with 313 lines for the offices to correct.
+The console's panel reads the same shape pasted directly, by the code row
+(`parseBaseFormat`, at the top level beside `parseOfficers`, for the reason
+the first `parsePostings` was not).

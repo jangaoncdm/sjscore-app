@@ -191,8 +191,32 @@ the establishment is pasted. Everybody else arrives in step 6.
 ## 6 — The establishment
 
 Switch the console to **District HRMS** (the register picker, top left), then
-Admin ▸ **The district establishment**, and paste the office's own list in
-the shape it keeps it in:
+Admin ▸ **The district establishment**. Two shapes go in there, and the panel
+tells which it has read.
+
+**The Base Format** (from 18.10.2026). A Section's workbook to every Head of
+Office — thirty-six columns an employee, taken from the Service Register and
+the last pay slip, with the earned and half pay leave at credit and the casual
+leave, optional holidays and child care leave already availed, as on a date,
+verified by a named official. Open the office's workbook on the sheet named
+*Base Format*, select everything from the first row (the title, the code row
+A1 … X2, the headings and the rows), copy, and paste. The columns are read by
+the **code row** and never by position, because two offices put a serial
+column in front of the format. The employee's leave account opens at those
+figures: casual leave is the year's fifteen less what the office recorded,
+earned leave is the balance at credit, and the sanction is measured against
+the same figures the employee sees.
+
+Twenty-six workbooks at once are one paste: run
+
+    node tests/hrms-base-seed.js
+
+and it reads every workbook in `hms/HRMS DATA`, writes `_PASTE.tsv` beside
+them for the panel and `_ISSUES.csv` naming every row an office must correct,
+and never writes outside that gitignored folder. The State Audit workbook is an
+older .xls and must be saved as .xlsx first.
+
+**The officers list** of 08.10.2026, in the shape the office keeps it:
 
     Sl.No · Section · Designation · Name of the Officer · Mobile No
 

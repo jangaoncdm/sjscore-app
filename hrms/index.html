@@ -8,245 +8,264 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <style>
-/* THE HOUSE PALETTE, and no webfont — this opens on a handset with no signal
-   and a font fetched from a CDN is a blank screen on a village road. */
+/* DISTRICT HRMS · the employee's own app, rebuilt 18.10.2026 on the draft the
+   Collector passed that morning. The shape is Workday's — a home that answers
+   what do I have, what is coming, what needs me; one rail of balances; a
+   request in two steps; every request with a journey — on the house's own
+   tokens: the indigo the field app carries since 14.10.2026, Material You
+   surfaces and 20px cards, Base's heavy tight headlines. System font only,
+   and no webfont ever: this opens on a handset with no signal. */
 :root{
-  --paper:#F3F4F9; --card:#FFFFFF; --ink:#13162B; --ink-2:#595F7E; --ink-3:#8D93AE;
-  --pri:#4A40CE; --pri-2:#EDECFB; --teal:#0F766E;
-  --ok:#157F4E; --ok-2:#E6F4EC; --warn:#A6681B; --warn-2:#FBF1E3;
-  --bad:#B3261E; --bad-2:#FBEAE9; --line:#E4E6F0;
-  --pad:18px; --r:14px;
-  --sys:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --primary:#4A40CE; --on-primary:#FFFFFF; --primary-container:#E4E1FF; --on-primary-container:#15006B;
+  --secondary:#0E7C86; --secondary-container:#D2F2F4; --on-secondary-container:#003B40;
+  --surface:#FBFAFF; --surface-low:#F3F4F9; --surface-mid:#ECEDF6; --surface-high:#E4E5EF; --surface-bright:#FFFFFF;
+  --on-surface:#1B1B22; --on-surface-2:#4B4A57; --on-surface-3:#767D93; --outline:#78777F; --outline-v:#D6D5E0;
+  --ok:#1B7F4B; --ok-container:#DDF3E6; --warn:#9A5B00; --warn-container:#FFE9C7; --err:#B3261E; --err-container:#FCE2DE;
+  /* the leave heat ramp — the console's own validated multi-hue sequence, one order, pale to deep */
+  --hm0:#EEF0F6; --hm1:#F4E97A; --hm2:#8FD38B; --hm3:#2FB5A0; --hm4:#2E7FBF; --hm5:#3B2F8F; --hm-lo:#1B1B22; --hm-hi:#FFFFFF;
+  --shadow:0 1px 2px rgba(27,27,34,.10),0 2px 10px rgba(27,27,34,.07);
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --ease:cubic-bezier(.32,.72,0,1);
+  --tabh:calc(80px + env(safe-area-inset-bottom));
+  color-scheme:light;
 }
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --primary:#C5BFFF; --on-primary:#2A1E8E; --primary-container:#3B30B5; --on-primary-container:#E4E1FF;
+  --secondary:#86D6DE; --secondary-container:#0E5D65; --on-secondary-container:#D2F2F4;
+  --surface:#121318; --surface-low:#1A1B21; --surface-mid:#1F2027; --surface-high:#2A2B33; --surface-bright:#30313A;
+  --on-surface:#E5E2EC; --on-surface-2:#C7C5D0; --on-surface-3:#9A98A6; --outline:#918F9A; --outline-v:#48474F;
+  --ok:#7ED8A4; --ok-container:#0F4A2C; --warn:#F2BE62; --warn-container:#5A3600; --err:#F2B8B5; --err-container:#6F1A14;
+  --hm0:#2A2B33; --hm1:#F6EB85; --hm2:#97D994; --hm3:#3CC1AC; --hm4:#4A95D1; --hm5:#7A6DD6; --hm-lo:#121318; --hm-hi:#FFFFFF;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 2px 10px rgba(0,0,0,.35); color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --primary:#C5BFFF; --on-primary:#2A1E8E; --primary-container:#3B30B5; --on-primary-container:#E4E1FF;
+  --secondary:#86D6DE; --secondary-container:#0E5D65; --on-secondary-container:#D2F2F4;
+  --surface:#121318; --surface-low:#1A1B21; --surface-mid:#1F2027; --surface-high:#2A2B33; --surface-bright:#30313A;
+  --on-surface:#E5E2EC; --on-surface-2:#C7C5D0; --on-surface-3:#9A98A6; --outline:#918F9A; --outline-v:#48474F;
+  --ok:#7ED8A4; --ok-container:#0F4A2C; --warn:#F2BE62; --warn-container:#5A3600; --err:#F2B8B5; --err-container:#6F1A14;
+  --hm0:#2A2B33; --hm1:#F6EB85; --hm2:#97D994; --hm3:#3CC1AC; --hm4:#4A95D1; --hm5:#7A6DD6; --hm-lo:#121318; --hm-hi:#FFFFFF;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 2px 10px rgba(0,0,0,.35); color-scheme:dark; }
+
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;padding:0}
-body{background:var(--paper);color:var(--ink);font:15px/1.55 var(--sys);
-  padding-bottom:env(safe-area-inset-bottom)}
-.wrap{max-width:560px;margin:0 auto;padding:0 var(--pad) 36px}
-h1,h2,h3{margin:0;font-weight:650;letter-spacing:-.01em}
-.eyebrow{font:600 11px/1.3 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--pri)}
-.muted{color:var(--ink-2)}
-.tiny{font-size:12.5px;line-height:1.6;color:var(--ink-2)}
-
-header{padding:26px var(--pad) 14px;max-width:560px;margin:0 auto}
-header h1{font-size:23px;margin-top:3px}
-header p{margin:4px 0 0;font-size:13.5px;color:var(--ink-2)}
-
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
-  padding:16px;margin-bottom:13px}
-.card h2{font-size:15.5px;margin-bottom:9px}
-
-.btn{display:block;width:100%;border:0;border-radius:12px;padding:14px 16px;
-  font:600 15px var(--sys);background:var(--pri);color:#fff;cursor:pointer;min-height:48px}
-.btn[disabled]{opacity:.55;cursor:default}
-.btn.quiet{background:var(--pri-2);color:var(--pri)}
-.btn.ghost{background:transparent;color:var(--ink-2);border:1px solid var(--line)}
-.btn + .btn{margin-top:9px}
-
-label{display:block;font-size:13px;font-weight:600;margin:12px 0 5px}
-input,select,textarea{width:100%;border:1px solid var(--line);border-radius:11px;
-  padding:12px 13px;font:15px var(--sys);background:#fff;color:var(--ink);min-height:46px}
-input:focus,select:focus,textarea:focus{outline:2px solid var(--pri);outline-offset:1px}
-textarea{min-height:84px;resize:vertical}
-/* a tick is not a text box: input{width:100%} above would stretch it across
-   the card and leave the words nowhere to sit */
-.chk{display:flex;align-items:flex-start;gap:10px;font-weight:500;
-     margin:15px 0 0;line-height:1.45;font-size:14px}
-.chk input{width:19px;height:19px;flex:0 0 19px;margin:1px 0 0}
-.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-
-.msg{margin-top:11px;font-size:13.5px;line-height:1.6;padding:10px 12px;border-radius:11px;display:none}
-.msg.on{display:block}
-.msg.bad{background:var(--bad-2);color:var(--bad)}
-.msg.ok{background:var(--ok-2);color:var(--ok)}
-.msg.info{background:var(--pri-2);color:var(--pri)}
-
-.pill{display:inline-block;font:600 11.5px var(--sys);padding:3px 9px;border-radius:999px}
-.pill.ok{background:var(--ok-2);color:var(--ok)}
-.pill.warn{background:var(--warn-2);color:var(--warn)}
-.pill.bad{background:var(--bad-2);color:var(--bad)}
-.pill.mut{background:#EEF0F6;color:var(--ink-2)}
-
-/* TWO BY TWO ON A PHONE. auto-fit with a floor of 0 put four tiles across a
-   390px screen and broke "Casual leave" over three lines; a 132px floor wraps
-   them instead. */
-.bal{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px}
-.bal div{background:var(--paper);border-radius:11px;padding:11px 12px;min-width:0}
-.bal b{display:block;font-size:21px;line-height:1.2}
-.bal span{font-size:11.5px;color:var(--ink-2)}
-
-.app{border-top:1px solid var(--line);padding:12px 0}
-.app:first-of-type{border-top:0}
-.app .t{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
-.app .t b{font-size:14.5px}
-.app .d{font-size:13px;color:var(--ink-2);margin-top:2px}
-
-.empty{text-align:center;color:var(--ink-3);font-size:13.5px;padding:18px 6px}
+html,body{margin:0;padding:0;background:var(--surface)}
+body{color:var(--on-surface);font-family:var(--font);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased;min-height:100%}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:inherit}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
 .hide{display:none!important}
-.foot{margin-top:22px;font-size:12px;line-height:1.7;color:var(--ink-3);text-align:center}
+
+/* ---------- welcome ----------
+   In front of sign-in on every opening, for people and not for robots: the seal the app ships as
+   its icon, the one gradient, and CSS motion that needs no signal. It goes by itself after 2.6 s
+   and a tap takes it away at once; a handset that asks for reduced motion sees one frame. It is
+   never shown to a driven browser (navigator.webdriver), so the render passes see the app. */
+#welcome{position:fixed;inset:0;z-index:90;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+  padding:40px 28px 36px;overflow:hidden;color:#fff;cursor:pointer;
+  background:linear-gradient(160deg,#4A40CE 0%,#3A4BD6 45%,#0E7C86 100%);transition:opacity .35s var(--ease)}
+#welcome.off{opacity:0;pointer-events:none}
+#welcome .seal{position:relative;width:132px;height:132px;display:grid;place-items:center}
+#welcome .halo{position:absolute;inset:0;border-radius:50%}
+#welcome .halo i{position:absolute;inset:0;border-radius:50%;border:2px solid #fff;opacity:0;animation:w-halo 2200ms ease-out 500ms infinite}
+#welcome .halo i:nth-child(2){animation-delay:1200ms}
+#welcome .emb{width:132px;height:132px;border-radius:50%;background:#fff;padding:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);position:relative;z-index:1;animation:w-emb 900ms cubic-bezier(.2,.9,.3,1.2) both}
+#welcome .emb img{width:100%;height:100%;display:block;border-radius:50%}
+#welcome .gov{margin-top:24px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;opacity:.9;animation:w-rise 600ms ease-out 450ms both}
+#welcome h1{margin:8px 0 0;font-size:36px;font-weight:800;letter-spacing:-.04em;line-height:1.05;color:#fff}
+#welcome h1 span{display:inline-block;animation:w-rise 600ms ease-out both;animation-delay:600ms}
+#welcome h1 span:nth-child(2){animation-delay:720ms}#welcome h1 span:nth-child(3){animation-delay:840ms}#welcome h1 span:nth-child(4){animation-delay:960ms}
+#welcome .sub{margin:12px 0 0;font-size:15px;opacity:.92;max-width:28ch;line-height:1.45;animation:w-rise 600ms ease-out 1100ms both}
+#welcome .foot{position:absolute;left:28px;right:28px;bottom:calc(env(safe-area-inset-bottom) + 50px);font-size:12px;opacity:.75;animation:w-fade 400ms ease-out 1300ms both}
+#welcome .prog{position:absolute;left:28px;right:28px;bottom:calc(env(safe-area-inset-bottom) + 36px);height:3px;border-radius:2px;overflow:hidden;background:rgba(255,255,255,.25);animation:w-fade 400ms ease-out 1100ms both}
+#welcome .prog i{display:block;height:100%;width:100%;background:#fff;transform-origin:left;animation:w-prog 1400ms cubic-bezier(.4,0,.2,1) 1200ms both}
+@keyframes w-emb{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
+@keyframes w-halo{0%{opacity:.55;transform:scale(1)}100%{opacity:0;transform:scale(1.9)}}
+@keyframes w-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes w-fade{from{opacity:0}to{opacity:1}}
+@keyframes w-prog{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@media (prefers-reduced-motion:reduce){ #welcome *{animation-duration:1ms!important;animation-iteration-count:1!important} }
+
+/* ---------- the shell: one page, the tab bar fixed at the foot ---------- */
+#screen{max-width:560px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+.bar{min-height:64px;display:flex;align-items:center;gap:12px;padding:calc(env(safe-area-inset-top) + 4px) 8px 0 16px;flex:0 0 auto;position:sticky;top:0;z-index:20;background:var(--surface)}
+.bar h1{font-size:24px;font-weight:800;margin:0;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.5px}
+.bar .ic{width:48px;height:48px;display:grid;place-items:center;border-radius:50%;flex:0 0 auto}
+.bar .ic:active{background:var(--surface-mid)}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary-container);color:var(--on-primary-container);display:grid;place-items:center;font-weight:700;font-size:13px;letter-spacing:.3px}
+.scroll{flex:1;padding:0 16px 24px;display:flex;flex-direction:column;gap:12px}
+.scroll>*{flex:0 0 auto}
+.scroll.tabbed{padding-bottom:calc(var(--tabh) + 16px)}
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:50;height:var(--tabh);background:var(--surface-low);display:grid;grid-auto-flow:column;grid-auto-columns:1fr;padding:10px 4px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--outline-v)}
+.nav button{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11.5px;font-weight:600;color:var(--on-surface-2);position:relative}
+.nav button .pill{width:60px;height:32px;border-radius:16px;display:grid;place-items:center;transition:background .18s}
+.nav button[aria-current]{color:var(--on-surface)}
+.nav button[aria-current] .pill{background:var(--secondary-container);color:var(--on-secondary-container)}
+.nav button[aria-current] svg{stroke-width:2.4}
+.nav .cnt{position:absolute;top:4px;left:50%;margin-left:8px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--err);color:#fff;font:700 10.5px/17px var(--mono);text-align:center;border:2px solid var(--surface-low);box-sizing:content-box}
+svg.i{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
+svg.i.s{width:20px;height:20px}
+
+/* ---------- components ---------- */
+.card{background:var(--surface-low);border-radius:20px;padding:16px}
+.card.bright{background:var(--surface-bright);box-shadow:var(--shadow)}
+.card.tonal{background:var(--primary-container);color:var(--on-primary-container)}
+.card.tight{padding:4px 16px}
+.card.flag{background:var(--err-container);color:var(--err)}
+.card.warn{background:var(--warn-container);color:var(--warn)}
+.eyebrow{font-size:11.5px;font-weight:700;color:var(--on-surface-3);letter-spacing:.08em;text-transform:uppercase;font-family:var(--mono)}
+.card.tonal .eyebrow,.card.flag .eyebrow,.card.warn .eyebrow{color:inherit;opacity:.8}
+.title-l{font-size:24px;font-weight:800;line-height:1.2;letter-spacing:-.4px;margin:0}
+.title-m{font-size:17px;font-weight:700;letter-spacing:-.2px;margin:0}
+.body{font-size:15px;color:var(--on-surface-2);margin:0}
+.small{font-size:12.5px;color:var(--on-surface-3);margin:0;line-height:1.45}
+.display{font-size:36px;font-weight:800;letter-spacing:-1px;line-height:1.05;margin:0}
+.hdr{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:6px 2px -4px}
+.hdr button{font-size:13px;font-weight:600;color:var(--primary)}
+.btn{min-height:48px;border-radius:24px;padding:0 24px;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:700;font-size:16px;width:100%}
+.btn.filled{background:var(--primary);color:var(--on-primary)}
+.btn.tonal{background:var(--secondary-container);color:var(--on-secondary-container)}
+.btn.text{color:var(--primary);min-height:40px}
+.btn.outl{border:1px solid var(--outline-v);color:var(--on-surface)}
+.btn.err{background:var(--err-container);color:var(--err)}
+.btn:disabled{opacity:.45;pointer-events:none}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row{display:flex;align-items:center;gap:14px;min-height:56px;padding:8px 0;width:100%}
+.row+.row{border-top:1px solid var(--outline-v)}
+.row .lead,.lead{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--surface-mid);color:var(--on-surface);flex:0 0 auto;font-weight:700;font-size:14px}
+.lead.ok{background:var(--ok-container);color:var(--ok)}.lead.warn{background:var(--warn-container);color:var(--warn)}.lead.err{background:var(--err-container);color:var(--err)}.lead.pri{background:var(--primary-container);color:var(--on-primary-container)}
+.row .txt{flex:1;min-width:0}
+.row .txt b{display:block;font-weight:600;font-size:15.5px;letter-spacing:-.1px}
+.row .txt span{display:block;font-size:13px;color:var(--on-surface-2);margin-top:1px}
+.row .trail{color:var(--outline);display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.chev{width:9px;height:9px;border-right:2.2px solid var(--outline);border-bottom:2.2px solid var(--outline);transform:rotate(-45deg);flex:none}
+.chip{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:10px;font-size:13.5px;font-weight:600;border:1px solid var(--outline-v);background:var(--surface-bright);color:var(--on-surface)}
+.chip.on{background:var(--secondary-container);color:var(--on-secondary-container);border-color:transparent}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:12px;font-size:12px;font-weight:700;white-space:nowrap}
+.badge.ok{background:var(--ok-container);color:var(--ok)}
+.badge.warn{background:var(--warn-container);color:var(--warn)}
+.badge.err{background:var(--err-container);color:var(--err)}
+.badge.neu{background:var(--surface-high);color:var(--on-surface-2)}
+.msg{font-size:13.5px;line-height:1.55;padding:10px 14px;border-radius:12px;display:none}
+.msg.on{display:block}
+.msg.bad{background:var(--err-container);color:var(--err)}
+.msg.ok{background:var(--ok-container);color:var(--ok)}
+.msg.info{background:var(--primary-container);color:var(--on-primary-container)}
+
+/* the balance rail */
+.rail{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 -16px;padding:2px 16px 6px;scrollbar-width:none}
+.rail::-webkit-scrollbar{display:none}
+.rail .bal{scroll-snap-align:start;flex:0 0 150px;background:var(--surface-bright);box-shadow:var(--shadow);border-radius:18px;padding:14px 14px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.rail .bal .k{font-size:12.5px;font-weight:600;color:var(--on-surface-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rail .bal .v{font-size:30px;font-weight:800;letter-spacing:-.9px;line-height:1.05;margin-top:6px}
+.rail .bal .v small{font-size:13px;font-weight:600;color:var(--on-surface-3);letter-spacing:0;margin-left:3px}
+.rail .bal .m{height:5px;border-radius:3px;background:var(--surface-mid);margin-top:10px;overflow:hidden}
+.rail .bal .m i{display:block;height:100%;background:var(--primary);border-radius:3px}
+.rail .bal .m i.lo{background:var(--warn)}.rail .bal .m i.out{background:var(--err)}
+.rail .bal .s{font-size:11.5px;color:var(--on-surface-3);margin-top:4px}
+.rail .bal.sel{box-shadow:var(--shadow),inset 0 0 0 2px var(--primary)}
+
+/* the journey of one application */
+.steps{display:flex;flex-direction:column}
+.step{display:flex;gap:14px;padding:10px 0;position:relative}
+.step+.step::before{content:"";position:absolute;left:13px;top:-12px;height:22px;width:2px;background:var(--outline-v)}
+.step .n{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:700;background:var(--surface-high);color:var(--on-surface-2);flex:0 0 auto}
+.step.done .n{background:var(--ok);color:#fff}
+.step.busy .n{background:var(--primary);color:var(--on-primary);box-shadow:0 0 0 5px var(--primary-container)}
+.step.bad .n{background:var(--err);color:#fff}
+.step.neu .n{background:var(--outline);color:#fff}
+.step b{display:block;font-size:15.5px;font-weight:600}
+.step span{display:block;font-size:13px;color:var(--on-surface-2)}
+
+/* fields */
+.field{background:var(--surface-low);border-radius:12px 12px 4px 4px;border-bottom:2px solid var(--outline);padding:10px 16px 8px}
+.field label{display:block;font-size:12px;color:var(--on-surface-2)}
+.field input,.field select,.field textarea{width:100%;border:0;background:none;font:inherit;font-size:16px;color:var(--on-surface);padding:4px 0 0;outline:none;resize:none;min-height:30px}
+.field input::placeholder,.field textarea::placeholder{color:var(--on-surface-3)}
+.sw{display:flex;align-items:center;gap:12px;padding:10px 0}
+.sw .txt{flex:1;min-width:0}.sw .txt b{display:block;font-weight:600;font-size:15px}.sw .txt span{display:block;font-size:13px;color:var(--on-surface-2)}
+.tog{width:52px;height:32px;border-radius:16px;background:var(--surface-high);position:relative;flex:0 0 auto;transition:background .18s;border:2px solid var(--outline)}
+.tog::after{content:"";position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:50%;background:var(--outline);transition:all .18s}
+.tog[aria-checked=true]{background:var(--primary);border-color:var(--primary)}
+.tog[aria-checked=true]::after{left:24px;background:var(--on-primary)}
+
+/* the calendar — the date picker and the heat map share one grid */
+.cal{display:flex;flex-direction:column;gap:6px}
+.cal .mh{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cal .mh b{font-size:16px;font-weight:700}
+.cal .mh button{width:40px;height:40px;border-radius:50%;display:grid;place-items:center}
+.cal .mh button:active{background:var(--surface-mid)}
+.cal .g{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal .g .dw{font-size:11px;color:var(--on-surface-3);text-align:center;font-weight:600;padding:2px 0}
+.cal .g .d{aspect-ratio:1;border-radius:10px;display:grid;place-items:center;font-size:13.5px;font-weight:600;color:var(--on-surface);background:var(--surface-bright);box-shadow:inset 0 0 0 1px var(--outline-v);position:relative;min-width:0}
+.cal .g .d.o{opacity:0;pointer-events:none}
+.cal .g .d.off{color:var(--on-surface-3);background:var(--surface-low);box-shadow:none}
+.cal .g .d.hol::after{content:"";position:absolute;bottom:5px;width:4px;height:4px;border-radius:50%;background:var(--warn)}
+.cal .g .d.gone{color:var(--on-surface-3);background:var(--surface-low);box-shadow:none;opacity:.7}
+.cal .g .d.today{box-shadow:inset 0 0 0 2px var(--warn)}
+.cal .g .d.in{background:var(--primary-container);color:var(--on-primary-container);box-shadow:none;border-radius:4px}
+.cal .g .d.a,.cal .g .d.b{background:var(--primary);color:var(--on-primary);box-shadow:none;border-radius:10px}
+.cal .g .d.mine{box-shadow:inset 0 0 0 2px var(--primary)}
+.cal .g .d.oh{box-shadow:inset 0 0 0 1.5px var(--secondary)}
+.cal .g .d.k0{background:var(--hm0);box-shadow:none;color:var(--on-surface-2)}
+.cal .g .d.k1{background:var(--hm1);color:var(--hm-lo);box-shadow:none}.cal .g .d.k2{background:var(--hm2);color:var(--hm-lo);box-shadow:none}.cal .g .d.k3{background:var(--hm3);color:var(--hm-lo);box-shadow:none}
+.cal .g .d.k4{background:var(--hm4);color:var(--hm-hi);box-shadow:none}.cal .g .d.k5{background:var(--hm5);color:var(--hm-hi);box-shadow:none}
+.cal .g .d small{position:absolute;bottom:3px;right:5px;font-size:9px;font-weight:700;opacity:.85}
+.cal.mini .g .d{font-size:11px;border-radius:7px}
+.cal.mini .g .d small{font-size:8px;bottom:2px;right:3px}
+.leg{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:11.5px;color:var(--on-surface-3);align-items:center}
+.leg i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:4px}
+
+/* twelve months */
+.months{display:grid;grid-template-columns:repeat(12,1fr);gap:4px}
+.months .m{aspect-ratio:1/1.35;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:10px;color:var(--on-surface-3);background:var(--hm0);min-width:0}
+.months .m b{font-size:12px;font-weight:800;color:inherit;font-variant-numeric:tabular-nums}
+.months .m.k1{background:var(--hm1);color:var(--hm-lo)}.months .m.k2{background:var(--hm2);color:var(--hm-lo)}.months .m.k3{background:var(--hm3);color:var(--hm-lo)}.months .m.k4{background:var(--hm4);color:var(--hm-hi)}.months .m.k5{background:var(--hm5);color:var(--hm-hi)}
+.months .m.k1 span,.months .m.k2 span,.months .m.k3 span{color:var(--hm-lo);opacity:.8}.months .m.k4 span,.months .m.k5 span{color:var(--hm-hi);opacity:.85}
+.months .m.w{box-shadow:inset 0 0 0 2px var(--warn)}
+.months .m.cur{outline:2px solid var(--on-surface);outline-offset:-2px}
+
+/* sheet, scrim, toast */
+.sheet{position:fixed;left:0;right:0;bottom:0;max-width:560px;margin:0 auto;background:var(--surface-bright);border-radius:28px 28px 0 0;padding:8px 20px calc(20px + env(safe-area-inset-bottom));box-shadow:0 -8px 40px rgba(0,0,0,.25);transform:translateY(105%);transition:transform .22s ease;z-index:85;max-height:82vh;overflow:auto}
+.sheet.on{transform:none}
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.32);opacity:0;pointer-events:none;transition:opacity .2s;z-index:80}
+.scrim.on{opacity:1;pointer-events:auto}
+.handle{width:32px;height:4px;border-radius:2px;background:var(--outline-v);margin:4px auto 14px}
+.sheet h2{font-size:22px;font-weight:800;letter-spacing:-.4px;margin:0 0 6px}
+.sheet p{color:var(--on-surface-2);margin:0 0 14px;line-height:1.5}
+.toast{position:fixed;left:16px;right:16px;bottom:calc(var(--tabh) + 12px);max-width:528px;margin:0 auto;background:var(--on-surface);color:var(--surface);border-radius:12px;padding:12px 16px;font-size:14px;opacity:0;transform:translateY(8px);transition:all .2s;z-index:95;pointer-events:none}
+.toast.on{opacity:1;transform:none}
+.kv div{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--outline-v);font-size:14px}
+.kv div:first-child{border-top:0}
+.kv span{color:var(--on-surface-2)}.kv b{font-weight:600;text-align:right;min-width:0;overflow-wrap:anywhere}
+.signin{flex:1;display:flex;flex-direction:column;justify-content:center;padding:28px 24px calc(28px + env(safe-area-inset-bottom));gap:14px;max-width:560px;margin:0 auto;width:100%}
+.signin .seal{width:76px;height:76px;border-radius:50%;background:#fff;padding:5px;box-shadow:var(--shadow)}
+.signin .seal img{width:100%;height:100%;border-radius:50%;display:block}
+.away{display:flex;gap:10px;overflow-x:auto;margin:0 -16px;padding:2px 16px 4px;scrollbar-width:none}
+.away::-webkit-scrollbar{display:none}
+.away .p{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:6px;width:72px;font-size:11px;color:var(--on-surface-2);text-align:center;line-height:1.3}
+.away .p .av{width:48px;height:48px;border-radius:50%;background:var(--surface-high);display:grid;place-items:center;font-weight:700;font-size:14px;color:var(--on-surface)}
+.away .p b{display:block;font-weight:600;color:var(--on-surface);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:72px}
+.empty{text-align:center;color:var(--on-surface-3);font-size:13.5px;padding:18px 6px}
+.foot{text-align:center;font-size:12px;color:var(--on-surface-3);line-height:1.6;padding:4px 10px 0}
 </style>
 </head>
 <body>
 
-<!-- ══ SIGN IN ══ -->
-<section id="vSignin">
-  <header>
-    <p class="eyebrow">Government of Telangana · Jangaon</p>
-    <h1>District HRMS</h1>
-    <p>Apply for leave, and see what you have left.</p>
-  </header>
-  <div class="wrap">
-    <div class="card">
-      <label for="iPhone">Mobile number</label>
-      <input id="iPhone" type="tel" inputmode="numeric" autocomplete="username" maxlength="13" placeholder="10 digits">
-      <label for="iPin">PIN</label>
-      <input id="iPin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="8" placeholder="Your PIN">
-      <div style="margin-top:14px"><button class="btn" id="bSignin">Sign in</button></div>
-      <div class="msg" id="mSignin" role="alert"></div>
-      <p class="tiny" style="margin-top:13px">Signing in for the first time? Enter your mobile number and
-        press <b>Sign in</b> — you will be asked to choose your own PIN.</p>
-    </div>
-    <p class="foot">Your office holds the establishment. If your number is not recognised,
-      ask it to check the number and the employee id it has against your name.</p>
-  </div>
-</section>
+<div id="welcome" hidden aria-hidden="true">
+  <div class="seal"><div class="halo"><i></i><i></i></div><div class="emb"><img src="icons/icon-192.png" alt=""></div></div>
+  <div class="gov">Government of Telangana</div>
+  <h1><span>Jangaon</span> <span>District</span><br><span>HRMS</span></h1>
+  <div class="sub">Leave, and the service record it is sanctioned against.</div>
+  <div class="foot">Collectorate &middot; Jangaon District</div>
+  <div class="prog"><i></i></div>
+</div>
 
-<!-- ══ CLAIM: choose your own PIN ══ -->
-<section id="vClaim" class="hide">
-  <header>
-    <p class="eyebrow">First sign-in</p>
-    <h1 id="claimName">Choose your PIN</h1>
-    <p>Your number is on the district roll and has no PIN yet. Set one now — it is yours and the office never sees it.</p>
-  </header>
-  <div class="wrap">
-    <div class="card">
-      <label for="cEmp">Employee ID or enrolment code</label>
-      <input id="cEmp" autocomplete="off" placeholder="From your office">
-      <!-- A MOBILE NUMBER IS NOT A SECRET — it is written in every office
-           register in the district — so the number alone cannot claim a row.
-           The employee id was that second thing, and the district's own list
-           of officers carries none, so the register issues a six-character
-           enrolment code per row instead and the office hands it over. Either
-           one opens this, and both are spent the moment the PIN is set. -->
-      <p class="tiny" style="margin-top:5px">This is how the register knows the number is yours —
-        your employee id, or the <b>six-character code</b> your office was given for you.
-        It is used once and then it is finished with.</p>
-      <div class="row2" style="margin-top:4px">
-        <div><label for="cPin">Choose a PIN</label>
-          <input id="cPin" type="password" inputmode="numeric" maxlength="8" placeholder="4 to 8 digits"></div>
-        <div><label for="cPin2">Type it again</label>
-          <input id="cPin2" type="password" inputmode="numeric" maxlength="8" placeholder="Once more"></div>
-      </div>
-      <div style="margin-top:14px"><button class="btn" id="bClaim">Set my PIN and sign in</button></div>
-      <button class="btn ghost" id="bClaimBack" style="margin-top:9px">Back</button>
-      <div class="msg" id="mClaim" role="alert"></div>
-    </div>
-    <p class="foot">A row is claimed once. If a PIN has already been set on your number and it was not you,
-      your office can have it reset.</p>
-  </div>
-</section>
-
-<!-- ══ HOME ══ -->
-<section id="vHome" class="hide">
-  <header>
-    <p class="eyebrow" id="hEyebrow">District HRMS</p>
-    <h1 id="hName">—</h1>
-    <p id="hWho">—</p>
-  </header>
-  <div class="wrap">
-    <div class="card">
-      <h2>This year</h2>
-      <div class="bal" id="hBal"></div>
-      <p class="tiny" style="margin-top:10px">What an application would leave you is worked out against the
-        dates you pick, on the form. Medical leave answers to no yearly figure; a spell of it is capped.</p>
-    </div>
-
-    <!-- ORDERS ARE PASSED IN THE APP, as they are on both other registers:
-         leaveDecision has always been the field app's, and the console only
-         shows the waiting list. This app had no such screen, so there was no
-         way to sanction a single application on the register whose whole
-         purpose is leave. Shown to the Collector alone, and the server
-         re-checks that anyway (rule 6). -->
-    <button class="btn hide" id="bOrders">Applications awaiting your orders<span id="bOrdersN"></span></button>
-
-    <button class="btn" id="bApply">Apply for leave</button>
-
-    <div class="card" style="margin-top:13px">
-      <h2>Your applications</h2>
-      <div id="hList"><div class="empty">Nothing yet.</div></div>
-    </div>
-
-    <button class="btn ghost" id="bRefresh">Refresh from the district</button>
-    <button class="btn ghost" id="bOut" style="margin-top:9px">Sign out</button>
-    <p class="foot" id="hFoot">This register records your leave and nothing else.
-      It takes no attendance and raises no notice.</p>
-  </div>
-</section>
-
-<!-- ══ ORDERS · the Collector's own ══ -->
-<section id="vOrders" class="hide">
-  <header>
-    <p class="eyebrow">For orders</p>
-    <h1>Awaiting your orders</h1>
-    <p id="oCount">—</p>
-  </header>
-  <div class="wrap">
-    <div class="card">
-      <div id="oList"><div class="empty">Nothing waiting.</div></div>
-      <div class="msg" id="mOrders" role="alert"></div>
-    </div>
-    <!-- SANCTION ALONE IS PASSED IN BULK. A refusal carries its own words per
-         case and is never passed over a list — and every application still
-         answers its own checks in turn, so the fifth casual leave of a batch
-         is counted against the four sanctioned just before it. -->
-    <button class="btn hide" id="bAll">Sanction all of them</button>
-    <button class="btn ghost" id="bOrdersBack" style="margin-top:9px">Back</button>
-    <p class="foot">An order is passed on the <b>application</b>, not on a row. Nothing is
-      destroyed: a refusal keeps the application and its words on the register.</p>
-  </div>
-</section>
-
-<!-- ══ APPLY ══ -->
-<section id="vApply" class="hide">
-  <header>
-    <p class="eyebrow">Apply</p>
-    <h1>Leave application</h1>
-    <p>It goes to the Collector for orders. Nothing is taken from you until it is sanctioned.</p>
-  </header>
-  <div class="wrap">
-    <div class="card">
-      <label for="aType">Kind of leave</label>
-      <select id="aType"></select>
-      <div class="row2">
-        <div><label for="aFrom">From</label><input id="aFrom" type="date"></div>
-        <div><label for="aTo">To</label><input id="aTo" type="date"></div>
-      </div>
-      <div class="msg info on" id="aNote" style="margin-top:12px"></div>
-      <label for="aReason">Reason</label>
-      <textarea id="aReason" placeholder="Briefly, in your own words"></textarea>
-      <label for="aAddr">Address while on leave</label>
-      <input id="aAddr" placeholder="Where you may be reached">
-      <!-- LEAVING HEADQUARTERS IS ASKED FOR, NOT ASSUMED. It is a separate
-           permission under the leave rules and the register has carried a
-           column for it since the first day; this app simply never asked, so
-           every application reached the Collector saying false whatever the
-           employee intended. He is the only one who knows. -->
-      <label class="chk" for="aHq"><input type="checkbox" id="aHq">
-        <span>I will be away from my headquarters during this leave, and seek
-        permission for it</span></label>
-      <!-- shown only for medical leave, because asking everybody for a
-           certificate is how a form teaches people to leave boxes empty -->
-      <div id="aCertWrap" class="hide">
-        <label for="aCert">Medical certificate</label>
-        <input id="aCert" placeholder="Who issued it, and on what date">
-      </div>
-      <div style="margin-top:14px"><button class="btn" id="bSend">Send for orders</button></div>
-      <button class="btn ghost" id="bCancel" style="margin-top:9px">Not now</button>
-      <div class="msg" id="mApply" role="alert"></div>
-    </div>
-  </div>
-</section>
+<main id="screen"></main>
+<nav class="nav hide" id="nav" aria-label="Sections"></nav>
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet" role="dialog"></div>
+<div class="toast" id="toast" role="status"></div>
 
 <script src="config.js"></script>
 <script src="app.js"></script>

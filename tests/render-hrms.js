@@ -1,22 +1,27 @@
 /* THE DISTRICT HRMS APP — driven in a real browser, end to end.
 
-   The employee's whole journey: a number the district seeded, a PIN he
-   chooses himself, an application, and his own register afterwards. Nothing
-   here is mocked away except the network, and what the network answers is the
-   REAL backend running in the Apps Script mock — so the app is driven against
-   the same saveLeave_, the same overlap refusal and the same twin-row fold
-   the district will run on.
+   Rebuilt 18.10.2026 with the app. The employee's whole journey: a number the
+   district seeded with his Service Register figures, a PIN he chooses
+   himself, an application picked on a calendar, his own register and his
+   year month by month afterwards; the head of an office's calendar of his
+   own people; the Collector's inbox. Nothing here is mocked away except the
+   network, and what the network answers is the REAL backend running in the
+   Apps Script mock — so the app is driven against the same saveLeave_, the
+   same overlap refusal, the same leaveOpening_ the district will run on.
 
-   Three things it guards that are easy to get wrong and expensive to get
-   wrong on a register that sanctions leave:
-
-     · the first sign-in tells him the row is HIS TO CLAIM rather than sending
-       five thousand people to telephone an office on the first morning;
-     · a refusal is a refusal: nothing is ever shown as sent that the district
-       did not take, because an application for leave is a request for orders
-       and not a fact a handset can hold;
-     · and medical leave is never drawn as a balance of nought, which reads as
-       "none left" and is the opposite of the rule.
+   What it guards that is expensive to get wrong on a register that sanctions
+   leave:
+     · the first sign-in tells him the row is HIS TO CLAIM;
+     · the figure on the rail is the register's, from the Service Register —
+       9 of 15 after six availed before the balance date, 214 at credit — and
+       never the pro-rated table once his office has supplied the figures;
+     · a refusal is a refusal: nothing is shown as sent that the district did
+       not take, and a dropped line is never reported as "no order was passed";
+     · medical leave is never drawn as a balance of nought;
+     · the heat map a head of office sees is HIS office's people and nobody
+       else's, and the Collector's is the district's;
+     · a driven browser is not shown the welcome, and asked for by name it
+       draws and is gone with the sign-in underneath.
 
    Usage: node tests/render-hrms.js
    Playwright is deliberately not a dependency: npm i playwright --no-save. */
@@ -26,22 +31,44 @@ const { chromium } = require('playwright');
 const mock = require('./gasmock.js');
 const ROOT = path.join(__dirname, '..');
 const APP = path.join(ROOT, 'hrms');
-const MIME = { '.html':'text/html', '.js':'text/javascript', '.webmanifest':'application/manifest+json',
-               '.png':'image/png' };
+const MIME = { '.html':'text/html', '.js':'text/javascript', '.webmanifest':'application/manifest+json', '.png':'image/png' };
 
 /* ---- the real register, in the Apps Script mock ---- */
-const U = ['Phone','Name','Role','Mandal','GP','Email','InitPin','Hash','Active','Designation','EmpId'];
+const NOW = '2026-10-19T10:00:00+05:30';                 /* a Monday */
+const U = ['Phone','Name','Role','Mandal','GP','Email','InitPin','Hash','Active','Designation','EmpId',
+           'Gender','DOB','Category','Department','Place','Gazetted','EnteredOn','PostOn','Status','Controller','AuthCL','AuthOther',
+           'BalAsOn','ELCredit','HPLCredit','CLUsed','OHUsed','CCLUsed','VerifiedBy','VerifiedOn'];
 const L = ['id','appliedAt','phone','name','role','mandal','type','fromDate','toDate','days',
-           'reason','address','leaveHq','certificate','status','decidedBy','decidedAt','remarks','receivedAt'];
+           'reason','address','leaveHq','certificate','status','decidedBy','decidedAt','remarks','receivedAt','standingOrder'];
+const OFFICE = 'Office of the District Panchayat Officer, Jangaon';
 function register(){
-  const e = mock.load({ now:'2026-10-06T10:00:00+05:30' });
+  const e = mock.load({ now:NOW });
   e.props.TENANT = 'HRMS';
   e.mkSheet('Users', U, [
-    { Phone:'9000000001', Name:'Sandeep Kumar Jha', Role:'COLLECTOR', Mandal:'', GP:'', Email:'c@x', Active:'TRUE' },
-    { Phone:'9444400001', Name:'K. Ramesh', Role:'EMP', Mandal:'Collectorate', GP:'', Email:'',
-      Active:'TRUE', Designation:'Senior Assistant', EmpId:'JN/2291' }
+    { Phone:'9000000001', Name:'Sandeep Kumar Jha', Role:'COLLECTOR', Mandal:'', Active:'TRUE' },
+    { Phone:'9000000002', Name:'V. Reddy', Role:'HOD', Mandal:OFFICE, Active:'TRUE', Designation:'District Panchayat Officer', EmpId:'HOD1', Hash:'' },
+    { Phone:'9000000003', Name:'T. Rao', Role:'HOD', Mandal:'Office of the District Treasury Officer, Jangaon', Active:'TRUE', Designation:'District Treasury Officer', EmpId:'HOD2' },
+    /* the employee, with the Service Register's figures as his office returned them */
+    { Phone:'9444400001', Name:'K. Srinivas Rao', Role:'EMP', Mandal:OFFICE, Active:'TRUE', Designation:'Superintendent', EmpId:'2071534',
+      Gender:'Male', DOB:'1972-06-15', Category:'Regular', Department:'Panchayat Raj and Rural Development', Place:'District Headquarters',
+      Gazetted:'Non-Gazetted', EnteredOn:'1998-11-12', PostOn:'2025-07-01', Status:'On duty', Controller:'District Panchayat Officer, Jangaon',
+      AuthCL:'District Panchayat Officer, Jangaon', AuthOther:'District Collector, Jangaon',
+      BalAsOn:'2026-09-30', ELCredit:214, HPLCredit:168, CLUsed:6, OHUsed:2, VerifiedBy:'S. Laxmi, Superintendent (A Section)', VerifiedOn:'2026-09-30' },
+    { Phone:'9444400002', Name:'M. Anitha', Role:'EMP', Mandal:OFFICE, Active:'TRUE', Designation:'Senior Assistant', EmpId:'E2', Gender:'Female', BalAsOn:'2026-09-30', CLUsed:3, CCLUsed:0 },
+    { Phone:'9444400003', Name:'P. Swapna', Role:'EMP', Mandal:'Office of the District Treasury Officer, Jangaon', Active:'TRUE', Designation:'Typist', EmpId:'E3', Gender:'Female' }
   ]);
-  e.mkSheet('Leave', L, []);
+  e.mkSheet('Leave', L, [
+    /* sanctioned leave in his office, and in another, for the calendar */
+    { id:'L-A1', appliedAt:'2026-10-10T09:00:00Z', phone:'9444400002', name:'M. Anitha', role:'EMP', mandal:OFFICE, type:'CL', fromDate:'2026-10-19', toDate:'2026-10-21', days:3,
+      reason:'Family function', status:'APPROVED', decidedBy:'Sandeep Kumar Jha (COLLECTOR)', decidedAt:'2026-10-11T04:00:00Z', receivedAt:'2026-10-10T09:00:00Z' },
+    { id:'L-A2', appliedAt:'2026-10-01T09:00:00Z', phone:'9444400002', name:'M. Anitha', role:'EMP', mandal:OFFICE, type:'EL', fromDate:'2026-10-05', toDate:'2026-10-09', days:5,
+      reason:'Personal', status:'APPROVED', decidedBy:'Sandeep Kumar Jha (COLLECTOR)', decidedAt:'2026-10-02T04:00:00Z', receivedAt:'2026-10-01T09:00:00Z' },
+    { id:'L-T1', appliedAt:'2026-10-12T09:00:00Z', phone:'9444400003', name:'P. Swapna', role:'EMP', mandal:'Office of the District Treasury Officer, Jangaon', type:'CL', fromDate:'2026-10-19', toDate:'2026-10-19', days:1,
+      reason:'Not well', status:'APPROVED', decidedBy:'Sandeep Kumar Jha (COLLECTOR)', decidedAt:'2026-10-13T04:00:00Z', receivedAt:'2026-10-12T09:00:00Z' },
+    /* one awaiting orders in the Treasury, for the inbox */
+    { id:'L-T2', appliedAt:'2026-10-18T09:00:00Z', phone:'9444400003', name:'P. Swapna', role:'EMP', mandal:'Office of the District Treasury Officer, Jangaon', type:'CL', fromDate:'2026-10-27', toDate:'2026-10-28', days:2,
+      reason:'Child’s examinations', status:'PENDING', receivedAt:'2026-10-18T09:00:00Z' }
+  ]);
   e.mkSheet('Audit', ['At','Action','Subject','Detail','By'], []);
   return e;
 }
@@ -55,9 +82,6 @@ function serve(noConfig){
     const srv = http.createServer((q, s) => {
       const u = decodeURIComponent(q.url.split('?')[0]);
       if(/\/config\.js$/.test(u)){
-        /* WITHHELD ON PURPOSE in the last section: the deploy Action publishes
-           /hrms/ whether or not the register has been stood up, so this is
-           the exact state the printed install card sends an employee to. */
         if(noConfig){ s.writeHead(404); return s.end('not stood up'); }
         s.writeHead(200,{'Content-Type':'text/javascript'});
         return s.end("window.SJGP_SERVER='https://hrms.district/exec';"); }
@@ -76,14 +100,18 @@ function serve(noConfig){
   const srv = await serve();
   const base = 'http://127.0.0.1:' + srv.address().port;
   const br = await chromium.launch();
-  const ctx = await br.newContext({ viewport:{ width:390, height:844 } });
+  /* THE HANDSET'S CLOCK IS PINNED to the register's day, or the picker greys
+     the days the fixture applies for and the pass fails one week in seven */
+  const ctx = await br.newContext({ viewport:{ width:390, height:844 }, deviceScaleFactor:2 });
+  await ctx.addInitScript(`{ const T = ${Date.parse(NOW)}; const _D = Date;
+    class D extends _D { constructor(...a){ super(...(a.length ? a : [T])); } static now(){ return T; } }
+    window.Date = D; }`);
   const page = await ctx.newPage();
   const errs = []; page.on('pageerror', e => errs.push(String(e)));
 
   let E = register();
-  let dead = false;               /* the village road, for the refusal test */
-  const bulk = [];                /* how many ids each bulk POST carried */
-  const sent = [];                /* every leave body that went on the wire */
+  let dead = false;
+  const bulk = [], sent = [];
   await page.route('**/hrms.district/**', r => {
     if(dead) return r.abort('failed');
     const q = r.request();
@@ -100,420 +128,263 @@ function serve(noConfig){
     }
     r.fulfill({ status:200, contentType:'application/json', body:JSON.stringify(out) });
   });
+  const shot = n => page.screenshot({ path: path.join(OUT, n + '.png') });
+  const txt = async sel => (await page.textContent(sel).catch(() => '')) || '';
+  const settle = (ms) => page.waitForTimeout(ms || 500);
 
   await page.goto(base + '/', { waitUntil:'domcontentloaded' });
-  await page.waitForTimeout(400);
+  await settle(400);
 
   /* ---- 1. the first sign-in ---- */
-  ck(await page.isVisible('#vSignin'), 'the app opens on sign in');
-  await page.screenshot({ path: path.join(OUT, '0-sign-in.png') });
-  await page.fill('#iPhone', '9444400001');
-  await page.fill('#iPin', '1234');
-  await page.click('#bSignin'); await page.waitForTimeout(700);
-  ck(await page.isVisible('#vClaim'),
-     'A NUMBER WITH NO PIN IS SHOWN THE CLAIM SCREEN, not an error telling him to telephone the office');
-  ck(/K\. Ramesh/.test(await page.textContent('#claimName')), 'greeting him by name', await page.textContent('#claimName'));
-  await page.screenshot({ path: path.join(OUT, '1-claim.png') });
+  ck(await page.isVisible('#iPhone'), 'the app opens on sign in');
+  ck(!(await page.$('#welcome')), 'A DRIVEN BROWSER IS NOT SHOWN THE WELCOME — the pass sees the app');
+  await shot('0-sign-in');
+  await page.fill('#iPhone', '9444400001'); await page.fill('#iPin', '1234');
+  await page.click('#bSignin'); await settle(700);
+  ck(await page.isVisible('#cEmp'), 'A NUMBER WITH NO PIN IS SHOWN THE CLAIM SCREEN, not an error telling him to telephone the office');
+  ck(/K\. Srinivas Rao/.test(await txt('#claimName')), 'greeting him by name', await txt('#claimName'));
+  await shot('1-claim');
+  await page.fill('#cEmp', '0000000'); await page.fill('#cPin', '8421'); await page.fill('#cPin2', '8421');
+  await page.click('#bClaim'); await settle(600);
+  ck(/do not match/.test(await txt('#mClaim')), 'a wrong employee id is refused', (await txt('#mClaim')).slice(0, 60));
+  await page.fill('#cEmp', '2071534');
+  await page.click('#bClaim'); await settle(900);
+  ck(await page.isVisible('[data-act="newreq"]'), 'the right one sets his PIN and lands him on Home');
+  ck(/Srinivas Rao/.test(await txt('.title-l')), 'greeted by name', await txt('.title-l'));
 
-  /* the employee id is the second factor, and a wrong one is refused */
-  await page.fill('#cEmp', 'JN/0000'); await page.fill('#cPin', '8421'); await page.fill('#cPin2', '8421');
-  await page.click('#bClaim'); await page.waitForTimeout(600);
-  ck(await page.isVisible('#vClaim'), 'a wrong employee id does not claim the row');
-  ck(/do not match/.test(await page.textContent('#mClaim')), 'and says so without naming which half was wrong',
-     (await page.textContent('#mClaim')).slice(0, 60));
+  /* ---- 2. THE RAIL IS THE REGISTER'S ACCOUNT, off the Service Register ---- */
+  const rail = await page.$$eval('.rail .bal', els => els.map(e => e.textContent.replace(/\s+/g, ' ').trim()));
+  ck(rail.length >= 5, 'the rail carries his kinds of leave', rail.length + ' cards');
+  ck(/Casual leave\s*9\s*of 15/.test(rail[0] || ''), 'CASUAL LEAVE IS 9 OF 15: the year’s fifteen less the six his office recorded, NOT the pro-rated four', rail[0]);
+  ck(/Earned leave\s*214\s*days/.test(rail[1] || ''), 'EARNED LEAVE IS THE BALANCE AT CREDIT, 214', rail[1]);
+  ck(/Half pay leave\s*168/.test(rail[2] || ''), 'half pay leave is offered because his record carries it', rail[2]);
+  ck(/Optional holiday\s*1\s*of 3/.test(rail[3] || ''), 'optional holidays: one of the Collector’s three left after two availed', rail[3]);
+  ck(!rail.some(x => /Child care/.test(x)), 'child care leave is not offered to a man whose record carries none');
+  const ml = rail.filter(x => /Medical/.test(x))[0] || '';
+  ck(/0\s*taken/.test(ml) && /no yearly limit/.test(ml), 'MEDICAL LEAVE IS NEVER A BALANCE OF NOUGHT', ml);
+  ck(!(await page.isVisible('[data-tab="inbox"]')), 'an employee has no Inbox tab');
+  await shot('2-home');
 
-  /* two different PINs are caught on the page, before the district is troubled */
-  await page.fill('#cEmp', 'JN/2291'); await page.fill('#cPin', '8421'); await page.fill('#cPin2', '9999');
-  await page.click('#bClaim'); await page.waitForTimeout(400);
-  ck(/not the same/.test(await page.textContent('#mClaim')), 'two different PINs are caught here');
+  /* ---- 3. he applies: two taps on the calendar, then the details ---- */
+  await page.click('[data-act="newreq"]'); await settle(300);
+  ck(await page.isVisible('[data-pick]'), 'the request opens on a calendar');
+  ck(/Tap the first day/.test(await txt('.card.tonal b')), 'and asks for the first day');
+  await page.click('[data-pick="2026-10-27"]'); await settle(150);
+  await page.click('[data-pick="2026-10-28"]'); await settle(150);
+  ck(/2 days/.test(await txt('.card.tonal b')), 'two taps are two days', await txt('.card.tonal b'));
+  ck(/leaves you 7 of 15/.test(await txt('.card.tonal span')), 'and he is told what it leaves him before he asks', await txt('.card.tonal span'));
+  await shot('3-pick');
+  /* a day already gone cannot be picked */
+  await page.click('[data-pick="2026-10-13"]'); await settle(200);
+  ck(/already gone/.test(await txt('#toast')), 'a day already gone is refused on the phone', await txt('#toast'));
+  await page.click('[data-act="next"]'); await settle(300);
+  ck(await page.isVisible('#rReason'), 'step two asks for the reason');
+  ck(!(await page.isVisible('#rCert')), 'and not for a certificate, because this is casual leave');
+  await page.click('[data-act="send"]'); await settle(300);
+  ck(/reason is needed/i.test(await txt('#mApply')), 'without a reason nothing goes', await txt('#mApply'));
+  await page.fill('#rReason', 'Personal work at native place');
+  await page.fill('#rAddr', 'Khammam');
+  await page.click('[data-act="hq"]');
+  await shot('3b-details');
+  await page.click('[data-act="send"]'); await settle(900);
+  ck(/Sent to the Collector/.test(await txt('#toast')), 'SENT TO THE COLLECTOR, and nothing else is said', await txt('#toast'));
+  ck(sent.length === 1 && sent[0].type === 'CL' && sent[0].from === '2026-10-27' && sent[0].to === '2026-10-28' && sent[0].days === 2 && sent[0].hq === true,
+     'what went on the wire is what he picked', JSON.stringify(sent[0]));
+  const lv = E.sheets['Leave'].rows.slice(1).filter(r => String(r[2]) === "'9444400001" || String(r[2]) === '9444400001');
+  ck(lv.length === 1 && String(lv[0][14]) === 'PENDING', 'and the REGISTER holds it, PENDING');
+  const home1 = await txt('#screen');
+  ck(/Awaiting orders/.test(home1), 'it stands on his home screen as awaiting orders');
+  await shot('4-home-after');
 
-  await page.fill('#cPin2', '8421');
-  await page.click('#bClaim'); await page.waitForTimeout(900);
-  ck(await page.isVisible('#vHome'), 'THE RIGHT ID AND A PIN OF HIS OWN SIGNS HIM IN');
-  ck(/K\. Ramesh/.test(await page.textContent('#hName')), 'on his own page');
-  ck(/Senior Assistant/.test(await page.textContent('#hWho')), 'with his designation and office',
-     await page.textContent('#hWho'));
+  /* ---- 3a. the certificate follows the kind ---- */
+  await page.click('[data-act="newreq"]'); await settle(300);
+  await page.click('[data-kind="ML"]'); await settle(200);
+  await page.click('[data-cm="1"]'); await settle(150);              /* November */
+  await page.click('[data-pick="2026-11-02"]'); await page.click('[data-pick="2026-11-04"]'); await settle(150);
+  ck(/inside a spell of 15/.test(await txt('.card.tonal span')), 'medical leave is measured against the spell, not a year', await txt('.card.tonal span'));
+  await page.click('[data-act="next"]'); await settle(300);
+  ck(await page.isVisible('#rCert'), 'and step two asks for the certificate');
+  await page.click('[data-go="home"]'); await settle(300);
 
-  /* and the register recorded the claim, never the PIN */
-  const audit = JSON.stringify(E.sheets['Audit'].rows);
-  ck(audit.indexOf('HRMS ROW CLAIMED') >= 0, 'the claim is on the Audit tab');
-  ck(audit.indexOf('8421') < 0, 'AND THE PIN IS NOT');
-
-  /* ---- 2. the balances ---- */
-  const bal = await page.textContent('#hBal');
-  ck(/Casual leave/.test(bal) && /Earned leave/.test(bal), 'his year is drawn', bal.replace(/\s+/g,' ').slice(0, 70));
-  ck(/no yearly limit/.test(bal),
-     'AND MEDICAL LEAVE IS NOT DRAWN AS A BALANCE OF NOUGHT — which reads as "none left", the opposite of the rule');
-  ck(!/Permission to leave headquarters/.test(bal), 'the headquarters permission is not a balance either');
-  await page.screenshot({ path: path.join(OUT, '2-home-empty.png') });
-
-  /* ---- 3. he applies ---- */
-  await page.click('#bApply'); await page.waitForTimeout(400);
-  ck(await page.isVisible('#vApply'), 'the application form opens');
-  await page.selectOption('#aType', 'CL');
-  await page.fill('#aFrom', '2026-10-12'); await page.fill('#aTo', '2026-10-13');
-  await page.waitForTimeout(300);
-  const n1 = await page.textContent('#aNote');
-  ck(/2 day\(s\)/.test(n1), 'the days are counted as he picks them', n1);
-  ck(/this would leave you/.test(n1), 'and what it would leave him is worked out live', n1);
-  await page.screenshot({ path: path.join(OUT, '3-apply.png') });
-
-  await page.click('#bSend'); await page.waitForTimeout(500);
-  ck(/reason is needed/.test(await page.textContent('#mApply')), 'a reason is required — the orders are passed on it');
-
-  await page.fill('#aReason', 'Family function at Warangal.');
-  await page.fill('#aAddr', 'H.No 4-21, Warangal.');
-
-  /* LEAVING HEADQUARTERS IS ASKED FOR, NOT ASSUMED. It is a separate
-     permission under the leave rules, the register has carried a column for
-     it since the first day, and this app never asked — so every application
-     reached the Collector saying false whatever the employee meant. */
-  ck(await page.isVisible('#aHq'), 'the form asks whether he is leaving headquarters');
-  const hqWords = await page.textContent('label[for="aHq"]');
-  ck(/away from my headquarters/i.test(hqWords), 'in words he can answer',
-     hqWords.replace(/\s+/g, ' ').trim().slice(0, 70));
-  /* A CERTIFICATE IS ASKED FOR WHERE IT IS WANTED AND NOWHERE ELSE. Asking
-     everybody for one is how a form teaches people to leave boxes empty. */
-  ck(!(await page.isVisible('#aCert')), 'and does NOT ask casual leave for a medical certificate');
-  await page.check('#aHq');
-  await page.click('#bSend'); await page.waitForTimeout(1400);
-  const wire = sent[sent.length - 1] || {};
-  ck(wire.hq === true, 'AND IT GOES ON THE WIRE', JSON.stringify(wire.hq));
-  ck(wire.reason === 'Family function at Warangal.', 'with the reason beside it', wire.reason);
-  ck(wire.address === 'H.No 4-21, Warangal.', 'and the address while on leave', wire.address);
-  ck(await page.isVisible('#vHome'), 'on sending he is returned to his own page');
-  const list = await page.textContent('#hList');
-  ck(/Casual leave/.test(list), 'the application is on it', list.replace(/\s+/g,' ').slice(0, 70));
-  ck(/awaiting orders/.test(list), 'AWAITING ORDERS — nothing is taken from him until it is sanctioned');
-  await page.screenshot({ path: path.join(OUT, '4-home-applied.png') });
-  ck(E.sheets['Leave'].rows.length === 2, 'and the register holds exactly one row for it',
-     (E.sheets['Leave'].rows.length - 1) + ' row(s)');
-
-  /* ---- 3a. the certificate follows the kind of leave ---- */
-  await page.click('#bApply'); await page.waitForTimeout(300);
-  await page.selectOption('#aType', 'ML'); await page.waitForTimeout(200);
-  ck(await page.isVisible('#aCert'), 'MEDICAL LEAVE IS ASKED FOR ITS CERTIFICATE');
-  ck(!(await page.isChecked('#aHq')), 'and the headquarters tick starts clear on a fresh form');
-  await page.selectOption('#aType', 'CL'); await page.waitForTimeout(200);
-  ck(!(await page.isVisible('#aCert')), 'and the box goes away again when it is not wanted');
-  await page.screenshot({ path: path.join(OUT, '3a-apply-hq.png') });
-  await page.click('#bCancel'); await page.waitForTimeout(300);
+  /* ---- 3b. an optional holiday is one notified day ---- */
+  await page.click('[data-act="newreq"]'); await settle(300);
+  await page.click('[data-kind="OH"]'); await settle(200);
+  await page.click('[data-pick="2026-10-28"]'); await settle(200);
+  ck(/notified days/.test(await txt('#toast')), 'a day not on the G.O.’s list is refused for an optional holiday', await txt('#toast'));
+  await page.click('[data-cm="1"]'); await settle(150);              /* November */
+  await page.click('[data-pick="2026-11-08"]'); await settle(200);
+  ck(/1 day/.test(await txt('.card.tonal b')) && /Naraka Chaturdhi/.test(await txt('.scroll')), 'a notified day is taken and named', await txt('.card.tonal b'));
+  await page.click('[data-go="home"]'); await settle(300);
 
   /* ---- 4. the overlap is the REGISTER's refusal, not the page's ---- */
-  await page.click('#bApply'); await page.waitForTimeout(300);
-  await page.selectOption('#aType', 'CL');
-  await page.fill('#aFrom', '2026-10-13'); await page.fill('#aTo', '2026-10-14');
-  await page.fill('#aReason', 'Again.');
-  await page.click('#bSend'); await page.waitForTimeout(1200);
-  ck(await page.isVisible('#vApply'), 'an overlapping spell leaves him on the form');
-  const om = await page.textContent('#mApply');
-  ck(/already|overlap/i.test(om), 'AND THE REFUSAL IS THE REGISTER’S OWN, through saveLeave_', om.slice(0, 70));
-  await page.screenshot({ path: path.join(OUT, '5-refused-overlap.png') });
-  ck(E.sheets['Leave'].rows.length === 2, 'nothing was written for it');
+  await page.click('[data-act="newreq"]'); await settle(300);
+  await page.click('[data-pick="2026-10-28"]'); await page.click('[data-pick="2026-10-29"]'); await settle(150);
+  await page.click('[data-act="next"]'); await settle(300);
+  await page.fill('#rReason', 'again'); await page.click('[data-act="send"]'); await settle(700);
+  ck(/already with the Collector/.test(await txt('#mApply')), 'a second application over the same days is refused by the register', (await txt('#mApply')).slice(0, 70));
+  ck(E.sheets['Leave'].rows.slice(1).filter(r => /9444400001/.test(String(r[2]))).length === 1, 'and nothing was written');
 
   /* ---- 5. NOTHING IS SHOWN AS SENT THAT WAS NOT ---- */
   dead = true;
-  await page.fill('#aFrom', '2026-11-02'); await page.fill('#aTo', '2026-11-03');
-  await page.fill('#aReason', 'On a village road.');
-  await page.click('#bSend'); await page.waitForTimeout(1200);
-  const dm = await page.textContent('#mApply');
-  ck(/nothing has been applied for/.test(dm),
-     'A LINE THAT DROPPED SAYS NOTHING HAS BEEN APPLIED FOR — an application is a request for orders, not a fact the handset can hold', dm.slice(0, 80));
-  ck(await page.isVisible('#vApply'), 'and he is left on the form, not told it went');
-  await page.screenshot({ path: path.join(OUT, '6-no-line.png') });
+  await page.click('[data-go="request"]'); await settle(200);        /* back to the calendar */
+  await page.click('[data-cm="1"]'); await settle(150);              /* November */
+  await page.click('[data-pick="2026-11-16"]'); await page.click('[data-pick="2026-11-17"]'); await settle(150);
+  await page.click('[data-act="next"]'); await settle(300);
+  await page.fill('#rReason', 'road'); await page.click('[data-act="send"]'); await settle(700);
+  ck(/nothing has been applied for/.test(await txt('#mApply')), 'on a dead line he is told nothing was applied for', (await txt('#mApply')).slice(0, 70));
   dead = false;
+  await page.click('[data-go="home"]'); await settle(300);
 
-  /* ---- 6. he signs out and back in with his own PIN ---- */
-  await page.click('#bCancel'); await page.waitForTimeout(300);
-  await page.click('#bOut'); await page.waitForTimeout(400);
-  ck(await page.isVisible('#vSignin'), 'he signs out');
-  await page.fill('#iPhone', '9444400001'); await page.fill('#iPin', '8421');
-  await page.click('#bSignin'); await page.waitForTimeout(900);
-  ck(await page.isVisible('#vHome'), 'and back in with the PIN HE chose');
-  ck(/Casual leave/.test(await page.textContent('#hList')), 'his application is still there');
+  /* ---- 6. his register, his year, the request opened ---- */
+  await page.click('[data-tab="leave"]'); await settle(400);
+  ck(await page.isVisible('.months'), 'the Leave screen carries his year month by month');
+  const strip = await page.$$eval('.months .m', els => els.map(e => e.className + '|' + e.textContent.trim()));
+  ck(/\bw\b/.test(strip[9] || ''), 'OCTOBER IS OUTLINED AS AWAITING, not drawn as taken', strip[9]);
+  ck(/Opening balances/.test(await txt('#screen')) && /S\. Laxmi/.test(await txt('#screen')), 'the opening balances name who verified them');
+  await shot('5-leave');
+  await page.click('[data-detail]'); await settle(300);
+  ck(/With the Collector/.test(await txt('.steps')) && /Awaiting orders/.test(await txt('.steps')), 'the request’s journey stands with the Collector');
+  ck(await page.isVisible('[data-act="withdraw"]'), 'and he may withdraw it while it waits');
+  await shot('6-request');
+  await page.click('[data-go="leave"]'); await settle(300);
 
-  /* ---- 6b. and the same screen once the Collector has passed orders ---- */
-  {
-    const cdm = E.ctx.issueToken_(E.ctx.findByPhone_('9000000001'));
-    /* the kind is `leaveDecision` and the field is `status` — passing
-       `decideLeave`/`decision` falls through doPost to the last guard and
-       comes back as "this register does not take village evaluations", which
-       is the fall-through this project has a rule about and which doGet's
-       tail was closed for. */
-    const mine = E.get('leave', { token:cdm }).rows || [];
-    const id = (mine.filter(function(x){ return String(x.phone).indexOf('9444400001') >= 0; })[0] || {}).id;
-    if(id) E.post({ kind:'leaveDecision', token:cdm, id:id, status:'APPROVED', remarks:'' });
-    await page.click('#bRefresh'); await page.waitForTimeout(900);
-    const after = await page.textContent('#hList');
-    ck(/approved/i.test(after), 'a sanctioned application shows as approved on his own page',
-       (after.replace(/\s+/g,' ').match(/[^·]{0,40}approved/i) || [''])[0]);
-    await page.screenshot({ path: path.join(OUT, '7-approved.png') });
-  }
+  /* ---- 7. his own calendar ---- */
+  await page.click('[data-tab="calendar"]'); await settle(400);
+  ck(!(await page.isVisible('[data-scope]')), 'an employee is offered no office calendar');
+  ck((await page.$$('.cal .d.mine')).length === 2, 'his two days awaiting orders are outlined on his own calendar');
+  ck(/Holidays this month/.test(await txt('#screen')), 'and the month’s holidays are listed');
+  await shot('7-calendar');
 
-  /* ---- 6c. THE EMPLOYEE IS NOT OFFERED ORDERS ---- */
-  ck(await page.isHidden('#bOrders'),
-     'an employee is never offered the orders screen — it is not his');
+  /* ---- 8. sign out, and the Collector passes orders in the app ---- */
+  await page.click('[data-tab="me"]'); await settle(300);
+  ck(/2071534/.test(await txt('#screen')) && /Superannuation/.test(await txt('#screen')) && /30\.06\.2033/.test(await txt('#screen')),
+     'ME carries his service record and his superannuation at sixty-one', '30.06.2033');
+  await shot('8-me');
+  await page.click('[data-act="signout"]'); await settle(300);
+  ck(await page.isVisible('#iPhone'), 'signed out');
+  /* the Collector claims his row the same way, with an employee id typed by hand */
+  E.sheets['Users'].rows[1][10] = 'ADMIN1';
+  await page.fill('#iPhone', '9000000001'); await page.fill('#iPin', '1111'); await page.click('#bSignin'); await settle(600);
+  await page.fill('#cEmp', 'ADMIN1'); await page.fill('#cPin', '1111'); await page.fill('#cPin2', '1111'); await page.click('#bClaim'); await settle(1200);
+  ck(await page.isVisible('[data-tab="inbox"]'), 'THE COLLECTOR HAS AN INBOX');
+  const cnt = await txt('.nav .cnt');
+  ck(cnt.trim() === '2', 'with the two applications waiting counted on the tab', cnt);
+  ck(await page.isVisible('.cal.mini'), 'AND THE DISTRICT’S HEAT MAP ON HIS HOME SCREEN', await txt('.cal.mini .eyebrow'));
+  ck(/The district on leave/.test(await txt('.cal.mini')), 'named as the district’s', await txt('.cal.mini .eyebrow'));
+  const cell19 = await page.getAttribute('.cal.mini [data-day="2026-10-19"]', 'class');
+  ck(/k[1-5]/.test(cell19 || '') && /today/.test(cell19 || ''), 'today carries the two away and is outlined', cell19);
+  await shot('9-collector-home');
+  await page.click('[data-tab="inbox"]'); await settle(500);
+  ck((await page.$$('[data-order]')).length === 2, 'the inbox lists both');
+  await shot('10-inbox');
+  await page.click('[data-order]'); await settle(300);
+  ck(/Asks for/.test(await txt('#screen')), 'an application opens for orders');
+  await page.click('[data-act="refuse"]'); await settle(200);
+  ck(/Remarks are needed/.test(await txt('#mOrder')), 'A REFUSAL WITHOUT WORDS IS REFUSED', await txt('#mOrder'));
+  await shot('11-order');
+  await page.click('[data-act="sanction"]'); await settle(900);
+  ck(/Sanctioned\./.test(await txt('#toast')), 'sanctioned', await txt('#toast'));
+  const okRows = E.sheets['Leave'].rows.slice(1).filter(r => String(r[14]) === 'APPROVED' && /Sandeep/.test(String(r[15])));
+  ck(okRows.length === 4, 'the register holds the order in the Collector’s hand', okRows.length + ' approved');
+  ck((await page.$$('[data-order]')).length === 1, 'and one is left');
+  /* the one left is refused, with words */
+  await page.click('[data-order]'); await settle(300);
+  await page.fill('#oRem', 'Review of the mandal works is fixed for that week.');
+  await page.click('[data-act="refuse"]'); await settle(900);
+  ck(/told why/.test(await txt('#toast')), 'refused, and the employee is told why', await txt('#toast'));
+  ck(E.sheets['Leave'].rows.slice(1).some(r => String(r[14]) === 'REJECTED' && /mandal works/.test(String(r[17]))), 'the words are on the register');
+  ck(/Nothing is waiting/.test(await txt('#screen')), 'the desk is clear');
 
-  /* ---- 6d. AND THE COLLECTOR PASSES THEM, IN THE APP ----
+  /* ---- 8a. SANCTION ALL REALLY MEANS ALL, in batches of twenty-five ---- */
+  for(let i = 0; i < 30; i++) E.addRow('Leave', { id:'B-' + i, appliedAt:'2026-10-18T0' + (i % 9) + ':00:00Z', phone:'9444400002', name:'M. Anitha', role:'EMP', mandal:OFFICE,
+    type:'EL', fromDate:'2027-0' + (1 + (i % 9)) + '-' + ('0' + (1 + (i % 27))).slice(-2), toDate:'2027-0' + (1 + (i % 9)) + '-' + ('0' + (1 + (i % 27))).slice(-2), days:1, reason:'b' + i, status:'PENDING', receivedAt:'2026-10-18T09:00:00Z' });
+  await page.click('[data-act="refresh"]'); await settle(900);
+  ck((await page.$$('[data-order]')).length === 30, 'thirty are waiting');
+  await page.click('[data-act="all"]'); await settle(300);
+  await page.click('#sheet [data-yes]'); await settle(2500);
+  ck(bulk.length === 2 && bulk[0] === 25 && bulk[1] === 5, 'TWO REQUESTS OF 25 AND 5 — never one that the server would cut at 200', JSON.stringify(bulk));
+  ck(/30 sanctioned/.test(await txt('#mOrders')), 'and thirty sanctioned', await txt('#mOrders'));
+  await shot('12-sanction-all');
 
-     Every order on every one of these registers is passed in the field app;
-     the console only shows the waiting list. This app had no such screen at
-     all, so there was no way on earth to sanction a single application on the
-     register whose whole purpose is leave. */
-  {
-    /* a second employee, so there is something still waiting */
-    E.post({ kind:'hrmsSeed', token:E.ctx.issueToken_(E.ctx.findByPhone_('9000000001')),
-      rows:[{ name:'B. Waiting', office:'DPO', desig:'Typist', emp:'JN/7', phone:'9444400003' }] });
-    E.post({ kind:'claimPin', u:'9444400003', emp:'JN/7', pin:'3333' });
-    const tok2 = E.post({ kind:'login', u:'9444400003', p:'3333' }).token;
-    E.post({ kind:'leave', token:tok2, leave:{ id:'HR-W1', type:'CL',
-      from:'2026-11-10', to:'2026-11-10', days:1, reason:'Village work.' } });
-    E.post({ kind:'leave', token:tok2, leave:{ id:'HR-W2', type:'EL',
-      from:'2026-12-01', to:'2026-12-03', days:3, reason:'Marriage at home.' } });
+  /* ---- 8b. a lost line is never 'no order was passed' ---- */
+  E.addRow('Leave', { id:'C-1', appliedAt:'2026-10-18T09:00:00Z', phone:'9444400002', name:'M. Anitha', role:'EMP', mandal:OFFICE, type:'CL', fromDate:'2026-12-01', toDate:'2026-12-01', days:1, reason:'c', status:'PENDING', receivedAt:'2026-10-18T09:00:00Z' });
+  await page.click('[data-act="refresh"]'); await settle(900);
+  await page.click('[data-order]'); await settle(300);
+  dead = true;
+  await page.click('[data-act="sanction"]'); await settle(700);
+  const lost = await txt('#mOrder');
+  ck(/NOT KNOWN/.test(lost) && !/no order has been passed\./i.test(lost.replace(/if the application is still on it, no order has been passed on it\./i, '')), 'A DROPPED LINE SAYS WHAT IS CERTAIN AND WHAT IS NOT', lost.slice(0, 80));
+  dead = false;
+  await page.click('[data-go="inbox"]'); await settle(300);
 
-    await page.click('#bOut'); await page.waitForTimeout(400);
-    /* the Collector signs in with a PIN of his own, set the same way */
-    E.post({ kind:'claimPin', u:'9000000001', emp:'', pin:'9090' });
-    const code = (E.get('hrmsClaims', { token:E.ctx.issueToken_(E.ctx.findByPhone_('9000000001')) }).open || [])
-      .filter(function(o){ return o.phone === '9000000001'; })[0];
-    /* the Collector's row is not on the rollout list — he is seeded with the
-       register, so his PIN is issued the way every other Collector PIN is */
-    E.sheets['Users'].rows.forEach(function(r){
-      if(String(r[0]).replace(/\D/g, '').slice(-10) === '9000000001') r[7] = E.ctx.hash_('9000000001', '9090'); });
+  /* ---- 9. THE HEAD OF AN OFFICE SEES HIS OWN PEOPLE AND NOBODY ELSE'S ---- */
+  await page.click('[data-tab="me"]'); await settle(200); await page.click('[data-act="signout"]'); await settle(300);
+  await page.fill('#iPhone', '9000000002'); await page.fill('#iPin', '2222'); await page.click('#bSignin'); await settle(600);
+  await page.fill('#cEmp', 'HOD1'); await page.fill('#cPin', '2222'); await page.fill('#cPin2', '2222'); await page.click('#bClaim'); await settle(1200);
+  ck(!(await page.isVisible('[data-tab="inbox"]')), 'a head of office has no inbox: every application goes to the Collector');
+  ck(await page.isVisible('.cal.mini'), 'BUT HIS OFFICE’S HEAT MAP IS ON HIS HOME SCREEN');
+  ck(/Your office on leave/.test(await txt('.cal.mini')), 'named as his office’s', await txt('.cal.mini .eyebrow'));
+  await shot('13-hod-home');
+  await page.click('[data-tab="calendar"]'); await settle(500);
+  ck(await page.isVisible('[data-scope="office"]'), 'the calendar offers his office and his own');
+  const away = await page.$$eval('.row .txt b', els => els.map(e => e.textContent.trim()));
+  ck(away.indexOf('M. Anitha') >= 0 && away.indexOf('P. Swapna') < 0, 'AWAY TODAY IS HIS OFFICE: Anitha is on it and the Treasury’s typist is not', away.join(', '));
+  const roll = await txt('.cal .small');
+  ck(/of 3 on the roll/.test(roll), 'the roll is his office’s three', roll.slice(0, 120));
+  await shot('14-hod-calendar');
+  await page.click('[data-day="2026-10-19"]'); await settle(400);
+  ck(/1<\/b> on sanctioned leave|<b>1<\/b>/.test(await page.innerHTML('#sheet')) || /\b1\b.*on sanctioned leave/.test(await txt('#sheet')), 'a day opens with its count', (await txt('#sheet')).slice(0, 60));
+  await shot('15-day');
 
-    await page.fill('#iPhone', '9000000001'); await page.fill('#iPin', '9090');
-    await page.click('#bSignin'); await page.waitForTimeout(1200);
-    ck(await page.isVisible('#vHome'), 'the Collector signs in');
-    ck(await page.isVisible('#bOrders'), 'AND HE IS OFFERED THE ORDERS SCREEN');
-    ck(/2/.test(await page.textContent('#bOrdersN')), 'with what is waiting counted on the button',
-       (await page.textContent('#bOrdersN')).trim());
+  ck(!errs.length, 'no script error anywhere above', errs.slice(0, 2).join(' | '));
+  /* THE FIRST PAGE IS CLOSED BEFORE THE STORE IS TAMPERED WITH. The pages
+     below share its origin and its localStorage, and a signed-in page writes
+     its own live session back over the dead one planted for section 11 the
+     next time it answers the district — which it does every few minutes and
+     on every refresh. */
+  await page.close();
 
-    await page.click('#bOrders'); await page.waitForTimeout(900);
-    ck(await page.isVisible('#vOrders'), 'it opens');
-    const ol = await page.textContent('#oList');
-    ck(/B\. Waiting/.test(ol), 'naming the employee');
-    ck(/Typist/.test(ol) && /DPO/.test(ol), 'with his designation and office, so an order is passed on a person');
-    ck(/Marriage at home/.test(ol), 'and the reason the orders are passed on');
-    await page.screenshot({ path: path.join(OUT, '8-orders.png') });
+  /* ---- 10. AN APP WITH NO ADDRESS DOES NOT BLAME THE OFFICER'S SIGNAL ---- */
+  const srv2 = await serve(true);
+  const p2 = await ctx.newPage(); const errs2 = []; p2.on('pageerror', e => errs2.push(String(e)));
+  await p2.goto('http://127.0.0.1:' + srv2.address().port + '/', { waitUntil:'domcontentloaded' }); await p2.waitForTimeout(400);
+  const m0 = (await p2.textContent('#mSignin').catch(() => '')) || '';
+  ck(/no district address/.test(m0), 'with no config.js it says on arrival that the app has no district address', m0.slice(0, 60));
+  await p2.fill('#iPhone', '9444400001'); await p2.fill('#iPin', '1234'); await p2.click('#bSignin'); await p2.waitForTimeout(500);
+  const m1 = (await p2.textContent('#mSignin').catch(() => '')) || '';
+  ck(/not your signal/.test(m1) && !/where there is a line/.test(m1), 'AND PRESSING SIGN IN DOES NOT BLAME HIS SIGNAL', m1.slice(0, 70));
+  ck(!errs2.length, 'no script error with no config');
+  await p2.close(); srv2.close();
 
-    /* SANCTION ONE */
-    await page.click('[data-ok="HR-W1"]'); await page.waitForTimeout(1000);
-    ck(/Sanctioned/.test(await page.textContent('#mOrders')), 'one is sanctioned');
-    const row = E.sheets['Leave'].rows.filter(function(r){ return r[0] === 'HR-W1'; })[0];
-    ck(String(row[14]).toUpperCase() === 'APPROVED', 'AND THE REGISTER SAYS SO', String(row[14]));
-    ck(!/B\. Waiting[\s\S]*Village work/.test(await page.textContent('#oList')) ||
-       !/Village work/.test(await page.textContent('#oList')),
-       'and it leaves the waiting list by itself');
+  /* ---- 11. A TOKEN THE REGISTER WILL NOT TAKE ---- */
+  const p3 = await ctx.newPage(); const errs3 = []; p3.on('pageerror', e => errs3.push(String(e)));
+  await p3.route('**/hrms.district/**', r => r.fulfill({ status:200, contentType:'application/json', body:JSON.stringify({ ok:false, error:'auth' }) }));
+  await p3.goto(base + '/', { waitUntil:'domcontentloaded' });
+  await p3.evaluate(() => { localStorage.setItem('sjgp-hrms1', JSON.stringify({ session:{ token:'dead', user:{ name:'K. Srinivas Rao', role:'EMP', phone:'9444400001' } }, rows:[] })); });
+  await p3.reload({ waitUntil:'domcontentloaded' }); await p3.waitForTimeout(1500);
+  const m3 = (await p3.textContent('#mSignin').catch(() => '')) || '';
+  ck(/no longer signed in/.test(m3), 'it says the device is not signed in any more', m3.slice(0, 60));
+  ck(!/\bauth\b/.test(await p3.textContent('body')), 'THE WORD auth IS NEVER PUT ON THE SCREEN');
+  const gone = await p3.evaluate(() => (JSON.parse(localStorage.getItem('sjgp-hrms1') || '{}').session));
+  ck(gone == null, 'AND THE REJECTED TOKEN IS OFF THE HANDSET', String(gone));
+  ck(!errs3.length, 'no script error on a refused token');
+  await p3.close();
 
-    /* A REFUSAL CARRIES ITS OWN WORDS */
-    page.once('dialog', d => d.accept('   '));
-    await page.click('[data-no="HR-W2"]'); await page.waitForTimeout(700);
-    ck(/needs its reason/.test(await page.textContent('#mOrders')),
-       'A REFUSAL WITH NO WORDS IS REFUSED — they are what the employee is told');
-    const still = E.sheets['Leave'].rows.filter(function(r){ return r[0] === 'HR-W2'; })[0];
-    ck(String(still[14] || 'PENDING').toUpperCase() === 'PENDING', 'and nothing was written by it');
-
-    page.once('dialog', d => d.accept('The office cannot spare you that week.'));
-    await page.click('[data-no="HR-W2"]'); await page.waitForTimeout(1000);
-    ck(/Refused, and the employee is told why/.test(await page.textContent('#mOrders')), 'with words, it is refused');
-    const gone = E.sheets['Leave'].rows.filter(function(r){ return r[0] === 'HR-W2'; })[0];
-    ck(String(gone[14]).toUpperCase() === 'REJECTED', 'the register records the refusal');
-    ck(String(gone[17] || '').indexOf('cannot spare') >= 0,
-       'AND KEEPS THE WORDS — nothing is destroyed (rule 7)', String(gone[17] || ''));
-    await page.screenshot({ path: path.join(OUT, '9-orders-passed.png') });
-
-    const ow = await page.evaluate(() => document.body.innerText);
-    ck(!/show.?cause|debit/i.test(ow), 'and the orders screen names no sanction either');
-  }
-
-  /* ---- 7. it is a leave register and says so ---- */
-  await page.click('#bOrdersBack').catch(() => {}); await page.waitForTimeout(400);
-  const foot = await page.textContent('#hFoot');
-  ck(/takes no attendance and raises no notice/.test(foot),
-     'the page says plainly that it takes no attendance and raises no notice', foot.trim().slice(0, 60));
-  const whole = await page.evaluate(() => document.body.innerText);
-  ck(!/show.?cause|debit|attendance mark/i.test(whole), 'and nothing on it names a sanction');
-
-  const wide = await page.evaluate(() =>
-    document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
-  ck(!wide, 'no sideways scroll at 390px');
-  ck(errs.length === 0, 'no script error', errs[0] || '');
-
-  /* ---- 7a. SANCTION ALL REALLY MEANS ALL, AND IS SENT IN BATCHES ----
-
-     By the Collector's order of 08.10.2026 every application in the district
-     comes to him, so this is the ordinary path. leaveDecision slices b.ids to
-     200 however many are sent, and decideOneLeave_ re-reads the Leave tab and
-     writes four cells for each in turn, so one request carrying the whole desk
-     is both silently truncated and minutes of Apps Script time. Thirty
-     applications must therefore go up as two requests and all thirty must be
-     sanctioned. */
-  {
-    const tk = E.ctx.issueToken_(E.ctx.findByPhone_('9000000001'));
-    const rows = [];
-    for(let i = 0; i < 30; i++)
-      rows.push({ name:'Emp ' + i, office:'DPO', desig:'Clerk',
-                  emp:'JN/B' + i, phone:'94555' + String(10000 + i) });
-    E.post({ kind:'hrmsSeed', token:tk, rows:rows });
-    for(let i = 0; i < 30; i++){
-      const ph = '94555' + String(10000 + i);
-      E.post({ kind:'claimPin', u:ph, emp:'JN/B' + i, pin:'4321' });
-      const t = E.post({ kind:'login', u:ph, p:'4321' }).token;
-      E.post({ kind:'leave', token:t, leave:{ id:'HR-B' + i, type:'CL',
-        from:'2026-11-20', to:'2026-11-20', days:1, reason:'One day of casual leave.' } });
-    }
-
-    bulk.length = 0;
-    await page.click('#bOrders'); await page.waitForTimeout(400);
-    await page.click('#bRefresh').catch(() => {});
-    await page.waitForTimeout(100);
-    /* re-read the desk through the app itself */
-    await page.evaluate(() => pending()); await page.waitForTimeout(600);
-    const waiting = await page.evaluate(() => (DB.pend || []).length);
-    ck(waiting >= 30, 'thirty applications are waiting on the Collector', String(waiting));
-
-    page.once('dialog', d => d.accept());
-    await page.click('#bAll');
-    await page.waitForTimeout(3000);
-
-    ck(bulk.length >= 2, 'SANCTION ALL GOES UP IN BATCHES, not one request',
-       bulk.join('+') + ' ids');
-    ck(bulk.every(n => n <= 25), 'and no batch is larger than twenty-five', bulk.join('+'));
-    const left = E.sheets['Leave'].rows.filter(r => /^HR-B/.test(String(r[0])) &&
-      String(r[14] || 'PENDING').toUpperCase() === 'PENDING').length;
-    ck(left === 0, 'AND EVERY ONE OF THE THIRTY IS SANCTIONED \u2014 none silently dropped',
-       left + ' still pending');
-    const msg = await page.textContent('#mOrders');
-    ck(/30 sanctioned/.test(msg), 'and it says so by number', msg.trim().slice(0, 60));
-    await page.screenshot({ path: path.join(OUT, '11-sanction-all.png') });
-  }
-
-  /* ---- 7b. A DROPPED LINE IS NEVER REPORTED AS 'NO ORDER WAS PASSED' ----
-
-     The message asserted it, which on a timeout is a false assurance about
-     casual leave that may already have been debited: the write can go through
-     and only the answer be lost on the way back. */
-  {
-    const tk = E.ctx.issueToken_(E.ctx.findByPhone_('9000000001'));
-    E.post({ kind:'hrmsSeed', token:tk,
-      rows:[{ name:'C. Lost', office:'DPO', desig:'Clerk', emp:'JN/L1', phone:'9455599999' }] });
-    E.post({ kind:'claimPin', u:'9455599999', emp:'JN/L1', pin:'4321' });
-    const t = E.post({ kind:'login', u:'9455599999', p:'4321' }).token;
-    E.post({ kind:'leave', token:t, leave:{ id:'HR-LOST', type:'CL',
-      from:'2026-12-20', to:'2026-12-20', days:1, reason:'One day.' } });
-    await page.evaluate(() => pending()); await page.waitForTimeout(600);
-
-    dead = true;
-    await page.click('[data-ok="HR-LOST"]').catch(() => {});
-    await page.waitForTimeout(900);
-    const m = (await page.textContent('#mOrders')).trim();
-    dead = false;
-    ck(!/NO ORDER HAS BEEN PASSED/.test(m),
-       'a lost line is NOT reported as no order having been passed', m.slice(0, 70));
-    ck(/not known|NOT KNOWN/i.test(m),
-       'it says plainly that it is not known whether the order was passed', m.slice(0, 70));
-    ck(/still/i.test(m) && /list/i.test(m),
-       'and points him at the register, which is the only thing that knows');
-    await page.screenshot({ path: path.join(OUT, '12-line-dropped.png') });
-  }
-
-  /* ---- 8. AN APP WITH NO ADDRESS DOES NOT BLAME THE OFFICER'S SIGNAL ----
-
-     The boot guard said plainly that config.js had not been written — and
-     then the employee pressed the only button on the screen, the POST went to
-     the page itself, the browser answered 405, and the catch replaced that
-     honest sentence with 'Try again where there is a line.' He was being told
-     the fault was his network on a register that had never been stood up, and
-     he would try again at a better signal for ever. Found by rendering the
-     live /hrms/ the day it was published, which is where the install card
-     points today. */
-  {
-    const srv2 = await serve(true);
-    const p2 = await br.newPage({ viewport:{ width:390, height:844 } });
-    const e2 = []; p2.on('pageerror', x => e2.push(String(x.message)));
-    await p2.goto('http://127.0.0.1:' + srv2.address().port + '/?t=' + Date.now(),
-                  { waitUntil:'networkidle' });
-    await p2.waitForTimeout(500);
-
-    const arrival = (await p2.textContent('#mSignin')).trim();
-    ck(/no district address/i.test(arrival),
-       'with no config.js it says on arrival that the app has no district address',
-       arrival.slice(0, 50));
-
-    await p2.fill('#iPhone', '9876543210');
-    await p2.fill('#iPin', '1234');
-    await p2.click('#bSignin');
-    await p2.waitForTimeout(800);
-    const after = (await p2.textContent('#mSignin')).trim();
-    ck(!/where there is a line|could not be reached/i.test(after),
-       'AND PRESSING SIGN IN DOES NOT BLAME HIS SIGNAL', after.slice(0, 60));
-    ck(/not been stood up/i.test(after),
-       'it says the register has not been stood up', after.slice(0, 60));
-    ck(/not your signal/i.test(after),
-       'and says in as many words that it is not his signal');
-    ck(await p2.isVisible('#vSignin'), 'he is left on the sign-in screen, not a blank one');
-    ck(e2.length === 0, 'no script error with no config', e2[0] || '');
-    await p2.screenshot({ path: path.join(OUT, '10-no-address.png'), fullPage:true });
-    await p2.close(); srv2.close();
-  }
-
-  /* ---- 9. A TOKEN THE REGISTER WILL NOT TAKE ----
-
-     'auth' is the register's internal word for "this is not one of my
-     tokens". The app printed r.error exactly as it arrived, so what the man
-     saw on the screen was the word auth and nothing else — reported from the
-     district on 09.10.2026 in those words. It says nothing about what
-     happened and nothing about what to do.
-
-     And the session has to come OFF the handset. One the district will not
-     accept is not a session: left in the store, every screen goes on sending
-     it, every screen goes on failing, and there is no way back to the sign-in
-     he needs. */
-  {
-    const srv3 = await serve();
-    const b3 = 'http://127.0.0.1:' + srv3.address().port;
-    const c3 = await br.newContext({ viewport:{ width:390, height:844 } });
-    const p3 = await c3.newPage();
-    const e3 = []; p3.on('pageerror', e => e3.push(String(e)));
-    /* every call is refused the way the register refuses an unknown token */
-    await p3.route('**/hrms.district/**', r => r.fulfill({ status:200,
-      contentType:'application/json', body:JSON.stringify({ ok:false, error:'auth' }) }));
-    /* a handset carrying a session the register has never heard of */
-    await c3.addInitScript(() => {
-      localStorage.setItem('sjgp-hrms1', JSON.stringify({
-        url:'https://hrms.district/exec',
-        session:{ token:'STALE', user:{ name:'K. Ramesh', role:'EMP', phone:'9876543210' } },
-        rows:[] }));
-    });
-    await p3.goto(b3 + '/', { waitUntil:'domcontentloaded' });
-    await p3.waitForTimeout(900);
-
-    /* he presses sign in, which is what he does when a screen will not work */
-    if(await p3.isVisible('#vSignin')){
-      await p3.fill('#iPhone', '9876543210');
-      await p3.fill('#iPin', '1234');
-      await p3.click('#bSignin');
-      await p3.waitForTimeout(800);
-    }
-    const body = (await p3.textContent('body')).replace(/\s+/g, ' ');
-    ck(!/\bauth\b/.test(body), 'THE WORD auth IS NEVER PUT ON THE SCREEN',
-       (body.match(/.{0,40}auth.{0,40}/) || [''])[0]);
-    ck(/no longer signed in/i.test(body), 'it says the device is not signed in any more',
-       body.slice(0, 80));
-    ck(/nothing of yours is lost/i.test(body), 'and that he loses nothing by signing in again');
-    const held = await p3.evaluate(() => {
-      try{ return (JSON.parse(localStorage.getItem('sjgp-hrms1') || '{}').session) || null; }
-      catch(e){ return 'unreadable'; }
-    });
-    ck(held === null, 'AND THE REJECTED TOKEN IS OFF THE HANDSET, so he is not stuck in a loop',
-       JSON.stringify(held));
-    ck(await p3.isVisible('#vSignin'), 'he is left on the sign-in screen');
-    ck(e3.length === 0, 'no script error on a refused token', e3[0] || '');
-    await p3.screenshot({ path: path.join(OUT, '11-token-refused.png'), fullPage:true });
-    await p3.close(); srv3.close();
-  }
+  /* ---- 12. THE WELCOME, asked for by name ---- */
+  const p4 = await ctx.newPage(); const errs4 = []; p4.on('pageerror', e => errs4.push(String(e)));
+  await p4.goto(base + '/?welcome=1', { waitUntil:'domcontentloaded' }); await p4.waitForTimeout(300);
+  ck(await p4.isVisible('#welcome'), 'asked for by name, the welcome draws');
+  const emb = await p4.$eval('#welcome .emb img', i => i.complete && i.naturalWidth > 0).catch(() => false);
+  ck(emb, 'and the emblem loaded');
+  ck((await p4.$$('#welcome h1 span')).length === 3, 'the words of the name arrive in turn');
+  await p4.screenshot({ path: path.join(OUT, '16-welcome.png') });
+  await p4.waitForTimeout(3300);
+  ck(!(await p4.$('#welcome')), 'and by four seconds it is GONE FROM THE DOCUMENT');
+  ck(await p4.isVisible('#iPhone'), 'with sign in underneath');
+  ck(!errs4.length, 'no script error with the welcome');
+  await p4.close();
 
   await br.close(); srv.close();
-  console.log('\n  ' + pass + ' passed, ' + fail + ' failed   ·   screenshots in Info/hrms-render/\n');
-  process.exitCode = fail ? 1 : 0;
-})();
+  console.log('\n  ' + pass + ' passed, ' + fail + ' failed   ·   screenshots in Info/hrms-render/');
+  process.exit(fail ? 1 : 0);
+})().catch(e => { console.error(e); process.exit(1); });
