@@ -6,7 +6,17 @@
 <meta name="theme-color" content="#4A40CE">
 <title>District HRMS · Jangaon</title>
 <link rel="manifest" href="manifest.webmanifest">
+<!-- iPhone: opened from the Home Screen it runs as an app, without Safari's
+     bars, and carries its own name and icon — the same three lines the
+     sanitation app has carried since its first day -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="HRMS">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
+<link rel="apple-touch-icon" sizes="152x152" href="icons/apple-touch-icon-152.png">
+<link rel="apple-touch-icon" sizes="167x167" href="icons/apple-touch-icon-167.png">
+<link rel="apple-touch-icon" sizes="120x120" href="icons/apple-touch-icon-120.png">
 <style>
 /* DISTRICT HRMS · the employee's own app, rebuilt 18.10.2026 on the draft the
    Collector passed that morning. The shape is Workday's — a home that answers
@@ -131,11 +141,13 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .fld:focus-within{border-color:var(--primary);background:var(--surface-bright);box-shadow:0 0 0 4px var(--primary-container)}
 .fld .mk{width:22px;height:22px;color:var(--on-surface-3);flex:0 0 auto}
 .fld:focus-within .mk{color:var(--primary)}
-.fld .in{flex:1;min-width:0;position:relative;padding-top:14px}
-.fld label{position:absolute;left:0;top:50%;transform:translateY(-50%);font-size:15.5px;color:var(--on-surface-3);pointer-events:none;transition:all .16s var(--ease);transform-origin:left top}
-.fld input{width:100%;border:0;background:none;font:inherit;font-size:17px;color:var(--on-surface);padding:2px 0 8px;outline:none;letter-spacing:.02em}
-.fld input:focus+label,.fld input:not(:placeholder-shown)+label{top:9px;transform:none;font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--on-surface-3)}
-.fld:focus-within input:focus+label{color:var(--primary)}
+.fld .in{flex:1;min-width:0;position:relative;display:flex;align-items:center;min-height:58px}
+.fld label{position:absolute;left:0;top:50%;transform:translateY(-50%);font-size:15.5px;color:var(--on-surface-3);pointer-events:none;transition:opacity .14s var(--ease)}
+.fld input{width:100%;border:0;background:none;font:inherit;font-size:17px;color:var(--on-surface);padding:0;outline:none;letter-spacing:.02em;line-height:1.3}
+/* the label is the placeholder: it goes the moment the field is focused or
+   holds a value, and the value stands centred on its own (18.10.2026 — on a
+   phone with a larger system font the shrunk caption sat on the number) */
+.fld input:focus+label,.fld input:not(:placeholder-shown)+label{opacity:0}
 .fld input::placeholder{color:transparent}
 .fld .eye{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:var(--on-surface-3);flex:0 0 auto;margin-right:-6px}
 .fld .eye:active{background:var(--surface-mid)}

@@ -2598,3 +2598,23 @@ code and asserts the code stands. The codes the console printed on the day
 are the ones on the register, so the download of that paste is the one to
 trust for those employees, and the join that builds the offices' sheets
 reads the downloads oldest first and lets the latest win.
+
+**The label is the placeholder, and it goes** (18.10.2026). The sign-in
+fields floated their label to the top of the pill as a small caption; on a
+phone with a larger system font the caption and the typed number shared the
+same pixels, and the Collector read it as *the placeholder refusing to go*.
+The label now sits centred while the field is empty and disappears the
+moment the field is focused or holds a value, and the value stands centred
+on its own. No caption, nothing to collide.
+
+**iPhones install from Safari's Share sheet, and only from Safari.** The
+HRMS page carried an apple-touch-icon and nothing else of what an iPhone
+reads; it now carries the same three `apple-mobile-web-app` lines the
+sanitation app has had since its first day, and every touch-icon size. Chrome
+on an iPhone cannot add a page to the Home Screen at all, so the install
+guide says so in as many words. `tests/hrms-install-guide.js` writes the
+guide — Android and iPhone step by step, the first sign-in, what to do when
+a number or a code is refused, the square and the address in words — as
+`hrms/install.html` on the site and as an A4 PDF under `Info/install/`. Its
+square is the same `QR.svg` every card carries and is covered by the QR pass
+through the card's address.
