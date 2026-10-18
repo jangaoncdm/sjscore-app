@@ -1741,7 +1741,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '554f190 - 18 Oct 12:23';
+const BUILD_STAMP = '7be2e98 - 18 Oct 12:27';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -4295,19 +4295,28 @@ const BASE_KEYS  = { A1:'emp', A2:'name', A3:'gender', A4:'dob', A5:'phone', A6:
                      B5:'place', B6:'gaz', B7:'entered', B8:'post', B9:'district', B10:'pay', B11:'ddo', B12:'vacation', B13:'status',
                      B14:'hqres', B15:'addr', C1:'ctl', C2:'authCL', C3:'authOther', D1:'balAsOn', D2:'el', D3:'hpl', D4:'clUsed',
                      D5:'ohUsed', D6:'cclUsed', D7:'children', D8:'verifiedBy', D9:'verifiedOn', R1:'remarks' };
+function retab(text){
+  const t = String(text || '');
+  if(t.indexOf('\t') >= 0) return t;
+  if(!/(^|\n)\s*(Sl\s{2,})?A1 {2,}A2 {2,}A3\b/.test(t)) return t;
+  return t.split(/\r?\n/).map(l => l.replace(/ {4,}/g, m => '\t'.repeat(Math.floor(m.length / 4)) + ' '.repeat(m.length % 4))).join('\n');
+}
+const wasRetabbed = text => String(text || '').indexOf('\t') < 0 && retab(text).indexOf('\t') >= 0;
 function isBaseFormat(text){
+  text = retab(text);
   return String(text || '').split(/\r?\n/).some(line => { const c = line.split('\t').map(x => x.trim()); return c.indexOf('A1') >= 0 && c.indexOf('A2') >= 0 && c.indexOf('B4') >= 0; })
       || /Employee ID \(IFMIS/.test(String(text || ''));
 }
 function parseBaseFormat(text, role){
-  const lines = String(text || '').split(/\r?\n/);
+  const recovered = wasRetabbed(text);
+  const lines = retab(text).split(/\r?\n/);
   const rows = [], bad = [], notes = [];
-  let colOf = null, started = false;
+  let colOf = null, started = false, codeCells = 0, misaligned = 0;
   lines.forEach(line => {
     if(!line.trim()) return;
     const cells = line.split('\t').map(c => c.trim());
     if(!colOf){
-      if(cells.indexOf('A1') >= 0 && cells.indexOf('A2') >= 0){ colOf = {}; cells.forEach((c, i) => { if(BASE_CODES.indexOf(c) >= 0) colOf[c] = i; }); return; }
+      if(cells.indexOf('A1') >= 0 && cells.indexOf('A2') >= 0){ colOf = {}; codeCells = cells.length; cells.forEach((c, i) => { if(BASE_CODES.indexOf(c) >= 0) colOf[c] = i; }); return; }
       if(/Employee ID/i.test(line) && /Mobile/i.test(line)){ colOf = {}; BASE_CODES.forEach((c, i) => { colOf[c] = i; }); return; }
       return;                                  /* the title line above the code row */
     }
@@ -4316,15 +4325,26 @@ function parseBaseFormat(text, role){
     const get = c => colOf[c] == null ? '' : (cells[colOf[c]] || '');
     if(!BASE_CODES.some(c => get(c))) return;
     if(get('A1') === '2071534' && /srinivas rao/i.test(get('A2'))) return;       /* the Field Guide's example row */
+    if(recovered && codeCells && cells.length > codeCells){
+      misaligned++;
+      bad.push({ line:(get('A2') || line.trim()).slice(0, 70), why:'the columns of this line do not line up (a gap inside an address reads as a column once the tabs are lost) — paste it from the file or from Excel' });
+      return;
+    }
     let phone = get('A5').replace(/\.0+$/, '').replace(/\D/g, '');
     if(phone.length === 11 && phone[0] === '0') phone = phone.slice(1);
     if(phone.length === 12 && phone.slice(0, 2) === '91') phone = phone.slice(2);
-    if(phone.length !== 10){ bad.push({ line:(get('A2') || line.trim()).slice(0, 70), why:'no ten-digit mobile number (' + (get('A5') || 'blank') + ')' }); return; }
+    if(phone.length !== 10){
+      /* a continuation line, a sub-heading or a signature block carries no
+         name and no number: it is not an employee the office forgot, and is
+         not shown as one */
+      if(!get('A2') && !get('A5')) return;
+      bad.push({ line:(get('A2') || line.trim()).slice(0, 70), why:'no ten-digit mobile number (' + (get('A5') || 'blank') + ')' }); return; }
     const r = { role: role || 'EMP' };
     BASE_CODES.forEach(c => { r[BASE_KEYS[c]] = c === 'A5' ? phone : get(c); });
     rows.push(r);
   });
   if(!colOf) bad.push({ line:'(the whole paste)', why:'no code row (A1 … X2) and no headings were found — paste the Base Format sheet from its first row' });
+  if(recovered) notes.push('The paste arrived with its tabs turned into spaces and was lined up again by the spacing' + (misaligned ? '; ' + misaligned + ' line(s) could not be and are listed above. Paste from the file or from Excel to take them in.' : '.'));
   const seen = {};
   rows.forEach(r => { if(seen[r.phone]) notes.push(r.phone + ' is on two rows — "' + seen[r.phone] + '" and "' + r.name + '". Both are sent; one number is one employee, so the register will refuse the second and name the holder.'); else seen[r.phone] = r.name; });
   return { rows, bad, notes, base:true };
