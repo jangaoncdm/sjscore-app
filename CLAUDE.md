@@ -2618,3 +2618,15 @@ a number or a code is refused, the square and the address in words — as
 `hrms/install.html` on the site and as an A4 PDF under `Info/install/`. Its
 square is the same `QR.svg` every card carries and is covered by the QR pass
 through the card's address.
+
+**A row set aside is kept and not shown** (19.10.2026). The thirty-seven
+rows set aside on 18.10 stayed on the console's roll as "off the roll" — a
+list of dates and digits, each with a *Put back* button, beside officers who
+had genuinely left. They are not officers; they never named anybody. The
+Admin roll leaves out any row whose name carries the set-aside prefix and
+says in one line how many it is not drawing, and the sheet keeps every one of
+them (rule 7). And the rollout list carries everyone: `op=hrmsClaims` sent
+the first 500 waiting rows and a count of the rest, so the district's one
+download of codes for every office stopped at 500 of 1,100.
+`HRMS_CLAIMS_MAX` is 5,000 now — the establishment this register was sized
+for, half a megabyte to the Collector's browser once.

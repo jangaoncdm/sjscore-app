@@ -58,7 +58,10 @@ const HROLL={ ok:true, roles:['EMP','HOD','COLLECTOR'], mandals:['Collectorate',
   holidays:{ year:2026, count:53, onOrder:53 },
   rows:[
     {phone:'9000000001',name:'Sandeep Kumar Jha',role:'COLLECTOR',mandal:'',gp:'',hasPin:true,active:true,rows:1},
-    {phone:'9444400001',name:'K. Ramesh',role:'HOD',mandal:'Collectorate',gp:'',hasPin:true,active:true,rows:1}
+    {phone:'9444400001',name:'K. Ramesh',role:'HOD',mandal:'Collectorate',gp:'',hasPin:true,active:true,rows:1},
+    /* a row the Collector set aside on 18.10.2026: a misread paste's date
+       where the name goes, digits where the office goes. Kept, not drawn. */
+    {phone:'9100000099',name:'(set aside 18.10.2026) 30-09-2026',role:'EMP',mandal:'1234567',gp:'',hasPin:false,active:false,rows:1}
   ]};
 
 /* WHO HAS NOT TAKEN IT UP, with what he claims it with */
@@ -215,6 +218,8 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   ck(gets.some(u=>/op=hrmsClaims/.test(u)),'and it read the rollout list from the district');
   ck(tA.indexOf('ZLTHWJ')>=0,'naming the code each waiting employee claims his row with');
   ck(tA.indexOf('Y. Ravikiran')>=0,'and who is waiting');
+  ck(tA.indexOf('(set aside')<0,'a row set aside is NOT drawn on the roll — it never named anybody');
+  ck(/1 row\(s\) set aside/.test(tA),'and the roll says how many it is keeping on the sheet and not showing');
 
   /* ---- 4. THE PASTE IS READ, AND READ AT THE TOP LEVEL ---- */
   /* the officers list goes on as heads of office — chosen, no longer the

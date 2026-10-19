@@ -325,7 +325,7 @@ function feature_hrms(){
              code is readable while the row is unclaimed, by the Collector's
              own token and nobody else's, and it goes the moment it is used. */
           const f = hrmsFactors_(t, v, i);
-          if(open.length < 500) open.push({ name:cell_(v[i], t.ix.name), phone:ph,
+          if(open.length < HRMS_CLAIMS_MAX) open.push({ name:cell_(v[i], t.ix.name), phone:ph,
             office:cell_(v[i], t.ix.mandal),
             desig: t.ix.designation >= 0 ? cell_(v[i], t.ix.designation) : '',
             emp:f.emp, code:f.code });
@@ -741,6 +741,15 @@ function hrmsHasLeave_(phone){
   }
   return !!HRMS_LEAVE_PHONES_[phone];
 }
+
+/* HOW MANY WAITING ROWS op=hrmsClaims CARRIES. It was 500, and on 19.10.2026
+   the district downloaded its rollout list to put one code sheet together
+   for every office and got the first 500 of 1,100 — the rest were a count.
+   A line is a hundred bytes; five thousand of them is the whole
+   establishment this register was sized for and half a megabyte to the
+   Collector's own browser, once. The cap stays as the guard against a
+   register nobody foresaw. */
+var HRMS_CLAIMS_MAX = 5000;
 
 /* THE ROWS THAT NAME NOBODY AND THAT NO PASTE WILL CORRECT — a misread row
    whose "number" was the first ten digits of a twelve-digit employee id has
