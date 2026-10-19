@@ -1743,7 +1743,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '1bde559 - 19 Oct 10:13';
+const BUILD_STAMP = 'ae248cf - 19 Oct 10:17';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -3332,6 +3332,9 @@ function segSwitch(){
      of nought, which reads as a register with nobody in it rather than as a
      question that does not arise there. */
   if(TVIEW === 'GP') return '';
+  /* ON THE DISTRICT HRMS THE ROLL IS ONE AND THE MARK IS VOLUNTARY
+     (19.10.2026): no segment, and the sentence that says so instead */
+  if(TVIEW === 'HRMS') return '<div class="c12" style="margin:-4px 0 4px"><span class="expnote">Attendance on this register is <b>voluntary</b>: a mark is recorded when an employee makes one, nobody is due and nobody is listed as not marked. Nothing on this screen raises a reminder, a notice or a debit.</span></div>';
   const c = segCounts(DATA || { today:{} });
   const tab = (k, label, n) => '<button type="button" role="tab" data-seg="' + k + '" aria-selected="' + (ASEG === k) + '">' +
     label + '<b>' + n + '</b></button>';
@@ -3479,7 +3482,9 @@ function vAttendance(j,A){
   h+='<div class="kpirow">';
   h+=kpi('Present',IC.u,A.present,delta(A.accounted,A.attY,true),'vs yesterday (with leave)');
   h+=kpi('On sanctioned leave',IC.c,A.onLeave,'','today');
-  h+=kpi('Not marked',IC.u,A.off?'—':A.absent,'',A.off?esc(A.off)+' — not tracked today':'as of now');
+  h+=TVIEW==='HRMS'
+    ? kpi('Not marked',IC.u,'—','','voluntary — nobody is due')
+    : kpi('Not marked',IC.u,A.off?'—':A.absent,'',A.off?esc(A.off)+' — not tracked today':'as of now');
   h+=kpi('Marked by 10:00',IC.u,A.present?pct(A.by10,A.present)+'%':'—','',A.by10+' of '+A.present);
   h+=kpi('Location not trustworthy',IC.u,j.today.present.filter(r=>suspect(r)||!r.verified).length,'','of '+A.present+' present');
   /* A MAN WHO TRIED AND WAS REFUSED IS NOT A MAN WHO DID NOT COME. Under the
@@ -3487,7 +3492,7 @@ function vAttendance(j,A){
      genuine absence — and the ladder cannot tell them apart either. This is
      the figure that lets the Collector tell them apart before a notice is
      proposed against the wrong man. */
-  if(((j.fence||{}).today||[]).length)
+  if(TVIEW!=='HRMS' && ((j.fence||{}).today||[]).length)
     h+=kpi('Refused \u2014 away from the place of duty',IC.u,(j.fence.today||[]).length,'',
            'they are inside \u201cnot marked\u201d');
   /* MARKING OUT IS A FIGURE OF THE DAY, so it stands with the day's other
@@ -3495,9 +3500,11 @@ function vAttendance(j,A){
      in when the feature's endpoint answers — a dash until then, never a
      nought, because nought closed days and no answer yet are not the same
      thing and only one of them is about the officers. */
-  h+=kpi('Marked out',IC.u,'<span id="outKpi">—</span>','',
-    '<span id="outKpiFoot">reading…</span>');
-  setTimeout(loadOutday, 0);        /* the tile must be in the page first */
+  if(TVIEW!=='HRMS'){               /* marking out is not built on the HRMS */
+    h+=kpi('Marked out',IC.u,'<span id="outKpi">—</span>','',
+      '<span id="outKpiFoot">reading…</span>');
+    setTimeout(loadOutday, 0);        /* the tile must be in the page first */
+  }
   /* WHICH MEASURE THIS REGISTER CAN HONESTLY MAKE.
      The sanitation roll has no coordinates, so the only thing it can say is
      how far a mark is from the MIDDLE OF THE MANDAL, as that mandal's own
@@ -3515,14 +3522,14 @@ function vAttendance(j,A){
     : (j.today.present||[]).filter(r=>r.far).sort((a,b)=>b.km-a.km);
   h+='</div>';
 
-  h+=atcPanel();
+  if(TVIEW!=='HRMS') h+=atcPanel();   /* the year's calendar counts the unmarked; nobody is due here */
   /* WHO TRIED AND WAS REFUSED, BY NAME, BEFORE ANY NOTICE IS PROPOSED.
      The count alone says forty; which forty, and from where, is the question
      a Collector actually has — and the difference between an officer at a
      mandal meeting and an officer who did not come to work. Nothing here is
      a charge: it is the opposite, a list of men whose absence from the
      attendance register has an explanation the register itself knows. */
-  if(((j.fence||{}).today||[]).length){
+  if(TVIEW!=='HRMS' && ((j.fence||{}).today||[]).length){
     const ou=(j.fence.today||[]);
     h+=panel('c12 w6','Refused — marked away from the place of duty',
       'today · within '+esc(String((j.fence||{}).km||5))+' km is the rule',
@@ -3560,7 +3567,7 @@ function vAttendance(j,A){
      edge of his mandal. A fenced register that showed only the second was
      showing the Collector a figure the order does not use. */
   const fenced = DUTY() && TVIEW!=='GP' && !!(((j.fence||{}).on));
-  h+=panel('c12 w6', DUTY()?'Marked away from the place of duty':'Marked away from the mandal',
+  if(TVIEW!=='HRMS') h+=panel('c12 w6', DUTY()?'Marked away from the place of duty':'Marked away from the mandal',
     farRows.length?farRows.length+' of '+A.present+' present · over '+farLim+' km':'nothing over '+farLim+' km today',
     `<div class="twrap"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th>${DUTY()?'<th>Place of duty</th><th>From place of duty</th><th>From mandal</th>':'<th>Distance</th>'}<th>Marked</th><th>Reading</th><th></th></tr></thead><tbody>`+
     farRows.map(r=>`<tr>
@@ -3584,18 +3591,18 @@ function vAttendance(j,A){
     `<div class="expbar">
       <button class="tbtn pri" data-exp="xlsx">Excel workbook (.xlsx)</button>
       <button class="tbtn" data-exp="today">CSV · today, officer by officer</button>
-      <button class="tbtn" data-exp="absent">CSV · not marked today</button>
+      ${TVIEW==='HRMS'?'':'<button class="tbtn" data-exp="absent">CSV · not marked today</button>'}
       <button class="tbtn" data-exp="matrix">CSV · 14-day comparative matrix</button>
       <span class="expnote" id="expNote">The workbook carries every sheet: today, the gaps, officer × day, mandal comparison, daily counts.</span>
     </div>`);
   /* THE ONE FIGURE ON THIS SCREEN THAT IS NOT THE SEGMENT'S. att14 is worked
      out by the register over everybody and cannot be re-cut here, so it says
      whose it is rather than letting the switch above imply otherwise. */
-  h+=panel('c7','Attendance rate · last 14 days',
+  if(TVIEW!=='HRMS') h+=panel('c7','Attendance rate · last 14 days',
     (ASEG==='all'?'accounted of '+A.officersDue:'everyone on the register · not the segment above'),
     '<div class="plot">'+areaChart(j.att14x,'present',metColor('present'))+'</div>');
-  h+=panel('c5','Mark-in time today','by hour','<div class="plot">'+histMarkIn(j.today.present)+'</div>');
-  h+=panel('c6','Attendance by mandal · worst first',
+  h+=panel(TVIEW==='HRMS'?'c6':'c5','Mark-in time today','by hour','<div class="plot">'+histMarkIn(j.today.present)+'</div>');
+  if(TVIEW!=='HRMS') h+=panel('c6','Attendance by mandal · worst first',
     '<span style="color:var(--st-ok)">■</span> present <span style="color:var(--st-warn)">■</span> leave <span style="color:var(--st-bad)">■</span> missing',
     '<div class="plot">'+mandalAtt(j)+'</div>');
   h+=panel('c6','Location quality today','of '+A.present+' marks',
@@ -3607,7 +3614,7 @@ function vAttendance(j,A){
       {center:A.present,centerLabel:'marks today',emptyMsg:'No officer has marked yet today.'})+'</div>');
   const attRows=[].concat(j.today.present.map(r=>({...r,_s:'P'})),j.today.onLeave.map(r=>({...r,_s:'L'})),j.today.absent.map(r=>({...r,_s:'A'})));
   window.__ROWS.att=attRows;
-  h+=panel('c12','Officer by officer',A.present+' present · '+A.onLeave+' leave · '+A.absent+' not marked',
+  h+=panel('c12','Officer by officer',A.present+' present · '+A.onLeave+' leave'+(TVIEW==='HRMS'?'':' · '+A.absent+' not marked'),
     `<input class="find" id="attFind" placeholder="Search name, role, mandal or status" style="margin-bottom:9px">
      <div class="twrap" style="max-height:430px"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th>${DUTY()?'<th>Place of duty</th>':''}<th>Time</th><th>Out</th><th>Location</th><th>Status</th></tr></thead><tbody id="attBody">`+
     attRows.map((r,i)=>attRow(r,i)).join('')+`</tbody></table></div>`,'att');
