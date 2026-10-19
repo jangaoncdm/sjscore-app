@@ -213,6 +213,9 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   await page.waitForTimeout(700);
   const tAtt=await txt();
   ck(/attendance|marked/i.test(tAtt),'the Attendance screen opens on the HRMS register',tAtt.slice(0,80));
+  ck(/voluntary/.test(tAtt)&&!/the roll the notice ladder reads/.test(tAtt),'and says the mark is voluntary — not the sanitation register’s segments');
+  ck(!/Marked away from|Attendance by mandal|Attendance rate|Refused — marked away/.test(tAtt),'no place-of-duty table, no gaps by mandal, no rate of nothing');
+  ck(!/CSV · not marked today/.test(tAtt),'and no export of the not-marked, because nobody is due');
   await page.screenshot({path:path.join(OUT,'hrms-attendance-1500.png'),fullPage:true});
   await page.click('#nav [data-v="leave"]');
   await page.waitForTimeout(400);
