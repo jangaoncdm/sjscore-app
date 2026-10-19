@@ -2669,3 +2669,55 @@ console's rail shows the Attendance screen on this register now — the
 voluntary office's own view, nobody due and nobody listed as not marked.
 Suite 42 section 9 holds the server half; `tests/render-hrms.js` section 7a
 drives the real app through the mark against the real backend in the mock.
+
+**The review of the same evening found ten faults, and all ten were real**
+(19.10.2026, `/ultrareview` on the day's commits). Two reached the
+sanitation register, which has carried marking out since 02.10.2026.
+
+**A queued mark out was judged on the day it arrived.** `attendanceOut`
+read `today_()`; a mark out pressed at a quarter to six on a village road
+and sent the next morning found no mark in "today" to close, or was refused
+as early against the morning's mark in and taken off the phone. The mark in
+had always carried its date; the out carries it now, both apps send it,
+and an old handset that sends none is read as today, as it was.
+
+**A second mark in wiped the mark out.** `saveAttendance_` rebuilt the
+row from blanks across the sheet's whole width, and the width has carried
+the marking-out columns since October. A phone that lost its store, or a
+second handset, blanked his own mark out, its photograph and its id. The row
+he already has is the starting point now, and the HRMS app asks again at
+the moment of writing whether the district already holds the day.
+
+**The app's "today" was the day the district last named.** Opened the next
+morning with no signal, it keyed, dated and stamped a new mark with
+yesterday's date, and the register takes the date the phone sends. The
+district's day is believed only when the district was last heard from on
+the handset's own current date; and the handset's date is its local one,
+because the UTC slice it fell back on is yesterday until half past five.
+
+**And the rest, each a few lines**: sign-out cleared the store with a mark
+the district had not received, silently — it sends first, then asks; a
+refusal the district would give again tomorrow (no mark in for that day,
+a mark out already standing, hours that could never be served) was resent
+with its photograph every three minutes for ever — the server marks those
+`final` and the phone takes the mark off and says why, while busy and a
+dead line are still retried, on the field app too, which was dropping a
+mark out on *busy*; two marks on a phone with no line re-armed the sync
+every 300 ms whatever the answer — the next mark follows only a settled
+one; a tap on the scrim left the mark in hand and the next reading
+re-opened the sheet — closing the sheet by any route cancels it; the sheet
+was rebuilt after every reading, replacing the file input the camera was
+open on, and the photograph was lost — it is drawn once and patched; the
+console's Out column read ··· for ever on the HRMS because the read was
+skipped there and `outday` dropped every voluntary row — the voluntary
+marks ride the answer under their own head, `voluntary`, listed and never
+counted as owed, so suite 30's "the MSO is not on it" still holds of the
+owing roll. **And the reads are bounded**: three paths read the Attendance
+tab whole to find one officer's one day, two of them under the lock, and
+the phone asked `op=out` every three minutes all day. `attRowsNear_`
+reads the tail and proves off the `receivedAt` of its first row — the
+district's clock, never the handset's — that the tail reaches the day, or
+reads the whole tab as before; the phone asks only while the answer can
+change. **Still to decide, before December**: at full uptake the HRMS
+Attendance tab reaches Sheets' ten-million-cell limit in about two months,
+so a yearly Attendance tab is an order to take, not a repair.

@@ -306,10 +306,20 @@ function serve(noConfig){
   await page.click('[data-act="refresh"]'); await settle(900);
   ck(await page.isVisible('[data-act="markout"]'), 'at a quarter to six the district says the hour has come and Mark out is offered');
   ck(/has been open since 17:30/.test(await txt('#todayCard')), 'in the words the field app uses');
+  /* THE PHOTOGRAPH IS TAKEN WHILE THE LOCATION IS STILL BEING READ, which
+     is what a person does: the sheet used to be rebuilt after every
+     reading, replacing the file input the camera was open on, and the
+     picture was lost (19.10.2026). The readings are slowed so the picture
+     lands between two of them. */
+  await page.evaluate(() => { window.STILL_GAP = 1200; });
   await page.click('[data-act="markout"]'); await settle(300);
   ck(/Mark out/.test(await txt('#sheet')), 'the sheet is the mark out\u2019s');
+  ck(/Reading your location/.test(await txt('#sheet')), 'the location is still being read');
+  await page.setInputFiles('#attFile', { name: 'selfie.png', mimeType: 'image/png', buffer: PNG }); await settle(400);
+  ck(/Reading your location/.test(await txt('#sheet')) && /Take it again/.test(await txt('#sheet')), 'the photograph is in hand while the readings go on', (await txt('#sheet')).replace(/\s+/g, ' ').slice(0, 120));
   await page.waitForFunction(() => { const s = document.getElementById('sheet').textContent; return /Location ±/.test(s) && !/Reading your location/.test(s); }, null, { timeout: 20000 });
-  await page.setInputFiles('#attFile', { name: 'selfie.png', mimeType: 'image/png', buffer: PNG }); await settle(600);
+  ck(/Take it again/.test(await txt('#sheet')) && !(await page.$eval('#attMark', b => b.disabled)), 'AND IT SURVIVES THE READINGS: Mark out is live with the picture taken before they finished');
+  await page.evaluate(() => { window.STILL_GAP = 120; });
   await page.click('#attMark'); await settle(1000);
   ck(outs.length === 1 && (outs[0].att.reads.r1 || []).length === 4 && !!(outs[0].photo && outs[0].photo.b64), 'ONE MARK OUT WENT UP, with its readings and its photograph', String(outs.length));
   const tc4 = await txt('#todayCard');
@@ -318,6 +328,46 @@ function serve(noConfig){
   ck(!!String(AT2.rows[1][ah2.indexOf('outAt')] || ''), 'written onto his own row for the day');
   ck(!(await page.isVisible('[data-act="markout"]')), 'and not offered again');
   await shot('7b-marked-out');
+
+  /* ---- 7c. THE NEXT MORNING, WITH NO LINE (19.10.2026, off the review) ----
+     The app's "today" is the day the district last named; opened the next
+     morning with no signal it dated a new mark with yesterday's date, and
+     the register took it. And signing out cleared the store, so a mark the
+     district had not received went with it. */
+  dead = true;
+  const MORNING = '2026-10-20T09:30:00+05:30';
+  await page.evaluate(t => { window.__T = t; }, Date.parse(MORNING));
+  await page.click('[data-act="refresh"]'); await settle(700);          /* fails: no line */
+  await page.click('[data-tab="home"]'); await settle(300);
+  const tc5 = await txt('#todayCard');
+  ck(/20 Oct/.test(tc5) && /not marked/.test(tc5), 'WITH NO LINE THE NEXT MORNING THE CARD IS THE HANDSET\u2019S DAY, not the day the district last named', tc5.replace(/\s+/g, ' ').trim().slice(0, 80));
+  await page.click('[data-act="mark"]'); await settle(300);
+  await page.waitForFunction(() => { const s = document.getElementById('sheet').textContent; return /Location ±/.test(s) && !/Reading your location/.test(s); }, null, { timeout: 20000 });
+  await page.setInputFiles('#attFile', { name: 'selfie.png', mimeType: 'image/png', buffer: PNG }); await settle(600);
+  await page.click('#attMark'); await settle(1200);
+  const tc6 = await txt('#todayCard');
+  ck(/Marked at/.test(tc6) && /not yet received by the district/.test(tc6), 'the mark is held on the phone', tc6.replace(/\s+/g, ' ').trim().slice(0, 100));
+  ck(marks.length === 1, 'and nothing reached the district', String(marks.length));
+  /* a tap on the scrim cancels a mark in hand rather than leaving it to
+     re-open the sheet at the next reading */
+  await page.click('[data-tab="me"]'); await settle(300);
+  await page.click('[data-act="signout"]'); await settle(1500);
+  ck(await page.isVisible('[data-act="signoutanyway"]'), 'SIGN OUT WITH A MARK STILL ON THE PHONE ASKS FIRST');
+  ck(!(await page.isVisible('#iPhone')), 'and has not signed him out');
+  await shot('7c-signout-asks');
+  await page.click('#sheet [data-close]'); await settle(300);
+  dead = false;
+  E.setNow('2026-10-20T09:31:00+05:30');
+  await page.click('[data-tab="home"]'); await settle(300);
+  await page.click('[data-act="attsend"]'); await settle(1200);
+  ck(marks.length === 2 && marks[1].att && marks[1].att.date === '2026-10-20', 'AND WHEN THE LINE RETURNS THE MARK GOES UP UNDER ITS OWN DAY', JSON.stringify((marks[1] || {}).att || {}).slice(0, 80));
+  ck(/Received by the district/.test(await txt('#todayCard')), 'and the card reads the receipt');
+  const AT3 = E.sheets['Attendance'], ah3 = AT3.rows[0].map(String);
+  ck(AT3.rows.slice(1).some(x => String(x[ah3.indexOf('date')]).replace(/^'/, '') === '2026-10-20'), 'written to the 20th on the register');
+  /* both clocks back to the day the rest of the pass is dated from */
+  E.setNow(LATER);
+  await page.evaluate(t => { window.__T = t; }, Date.parse(LATER));
+  await page.click('[data-act="refresh"]'); await settle(700);
 
   /* ---- 8. sign out, and the Collector passes orders in the app ---- */
   await page.click('[data-tab="me"]'); await settle(300);

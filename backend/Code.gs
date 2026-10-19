@@ -7695,6 +7695,35 @@ function doPost(e){
 }
 
 /* ---------------- attendance ---------------- */
+/* THE ROWS THAT CAN HOLD A DAY, READ FROM THE TAIL (19.10.2026). The
+   Attendance tab is only ever appended to — a row is rewritten where it
+   stands or added at the foot, never inserted — so the rows for a day are
+   never further from the foot than everything received since that day
+   began. Three paths were reading the whole tab to find one officer's one
+   day, two of them under the script lock, and the District HRMS at a
+   thousand voluntary marks a morning turns that into millions of cells
+   read for every mark. The tail is read first; whether it reaches far
+   enough is settled off the receivedAt of its FIRST row, which is the
+   district's own clock and never the handset's: a row dated D cannot have
+   been received before D began, so a tail whose first row arrived before
+   that holds every row for D. A tail that cannot prove it — a day older
+   than the tail, a first row with no receivedAt — falls back to the whole
+   tab, which is what every path did before; one day, one row is worth more
+   than the read it saves. */
+var ATT_TAIL_ROWS = 6000;
+function attRowsNear_(sh, m, date){
+  const last = sh.getLastRow(), width = Math.max(sh.getLastColumn(), 1);
+  if(last < 2) return { start:2, rows:[] };
+  const start = Math.max(2, last - ATT_TAIL_ROWS + 1);
+  const rows = sh.getRange(start, 1, last - start + 1, width).getValues();
+  if(start === 2) return { start:2, rows:rows };
+  /* any instant before the day began, in any timezone: the day before, UTC */
+  const floor = Date.parse(String(date) + 'T00:00:00Z') - 86400000;
+  const first = m.ix.receivedAt >= 0 ? Date.parse(String(rows[0][m.ix.receivedAt] || '')) : NaN;
+  if(!isNaN(floor) && !isNaN(first) && first < floor) return { start:start, rows:rows };
+  return { start:2, rows:sh.getRange(2, 1, last - 1, width).getValues() };
+}
+
 function saveAttendance_(b, u){
   const a = b.att || {};
   const date = dateText_(a.date) || today_();
@@ -7757,14 +7786,15 @@ function saveAttendance_(b, u){
      in — so the read-decide-write alone is held under the script lock. */
   const lock = LockService.getScriptLock();
   try{ lock.waitLock(20000); }catch(err){ return json_({ ok:false, error:'busy — try again' }); }
-  const data = sh.getDataRange().getValues();
-  let at = 0, prevCount = 0, firstAt = '', prevId = '';
-  for(let i = 1; i < data.length; i++){
-    if(phone10_(data[i][m.ix.phone]) === u.phone && dateText_(data[i][m.ix.date]) === date){
-      if(!at){ at = i + 1;
-        prevCount = Number(data[i][m.ix.markCount]) || 1;
-        firstAt = String(data[i][m.ix.firstMarkAt] || data[i][m.ix.markedAt] || '');
-        prevId = String(data[i][m.ix.id] || '');
+  const T = attRowsNear_(sh, m, date);
+  let at = 0, prevCount = 0, firstAt = '', prevId = '', was = null;
+  for(let i = 0; i < T.rows.length; i++){
+    const r = T.rows[i];
+    if(phone10_(r[m.ix.phone]) === u.phone && dateText_(r[m.ix.date]) === date){
+      if(!at){ at = T.start + i; was = r;
+        prevCount = Number(r[m.ix.markCount]) || 1;
+        firstAt = String(r[m.ix.firstMarkAt] || r[m.ix.markedAt] || '');
+        prevId = String(r[m.ix.id] || '');
       }
     }
   }
@@ -7774,7 +7804,16 @@ function saveAttendance_(b, u){
      markedAt. Only a genuinely new mark-in (a fresh id) raises the count. */
   const sameMark = !!at && !!prevId && String(a.id || '') === prevId;
 
-  const row = new Array(m.width).fill('');
+  /* A SECOND MARK IN DOES NOT WIPE THE MARK OUT (19.10.2026). The row is
+     written across the sheet's whole width, and the width has carried the
+     marking-out columns since 02.10.2026 — so a row that already stood was
+     being rebuilt from blanks, and an officer who marked in again in the
+     evening (a phone that lost its store, a second handset) had his mark
+     out, its photograph and its id blanked by his own mark in. The row he
+     already has is the starting point; the mark in puts its own cells over
+     it and leaves the rest standing. */
+  const row = was ? was.slice(0, m.width) : new Array(m.width).fill('');
+  while(row.length < m.width) row.push('');
   const put = (k, v) => { if(m.ix[k] >= 0) row[m.ix[k]] = v; };
   put('id', a.id || Utilities.getUuid());
   put('date', "'" + date);

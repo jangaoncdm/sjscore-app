@@ -3500,11 +3500,13 @@ function vAttendance(j,A){
      in when the feature's endpoint answers — a dash until then, never a
      nought, because nought closed days and no answer yet are not the same
      thing and only one of them is about the officers. */
-  if(TVIEW!=='HRMS'){               /* marking out is not built on the HRMS */
-    h+=kpi('Marked out',IC.u,'<span id="outKpi">—</span>','',
-      '<span id="outKpiFoot">reading…</span>');
-    setTimeout(loadOutday, 0);        /* the tile must be in the page first */
-  }
+  /* ON THE DISTRICT HRMS TOO (19.10.2026): the voluntary mark out is
+     listed by op=outday under its own head, owed by nobody, and the Out
+     column read '···' for ever on this register because the read was
+     never made here */
+  h+=kpi('Marked out',IC.u,'<span id="outKpi">—</span>','',
+    '<span id="outKpiFoot">reading…</span>');
+  setTimeout(loadOutday, 0);        /* the tile must be in the page first */
   /* WHICH MEASURE THIS REGISTER CAN HONESTLY MAKE.
      The sanitation roll has no coordinates, so the only thing it can say is
      how far a mark is from the MIDDLE OF THE MANDAL, as that mandal's own
@@ -3692,19 +3694,25 @@ async function loadOutday(){
     if(!r || !r.ok || typeof r.marked !== 'number') return;
     r.by = {};
     (r.rows || []).forEach(x => { r.by[String(x.phone).slice(-10)] = x; });
+    /* the voluntary marks are on the same column — the time he closed his
+       day — and never in the figures of who still owes one */
+    const vol = r.voluntary || { marked:0, closed:0, rows:[] };
+    (vol.rows || []).forEach(x => { r.by[String(x.phone).slice(-10)] = x; });
     r._t = TVIEW;                      /* whose answer this is */
     OUTDAY = r;
     const b = document.getElementById('attBody');
     if(b && window.__ROWS && window.__ROWS.att)
       b.innerHTML = window.__ROWS.att.map((x,i) => attRow(x,i)).join('');
     const v = document.getElementById('outKpi');
-    if(v) v.textContent = String(r.closed);
+    if(v) v.textContent = String(TVIEW==='HRMS' ? vol.closed : r.closed);
     const f = document.getElementById('outKpiFoot');
     /* AND IT ACCUSES NOBODY (the direction of 02.10.2026). The foot says
        how many are still open and stops — it does not call them late, does
        not call it a default, and there is no red: a day left unclosed draws
-       a reminder by mail the next morning and nothing else. */
-    if(f) f.textContent = 'of ' + r.marked + ' who marked in · ' +
+       a reminder by mail the next morning and nothing else. On the
+       voluntary register nothing is open, because nothing is owed. */
+    if(f) f.textContent = TVIEW==='HRMS' ? 'of ' + vol.marked + ' who marked in'
+      : 'of ' + r.marked + ' who marked in · ' +
       r.open + ' still open' + (r.cannot ? ' · ' + r.cannot + ' could not serve the hours' : '');
   }catch(e){}
 }

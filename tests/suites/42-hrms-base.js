@@ -367,6 +367,14 @@ module.exports = {
       t.eq(again.already, true, 'the same mark arriving twice is written once (rule 5)');
       const mine2 = e.get('hrms', { token:tok(e, '9444400001') });
       t.eq(String((mine2.attendance.today || {}).outAt || ''), '2026-10-19T12:15:00.000Z', 'and op=hrms hands the out back with the in');
+      /* and the console reads the voluntary mark out under its own head,
+         where nothing is owed (19.10.2026) */
+      const od = e.get('outday', { token:tok(e, '9000000001') });
+      t.eq(od.ok, true, 'the Collector reads the day on this register');
+      t.eq(od.marked, 0, 'nobody owes a mark out');
+      t.eq((od.voluntary || {}).marked, 1, 'one voluntary mark in is listed');
+      t.eq((od.voluntary || {}).closed, 1, 'and he closed his day');
+      t.eq(String(((od.voluntary || {}).rows || [{}])[0].outAt || ''), '2026-10-19T12:15:00.000Z', 'at the moment the register holds');
       /* a third employee marks in and never closes the day; the morning
          after, the out module's reminder reads attExempt and mails nobody */
       e.addRow('Users', { Phone:'9444400003', Name:'P. Swapna', Role:'EMP', Mandal:OFFICE, Active:'TRUE' });

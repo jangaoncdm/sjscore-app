@@ -1328,8 +1328,11 @@ async function _syncOut(){
       const b64 = await BLOBS.get(o.photoId);
       /* the same id every time, so a re-send is a retry and not a second
          mark (rule 5) — the server answers already:true and nothing doubles */
+      /* the mark's own day travels with it (19.10.2026): an out queued on a
+         village road and sent the next morning closes the day it was made
+         on, not the morning it arrived */
       const r = await post({kind:'attendanceOut', token:DB.session.token, att:{
-        id:o.id, ts:o.ts, lat:o.lat, lng:o.lng, acc:o.acc, verified:o.verified, tz:o.tz,
+        id:o.id, date:o.date, ts:o.ts, lat:o.lat, lng:o.lng, acc:o.acc, verified:o.verified, tz:o.tz,
         reads:o.reads || null
       }, photo: b64 ? {name:`OUT_${o.phone}_${o.date}.jpg`, b64} : null});
       if(r && r.ok){ o.sync = 'synced'; if(o.photoId) BLOBS.del(o.photoId); done++; }
@@ -1341,6 +1344,10 @@ async function _syncOut(){
         DB.outState = null;
         if(document.visibilityState === 'visible')
           toast((r.error || 'Marking out is not open yet.'), 7000);
+      }
+      else if(r && r.ok === false && /busy/i.test(String(r.error || ''))){
+        /* the register's lock was held (19.10.2026): that is a line to try
+           again on, not a refusal, and the row stays for the next pass */
       }
       else if(r && r.ok === false){
         /* any other refusal is the district's and is shown once, and the row

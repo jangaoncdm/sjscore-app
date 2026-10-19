@@ -5,7 +5,7 @@
    application is a request for orders and not a fact a handset can hold.
    ONE ORIGIN, THREE APPS, THREE CACHES: caches are keyed by name and shared
    across an origin, so this one is the HRMS app's own. */
-const CACHE = 'hrms-v2-2-0';
+const CACHE = 'hrms-v2-3-0';
 const SHELL = [
   './', './index.html', './app.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',

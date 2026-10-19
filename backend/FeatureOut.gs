@@ -97,32 +97,39 @@ function feature_out(){
         const date = p.date ? dateText_(p.date) : today_();
         const sh = sheet_('Attendance', A_HEAD.concat(A_OUT_HEAD));
         const m = headMap_(sh, A_HEAD.concat(A_OUT_HEAD));
-        const v = sh.getDataRange().getValues();
-        const rows = [], seen = {};
-        let closed = 0, open = 0, cannot = 0;
-        for(let i = 1; i < v.length; i++){
+        const T = attRowsNear_(sh, m, date), v = T.rows;
+        const rows = [], seen = {}, vol = [];
+        let closed = 0, open = 0, cannot = 0, volClosed = 0;
+        for(let i = 0; i < v.length; i++){
           if(dateText_(v[i][m.ix.date]) !== date) continue;
           const ph = phone10_(v[i][m.ix.phone]); if(!ph || seen[ph]) continue;
           seen[ph] = true;
           const role = String(v[i][m.ix.role] || '').toUpperCase();
-          /* an MSO need not mark in at all, so he is never counted as owing
-             a marking out either (order of 19.08.2026) */
-          if(attExempt_(role)) continue;
           const eff = effMarkAt_(String(v[i][m.ix.markedAt] || ''), String(v[i][m.ix.receivedAt] || ''));
           const outAt = String(v[i][m.ix.outAt] || '');
           const from = outOpensAt_(eff, date);
-          if(outAt) closed++; else if(!from) cannot++; else open++;
-          rows.push({ phone:ph, name:String(v[i][m.ix.name] || ''), role:role,
+          const line = { phone:ph, name:String(v[i][m.ix.name] || ''), role:role,
             mandal:String(v[i][m.ix.mandal] || ''), inAt:eff, outAt:outAt,
             outFrom:from, outVerified:!!v[i][m.ix.outVerified],
             outAccuracy:Number(v[i][m.ix.outAccuracy] || 0) || null,
-            outPhoto:String(v[i][m.ix.outPhoto] || '') });
+            outPhoto:String(v[i][m.ix.outPhoto] || '') };
+          /* an MSO need not mark in at all, so he is never counted as owing
+             a marking out either (order of 19.08.2026) — and since 19.10.2026
+             the whole District HRMS marks on the same footing. A voluntary
+             mark out is LISTED, so the console can print the time he closed
+             his day, and is counted under its own head where nothing reads
+             as owed: `rows` and the figures beside it are the owing roll
+             and nothing else. */
+          if(attExempt_(role)){ line.voluntary = true; vol.push(line); if(outAt) volClosed++; continue; }
+          if(outAt) closed++; else if(!from) cannot++; else open++;
+          rows.push(line);
         }
         /* IT ACCUSES NOBODY, and the answer says so in the words the app and
            the mail use, so the console cannot quietly grow a sanction this
            register does not have. */
         return json_({ ok:true, date:date, rows:rows,
           closed:closed, open:open, cannot:cannot, marked:rows.length,
+          voluntary:{ marked:vol.length, closed:volClosed, rows:vol },
           sanction:false,
           note:'A day left unclosed draws a reminder by mail the next working morning and nothing else — no notice, no debit and no lock.' });
       },
@@ -149,9 +156,24 @@ function feature_out(){
       /* The mark itself. Everything IN does, done once more. */
       attendanceOut: function(b, u){
         const a = b.att || {};
-        const date = today_();
+        /* THE MARK'S OWN DAY, NOT THE DAY IT ARRIVED (19.10.2026). A mark
+           out pressed at a quarter to six on a village road with no signal
+           goes up the next morning — and was being judged against the next
+           morning's row: there was no mark in "today" to close, or the
+           morning's mark in was seven and a half hours short and the out
+           was refused as early and taken off the phone. The mark in has
+           always carried its date and been written to it; the out now
+           does the same, and an old handset that sends none is read as
+           today, which is what it was. */
+        const date = dateText_(a.date) || today_();
+        const dayWord = date === today_() ? 'today' : outDmy_(date);
         const row = outRow_(u.phone, date);
-        if(!row) return json_({ ok:false, error:'There is no mark in for today to close.' });
+        /* `final` TELLS THE PHONE THE REFUSAL WILL NOT CHANGE BY WAITING
+           (19.10.2026): a mark the district will refuse again tomorrow is
+           not a mark waiting for a line, and the app takes it off rather
+           than sending it, with its photograph, every three minutes for
+           ever. busy and a dead line carry no such flag and are retried. */
+        if(!row) return json_({ ok:false, final:true, error:'There is no mark in for ' + dayWord + ' to close.' });
 
         /* A RETRY IS NOT A SECOND MARK (rule 5). The phone carries the same id
            when the signal swallowed our answer; that is the same mark arriving
@@ -159,12 +181,12 @@ function feature_out(){
         if(row.outAt){
           if(row.outId && String(a.id || '') === row.outId)
             return json_({ ok:true, already:true, outAt:row.outAt });
-          return json_({ ok:false, error:'You marked out at ' + hhmm_(row.outAt) + ' today.' });
+          return json_({ ok:false, final:true, error:'You marked out at ' + hhmm_(row.outAt) + ' ' + dayWord + '.' });
         }
 
         const from = outOpensAt_(row.eff, date);
-        if(!from) return json_({ ok:false,
-          error:'Seven and a half hours from your mark in would run past the end of today, so there is no marking out to do.' });
+        if(!from) return json_({ ok:false, final:true,
+          error:'Seven and a half hours from your mark in would run past the end of ' + (dayWord === 'today' ? 'today' : 'that day') + ', so there is no marking out to do.' });
 
         /* THE SAME FIELD THE MARK IN USES. saveAttendance_ reads the handset's
            claim from `ts`, so this reads `ts` too; an OUT that read `markedAt`
@@ -229,16 +251,16 @@ function feature_out(){
         try{
           const sh = sheet_('Attendance', A_HEAD.concat(A_OUT_HEAD));
           const m = headMap_(sh, A_HEAD.concat(A_OUT_HEAD));
-          const v = sh.getDataRange().getValues();
-          let at = 0;
-          for(let i = 1; i < v.length; i++){
-            if(phone10_(v[i][m.ix.phone]) === u.phone && dateText_(v[i][m.ix.date]) === date){ at = i + 1; break; }
+          const T = attRowsNear_(sh, m, date);
+          let at = 0, hit = null;
+          for(let i = 0; i < T.rows.length; i++){
+            if(phone10_(T.rows[i][m.ix.phone]) === u.phone && dateText_(T.rows[i][m.ix.date]) === date){ at = T.start + i; hit = T.rows[i]; break; }
           }
-          if(!at) return json_({ ok:false, error:'There is no mark in for today to close.' });
+          if(!at) return json_({ ok:false, final:true, error:'There is no mark in for ' + dayWord + ' to close.' });
           /* read once more under the lock: two syncs landing together is how
              the duplicate rows got in the first time */
-          if(String(v[at - 1][m.ix.outAt] || '')) return json_({ ok:true, already:true,
-            outAt:String(v[at - 1][m.ix.outAt]) });
+          if(String(hit[m.ix.outAt] || '')) return json_({ ok:true, already:true,
+            outAt:String(hit[m.ix.outAt]) });
 
           const set = (k, val) => { if(m.ix[k] >= 0) sh.getRange(at, m.ix[k] + 1).setValue(val); };
           const acc = a.acc == null ? '' : Math.round(Number(a.acc));
@@ -268,11 +290,11 @@ function feature_out(){
 
       const sh = sheet_('Attendance', A_HEAD.concat(A_OUT_HEAD));
       const m = headMap_(sh, A_HEAD.concat(A_OUT_HEAD));
-      const v = sh.getDataRange().getValues();
+      const v = attRowsNear_(sh, m, day).rows;
 
       const done = outRemindedOn_(day);
       const owed = [];
-      for(let i = 1; i < v.length; i++){
+      for(let i = 0; i < v.length; i++){
         if(dateText_(v[i][m.ix.date]) !== day) continue;
         if(String(v[i][m.ix.outAt] || '')) continue;              /* he closed it */
         const role = String(v[i][m.ix.role] || '').toUpperCase();
@@ -325,12 +347,15 @@ function feature_out(){
 function outRow_(phone, date){
   const sh = sheet_('Attendance', A_HEAD.concat(A_OUT_HEAD));
   const m = headMap_(sh, A_HEAD.concat(A_OUT_HEAD));
-  const v = sh.getDataRange().getValues();
-  for(let i = 1; i < v.length; i++){
+  /* from the tail, with the whole tab behind it when the tail cannot prove
+     it reaches the day (attRowsNear_, 19.10.2026): the phone asks op=out
+     every few minutes and this was a read of the whole register each time */
+  const T = attRowsNear_(sh, m, date), v = T.rows;
+  for(let i = 0; i < v.length; i++){
     if(phone10_(v[i][m.ix.phone]) !== phone10_(phone)) continue;
     if(dateText_(v[i][m.ix.date]) !== date) continue;
     return {
-      at:i + 1,
+      at:T.start + i,
       eff: effMarkAt_(String(v[i][m.ix.markedAt] || ''), String(v[i][m.ix.receivedAt] || '')),
       outAt: String(v[i][m.ix.outAt] || ''),
       outId: String(v[i][m.ix.outId] || '')
@@ -356,6 +381,10 @@ function outOpensAt_(inAt, date){
   if(outClock_(opens) > OUT_DAY_ENDS) return '';
   return opens.toISOString();
 }
+
+/* a day as an officer reads it, dd.mm.yyyy, for a refusal about a day that
+   is not today */
+function outDmy_(date){ const p = String(date || '').split('-'); return p.length === 3 ? p[2] + '.' + p[1] + '.' + p[0] : String(date || ''); }
 
 /* the clock face of an instant in the district's own timezone, HH:mm */
 function outClock_(d){

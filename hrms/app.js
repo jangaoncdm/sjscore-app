@@ -23,7 +23,7 @@
  */
 'use strict';
 
-var APP_VERSION = '2.2.0';
+var APP_VERSION = '2.3.0';
 var SERVER = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
 var STORE = 'sjgp-hrms1';          /* browser storage is per DOMAIN, not per
                                       folder: three apps on one origin need
@@ -139,8 +139,22 @@ var TS_OPTIONAL_2026 = {
 
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
 function iso(v){ return String(v || '').slice(0, 10); }
-/* THE DISTRICT'S DAY, NOT THE HANDSET'S (rule 1): op=hrms carries today */
-function today(){ return DB.today || new Date().toISOString().slice(0, 10); }
+/* THE DISTRICT'S DAY, NOT THE HANDSET'S (rule 1): op=hrms carries today.
+   BUT ONLY WHILE IT IS STILL THAT DAY (19.10.2026). The day the district
+   last named is kept in the store, and an app opened with no signal the
+   next morning was keying, dating and stamping a NEW mark with yesterday's
+   date — and the register takes the date the phone sends, so that was a
+   wrong-day record against the employee. The district's day is believed
+   only when the district was last heard from on the handset's own current
+   date; otherwise the handset's date stands, which is at worst a few
+   minutes out and never a whole day. The handset's date is its LOCAL one:
+   the UTC slice this used to fall back on is yesterday until 05:30. */
+function localDay(d){ d = d || new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+function today(){
+  var now = localDay();
+  if(DB.today && DB.at){ var at = new Date(Date.parse(DB.at)); if(!isNaN(at.getTime()) && localDay(at) === now) return DB.today; }
+  return now;
+}
 function yearNow(){ return Number(today().slice(0, 4)); }
 function dmy(d){ var p = iso(d).split('-'); return p.length === 3 ? Number(p[2]) + ' ' + MON[Number(p[1]) - 1] + (p[0] !== String(yearNow()) ? ' ' + p[0] : '') : ''; }
 function dmyFull(d){ var p = iso(d).split('-'); return p.length === 3 ? p[2] + '.' + p[1] + '.' + p[0] : String(d || ''); }
@@ -458,7 +472,17 @@ var ATT = null;                                       /* the mark in hand */
 function outLocal(){ return (DB.out || {})[today()] || null; }
 function outHeld(){ var o = outLocal(); if(o) return o; var d = DB.outD; if(d && iso(d.date) === today() && d.markedOut) return { ts:d.outAt, sync:'district' }; var a = DB.attD; if(a && iso(a.date) === today() && a.outAt) return { ts:a.outAt, sync:'district' }; return null; }
 function refreshOut(){
-  if(!DB.session || !attHeld()) return;
+  if(!DB.session || !attHeld() || outHeld()) return;
+  /* ASKED ONLY WHEN THE ANSWER CAN HAVE CHANGED (19.10.2026). It was asked
+     on every refresh, every three minutes, all day, by every phone that had
+     marked in — and each answer is a read of the Attendance tab. A mark in
+     still on this phone has no row for the district to find; an answer
+     that named the moment is good until that moment; one that said the
+     hours cannot be served, or that they have come, does not change until
+     he marks — and his mark out is on this phone first. */
+  var mine = attLocal(); if(mine && mine.sync !== 'synced') return;
+  var d = DB.outD && iso(DB.outD.date) === today() ? DB.outD : null;
+  if(d && d.markedIn && (d.canOut || !d.outFrom || Date.now() < Date.parse(d.outFrom))) return;
   get({ op:'out', token:DB.session.token })
     .then(function(r){ if(!r || !r.ok) return; DB.outD = r; save(); if(S.screen === 'home') render(); })
     .catch(function(){});
@@ -554,22 +578,49 @@ function onPhoto(file){
   grabPhoto(file).then(function(b64){ if(ATT){ ATT.b64 = b64; ATT.err = ''; attSheet(); } })
     .catch(function(e){ if(ATT){ ATT.err = e.message; attSheet(); } });
 }
+/* DRAWN ONCE, THEN PATCHED (19.10.2026). The sheet used to be rebuilt from
+   scratch after every one of the four readings, which replaced the file
+   input while the camera was open on it — the photograph came back to an
+   element that was no longer in the document and was lost, on an iPhone
+   every time. The markup is written once per mark; every later reading
+   changes only the words, the button and the picture. */
 function attSheet(){
   if(!ATT) return;
+  var el = $('sheet');
+  if(!(el.classList.contains('on') && el.getAttribute('data-att') === ATT.id)){
+    el.setAttribute('data-att', ATT.id);
+    sheet('<h2>' + (ATT.out ? 'Mark out' : 'Mark attendance') + '</h2>' +
+      '<div class="row"><span class="lead" id="attLead">' + I.sun + '</span><span class="txt"><b id="attLocB"></b><span id="attLocS"></span></span>' +
+        '<button class="btn text hid" id="attAgain" style="width:auto;padding:0 10px" data-act="attagain">Read again</button></div>' +
+      '<div id="attShot"></div>' +
+      '<label class="btn tonal" id="attLabel" for="attFile" style="margin-top:10px">Take the photograph</label>' +
+      '<input id="attFile" class="hid" type="file" accept="image/*" capture="user">' +
+      '<p class="msg bad" id="attErr"></p>' +
+      '<button class="btn filled" id="attMark" data-act="attmark" style="margin-top:10px" disabled>' + (ATT.out ? 'Mark out' : 'Mark') + '</button>' +
+      '<button class="btn text" data-act="attcancel">Not now</button>');
+  }
+  attUpdate();
+}
+function attUpdate(){
+  if(!ATT || !$('attMark')) return;
   var f = ATT.fix, n = (ATT[ATT.sampling] || []).length;
   var loc = ATT.sampling ? ('Reading your location' + (f ? ' \u00b7 ' + accWord(f.acc) : '') + ' \u2026 ' + n + ' of ' + STILL_N)
           : f ? ('Location ' + accWord(f.acc) + (f.acc > ACC_LIMIT ? ' \u2014 a wide fix; step into the open and read again' : ''))
           : (ATT.err || 'No location yet.');
   var can = !!ATT.b64 && !ATT.sampling && !ATT.busy && !!f;
-  sheet('<h2>' + (ATT.out ? 'Mark out' : 'Mark attendance') + '</h2>' +
-    '<div class="row"><span class="lead ' + (f ? (ATT.sampling ? 'warn' : 'ok') : '') + '">' + I.sun + '</span><span class="txt"><b>' + esc(loc) + '</b><span>' + (f ? f.lat.toFixed(5) + ', ' + f.lng.toFixed(5) : '') + '</span></span>' +
-      (ATT.sampling ? '' : '<button class="btn text" style="width:auto;padding:0 10px" data-act="attagain">Read again</button>') + '</div>' +
-    (ATT.b64 ? '<img class="shot" alt="" src="data:image/jpeg;base64,' + ATT.b64 + '">' : '') +
-    '<label class="btn ' + (ATT.b64 ? 'outl' : 'tonal') + '" for="attFile" style="margin-top:10px">' + (ATT.b64 ? 'Take it again' : 'Take the photograph') + '</label>' +
-    '<input id="attFile" class="hid" type="file" accept="image/*" capture="user">' +
-    (ATT.err && (ATT.b64 || f) ? '<p class="msg on bad">' + esc(ATT.err) + '</p>' : '') +
-    '<button class="btn filled" id="attMark" data-act="attmark" style="margin-top:10px"' + (can ? '' : ' disabled') + '>' + (ATT.busy ? (ATT.out ? 'Marking out\u2026' : 'Marking\u2026') : (ATT.out ? 'Mark out' : 'Mark')) + '</button>' +
-    '<button class="btn text" data-act="attcancel">Not now</button>');
+  $('attLead').className = 'lead ' + (f ? (ATT.sampling ? 'warn' : 'ok') : '');
+  $('attLocB').textContent = loc;
+  $('attLocS').textContent = f ? f.lat.toFixed(5) + ', ' + f.lng.toFixed(5) : '';
+  $('attAgain').classList.toggle('hid', !!ATT.sampling);
+  var want = ATT.b64 ? 'data:image/jpeg;base64,' + ATT.b64 : '', shot = $('attShot'), img = shot.firstChild;
+  if(!want) shot.innerHTML = '';
+  else if(!img || img.getAttribute('src') !== want) shot.innerHTML = '<img class="shot" alt="" src="' + want + '">';
+  $('attLabel').className = 'btn ' + (ATT.b64 ? 'outl' : 'tonal');
+  $('attLabel').textContent = ATT.b64 ? 'Take it again' : 'Take the photograph';
+  var err = ATT.err && (ATT.b64 || f) ? ATT.err : '';
+  $('attErr').textContent = err; $('attErr').classList.toggle('on', !!err);
+  $('attMark').disabled = !can;
+  $('attMark').textContent = ATT.busy ? (ATT.out ? 'Marking out\u2026' : 'Marking\u2026') : (ATT.out ? 'Mark out' : 'Mark');
 }
 function markNow(){
   if(!ATT || !ATT.b64 || !ATT.fix || ATT.busy) return;
@@ -580,6 +631,15 @@ function markNow(){
     if(stillBlock()){
       ATT.err = 'The phone reported exactly the same point ' + STILL_N + ' times in a row, which a receiver never does. Walk ten or twenty metres into the open and read again.';
       attSheet(); return;
+    }
+    /* THE DISTRICT MAY HAVE ANSWERED WHILE THE SHEET WAS OPEN (19.10.2026):
+       a refresh landing a mark the register already holds for today. A
+       second mark in is written over the day's row, so the question asked
+       when the sheet opened is asked again at the moment of writing. */
+    if(ATT.out ? outHeld() : attHeld()){
+      var dupOut = ATT.out; ATT = null; closeSheet(); render();
+      toast(dupOut ? 'The district already holds your mark out for today.' : 'The district already holds your attendance for today.');
+      return;
     }
     ATT.busy = true; attSheet();
     var u = (DB.session || {}).user || {}, key = today();
@@ -592,40 +652,54 @@ function markNow(){
     syncAtt();
   })();
 }
-var ATT_SYNCING = false;
-function syncAtt(loud){
-  /* the mark in goes first: an out cannot be taken for a day the district
-     does not yet hold a mark in for */
-  var list = Object.keys(DB.att || {}).map(function(k){ return DB.att[k]; })
+var ATT_SYNC = null;                                /* the send in flight */
+/* every mark still on this phone, the mark in first: an out cannot be taken
+   for a day the district does not yet hold a mark in for */
+function attUnsent(){
+  return Object.keys(DB.att || {}).map(function(k){ return DB.att[k]; })
     .concat(Object.keys(DB.out || {}).map(function(k){ return DB.out[k]; }))
     .filter(function(a){ return a && a.sync !== 'synced'; });
-  if(!list.length || !DB.session || ATT_SYNCING) return;
-  ATT_SYNCING = true;
+}
+/* RETURNS A PROMISE THAT SETTLES WHEN THE PHONE HAS NOTHING MORE TO TRY, so
+   sign-out can wait for it (19.10.2026). A call while one is in flight
+   joins it rather than starting a second. */
+function syncAtt(loud){
+  if(ATT_SYNC) return ATT_SYNC;
+  var list = attUnsent();
+  if(!list.length || !DB.session) return Promise.resolve();
   var a = list[0], u = (DB.session || {}).user || {};
-  post({ kind:a.out ? 'attendanceOut' : 'attendance', token:DB.session.token,
+  var drop = function(){ if(a.out) delete (DB.out || {})[a.date]; else delete (DB.att || {})[a.date]; save(); if(S.screen === 'home') render(); };
+  ATT_SYNC = post({ kind:a.out ? 'attendanceOut' : 'attendance', token:DB.session.token,
          att:{ id:a.id, date:a.date, ts:a.ts, lat:a.lat, lng:a.lng, acc:a.acc, verified:a.verified, tz:a.tz, status:'PRESENT', reads:a.reads || null },
          photo:a.b64 ? { name:'ATT_' + (u.phone || '') + '_' + a.date + (a.out ? '-out' : '') + '.jpg', b64:a.b64 } : null })
     .then(function(r){
-      if(r && r.ok){ a.sync = 'synced'; a.url = r.url || ''; if(r.outAt) a.ts = r.outAt; delete a.b64; save(); if(S.screen === 'home') render(); if(!a.out) refreshOut(); }
+      if(r && r.ok){ a.sync = 'synced'; a.url = r.url || ''; if(r.outAt) a.ts = r.outAt; delete a.b64; save(); if(S.screen === 'home') render(); if(!a.out) refreshOut(); return true; }
       /* AN EARLY MARK OUT IS NOT A MARK OUT: the district answered that the
          hour had not come, so the local row is taken off rather than left
          standing as a mark the register does not hold */
-      else if(r && r.ok === false && r.early){
-        delete DB.out[a.date]; save(); if(S.screen === 'home') render();
-        toast(r.error || 'Marking out has not opened yet.');
-      }
-      else if(r && r.ok === false && r.outside){
-        /* A MARK THE DISTRICT REFUSED IS NOT A MARK and must not sit on the
-           phone saying it is */
-        if(a.out) delete DB.out[a.date]; else delete DB.att[a.date];
-        save(); if(S.screen === 'home') render();
-        toast(r.error || 'The district did not take that mark.');
-      }
-      else if(tokenRefused(r)){ }
-      else if(loud) toast('Not sent yet \u2014 it goes up when there is a line.');
+      if(r && r.ok === false && r.early){ drop(); toast(r.error || 'Marking out has not opened yet.'); return true; }
+      /* A MARK THE DISTRICT REFUSED IS NOT A MARK and must not sit on the
+         phone saying it is — and a refusal the district says is FINAL
+         (no mark in for that day to close, a mark out already standing,
+         hours that could never be served) is one it will give again
+         tomorrow, so the mark is taken off now and he is told, rather
+         than sent with its photograph every three minutes for ever
+         (19.10.2026). busy and a dead line carry no such flag and stay. */
+      if(r && r.ok === false && (r.outside || r.final)){ drop(); toast(r.error || 'The district did not take that mark.'); return true; }
+      if(tokenRefused(r)) return false;
+      if(loud) toast(r && r.ok === false && /busy/i.test(String(r.error || '')) ? 'The district is busy \u2014 it goes up shortly.' : 'Not sent yet \u2014 it goes up when there is a line.');
+      return false;
     })
-    .catch(function(){ if(loud) toast('Not sent yet \u2014 it goes up when there is a line.'); })
-    .then(function(){ ATT_SYNCING = false; if(list.length > 1) setTimeout(function(){ syncAtt(loud); }, 300); });
+    .catch(function(){ if(loud) toast('Not sent yet \u2014 it goes up when there is a line.'); return false; })
+    .then(function(go){
+      ATT_SYNC = null;
+      /* THE NEXT MARK FOLLOWS ONLY A SETTLED ONE. It used to follow every
+         answer, 300 ms later, whatever the answer was — two marks on a
+         phone with no line were a loop of failing posts every third of a
+         second until the battery went. */
+      if(go && attUnsent().length) return new Promise(function(res){ setTimeout(function(){ syncAtt(loud).then(res, res); }, 300); });
+    });
+  return ATT_SYNC;
 }
 /* the second line of the card: where the day's close stands */
 function outLine(){
@@ -1068,7 +1142,10 @@ function chpin(){
 /* -------------------------------------------------------- sheet and wiring */
 function sheet(html){ $('sheet').innerHTML = '<div class="handle"></div>' + html; $('sheet').classList.add('on'); $('scrim').classList.add('on');
   $('sheet').querySelectorAll('[data-close]').forEach(function(b){ b.addEventListener('click', closeSheet); }); }
-function closeSheet(){ $('sheet').classList.remove('on'); $('scrim').classList.remove('on'); }
+/* closing the sheet by any route cancels the mark in hand (19.10.2026): a
+   tap on the scrim left ATT standing, and the next reading re-opened the
+   sheet over whatever he had moved on to */
+function closeSheet(){ ATT = null; $('sheet').classList.remove('on'); $('scrim').classList.remove('on'); }
 function daySheet(k){
   var C = DB.cal || { days:{}, away:[] }, n = C.days[k] || 0, t = today();
   var who = k === t ? (C.away || []) : [];
@@ -1076,12 +1153,27 @@ function daySheet(k){
     (who.length ? '<div class="card bright tight" style="margin-bottom:10px">' + who.slice(0, 12).map(function(p){ return '<div class="row"><span class="lead">' + esc(ini(p.name)) + '</span><span class="txt"><b>' + esc(p.name) + '</b><span>' + esc((KIND_NAME[String(p.type).toUpperCase()] || p.type) + ' to ' + dmy(p.to)) + '</span></span></div>'; }).join('') + (who.length > 12 ? '<div class="row" style="min-height:40px"><span class="txt"><span>and ' + (who.length - 12) + ' more</span></span></div>' : '') + '</div>' : '') +
     '<button class="btn text" data-close="1">Close</button>');
 }
+function signOut(){ DB.session = null; DB.rows = []; DB.me = null; DB.pend = []; DB.pendAll = 0; DB.cal = null; DB.account = null; DB.record = null; DB.att = {}; DB.attD = null; DB.out = {}; DB.outD = null; ATT = null; save(); closeSheet(); go('signin'); }
 function act(k, b){
   if(k === 'signin') return signIn();
   if(k === 'firsttime'){ var p = $('iPhone'); if(p && p.value.replace(/\D/g, '').length === 10) return signIn(); if(p) p.focus(); return say('mSignin', 'info', 'Enter your mobile number above and press Sign in. If the row is yours to claim, the register asks for your code next.'); }
   if(k === 'claim') return claim();
   if(k === 'refresh'){ refresh(); toast('Reading from the district…'); return; }
-  if(k === 'signout'){ DB.session = null; DB.rows = []; DB.me = null; DB.pend = []; DB.pendAll = 0; DB.cal = null; DB.account = null; DB.record = null; DB.att = {}; DB.attD = null; DB.out = {}; DB.outD = null; ATT = null; save(); go('signin'); return; }
+  if(k === 'signout'){
+    /* A MARK STILL ON THE PHONE IS NOT THROWN AWAY BY SIGNING OUT
+       (19.10.2026). The store is cleared at sign-out, so a mark the
+       district had not yet received went with it, silently. It is sent
+       first; if it still cannot go, he is told and asked. */
+    if(!attUnsent().length) return signOut();
+    toast('Sending the mark on this phone\u2026');
+    return syncAtt(true).then(function(){
+      if(!attUnsent().length) return signOut();
+      sheet('<h2>A mark is still on this phone</h2><p class="body">The district has not received it yet. Signing out now will throw it away.</p>' +
+        '<button class="btn text" data-close="1">Not now</button>' +
+        '<button class="btn outl" data-act="signoutanyway">Sign out anyway</button>');
+    });
+  }
+  if(k === 'signoutanyway') return signOut();
   if(k === 'newreq') return newReq();
   if(k === 'next'){ if(S.req && S.req.to) go('request2'); return; }
   if(k === 'hq'){ S.req.hq = !S.req.hq; b.setAttribute('aria-checked', S.req.hq ? 'true' : 'false'); return; }

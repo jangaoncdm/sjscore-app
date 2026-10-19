@@ -46,7 +46,9 @@ const DASH = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-dashboard.
    register, so the roster is empty and honestly so. */
 const HDASH = Object.assign({}, DASH, {
   tenant:'HRMS',
-  today:{ present:[], onLeave:[], absent:[] },
+  /* one voluntary mark, so the Out column has a row to draw (19.10.2026) */
+  today:{ present:[{phone:'9444400001',name:'K. Ramesh',role:'EMP',mandal:'Collectorate',
+            at:'2026-10-08T04:30:00.000Z',verified:true,acc:20,lat:17.72,lng:79.15}], onLeave:[], absent:[] },
   /* and `leave` is an OBJECT, {pending, recent} — not a list */
   leave:{ pending:[{id:'LV-9001',phone:'9444400001',name:'K. Ramesh',role:'EMP',mandal:'Collectorate',
             type:'CL',from:'2026-10-20',to:'2026-10-21',days:2,status:'PENDING',
@@ -173,6 +175,11 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
     }
     gets.push(q.url());
     if(/op=hrmsClaims/.test(q.url())) return reply(CLAIMS);
+    /* the day's marking out, as FeatureOut answers it on this register:
+       nobody owes one, and the voluntary mark is listed under its own head */
+    if(/op=outday/.test(q.url())) return reply({ok:true,date:'2026-10-08',rows:[],marked:0,closed:0,open:0,cannot:0,sanction:false,
+      voluntary:{marked:1,closed:1,rows:[{phone:'9444400001',name:'K. Ramesh',role:'EMP',mandal:'Collectorate',
+        inAt:'2026-10-08T04:30:00.000Z',outAt:'2026-10-08T12:05:00.000Z',outFrom:'2026-10-08T12:00:00.000Z',outVerified:true,voluntary:true}]}});
     if(/op=roll/.test(q.url())) return reply(HROLL);
     if(/op=health/.test(q.url())) return reply({ok:true,tenant:'HRMS',allWell:true,concerns:[],
       triggers:{installed:['dailyBackup'],missing:[],ok:true},
@@ -216,6 +223,11 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   ck(/voluntary/.test(tAtt)&&!/the roll the notice ladder reads/.test(tAtt),'and says the mark is voluntary — not the sanitation register’s segments');
   ck(!/Marked away from|Attendance by mandal|Attendance rate|Refused — marked away/.test(tAtt),'no place-of-duty table, no gaps by mandal, no rate of nothing');
   ck(!/CSV · not marked today/.test(tAtt),'and no export of the not-marked, because nobody is due');
+  ck(gets.some(u=>/op=outday/.test(u)),'THE MARKING OUT IS READ ON THIS REGISTER TOO (19.10.2026)');
+  const outTile=(await page.$eval('#outKpi',e=>e.textContent))+' · '+(await page.$eval('#outKpiFoot',e=>e.textContent));
+  ck(/Marked out/.test(tAtt)&&/^1 · of 1 who marked in$/.test(outTile),'the Marked-out tile counts the voluntary closes and says nothing is open',outTile);
+  const outCol=await page.$$eval('#attBody tr',rs=>rs.map(r=>r.children[5]?.textContent||'').join('|'));
+  ck(outCol.length>0&&!/···/.test(outCol),'and the Out column carries his time rather than ··· for ever',outCol);
   await page.screenshot({path:path.join(OUT,'hrms-attendance-1500.png'),fullPage:true});
   await page.click('#nav [data-v="leave"]');
   await page.waitForTimeout(400);

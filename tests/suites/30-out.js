@@ -239,6 +239,12 @@ module.exports = {
       t.eq(r.marked, 2, 'TWO officers are counted, not three');
       t.ok(JSON.stringify(r.rows).indexOf('9000000010') < 0,
         'THE MSO IS NOT ON IT — attendance is voluntary for him, so marking out cannot be owed');
+      /* but his mark is LISTED under its own head (19.10.2026), so the
+         console can print the time he closes his day without a figure that
+         reads as owed */
+      t.eq((r.voluntary || {}).marked, 1, 'and is listed under voluntary, where nothing is owed');
+      t.eq((r.voluntary || {}).closed, 0, 'with how many of those closed their day');
+      t.ok(JSON.stringify((r.voluntary || {}).rows).indexOf('9000000010') >= 0, 'by name');
       const mine = r.rows.filter(x => x.phone === '9000000014')[0];
       t.ok(!!mine && mine.outAt.indexOf('17:40') >= 0, 'the time he marked out');
       t.eq(!!mine.outVerified, true, 'and whether the reading was trustworthy');
@@ -288,6 +294,73 @@ module.exports = {
       const row = sh.rows.slice(1).find(x => String(x[head.indexOf('phone')]).indexOf('9000000014') >= 0);
       t.ok(!!row && String(row[head.indexOf('markedAt')]).indexOf('10:00') >= 0,
         'his attendance is exactly as it was');
+    }
+
+    /* ---- 10. A QUEUED MARK OUT IS JUDGED ON ITS OWN DAY (19.10.2026) ----
+       Pressed at a quarter to six on a village road with no signal, sent
+       the next morning. It used to be judged against the NEXT morning's
+       row: no mark in today to close — or, after the morning's mark in,
+       refused as early and taken off the phone. */
+    {
+      const e = start(mock.load({ now:at('10:00') }));
+      const ps = tok(e, '9000000014');
+      markIn(e, ps, '10:00');
+      e.setNow(NEXT);
+      const r = e.post({ kind:'attendanceOut', token:ps,
+        att:{ id:'OQ', date:DAY, ts:at('17:45'), lat:17.7, lng:79.1, acc:9, verified:true } });
+      t.eq(r.ok, true, 'THE MARK OUT CARRIES ITS DAY and is taken the next morning');
+      const sh = e.sheets['Attendance'], head = sh.rows[0].map(String);
+      const row = sh.rows.slice(1).find(x => String(x[head.indexOf('phone')]).indexOf('9000000014') >= 0);
+      t.contains(String(row[head.indexOf('outAt')]), '17:45', 'written onto the row of the day it was made on');
+      t.eq(e.get('out', { token:ps }).markedIn, false, 'and the next morning is still its own day, with no mark in yet');
+      /* an old handset that sends no date is read as it always was */
+      const old = e.post({ kind:'attendanceOut', token:ps, att:{ id:'OO', ts:NEXT } });
+      t.eq(old.ok, false, 'a mark out with no date is judged on the day it arrives, as before');
+      t.eq(old.final, true, 'AND THE PHONE IS TOLD THE REFUSAL IS FINAL, so it is not resent with its photograph every three minutes for ever');
+      t.contains(old.error, 'today', 'in words about today');
+    }
+
+    /* ---- 11. A SECOND MARK IN DOES NOT WIPE THE MARK OUT (19.10.2026) ----
+       The row is rewritten across the sheet's whole width, which has
+       carried the marking-out columns since 02.10.2026, so a second mark in
+       in the evening — a phone that lost its store, a second handset — was
+       blanking the mark out, its photograph and its id. */
+    {
+      const e = start(mock.load({ now:at('10:00') }));
+      const ps = tok(e, '9000000014');
+      markIn(e, ps, '10:00');
+      e.setNow(at('17:40'));
+      e.post({ kind:'attendanceOut', token:ps, att:{ id:'O1', date:DAY, ts:at('17:40'), lat:17.7, lng:79.1, acc:9, verified:true } });
+      e.setNow(at('17:50'));
+      const again = e.post({ kind:'attendance', token:ps,
+        att:{ id:'IN-second', date:DAY, ts:at('17:50'), lat:17.72, lng:79.14, acc:11, verified:true } });
+      t.eq(again.ok, true, 'a second mark in is taken, as it always was');
+      t.eq(again.marks, 2, 'and counted as a second mark');
+      const sh = e.sheets['Attendance'], head = sh.rows[0].map(String);
+      const mine = sh.rows.slice(1).filter(x => String(x[head.indexOf('phone')]).indexOf('9000000014') >= 0);
+      t.eq(mine.length, 1, 'one day, one row');
+      t.contains(String(mine[0][head.indexOf('outAt')]), '17:40', 'AND THE MARK OUT STILL STANDS ON IT');
+      t.eq(String(mine[0][head.indexOf('outId')]), 'O1', 'with its id');
+      t.contains(String(mine[0][head.indexOf('firstMarkAt')]), '10:00', 'and the first mark in is still the first');
+      t.eq(e.get('out', { token:ps }).markedOut, true, 'so the phone still reads the day as closed');
+    }
+
+    /* ---- 12. THE TAIL READ REACHES THE DAY, OR READS THE WHOLE TAB ---- */
+    {
+      const e = start(mock.load({ now:at('10:00') }));
+      const ps = tok(e, '9000000014');
+      markIn(e, ps, '10:00');
+      const sh = e.sheets['Attendance'], m = e.ctx.headMap_(sh, e.eval('A_HEAD'));
+      const saved = e.ctx.ATT_TAIL_ROWS;
+      e.ctx.ATT_TAIL_ROWS = 1;                           /* a tail of one row */
+      /* the one row is today's own, received this morning: it cannot prove
+         it reaches the start of the day, so the whole tab is read */
+      const T = e.ctx.attRowsNear_(sh, m, DAY);
+      t.eq(T.start, 2, 'a tail that cannot prove it reaches the day falls back to the whole tab');
+      e.ctx.ATT_TAIL_ROWS = saved;
+      /* and a second mark in through the bounded path still finds the row */
+      e.post({ kind:'attendance', token:ps, att:{ id:'IN-again', date:DAY, ts:at('10:05'), lat:17.72, lng:79.14, acc:11, verified:true } });
+      t.eq(sh.rows.slice(1).filter(x => String(x[m.ix.phone]).indexOf('9000000014') >= 0).length, 1, 'one day, one row, through the bounded read');
     }
   }
 };
