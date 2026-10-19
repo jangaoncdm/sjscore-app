@@ -1574,7 +1574,9 @@ const TENANCY = {
      Leave. */
   HRMS:{ key:'HRMS', name:'District HRMS',  full:'District HRMS · leave',      store:'sjgp-hrms1',
     cfg:'hrms/config.js', home:'leave',
-    off:['overview','attendance','analytics','villages','schedule','notices','map','gpdp','advisory','duty','mock'],
+    /* Attendance is on the rail since 19.10.2026: voluntary marks, nobody
+       due, nobody listed as not marked — the voluntary office's own view */
+    off:['overview','analytics','villages','schedule','notices','map','gpdp','advisory','duty','mock'],
     aud:[['EMP','Employees'],['HOD','Heads of office']] }
 };
 let TVIEW='SJGP';
@@ -1741,7 +1743,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '00874af - 19 Oct 09:40';
+const BUILD_STAMP = '1bde559 - 19 Oct 10:13';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
