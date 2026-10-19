@@ -346,6 +346,36 @@ module.exports = {
       t.eq(String((mine.attendance.today || {}).markedAt || ''), '2026-10-19T04:31:00.000Z', 'with the moment he made it');
       const hers = e.get('hrms', { token:tok(e, '9444400002') });
       t.eq(hers.attendance.today, null, 'and nothing for the one it refused');
+
+      /* ---- and MARKING OUT, the same afternoon ("add mark out also") ---- */
+      const o1 = e.get('out', { token:tok(e, '9444400001') });
+      t.eq(o1.markedIn, true, 'op=out knows he marked in');
+      t.eq(o1.outFrom, '2026-10-19T12:00:00.000Z', 'and TELLS him the moment: seven and a half hours after the mark as the district judges it — the EARLIER of his 10:01 claim and the 10:00 receipt (rule 1)');
+      t.eq(o1.canOut, false, 'which has not come at ten in the morning');
+      const early = e.post({ kind:'attendanceOut', token:tok(e, '9444400001'), att:{ id:'HO-1', ts:'2026-10-19T12:30:00.000Z', lat:17.72, lng:79.15, acc:28, verified:true, reads:reads }, photo:null });
+      t.eq(early.ok, false, 'an out sent before the hour is refused');
+      t.eq(early.early, true, 'as early — the claim says 17:30 but the district received it at 10:00, and the earlier reading is the one judged (rule 1)');
+      e.setNow('2026-10-19T17:45:00+05:30');
+      const o2 = e.get('out', { token:tok(e, '9444400001') });
+      t.eq(o2.canOut, true, 'at a quarter to six the district says the hour has come');
+      const out = e.post({ kind:'attendanceOut', token:tok(e, '9444400001'), att:{ id:'HO-1', ts:'2026-10-19T12:15:00.000Z', lat:17.7201, lng:79.1501, acc:30, verified:true, reads:reads }, photo:null });
+      t.eq(out.ok, true, 'and the mark out is taken');
+      const ah2 = e.sheets['Attendance'].rows[0].map(String);
+      const row2 = e.sheets['Attendance'].rows.slice(1).find(x => String(x[ah2.indexOf('phone')]).replace(/^'/, '') === '9444400001');
+      t.eq(String(row2[ah2.indexOf('outAt')]), '2026-10-19T12:15:00.000Z', 'written onto his own row for the day — one day, one row');
+      const again = e.post({ kind:'attendanceOut', token:tok(e, '9444400001'), att:{ id:'HO-1', ts:'2026-10-19T12:15:00.000Z', lat:17.7201, lng:79.1501, acc:30, verified:true, reads:reads }, photo:null });
+      t.eq(again.already, true, 'the same mark arriving twice is written once (rule 5)');
+      const mine2 = e.get('hrms', { token:tok(e, '9444400001') });
+      t.eq(String((mine2.attendance.today || {}).outAt || ''), '2026-10-19T12:15:00.000Z', 'and op=hrms hands the out back with the in');
+      /* a third employee marks in and never closes the day; the morning
+         after, the out module's reminder reads attExempt and mails nobody */
+      e.addRow('Users', { Phone:'9444400003', Name:'P. Swapna', Role:'EMP', Mandal:OFFICE, Active:'TRUE' });
+      e.setNow('2026-10-19T10:05:00+05:30');
+      const r3 = e.post({ kind:'attendance', token:tok(e, '9444400003'), att:{ id:'HA-3', date:'2026-10-19', ts:'2026-10-19T04:35:00.000Z', lat:17.72, lng:79.15, acc:28, verified:true, reads:reads }, photo:null });
+      t.eq(r3.ok, true, 'a third employee marks in');
+      e.setNow('2026-10-20T09:00:00+05:30');
+      const said = e.ctx.featureDaily();
+      t.ok(!(e.sheets['OutReminders'] && e.sheets['OutReminders'].rows.length > 1), 'THE MORNING AFTER, NOBODY IS CHASED for the day she left open — every role here is voluntary', JSON.stringify(said).slice(0, 120));
     }
   }
 };

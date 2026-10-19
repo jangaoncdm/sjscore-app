@@ -23,7 +23,7 @@
  */
 'use strict';
 
-var APP_VERSION = '2.1.0';
+var APP_VERSION = '2.2.0';
 var SERVER = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
 var STORE = 'sjgp-hrms1';          /* browser storage is per DOMAIN, not per
                                       folder: three apps on one origin need
@@ -33,7 +33,7 @@ var STORE = 'sjgp-hrms1';          /* browser storage is per DOMAIN, not per
 
 var $ = function(id){ return document.getElementById(id); };
 var DB = { url:SERVER, session:null, me:null, rows:[], account:null, record:null, holidays:{}, today:'',
-           at:'', pend:[], pendAll:0, cal:null, calAt:'', att:{}, attD:null };
+           at:'', pend:[], pendAll:0, cal:null, calAt:'', att:{}, attD:null, out:{}, outD:null };
 /* what the screen is doing — never saved, never the register's */
 var S = { screen:'signin', tab:'home', req:null, calM:0, calY:0, hmM:0, hmY:0, hmScope:'office', detail:null, myM:null, busy:false };
 
@@ -64,7 +64,7 @@ function load(){
   try{ DB = Object.assign(DB, JSON.parse(localStorage.getItem(STORE) || 'null') || {}); }catch(e){}
   /* THE ADDRESS THE DISTRICT PUBLISHES BEATS THE ONE A PHONE REMEMBERED. */
   if(SERVER) DB.url = SERVER;
-  DB.rows = DB.rows || []; DB.pend = DB.pend || []; DB.holidays = DB.holidays || {}; DB.att = DB.att || {};
+  DB.rows = DB.rows || []; DB.pend = DB.pend || []; DB.holidays = DB.holidays || {}; DB.att = DB.att || {}; DB.out = DB.out || {};
 }
 function save(){ try{ localStorage.setItem(STORE, JSON.stringify(DB)); }catch(e){} }
 
@@ -326,6 +326,7 @@ function refresh(){
       DB.at = new Date().toISOString();
       save(); if(/^(home|leave|calendar|detail)$/.test(S.screen)) render();
       syncAtt();
+      refreshOut();
     })
     .catch(function(){});
   if(canOrder()) pending();
@@ -449,6 +450,19 @@ function vHome(){
    written on the phone first and sent after, and a mark the district refuses
    is taken off the phone and he is told, as the field app learnt to. */
 var ATT = null;                                       /* the mark in hand */
+/* MARKING OUT (19.10.2026, "add mark out also"): seven and a half hours
+   after the mark in, by the district's clock — op=out TELLS the phone the
+   moment and whether it has come, and the register judges the mark again
+   when it lands (rule 6). Nobody is chased for a day left open: every role
+   here is attExempt and the out module's morning-after reminder reads that. */
+function outLocal(){ return (DB.out || {})[today()] || null; }
+function outHeld(){ var o = outLocal(); if(o) return o; var d = DB.outD; if(d && iso(d.date) === today() && d.markedOut) return { ts:d.outAt, sync:'district' }; var a = DB.attD; if(a && iso(a.date) === today() && a.outAt) return { ts:a.outAt, sync:'district' }; return null; }
+function refreshOut(){
+  if(!DB.session || !attHeld()) return;
+  get({ op:'out', token:DB.session.token })
+    .then(function(r){ if(!r || !r.ok) return; DB.outD = r; save(); if(S.screen === 'home') render(); })
+    .catch(function(){});
+}
 var STILL_FINE = 15, STILL_N = 4, ACC_LIMIT = 250;
 var STILL_GAP = (typeof window !== 'undefined' && window.HRMS_STILL_GAP) || 1800;
 function attLocal(){ return (DB.att || {})[today()] || null; }
@@ -528,9 +542,9 @@ function grabPhoto(file){
     img.src = url;
   });
 }
-function startMark(){
-  if(attHeld()) return;
-  ATT = { id:attId(), reads1:[], reads2:[], fix:null, b64:'', sampling:'', err:'', busy:false };
+function startMark(out){
+  if(out ? (!attHeld() || outHeld()) : attHeld()) return;
+  ATT = { id:attId(), out:!!out, reads1:[], reads2:[], fix:null, b64:'', sampling:'', err:'', busy:false };
   attSheet();
   readRound(1);
 }
@@ -547,14 +561,14 @@ function attSheet(){
           : f ? ('Location ' + accWord(f.acc) + (f.acc > ACC_LIMIT ? ' \u2014 a wide fix; step into the open and read again' : ''))
           : (ATT.err || 'No location yet.');
   var can = !!ATT.b64 && !ATT.sampling && !ATT.busy && !!f;
-  sheet('<h2>Mark attendance</h2>' +
+  sheet('<h2>' + (ATT.out ? 'Mark out' : 'Mark attendance') + '</h2>' +
     '<div class="row"><span class="lead ' + (f ? (ATT.sampling ? 'warn' : 'ok') : '') + '">' + I.sun + '</span><span class="txt"><b>' + esc(loc) + '</b><span>' + (f ? f.lat.toFixed(5) + ', ' + f.lng.toFixed(5) : '') + '</span></span>' +
       (ATT.sampling ? '' : '<button class="btn text" style="width:auto;padding:0 10px" data-act="attagain">Read again</button>') + '</div>' +
     (ATT.b64 ? '<img class="shot" alt="" src="data:image/jpeg;base64,' + ATT.b64 + '">' : '') +
     '<label class="btn ' + (ATT.b64 ? 'outl' : 'tonal') + '" for="attFile" style="margin-top:10px">' + (ATT.b64 ? 'Take it again' : 'Take the photograph') + '</label>' +
     '<input id="attFile" class="hid" type="file" accept="image/*" capture="user">' +
     (ATT.err && (ATT.b64 || f) ? '<p class="msg on bad">' + esc(ATT.err) + '</p>' : '') +
-    '<button class="btn filled" id="attMark" data-act="attmark" style="margin-top:10px"' + (can ? '' : ' disabled') + '>' + (ATT.busy ? 'Marking\u2026' : 'Mark') + '</button>' +
+    '<button class="btn filled" id="attMark" data-act="attmark" style="margin-top:10px"' + (can ? '' : ' disabled') + '>' + (ATT.busy ? (ATT.out ? 'Marking out\u2026' : 'Marking\u2026') : (ATT.out ? 'Mark out' : 'Mark')) + '</button>' +
     '<button class="btn text" data-act="attcancel">Not now</button>');
 }
 function markNow(){
@@ -569,37 +583,64 @@ function markNow(){
     }
     ATT.busy = true; attSheet();
     var u = (DB.session || {}).user || {}, key = today();
-    DB.att = DB.att || {};
-    DB.att[key] = { id:ATT.id, date:key, ts:new Date().toISOString(), lat:ATT.fix.lat, lng:ATT.fix.lng, acc:ATT.fix.acc,
+    var rec = { id:ATT.id, date:key, ts:new Date().toISOString(), lat:ATT.fix.lat, lng:ATT.fix.lng, acc:ATT.fix.acc,
       verified:Number(ATT.fix.acc) <= ACC_LIMIT, reads:{ r1:ATT.reads1 || [], r2:ATT.reads2 || [] },
-      tz:(Intl.DateTimeFormat().resolvedOptions().timeZone || ''), b64:ATT.b64, phone:u.phone, sync:'local' };
-    save(); ATT = null; closeSheet(); render();
-    toast('Attendance marked');
+      tz:(Intl.DateTimeFormat().resolvedOptions().timeZone || ''), b64:ATT.b64, phone:u.phone, sync:'local', out:!!ATT.out };
+    if(ATT.out){ DB.out = DB.out || {}; DB.out[key] = rec; } else { DB.att = DB.att || {}; DB.att[key] = rec; }
+    save(); var wasOut = !!ATT.out; ATT = null; closeSheet(); render();
+    toast(wasOut ? 'Marked out' : 'Attendance marked');
     syncAtt();
   })();
 }
 var ATT_SYNCING = false;
 function syncAtt(loud){
-  var list = Object.keys(DB.att || {}).map(function(k){ return DB.att[k]; }).filter(function(a){ return a && a.sync !== 'synced'; });
+  /* the mark in goes first: an out cannot be taken for a day the district
+     does not yet hold a mark in for */
+  var list = Object.keys(DB.att || {}).map(function(k){ return DB.att[k]; })
+    .concat(Object.keys(DB.out || {}).map(function(k){ return DB.out[k]; }))
+    .filter(function(a){ return a && a.sync !== 'synced'; });
   if(!list.length || !DB.session || ATT_SYNCING) return;
   ATT_SYNCING = true;
   var a = list[0], u = (DB.session || {}).user || {};
-  post({ kind:'attendance', token:DB.session.token,
+  post({ kind:a.out ? 'attendanceOut' : 'attendance', token:DB.session.token,
          att:{ id:a.id, date:a.date, ts:a.ts, lat:a.lat, lng:a.lng, acc:a.acc, verified:a.verified, tz:a.tz, status:'PRESENT', reads:a.reads || null },
-         photo:a.b64 ? { name:'ATT_' + (u.phone || '') + '_' + a.date + '.jpg', b64:a.b64 } : null })
+         photo:a.b64 ? { name:'ATT_' + (u.phone || '') + '_' + a.date + (a.out ? '-out' : '') + '.jpg', b64:a.b64 } : null })
     .then(function(r){
-      if(r && r.ok){ a.sync = 'synced'; a.url = r.url || ''; delete a.b64; save(); if(S.screen === 'home') render(); }
+      if(r && r.ok){ a.sync = 'synced'; a.url = r.url || ''; if(r.outAt) a.ts = r.outAt; delete a.b64; save(); if(S.screen === 'home') render(); if(!a.out) refreshOut(); }
+      /* AN EARLY MARK OUT IS NOT A MARK OUT: the district answered that the
+         hour had not come, so the local row is taken off rather than left
+         standing as a mark the register does not hold */
+      else if(r && r.ok === false && r.early){
+        delete DB.out[a.date]; save(); if(S.screen === 'home') render();
+        toast(r.error || 'Marking out has not opened yet.');
+      }
       else if(r && r.ok === false && r.outside){
         /* A MARK THE DISTRICT REFUSED IS NOT A MARK and must not sit on the
            phone saying it is */
-        delete DB.att[a.date]; save(); if(S.screen === 'home') render();
+        if(a.out) delete DB.out[a.date]; else delete DB.att[a.date];
+        save(); if(S.screen === 'home') render();
         toast(r.error || 'The district did not take that mark.');
       }
       else if(tokenRefused(r)){ }
       else if(loud) toast('Not sent yet \u2014 it goes up when there is a line.');
     })
     .catch(function(){ if(loud) toast('Not sent yet \u2014 it goes up when there is a line.'); })
-    .then(function(){ ATT_SYNCING = false; });
+    .then(function(){ ATT_SYNCING = false; if(list.length > 1) setTimeout(function(){ syncAtt(loud); }, 300); });
+}
+/* the second line of the card: where the day's close stands */
+function outLine(){
+  var o = outHeld(), d = DB.outD && iso(DB.outD.date) === today() ? DB.outD : null;
+  if(o){
+    var held = o.sync === 'synced' || o.sync === 'district';
+    return '<div class="row"><span class="lead ' + (held ? 'ok' : 'warn') + '">' + (held ? I.check : I.clock) + '</span><span class="txt"><b>Marked out at ' + esc(hhmm(o.ts)) + '</b><span>' +
+      (held ? 'Received by the district' : 'On this phone \u00b7 <b style="font-weight:700">not yet received by the district</b>') + '</span></span>' +
+      (held ? '' : '<button class="btn tonal" style="width:auto;min-height:40px;padding:0 14px;font-size:14px" data-act="attsend">Send</button>') + '</div>';
+  }
+  if(!d || !d.markedIn) return '';
+  if(d.canOut) return '<div class="row"><span class="lead warn">' + I.out + '</span><span class="txt"><b>Marking out has been open since ' + esc(hhmm(d.outFrom)) + '</b><span>Seven and a half hours after you marked in</span></span>' +
+      '<button class="btn filled" style="width:auto;min-height:40px;padding:0 16px;font-size:14px" data-act="markout">Mark out</button></div>';
+  if(d.outFrom) return '<div class="row"><span class="lead">' + I.out + '</span><span class="txt"><b>Marking out opens at ' + esc(hhmm(d.outFrom)) + '</b><span>Seven and a half hours after you marked in</span></span></div>';
+  return '<div class="row"><span class="lead">' + I.out + '</span><span class="txt"><b>No marking out today</b><span>Seven and a half hours would run past the end of the day</span></span></div>';
 }
 function todayCard(){
   var t = today(), a = attHeld(), hol = DB.holidays[t], dow = new Date(t + 'T00:00:00').getDay();
@@ -613,6 +654,7 @@ function todayCard(){
     h += '<div class="row"><span class="lead ' + (held ? 'ok' : 'warn') + '">' + (held ? I.check : I.clock) + '</span><span class="txt"><b>Marked at ' + esc(hhmm(a.ts)) + '</b><span>' +
          (held ? 'Received by the district' : 'On this phone \u00b7 <b style="font-weight:700">not yet received by the district</b>') + '</span></span>' +
          (held ? '' : '<button class="btn tonal" style="width:auto;min-height:40px;padding:0 14px;font-size:14px" data-act="attsend">Send</button>') + '</div>';
+    h += outLine();
   }
   return h + '</div>';
 }
@@ -1039,7 +1081,7 @@ function act(k, b){
   if(k === 'firsttime'){ var p = $('iPhone'); if(p && p.value.replace(/\D/g, '').length === 10) return signIn(); if(p) p.focus(); return say('mSignin', 'info', 'Enter your mobile number above and press Sign in. If the row is yours to claim, the register asks for your code next.'); }
   if(k === 'claim') return claim();
   if(k === 'refresh'){ refresh(); toast('Reading from the district…'); return; }
-  if(k === 'signout'){ DB.session = null; DB.rows = []; DB.me = null; DB.pend = []; DB.pendAll = 0; DB.cal = null; DB.account = null; DB.record = null; DB.att = {}; DB.attD = null; ATT = null; save(); go('signin'); return; }
+  if(k === 'signout'){ DB.session = null; DB.rows = []; DB.me = null; DB.pend = []; DB.pendAll = 0; DB.cal = null; DB.account = null; DB.record = null; DB.att = {}; DB.attD = null; DB.out = {}; DB.outD = null; ATT = null; save(); go('signin'); return; }
   if(k === 'newreq') return newReq();
   if(k === 'next'){ if(S.req && S.req.to) go('request2'); return; }
   if(k === 'hq'){ S.req.hq = !S.req.hq; b.setAttribute('aria-checked', S.req.hq ? 'true' : 'false'); return; }
@@ -1053,7 +1095,8 @@ function act(k, b){
   if(k === 'all') return orderAll();
   if(k === 'chpin') return chpin();
   if(k === 'install') return install();
-  if(k === 'mark') return startMark();
+  if(k === 'mark') return startMark(false);
+  if(k === 'markout') return startMark(true);
   if(k === 'attmark') return markNow();
   if(k === 'attagain') return readAgain();
   if(k === 'attsend'){ syncAtt(true); return; }

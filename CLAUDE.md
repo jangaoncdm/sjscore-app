@@ -2655,8 +2655,15 @@ reminder, no notice, no debit, no lock, no seen ping — and not one word on
 the card or the sheet names a sanction. There is no fence: an office
 employee has no place of duty on this register, so no mark is refused for
 where it was made (rule 10 as it stood before the fence); one whose location
-was not measured still is, by the register (rule 6). Marking out and the
-fortnight card are not built here. Taking a role off `attExempt` is the
+was not measured still is, by the register (rule 6). **Marking out came
+the same afternoon** (*"add mark out also"*): `FeatureOut` names the HRMS
+among its tenants, `op=out` tells the phone the moment and whether it has
+come, the card reads *Marking out opens at* / *has been open since* /
+*Marked out at* in the field app's words, and an early mark the district
+refuses is taken off the phone. Its morning-after reminder reads
+`attExempt_` and mails nobody here; the console's Marked-out tile stays off
+this register because `outday` counts only the roles that owe one. The
+fortnight card is not built here. Taking a role off `attExempt` is the
 Collector's written order and suite 34 is where it is changed first. The
 console's rail shows the Attendance screen on this register now — the
 voluntary office's own view, nobody due and nobody listed as not marked.

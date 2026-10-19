@@ -814,12 +814,17 @@ function hrmsAttToday_(phone){
     if(last < 2) return null;
     var m = headMap_(sh, A_HEAD), from = Math.max(2, last - HRMS_ATT_TAIL_ROWS + 1);
     var v = sh.getRange(from, 1, last - from + 1, sh.getLastColumn()).getValues();
+    /* the mark out's column is the out module's and may not be there yet;
+       it is looked for by name and never made here (a read writes nothing) */
+    var hdr = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function(h){ return String(h); });
+    var oi = hdr.indexOf('outAt');
     var p = phone10_(phone), d = today_();
     for(var i = v.length - 1; i >= 0; i--){
       if(phone10_(v[i][m.ix.phone]) !== p || dateText_(v[i][m.ix.date]) !== d) continue;
       return { date:d, markedAt:String(v[i][m.ix.markedAt] || ''), receivedAt:String(v[i][m.ix.receivedAt] || ''),
                status:String(v[i][m.ix.status] || 'PRESENT'), photo:!!v[i][m.ix.photo],
-               verified:String(v[i][m.ix.verified]).toUpperCase() !== 'FALSE' };
+               verified:String(v[i][m.ix.verified]).toUpperCase() !== 'FALSE',
+               outAt:oi >= 0 ? String(v[i][oi] || '') : '' };
     }
   }catch(err){}
   return null;

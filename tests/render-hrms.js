@@ -103,8 +103,10 @@ function serve(noConfig){
   /* THE HANDSET'S CLOCK IS PINNED to the register's day, or the picker greys
      the days the fixture applies for and the pass fails one week in seven */
   const ctx = await br.newContext({ viewport:{ width:390, height:844 }, deviceScaleFactor:2 });
-  await ctx.addInitScript(`{ const T = ${Date.parse(NOW)}; const _D = Date;
-    class D extends _D { constructor(...a){ super(...(a.length ? a : [T])); } static now(){ return T; } }
+  /* the pin is a window property so a section can move the handset's clock
+     (the mark out opens seven and a half hours after the mark in) */
+  await ctx.addInitScript(`{ window.__T = ${Date.parse(NOW)}; const _D = Date;
+    class D extends _D { constructor(...a){ super(...(a.length ? a : [window.__T])); } static now(){ return window.__T; } }
     window.Date = D; }`);
   /* the four location readings come a couple of seconds apart on a phone;
      the pass need not wait for them */
@@ -114,7 +116,7 @@ function serve(noConfig){
 
   let E = register();
   let dead = false;
-  const bulk = [], sent = [], marks = [];
+  const bulk = [], sent = [], marks = [], outs = [];
   await page.route('**/hrms.district/**', r => {
     if(dead) return r.abort('failed');
     const q = r.request();
@@ -124,6 +126,7 @@ function serve(noConfig){
       if(Array.isArray(b.ids)) bulk.push(b.ids.length);
       if(b.kind === 'leave') sent.push(b.leave || {});
       if(b.kind === 'attendance') marks.push(b);
+      if(b.kind === 'attendanceOut') outs.push(b);
       out = E.post(b);
     } else {
       const sp = new URL(q.url()).searchParams, p = {};
@@ -288,6 +291,33 @@ function serve(noConfig){
   ck(attRows.length === 1 && String(attRows[0][ahd.indexOf('phone')]).replace(/^'/, '') === '9444400001', 'and the register holds one row, his', String(attRows.length));
   ck(!(await page.isVisible('[data-act="mark"]')), 'a second mark is not offered');
   await shot('7a-marked');
+
+  /* ---- 7b. MARKING OUT ("add mark out also", 19.10.2026) ----
+     The district tells the phone the moment; the button appears when the
+     district says the hour has come; the mark goes up the same way and the
+     card reads the receipt. */
+  await settle(600);
+  const tc3 = await txt('#todayCard');
+  ck(/Marking out opens at 17:30/.test(tc3), 'THE CARD IS TOLD THE MOMENT: seven and a half hours after 10:00', tc3.replace(/\s+/g, ' ').trim().slice(0, 120));
+  ck(!(await page.isVisible('[data-act="markout"]')), 'and offers no button before it');
+  const LATER = '2026-10-19T17:45:00+05:30';
+  E.setNow(LATER);
+  await page.evaluate(t => { window.__T = t; }, Date.parse(LATER));
+  await page.click('[data-act="refresh"]'); await settle(900);
+  ck(await page.isVisible('[data-act="markout"]'), 'at a quarter to six the district says the hour has come and Mark out is offered');
+  ck(/has been open since 17:30/.test(await txt('#todayCard')), 'in the words the field app uses');
+  await page.click('[data-act="markout"]'); await settle(300);
+  ck(/Mark out/.test(await txt('#sheet')), 'the sheet is the mark out\u2019s');
+  await page.waitForFunction(() => { const s = document.getElementById('sheet').textContent; return /Location ±/.test(s) && !/Reading your location/.test(s); }, null, { timeout: 20000 });
+  await page.setInputFiles('#attFile', { name: 'selfie.png', mimeType: 'image/png', buffer: PNG }); await settle(600);
+  await page.click('#attMark'); await settle(1000);
+  ck(outs.length === 1 && (outs[0].att.reads.r1 || []).length === 4 && !!(outs[0].photo && outs[0].photo.b64), 'ONE MARK OUT WENT UP, with its readings and its photograph', String(outs.length));
+  const tc4 = await txt('#todayCard');
+  ck(/Marked out at 17:45/.test(tc4) && /Received by the district/.test(tc4), 'and the card reads the district\u2019s receipt of it', tc4.replace(/\s+/g, ' ').trim().slice(0, 160));
+  const AT2 = E.sheets['Attendance'], ah2 = AT2.rows[0].map(String);
+  ck(!!String(AT2.rows[1][ah2.indexOf('outAt')] || ''), 'written onto his own row for the day');
+  ck(!(await page.isVisible('[data-act="markout"]')), 'and not offered again');
+  await shot('7b-marked-out');
 
   /* ---- 8. sign out, and the Collector passes orders in the app ---- */
   await page.click('[data-tab="me"]'); await settle(300);

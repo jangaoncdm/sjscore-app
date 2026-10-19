@@ -72,7 +72,12 @@ var OUTREM_HEAD = ['date','phone','name','role','mandal','inAt','sentAt','emaile
 function feature_out(){
   return {
     title: 'Marking out — seven and a half hours after marking in',
-    tenants: ['SJGP'],
+    /* AND THE DISTRICT HRMS, since 19.10.2026 ("add mark out also"): the
+       same seven and a half hours, the same mark, the same refusal of an
+       early one. Every role there is attExempt, so outday counts nobody as
+       owing one and the morning-after reminder mails nobody — a register
+       whose mark in is voluntary cannot chase a mark out. */
+    tenants: ['SJGP', 'HRMS'],
 
     get: {
       /* WHAT THE OFFICER'S OWN PHONE NEEDS TO KNOW, and nothing else: whether
