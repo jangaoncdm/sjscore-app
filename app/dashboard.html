@@ -1574,7 +1574,9 @@ const TENANCY = {
      Leave. */
   HRMS:{ key:'HRMS', name:'District HRMS',  full:'District HRMS · leave',      store:'sjgp-hrms1',
     cfg:'hrms/config.js', home:'leave',
-    off:['overview','attendance','analytics','villages','schedule','notices','map','gpdp','advisory','duty','mock'],
+    /* Attendance is on the rail since 19.10.2026: voluntary marks, nobody
+       due, nobody listed as not marked — the voluntary office's own view */
+    off:['overview','analytics','villages','schedule','notices','map','gpdp','advisory','duty','mock'],
     aud:[['EMP','Employees'],['HOD','Heads of office']] }
 };
 let TVIEW='SJGP';

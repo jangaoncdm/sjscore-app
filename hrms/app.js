@@ -1,4 +1,5 @@
-/* DISTRICT HRMS — the employee's own app. Leave, and nothing else.
+/* DISTRICT HRMS — the employee's own app. Leave, and since 19.10.2026 a
+ * voluntary attendance mark.
  *
  * Ordered 05.10.2026; rebuilt 18.10.2026 on the draft the Collector passed
  * that morning: "move forward with that, use motion animation as stated in
@@ -22,7 +23,7 @@
  */
 'use strict';
 
-var APP_VERSION = '2.0.0';
+var APP_VERSION = '2.1.0';
 var SERVER = (typeof window !== 'undefined' && window.SJGP_SERVER) || '';
 var STORE = 'sjgp-hrms1';          /* browser storage is per DOMAIN, not per
                                       folder: three apps on one origin need
@@ -32,7 +33,7 @@ var STORE = 'sjgp-hrms1';          /* browser storage is per DOMAIN, not per
 
 var $ = function(id){ return document.getElementById(id); };
 var DB = { url:SERVER, session:null, me:null, rows:[], account:null, record:null, holidays:{}, today:'',
-           at:'', pend:[], pendAll:0, cal:null, calAt:'' };
+           at:'', pend:[], pendAll:0, cal:null, calAt:'', att:{}, attD:null };
 /* what the screen is doing — never saved, never the register's */
 var S = { screen:'signin', tab:'home', req:null, calM:0, calY:0, hmM:0, hmY:0, hmScope:'office', detail:null, myM:null, busy:false };
 
@@ -63,7 +64,7 @@ function load(){
   try{ DB = Object.assign(DB, JSON.parse(localStorage.getItem(STORE) || 'null') || {}); }catch(e){}
   /* THE ADDRESS THE DISTRICT PUBLISHES BEATS THE ONE A PHONE REMEMBERED. */
   if(SERVER) DB.url = SERVER;
-  DB.rows = DB.rows || []; DB.pend = DB.pend || []; DB.holidays = DB.holidays || {};
+  DB.rows = DB.rows || []; DB.pend = DB.pend || []; DB.holidays = DB.holidays || {}; DB.att = DB.att || {};
 }
 function save(){ try{ localStorage.setItem(STORE, JSON.stringify(DB)); }catch(e){} }
 
@@ -320,9 +321,11 @@ function refresh(){
       if(!r || !r.ok){ tokenRefused(r); return; }
       DB.rows = r.rows || []; DB.account = r.account || null; DB.record = r.record || null;
       DB.holidays = r.holidays || {}; DB.today = r.today || ''; DB.me = r.me || null;
+      DB.attD = (r.attendance && r.attendance.today) || null;
       if(r.me && DB.session && DB.session.user){ DB.session.user.desig = r.me.desig || DB.session.user.desig; }
       DB.at = new Date().toISOString();
       save(); if(/^(home|leave|calendar|detail)$/.test(S.screen)) render();
+      syncAtt();
     })
     .catch(function(){});
   if(canOrder()) pending();
@@ -394,6 +397,9 @@ function vHome(){
   h += '<div class="scroll tabbed">';
   h += '<div><p class="eyebrow">' + greet + '</p><h2 class="title-l" style="margin-top:2px">' + esc(String(u.name || '').replace(/,.*$/, '')) + '</h2><p class="small" style="margin-top:2px">' + esc(roleWord()) + ' · ' + DOW[d.getDay()] + ', ' + dmy(t) + '</p></div>';
 
+  /* ATTENDANCE, VOLUNTARY (19.10.2026): the card offers the mark and says
+     whether the district holds today's; not one word on it names a sanction */
+  h += todayCard();
   if(canOrder()){
     var n = Math.max(Number(DB.pendAll) || 0, (DB.pend || []).length);
     h += '<button class="card tonal" data-go="inbox" style="display:flex;align-items:center;gap:14px;text-align:left;width:100%"><span class="lead pri" style="background:rgba(255,255,255,.35)">' + I.inbox + '</span><span style="flex:1;min-width:0"><b style="display:block;font-size:16px">' + (n ? n + ' application' + (n === 1 ? '' : 's') + ' for your orders' : 'Nothing awaiting your orders') + '</b><span style="font-size:13px;opacity:.85">' + (n ? 'Open the inbox to pass them.' : 'The desk is clear.') + '</span></span><span class="chev" style="border-color:currentColor"></span></button>';
@@ -421,9 +427,194 @@ function vHome(){
     h += '<div class="card"><p class="body">No application yet. Your leave, when you apply for it, is listed here and under Leave.</p></div>';
   }
   if(canInstall()) h += '<div class="card bright tight">' + installRow() + '</div>';
-  h += '<p class="foot">This register records leave and nothing else. It takes no attendance.</p>';
+  h += '<p class="foot">Attendance here is voluntary: a mark is recorded, and silence draws nothing.</p>';
   h += '</div>';
   return h;
+}
+
+/* ------------------------------------------------- attendance, voluntary */
+/* ORDERED 19.10.2026: "also add to this attendance which is optional for
+   now". The mark is the sanitation app's mark — the photograph, the
+   coordinates and their precision, the handset's time and the district's
+   receipt, the four readings that tell a receiver from an app — sent to the
+   same saveAttendance_ and written to this register's own Attendance tab.
+
+   WHAT IS NOT HERE IS THE LADDER. Every role on this register stays
+   attExempt, so a mark is recorded and silence draws nothing — no reminder,
+   no notice, no debit, no lock — and not one word on the card names a
+   sanction. There is no fence (an office employee has no place of duty on
+   this register), so no mark is refused for where it was made; one whose
+   location was not measured still is, by the register (rule 6). The mark is
+   written on the phone first and sent after, and a mark the district refuses
+   is taken off the phone and he is told, as the field app learnt to. */
+var ATT = null;                                       /* the mark in hand */
+var STILL_FINE = 15, STILL_N = 4, ACC_LIMIT = 250;
+var STILL_GAP = (typeof window !== 'undefined' && window.HRMS_STILL_GAP) || 1800;
+function attLocal(){ return (DB.att || {})[today()] || null; }
+/* the phone's own record beats the district's answer; the district's answer
+   beats an empty store */
+function attHeld(){ var a = attLocal(); if(a) return a; var d = DB.attD; return d && iso(d.date) === today() ? { ts:d.markedAt, sync:'district' } : null; }
+function attId(){ return 'HA-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
+function getFix(opts){
+  return new Promise(function(res, rej){
+    if(!navigator.geolocation) return rej(new Error('This phone cannot provide a location.'));
+    navigator.geolocation.getCurrentPosition(
+      function(p){ res({ lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy }); },
+      function(e){ rej(new Error(e && e.code === 1 ? 'Location is switched off for this app. Allow it in the phone\u2019s settings and try again.' : 'No location yet. Step into the open and try again.')); },
+      Object.assign({ enableHighAccuracy:true, timeout:12000, maximumAge:0 }, opts || {}));
+  });
+}
+function accWord(a){ return a == null ? '' : a < 1000 ? '\u00b1' + Math.round(a) + ' m' : '\u00b1' + (a / 1000).toFixed(1) + ' km'; }
+/* THE READINGS: four fixes a couple of seconds apart. The best stands as the
+   mark's own and all four travel with it, because a receiver's readings
+   always differ and an app's never do. */
+function readRound(n){
+  if(!ATT || ATT.sampling) return;
+  var key = n === 2 ? 'reads2' : 'reads1', token = ATT.id, i = 0;
+  ATT[key] = []; ATT.sampling = key; ATT.err = ''; attSheet();
+  (function step(){
+    if(!ATT || ATT.id !== token) return;
+    getFix().then(function(f){
+      if(!ATT || ATT.id !== token) return;
+      ATT[key].push([f.lat, f.lng, f.acc, Date.now()]);
+      if(!ATT.fix || f.acc < ATT.fix.acc) ATT.fix = f;
+    }).catch(function(e){ if(ATT && ATT.id === token && !ATT.fix) ATT.err = e.message; })
+    .then(function(){
+      if(!ATT || ATT.id !== token) return;
+      i++;
+      if(i < STILL_N){ attSheet(); setTimeout(step, STILL_GAP); }
+      else { ATT.sampling = ''; attSheet(); }
+    });
+  })();
+}
+function roundStill(r){
+  if(!r || r.length < 3) return null;
+  var k0 = r[0][0].toFixed(7) + ',' + r[0][1].toFixed(7), a0 = r[0][2];
+  var same = r.every(function(x){ return x[0].toFixed(7) + ',' + x[1].toFixed(7) === k0 && x[2] === a0; });
+  return same && a0 != null && a0 <= STILL_FINE;
+}
+function stillBlock(){
+  if(!ATT) return false;
+  var r1 = ATT.reads1 || [], r2 = ATT.reads2 || [];
+  if(r2.length >= 3) return !!roundStill(r2);
+  return !!roundStill(r1);
+}
+/* file -> JPEG, resized and stamped with who, when and where */
+function grabPhoto(file){
+  return new Promise(function(res, rej){
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onerror = function(){ URL.revokeObjectURL(url); rej(new Error('That picture could not be read. Take it again.')); };
+    img.onload = function(){
+      try{
+        var sc = Math.min(1, 1000 / Math.max(img.width, img.height));
+        var c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * sc)); c.height = Math.max(1, Math.round(img.height * sc));
+        var g = c.getContext('2d'); g.drawImage(img, 0, 0, c.width, c.height);
+        var u = (DB.session || {}).user || {}, f = ATT && ATT.fix;
+        var lines = [String(u.name || ''),
+          dmyFull(today()) + ' ' + new Date().toTimeString().slice(0, 5) + (f ? ' \u00b7 ' + f.lat.toFixed(5) + ', ' + f.lng.toFixed(5) + ' ' + accWord(f.acc) : ''),
+          'District HRMS \u00b7 Jangaon'];
+        var w = c.width, hh = c.height, fs = Math.max(11, Math.round(w * 0.031)), lh = Math.round(fs * 1.36), bar = lh * lines.length + Math.round(fs * 1.15);
+        g.fillStyle = 'rgba(8,14,10,.68)'; g.fillRect(0, hh - bar, w, bar);
+        lines.forEach(function(t, i){
+          g.font = (i ? '400 ' : '700 ') + Math.round(i ? fs * 0.92 : fs) + 'px -apple-system,"Segoe UI",Roboto,sans-serif'; g.fillStyle = '#fff';
+          g.fillText(t, Math.round(w * 0.03), hh - bar + Math.round(fs * 0.95) + i * lh);
+        });
+        URL.revokeObjectURL(url);
+        res(c.toDataURL('image/jpeg', 0.6).split(',')[1]);
+      }catch(e){ URL.revokeObjectURL(url); rej(new Error('That picture could not be prepared. Take it again.')); }
+    };
+    img.src = url;
+  });
+}
+function startMark(){
+  if(attHeld()) return;
+  ATT = { id:attId(), reads1:[], reads2:[], fix:null, b64:'', sampling:'', err:'', busy:false };
+  attSheet();
+  readRound(1);
+}
+function readAgain(){ if(!ATT || ATT.sampling) return; ATT.fix = null; ATT.reads2 = []; readRound((ATT.reads1 || []).length ? 2 : 1); }
+function onPhoto(file){
+  if(!ATT || !file) return;
+  grabPhoto(file).then(function(b64){ if(ATT){ ATT.b64 = b64; ATT.err = ''; attSheet(); } })
+    .catch(function(e){ if(ATT){ ATT.err = e.message; attSheet(); } });
+}
+function attSheet(){
+  if(!ATT) return;
+  var f = ATT.fix, n = (ATT[ATT.sampling] || []).length;
+  var loc = ATT.sampling ? ('Reading your location' + (f ? ' \u00b7 ' + accWord(f.acc) : '') + ' \u2026 ' + n + ' of ' + STILL_N)
+          : f ? ('Location ' + accWord(f.acc) + (f.acc > ACC_LIMIT ? ' \u2014 a wide fix; step into the open and read again' : ''))
+          : (ATT.err || 'No location yet.');
+  var can = !!ATT.b64 && !ATT.sampling && !ATT.busy && !!f;
+  sheet('<h2>Mark attendance</h2>' +
+    '<p class="small" style="margin:4px 0 12px">Voluntary. A mark is recorded; silence draws nothing.</p>' +
+    '<div class="row"><span class="lead ' + (f ? (ATT.sampling ? 'warn' : 'ok') : '') + '">' + I.sun + '</span><span class="txt"><b>' + esc(loc) + '</b><span>' + (f ? f.lat.toFixed(5) + ', ' + f.lng.toFixed(5) : '') + '</span></span>' +
+      (ATT.sampling ? '' : '<button class="btn text" style="width:auto;padding:0 10px" data-act="attagain">Read again</button>') + '</div>' +
+    (ATT.b64 ? '<img class="shot" alt="" src="data:image/jpeg;base64,' + ATT.b64 + '">' : '') +
+    '<label class="btn ' + (ATT.b64 ? 'outl' : 'tonal') + '" for="attFile" style="margin-top:10px">' + (ATT.b64 ? 'Take it again' : 'Take the photograph') + '</label>' +
+    '<input id="attFile" class="hid" type="file" accept="image/*" capture="user">' +
+    (ATT.err && (ATT.b64 || f) ? '<p class="msg on bad">' + esc(ATT.err) + '</p>' : '') +
+    '<button class="btn filled" id="attMark" data-act="attmark" style="margin-top:10px"' + (can ? '' : ' disabled') + '>' + (ATT.busy ? 'Marking\u2026' : 'Mark') + '</button>' +
+    '<button class="btn text" data-act="attcancel">Not now</button>');
+}
+function markNow(){
+  if(!ATT || !ATT.b64 || !ATT.fix || ATT.busy) return;
+  var token = ATT.id, tries = 0;
+  (function wait(){                  /* the round in hand finishes, briefly */
+    if(!ATT || ATT.id !== token) return;
+    if(ATT.sampling && tries++ < 36) return setTimeout(wait, 250);
+    if(stillBlock()){
+      ATT.err = 'The phone reported exactly the same point ' + STILL_N + ' times in a row, which a receiver never does. Walk ten or twenty metres into the open and read again.';
+      attSheet(); return;
+    }
+    ATT.busy = true; attSheet();
+    var u = (DB.session || {}).user || {}, key = today();
+    DB.att = DB.att || {};
+    DB.att[key] = { id:ATT.id, date:key, ts:new Date().toISOString(), lat:ATT.fix.lat, lng:ATT.fix.lng, acc:ATT.fix.acc,
+      verified:Number(ATT.fix.acc) <= ACC_LIMIT, reads:{ r1:ATT.reads1 || [], r2:ATT.reads2 || [] },
+      tz:(Intl.DateTimeFormat().resolvedOptions().timeZone || ''), b64:ATT.b64, phone:u.phone, sync:'local' };
+    save(); ATT = null; closeSheet(); render();
+    toast('Attendance marked');
+    syncAtt();
+  })();
+}
+var ATT_SYNCING = false;
+function syncAtt(loud){
+  var list = Object.keys(DB.att || {}).map(function(k){ return DB.att[k]; }).filter(function(a){ return a && a.sync !== 'synced'; });
+  if(!list.length || !DB.session || ATT_SYNCING) return;
+  ATT_SYNCING = true;
+  var a = list[0], u = (DB.session || {}).user || {};
+  post({ kind:'attendance', token:DB.session.token,
+         att:{ id:a.id, date:a.date, ts:a.ts, lat:a.lat, lng:a.lng, acc:a.acc, verified:a.verified, tz:a.tz, status:'PRESENT', reads:a.reads || null },
+         photo:a.b64 ? { name:'ATT_' + (u.phone || '') + '_' + a.date + '.jpg', b64:a.b64 } : null })
+    .then(function(r){
+      if(r && r.ok){ a.sync = 'synced'; a.url = r.url || ''; delete a.b64; save(); if(S.screen === 'home') render(); }
+      else if(r && r.ok === false && r.outside){
+        /* A MARK THE DISTRICT REFUSED IS NOT A MARK and must not sit on the
+           phone saying it is */
+        delete DB.att[a.date]; save(); if(S.screen === 'home') render();
+        toast(r.error || 'The district did not take that mark.');
+      }
+      else if(tokenRefused(r)){ }
+      else if(loud) toast('Not sent yet \u2014 it goes up when there is a line.');
+    })
+    .catch(function(){ if(loud) toast('Not sent yet \u2014 it goes up when there is a line.'); })
+    .then(function(){ ATT_SYNCING = false; });
+}
+function todayCard(){
+  var t = today(), a = attHeld(), hol = DB.holidays[t], dow = new Date(t + 'T00:00:00').getDay();
+  var h = '<div class="card bright tight" id="todayCard">';
+  if(!a){
+    h += '<div class="row"><span class="lead">' + I.sun + '</span><span class="txt"><b>Attendance \u00b7 voluntary</b><span>' +
+         esc(DOW[dow] + ', ' + dmy(t) + (hol ? ' \u00b7 ' + hol : '') + ' \u00b7 not marked') + '</span></span>' +
+         '<button class="btn filled" style="width:auto;min-height:40px;padding:0 16px;font-size:14px" data-act="mark">Mark</button></div>';
+  } else {
+    var held = a.sync === 'synced' || a.sync === 'district';
+    h += '<div class="row"><span class="lead ' + (held ? 'ok' : 'warn') + '">' + (held ? I.check : I.clock) + '</span><span class="txt"><b>Marked at ' + esc(hhmm(a.ts)) + '</b><span>' +
+         (held ? 'Received by the district' : 'On this phone \u00b7 <b style="font-weight:700">not yet received by the district</b>') + '</span></span>' +
+         (held ? '' : '<button class="btn tonal" style="width:auto;min-height:40px;padding:0 14px;font-size:14px" data-act="attsend">Send</button>') + '</div>';
+  }
+  return h + '</div>';
 }
 
 /* ---------------------------------------------------------------- leave */
@@ -848,7 +1039,7 @@ function act(k, b){
   if(k === 'firsttime'){ var p = $('iPhone'); if(p && p.value.replace(/\D/g, '').length === 10) return signIn(); if(p) p.focus(); return say('mSignin', 'info', 'Enter your mobile number above and press Sign in. If the row is yours to claim, the register asks for your code next.'); }
   if(k === 'claim') return claim();
   if(k === 'refresh'){ refresh(); toast('Reading from the district…'); return; }
-  if(k === 'signout'){ DB.session = null; DB.rows = []; DB.me = null; DB.pend = []; DB.pendAll = 0; DB.cal = null; DB.account = null; DB.record = null; save(); go('signin'); return; }
+  if(k === 'signout'){ DB.session = null; DB.rows = []; DB.me = null; DB.pend = []; DB.pendAll = 0; DB.cal = null; DB.account = null; DB.record = null; DB.att = {}; DB.attD = null; ATT = null; save(); go('signin'); return; }
   if(k === 'newreq') return newReq();
   if(k === 'next'){ if(S.req && S.req.to) go('request2'); return; }
   if(k === 'hq'){ S.req.hq = !S.req.hq; b.setAttribute('aria-checked', S.req.hq ? 'true' : 'false'); return; }
@@ -862,6 +1053,11 @@ function act(k, b){
   if(k === 'all') return orderAll();
   if(k === 'chpin') return chpin();
   if(k === 'install') return install();
+  if(k === 'mark') return startMark();
+  if(k === 'attmark') return markNow();
+  if(k === 'attagain') return readAgain();
+  if(k === 'attsend'){ syncAtt(true); return; }
+  if(k === 'attcancel'){ ATT = null; closeSheet(); return; }
 }
 $('screen').addEventListener('click', function(e){
   var b;
@@ -892,6 +1088,9 @@ $('screen').addEventListener('input', function(e){
 });
 $('nav').addEventListener('click', function(e){ var b = e.target.closest('[data-tab]'); if(b) go(b.getAttribute('data-tab')); });
 $('scrim').addEventListener('click', closeSheet);
+/* the mark sheet's own buttons and its camera input live in #sheet, outside #screen */
+$('sheet').addEventListener('click', function(e){ var b = e.target.closest('[data-act]'); if(b) act(b.getAttribute('data-act'), b); });
+$('sheet').addEventListener('change', function(e){ if(e.target && e.target.id === 'attFile' && e.target.files && e.target.files[0]) onPhoto(e.target.files[0]); });
 
 /* ------------------------------------------------------------------- boot */
 /* THE WELCOME. In front of sign-in on every opening, 2.6 s and gone, or gone

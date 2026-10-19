@@ -607,11 +607,16 @@ const TENANTS = {
    * EVERYTHING BUT LEAVE IS OFF, and off by name rather than by omission, so
    * that nothing can reach an employee by accident:
    *
-   *   · NO ATTENDANCE. Nobody marks in here, so every role is attExempt and
-   *     the whole morning machinery — the reminder, the gap report, the seen
-   *     ping — has nobody to walk. A leave register that started chasing five
-   *     thousand people for a mark they were never asked to make would be
-   *     the worst thing this project has ever done;
+   *   · ATTENDANCE IS VOLUNTARY (ordered 19.10.2026: "add to this attendance
+   *     which is optional for now"). An employee MAY mark in from the HRMS
+   *     app and the mark is recorded — saveAttendance_ takes it exactly as it
+   *     takes a Secretary's — but every role is attExempt, so the whole
+   *     morning machinery — the reminder, the gap report, the seen ping — has
+   *     nobody to walk. A leave register that started chasing five thousand
+   *     people for a mark they were never asked to make would be the worst
+   *     thing this project has ever done; taking a role off attExempt here is
+   *     the Collector's written order and suite 34 is where it is changed
+   *     first;
    *   · NO SHOW-CAUSE LADDER. There is no attendance to be absent from.
    *     sanction:false, as the Gram Palana register is;
    *   · no evaluation, no filing schedule, no development plan, no place of
@@ -644,14 +649,17 @@ const TENANTS = {
     district:['COLLECTOR'],
     mandal:['HOD'],
     viewer:[],
-    /* NOBODY MARKS IN. Every role is exempt, so noticeGaps_, the daily
-       report's roll and the attendance reminder all walk an empty list
-       whatever else is switched on. */
+    /* NOBODY IS ASKED TO MARK IN — a mark is taken when one is made (since
+       19.10.2026) and silence draws nothing. Every role is exempt, so
+       noticeGaps_, the daily report's roll and the attendance reminder all
+       walk an empty list whatever else is switched on. */
     attExempt:['EMP','HOD','COLLECTOR'],
     leaveApply:['EMP','HOD'],
     sanction:false, evaluation:false, schedule:false,
     placeOfDuty:false,
-    /* nobody on this register marks attendance, so there is nothing to fence */
+    /* an office employee has no place of duty on this register, so a mark is
+       never refused for where it was made (rule 10 as it stood before the
+       fence): no place of duty, no fence */
     fence:0,
     /* EVERY APPLICATION IN THE DISTRICT COMES TO THE COLLECTOR (08.10.2026).
        The sanitation and Gram Palana registers sanction leave within the

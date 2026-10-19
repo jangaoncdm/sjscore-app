@@ -312,7 +312,7 @@ module.exports = {
       const mine = e.get('hrms', { token:tok });
       t.eq(mine.ok, true, 'he reads his own register');
       t.eq(mine.rows.length, 1, 'and sees his own application');
-      t.eq(mine.attendance, false, 'which carries no attendance');
+      t.eq(mine.attendance.voluntary, true, 'which carries attendance as voluntary (19.10.2026)');
       t.eq(mine.sanction, false, 'and no sanction');
       t.eq(mine.me.office, 'Collectorate', 'with his own office against his name');
     }

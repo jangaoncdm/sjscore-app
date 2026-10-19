@@ -287,8 +287,11 @@ function feature_hrms(){
                          return out;
                        })(),
                        year:String(new Date().getFullYear()),
-                       /* IT IS A LEAVE REGISTER AND NOTHING ELSE */
-                       attendance:false, sanction:false });
+                       /* ATTENDANCE IS VOLUNTARY HERE (19.10.2026): the app
+                          offers the mark and draws today's off this answer,
+                          so a phone that lost its store still reads what the
+                          district holds. Nothing here walks a ladder. */
+                       attendance:{ voluntary:true, today:hrmsAttToday_(u.phone) }, sanction:false });
       },
 
       /* WHO IS AWAY — the office's calendar for its head, the district's for the
@@ -798,6 +801,28 @@ function hrmsSetAside_(b, u){
     admAudit_('HRMS ROWS SET ASIDE', tenant_().key, hits.length + ' row(s) that named nobody set aside (inactive, EMP, code spent) · by ' + u.name);
     return json_({ ok:true, dry:false, setAside:hits.length, hodWithRecord:hodWithRecord });
   } finally { lock.releaseLock(); }
+}
+
+/* HIS MARK TODAY, IF THE DISTRICT HOLDS ONE. Read off the tail of the
+   Attendance tab — bounded, like everything else on this register — so the
+   Today card on a phone that lost its store, or on a second phone, says what
+   the register says and not what the handset remembers. Nothing is written. */
+var HRMS_ATT_TAIL_ROWS = 4000;
+function hrmsAttToday_(phone){
+  try{
+    var sh = sheet_('Attendance', A_HEAD), last = sh.getLastRow();
+    if(last < 2) return null;
+    var m = headMap_(sh, A_HEAD), from = Math.max(2, last - HRMS_ATT_TAIL_ROWS + 1);
+    var v = sh.getRange(from, 1, last - from + 1, sh.getLastColumn()).getValues();
+    var p = phone10_(phone), d = today_();
+    for(var i = v.length - 1; i >= 0; i--){
+      if(phone10_(v[i][m.ix.phone]) !== p || dateText_(v[i][m.ix.date]) !== d) continue;
+      return { date:d, markedAt:String(v[i][m.ix.markedAt] || ''), receivedAt:String(v[i][m.ix.receivedAt] || ''),
+               status:String(v[i][m.ix.status] || 'PRESENT'), photo:!!v[i][m.ix.photo],
+               verified:String(v[i][m.ix.verified]).toUpperCase() !== 'FALSE' };
+    }
+  }catch(err){}
+  return null;
 }
 
 /* ----------------------------------------------------- his record and account

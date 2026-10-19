@@ -106,12 +106,15 @@ function serve(noConfig){
   await ctx.addInitScript(`{ const T = ${Date.parse(NOW)}; const _D = Date;
     class D extends _D { constructor(...a){ super(...(a.length ? a : [T])); } static now(){ return T; } }
     window.Date = D; }`);
+  /* the four location readings come a couple of seconds apart on a phone;
+     the pass need not wait for them */
+  await ctx.addInitScript('window.HRMS_STILL_GAP = 120;');
   const page = await ctx.newPage();
   const errs = []; page.on('pageerror', e => errs.push(String(e)));
 
   let E = register();
   let dead = false;
-  const bulk = [], sent = [];
+  const bulk = [], sent = [], marks = [];
   await page.route('**/hrms.district/**', r => {
     if(dead) return r.abort('failed');
     const q = r.request();
@@ -120,6 +123,7 @@ function serve(noConfig){
       let b = {}; try{ b = JSON.parse(q.postData() || '{}'); }catch(e){}
       if(Array.isArray(b.ids)) bulk.push(b.ids.length);
       if(b.kind === 'leave') sent.push(b.leave || {});
+      if(b.kind === 'attendance') marks.push(b);
       out = E.post(b);
     } else {
       const sp = new URL(q.url()).searchParams, p = {};
@@ -254,6 +258,36 @@ function serve(noConfig){
   ck((await page.$$('.cal .d.mine')).length === 2, 'his two days awaiting orders are outlined on his own calendar');
   ck(/Holidays this month/.test(await txt('#screen')), 'and the month’s holidays are listed');
   await shot('7-calendar');
+
+  /* ---- 7a. ATTENDANCE, VOLUNTARY (19.10.2026) ----
+     The card offers the mark and names no sanction; the sheet holds Mark
+     until the location is read and the photograph taken; one mark goes up
+     with its readings and its photograph; the card then reads the
+     district's receipt and the register holds one row. */
+  await ctx.grantPermissions(['geolocation'], { origin: base });
+  await ctx.setGeolocation({ latitude: 17.7215, longitude: 79.1512, accuracy: 30 });
+  await page.click('[data-tab="home"]'); await settle(400);
+  const tc = await txt('#todayCard');
+  ck(/Attendance · voluntary/.test(tc) && /not marked/.test(tc), 'the Today card offers a voluntary mark and nothing more', tc.replace(/\s+/g, ' ').trim().slice(0, 80));
+  ck(!/notice|debit|casual leave|lock/i.test(tc), 'and not one word on it names a sanction');
+  await page.click('[data-act="mark"]'); await settle(300);
+  ck(await page.isVisible('#attMark'), 'the mark sheet opens');
+  ck(await page.$eval('#attMark', b => b.disabled), 'and Mark is held until the location is read and the photograph taken');
+  await page.waitForFunction(() => { const s = document.getElementById('sheet').textContent; return /Location ±/.test(s) && !/Reading your location/.test(s); }, null, { timeout: 20000 });
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+  await page.setInputFiles('#attFile', { name: 'selfie.png', mimeType: 'image/png', buffer: PNG }); await settle(600);
+  ck(!(await page.$eval('#attMark', b => b.disabled)), 'with both in hand, Mark is live');
+  await shot('7a-mark');
+  await page.click('#attMark'); await settle(1000);
+  ck(marks.length === 1 && !!marks[0].att && (marks[0].att.reads.r1 || []).length === 4, 'ONE MARK WENT UP, with its four readings', String(marks.length));
+  ck(!!(marks[0] && marks[0].photo && marks[0].photo.b64), 'and its photograph');
+  const tc2 = await txt('#todayCard');
+  ck(/Marked at/.test(tc2) && /Received by the district/.test(tc2), 'THE CARD READS THE DISTRICT\'S RECEIPT', tc2.replace(/\s+/g, ' ').trim().slice(0, 80));
+  const AT = E.sheets['Attendance'], ahd = AT ? AT.rows[0].map(String) : [];
+  const attRows = AT ? AT.rows.slice(1) : [];
+  ck(attRows.length === 1 && String(attRows[0][ahd.indexOf('phone')]).replace(/^'/, '') === '9444400001', 'and the register holds one row, his', String(attRows.length));
+  ck(!(await page.isVisible('[data-act="mark"]')), 'a second mark is not offered');
+  await shot('7a-marked');
 
   /* ---- 8. sign out, and the Collector passes orders in the app ---- */
   await page.click('[data-tab="me"]'); await settle(300);

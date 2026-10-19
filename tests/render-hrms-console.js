@@ -196,7 +196,8 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   const rail=await page.$$eval('#nav [data-v]',es=>es.filter(e=>!e.hidden).map(e=>e.dataset.v));
   ck(rail.indexOf('leave')>=0,'Leave is on the rail');
   ck(rail.indexOf('admin')>=0,'and Admin');
-  ['overview','attendance','analytics','villages','schedule','notices','map','gpdp','advisory']
+  ck(rail.indexOf('attendance')>=0,'and Attendance — voluntary marks since 19.10.2026');
+  ['overview','analytics','villages','schedule','notices','map','gpdp','advisory']
     .forEach(v=>ck(rail.indexOf(v)<0,'nothing on the rail for '+v+' — this register does not have it'));
   const cur=await page.$eval('#nav [aria-current]',e=>e.dataset.v);
   ck(cur==='leave','AND IT OPENS ON LEAVE, not on a hidden Overview',cur);
@@ -204,6 +205,17 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   const txt=()=>page.$eval('#g',e=>e.innerText);
   ck((await txt()).indexOf('K. Ramesh')>=0,'the application awaiting orders renders');
   await page.screenshot({path:path.join(OUT,'hrms-leave-1500.png'),fullPage:true});
+
+  /* ---- 2a. THE ATTENDANCE SCREEN DRAWS ON THIS REGISTER (19.10.2026) ----
+     Voluntary marks, nobody due: the screen must open without a script
+     error on a payload that carries no roster of the unmarked. */
+  await page.click('#nav [data-v="attendance"]');
+  await page.waitForTimeout(700);
+  const tAtt=await txt();
+  ck(/attendance|marked/i.test(tAtt),'the Attendance screen opens on the HRMS register',tAtt.slice(0,80));
+  await page.screenshot({path:path.join(OUT,'hrms-attendance-1500.png'),fullPage:true});
+  await page.click('#nav [data-v="leave"]');
+  await page.waitForTimeout(400);
 
   /* ---- 3. THE ESTABLISHMENT PANEL ---- */
   await page.click('#nav [data-v="admin"]');

@@ -314,5 +314,38 @@ module.exports = {
       t.eq(vv.role, 'EMP', 'with its role');
       t.eq(vv.active, true, 'and he is active');
     }
+
+    /* ---- 9. ATTENDANCE, VOLUNTARY (19.10.2026) ----
+       "also add to this attendance which is optional for now." A mark is
+       taken and recorded; nobody is asked for one, so silence draws nothing.
+       No place of duty, so no fence; the still-check holds (rule 6). */
+    {
+      const e = start([{ Phone:'9444400001', Name:'K. Srinivas Rao', Role:'EMP', Mandal:OFFICE, Active:'TRUE' },
+                       { Phone:'9444400002', Name:'M. Anitha', Role:'EMP', Mandal:OFFICE, Active:'TRUE' }]);
+      const reads = { r1:[[17.72, 79.15, 30, 1], [17.7201, 79.1501, 28, 2], [17.72003, 79.1502, 31, 3], [17.7202, 79.15, 30, 4]], r2:[] };
+      const r = e.post({ kind:'attendance', token:tok(e, '9444400001'), att:{ id:'HA-1', date:'2026-10-19', ts:'2026-10-19T04:31:00.000Z',
+        lat:17.72, lng:79.15, acc:28, verified:true, tz:'Asia/Kolkata', status:'PRESENT', reads:reads }, photo:null });
+      t.eq(r.ok, true, 'an employee\'s mark is taken');
+      const A = e.sheets['Attendance'], ah = A.rows[0].map(String);
+      const row = A.rows.slice(1).find(x => String(x[ah.indexOf('phone')]).replace(/^'/, '') === '9444400001');
+      t.ok(!!row, 'and written to this register\'s own Attendance tab');
+      t.eq(String(row[ah.indexOf('role')]), 'EMP', 'under his role');
+      t.eq(String(row[ah.indexOf('status')]), 'PRESENT', 'as present');
+      t.eq(e.ctx.fenceCheck_(e.ctx.findByPhone_('9444400001'), 17.72, 79.15, 28).gated, false,
+        'NO FENCE: an office employee has no place of duty here, so no mark is refused for where it was made');
+      const pinned = { r1:[[17.72, 79.15, 5, 1], [17.72, 79.15, 5, 2], [17.72, 79.15, 5, 3], [17.72, 79.15, 5, 4]], r2:[] };
+      const r2 = e.post({ kind:'attendance', token:tok(e, '9444400002'), att:{ id:'HA-2', date:'2026-10-19', ts:'2026-10-19T04:32:00.000Z',
+        lat:17.72, lng:79.15, acc:5, verified:true, reads:pinned }, photo:null });
+      t.eq(r2.ok, false, 'but a location that was not measured is still refused (rule 6)');
+      t.eq(r2.notMeasured, true, 'by name');
+      t.eq(e.eval("attExempt_('EMP')"), true, 'EVERY ROLE STAYS VOLUNTARY');
+      t.eq(e.ctx.noticeGaps_('2026-10-19').length, 0, 'so the one who did not mark draws nothing — no reminder, no notice, no debit, no lock');
+      const mine = e.get('hrms', { token:tok(e, '9444400001') });
+      t.eq(mine.attendance.voluntary, true, 'op=hrms says attendance is voluntary');
+      t.eq(String((mine.attendance.today || {}).date || ''), '2026-10-19', 'and hands him back the mark the district holds');
+      t.eq(String((mine.attendance.today || {}).markedAt || ''), '2026-10-19T04:31:00.000Z', 'with the moment he made it');
+      const hers = e.get('hrms', { token:tok(e, '9444400002') });
+      t.eq(hers.attendance.today, null, 'and nothing for the one it refused');
+    }
   }
 };

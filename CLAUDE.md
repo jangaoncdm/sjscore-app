@@ -1366,8 +1366,8 @@ the officer for its own wait.
 **IT IS THE SANITATION REGISTER'S ALONE.** `TENANTS[k].fence` is the radius;
 the Gram Palana register has carried village offices since 18.09.2026 and
 **measures without deciding** (rule 10), because nobody ordered otherwise, and
-nobody on the HRMS register marks attendance at all. Suite 35 is where that is
-changed first. **And it stands down in a minute with no deploy**, the way
+the HRMS register's voluntary mark has no place of duty to be measured from.
+Suite 35 is where that is changed first. **And it stands down in a minute with no deploy**, the way
 `FEATURE_OFF` takes a module out of the road: `FENCE_OFF` stops the whole
 thing, `FENCE_KM` moves the radius, and both reach every handset with a line.
 A gate on attendance that needs a deploy to loosen is a gate that locks a
@@ -1731,10 +1731,11 @@ live at the top level, beside `parseRoster`.
 **Ordered 05.10.2026.** The whole district applies for leave, tracks it and
 sees what it has left — between two and five thousand employees across every
 office, a third Sheet behind a third `/exec`, with its own app at `/hrms/`.
-`DEPLOY-HRMS.md` is how it is put up. **It takes leave and nothing else**:
-nobody on it is asked to mark attendance, so the whole show-cause ladder has
-nobody to walk — no reminder, no notice, no debit, no lock — and `TENANTS.HRMS`
-carries `sanction:false`. Suite 34 is where that is changed first.
+`DEPLOY-HRMS.md` is how it is put up. **It takes leave, and since 19.10.2026
+a voluntary attendance mark**: nobody on it is asked to mark attendance, so
+the whole show-cause ladder has nobody to walk — no reminder, no notice, no
+debit, no lock — and `TENANTS.HRMS` carries `sanction:false`. Suite 34 is
+where that is changed first.
 
 Leave itself is **Code.gs's and is not re-written here**. `saveLeave_`, the
 overlap refusal, the medical spell, the yearly cap and the twin-row rule are
@@ -2630,3 +2631,31 @@ the first 500 waiting rows and a count of the rest, so the district's one
 download of codes for every office stopped at 500 of 1,100.
 `HRMS_CLAIMS_MAX` is 5,000 now — the establishment this register was sized
 for, half a megabyte to the Collector's browser once.
+
+**Attendance on the District HRMS, voluntary** (ordered 19.10.2026: *"also
+add to this attendance which is optional for now"*). The HRMS app's Home
+carries a Today card: *Attendance · voluntary*, a Mark button, and after the
+mark the time and whether the district has received it. The mark is the
+sanitation app's mark and nothing less — the photograph, resized and stamped
+with who, when and where; the coordinates and their precision; four readings
+a couple of seconds apart, because a receiver's readings always differ and an
+app's never do — sent as `kind:'attendance'` to the same `saveAttendance_`
+and written to this register's own Attendance tab. The phone writes it first
+and sends it after; a mark the district refuses is taken off the phone and
+he is told. `op=hrms` answers `attendance:{voluntary, today}` off a
+bounded tail read (`hrmsAttToday_`), so a phone that lost its store still
+reads what the register holds.
+
+**What did not change is the whole point.** Every role on the register
+stays on `attExempt`, so a mark is recorded and silence draws nothing — no
+reminder, no notice, no debit, no lock, no seen ping — and not one word on
+the card or the sheet names a sanction. There is no fence: an office
+employee has no place of duty on this register, so no mark is refused for
+where it was made (rule 10 as it stood before the fence); one whose location
+was not measured still is, by the register (rule 6). Marking out and the
+fortnight card are not built here. Taking a role off `attExempt` is the
+Collector's written order and suite 34 is where it is changed first. The
+console's rail shows the Attendance screen on this register now — the
+voluntary office's own view, nobody due and nobody listed as not marked.
+Suite 42 section 9 holds the server half; `tests/render-hrms.js` section 7a
+drives the real app through the mark against the real backend in the mock.
