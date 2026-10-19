@@ -397,8 +397,10 @@ function vHome(){
   h += '<div class="scroll tabbed">';
   h += '<div><p class="eyebrow">' + greet + '</p><h2 class="title-l" style="margin-top:2px">' + esc(String(u.name || '').replace(/,.*$/, '')) + '</h2><p class="small" style="margin-top:2px">' + esc(roleWord()) + ' · ' + DOW[d.getDay()] + ', ' + dmy(t) + '</p></div>';
 
-  /* ATTENDANCE, VOLUNTARY (19.10.2026): the card offers the mark and says
-     whether the district holds today's; not one word on it names a sanction */
+  /* ATTENDANCE (19.10.2026): the card offers the mark and says whether the
+     district holds today's. It is voluntary and the app does not say so — by
+     the Collector's direction the same afternoon the word is not shown; not
+     one word on the card names a sanction either */
   h += todayCard();
   if(canOrder()){
     var n = Math.max(Number(DB.pendAll) || 0, (DB.pend || []).length);
@@ -427,7 +429,6 @@ function vHome(){
     h += '<div class="card"><p class="body">No application yet. Your leave, when you apply for it, is listed here and under Leave.</p></div>';
   }
   if(canInstall()) h += '<div class="card bright tight">' + installRow() + '</div>';
-  h += '<p class="foot">Attendance here is voluntary: a mark is recorded, and silence draws nothing.</p>';
   h += '</div>';
   return h;
 }
@@ -547,7 +548,6 @@ function attSheet(){
           : (ATT.err || 'No location yet.');
   var can = !!ATT.b64 && !ATT.sampling && !ATT.busy && !!f;
   sheet('<h2>Mark attendance</h2>' +
-    '<p class="small" style="margin:4px 0 12px">Voluntary. A mark is recorded; silence draws nothing.</p>' +
     '<div class="row"><span class="lead ' + (f ? (ATT.sampling ? 'warn' : 'ok') : '') + '">' + I.sun + '</span><span class="txt"><b>' + esc(loc) + '</b><span>' + (f ? f.lat.toFixed(5) + ', ' + f.lng.toFixed(5) : '') + '</span></span>' +
       (ATT.sampling ? '' : '<button class="btn text" style="width:auto;padding:0 10px" data-act="attagain">Read again</button>') + '</div>' +
     (ATT.b64 ? '<img class="shot" alt="" src="data:image/jpeg;base64,' + ATT.b64 + '">' : '') +
@@ -605,7 +605,7 @@ function todayCard(){
   var t = today(), a = attHeld(), hol = DB.holidays[t], dow = new Date(t + 'T00:00:00').getDay();
   var h = '<div class="card bright tight" id="todayCard">';
   if(!a){
-    h += '<div class="row"><span class="lead">' + I.sun + '</span><span class="txt"><b>Attendance \u00b7 voluntary</b><span>' +
+    h += '<div class="row"><span class="lead">' + I.sun + '</span><span class="txt"><b>Attendance</b><span>' +
          esc(DOW[dow] + ', ' + dmy(t) + (hol ? ' \u00b7 ' + hol : '') + ' \u00b7 not marked') + '</span></span>' +
          '<button class="btn filled" style="width:auto;min-height:40px;padding:0 16px;font-size:14px" data-act="mark">Mark</button></div>';
   } else {

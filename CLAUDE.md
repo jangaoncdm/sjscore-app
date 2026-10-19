@@ -2634,8 +2634,11 @@ for, half a megabyte to the Collector's browser once.
 
 **Attendance on the District HRMS, voluntary** (ordered 19.10.2026: *"also
 add to this attendance which is optional for now"*). The HRMS app's Home
-carries a Today card: *Attendance · voluntary*, a Mark button, and after the
-mark the time and whether the district has received it. The mark is the
+carries a Today card: *Attendance*, a Mark button, and after the mark the
+time and whether the district has received it. **The word voluntary is not
+on the app** (the Collector's direction the same afternoon: *"you not need
+to mention voluntary in the app"*); the card names the day and the state and
+nothing about the rule, as the leave screens name no rule. The mark is the
 sanitation app's mark and nothing less — the photograph, resized and stamped
 with who, when and where; the coordinates and their precision; four readings
 a couple of seconds apart, because a receiver's readings always differ and an

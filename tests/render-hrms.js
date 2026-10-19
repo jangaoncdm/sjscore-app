@@ -268,7 +268,7 @@ function serve(noConfig){
   await ctx.setGeolocation({ latitude: 17.7215, longitude: 79.1512, accuracy: 30 });
   await page.click('[data-tab="home"]'); await settle(400);
   const tc = await txt('#todayCard');
-  ck(/Attendance · voluntary/.test(tc) && /not marked/.test(tc), 'the Today card offers a voluntary mark and nothing more', tc.replace(/\s+/g, ' ').trim().slice(0, 80));
+  ck(/Attendance/.test(tc) && /not marked/.test(tc) && !/voluntary/i.test(tc), 'the Today card offers the mark and nothing more — not even the word voluntary (19.10.2026)', tc.replace(/\s+/g, ' ').trim().slice(0, 80));
   ck(!/notice|debit|casual leave|lock/i.test(tc), 'and not one word on it names a sanction');
   await page.click('[data-act="mark"]'); await settle(300);
   ck(await page.isVisible('#attMark'), 'the mark sheet opens');
