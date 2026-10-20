@@ -1743,7 +1743,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '895eff2 - 19 Oct 15:45';
+const BUILD_STAMP = 'aa1419c - 20 Oct 11:02';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -3659,8 +3659,8 @@ function dutyCell(r){
    behaviour for the one figure a Collector watching the evening refreshes.
 
    IT ACCUSES NOBODY (rule 10, and the Collector's direction of 02.10.2026).
-   An officer who has not closed his day draws a reminder by mail the next
-   morning and nothing else, so this cell is never red and never says
+   An officer who has not closed his day draws nothing — the morning-after
+   reminder was withdrawn on 20.10.2026 — so this cell is never red and never says
    'default'. A man may have gone straight from the village to a mandal
    meeting; the register cannot know, and a table must not decide it. */
 let OUTDAY = null;
