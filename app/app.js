@@ -1719,15 +1719,15 @@ function banner(kind, icon, text){
    all only once there is a mark in to close.
 
    IT ASKS AND IT NEVER ACCUSES. Nothing on this card is a warning, there is
-   no red, and a day left unclosed draws a reminder by mail the next morning
-   and nothing whatever besides — no notice, no debit, no lock. The card says
+   no red, and a day left unclosed draws nothing whatever — no reminder (the
+   mail was withdrawn on 20.10.2026), no notice, no debit, no lock. The card says
    so in as many words, because an officer who reads 'not marked' on a
    government register assumes the worst and rings the mandal office. */
 /* THE TODAY CARD. One card, whose colour is the register's own reading of the day:
    red-leaning while a mark is owed, green once the district holds it, amber while a mark out is
    open or a mark is still on the phone, grey when the day asks for nothing. It replaced two strips
    (the mark in, the mark out) that read as a row of banners; the sentences are the same ones, and
-   not one of them names a sanction. A missed mark out draws a reminder and nothing else; a mark
+   not one of them names a sanction. A missed mark out draws nothing; a mark
    held on the phone is NOT a mark the district has, and the card says so in bold with the button
    that fixes it, because officers who had honestly marked were once read as absent. */
 function tcard(cls, live, k, t, b, extra){
@@ -1803,7 +1803,7 @@ function attendanceStrip(){
           '<div class="n">Marking out opens at ' + esc(t3) + (told ? '' : ' · the district confirms the exact time') + '</div>');
       } else {
         h = tcard('open', true, 'Mark out · open since ' + t3, 'Your day is not closed yet',
-          'Marked in at ' + esc(t) + '. Marking out has been open since ' + esc(t3) + ' and takes one photograph, as marking in did. A missed mark out draws a reminder and nothing else.',
+          'Marked in at ' + esc(t) + '. Marking out has been open since ' + esc(t3) + ' and takes one photograph, as marking in did.',
           '<button class="btn" id="outGo">' + ICON.cam + 'Mark out</button>');
       }
     }

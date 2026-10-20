@@ -61,7 +61,7 @@ const SCHEDFIX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixture-schedu
    'undefined of undefined' off the dashboard payload it had fallen back to. */
 const OUTFIX = { ok:true, date:'2026-10-02', marked:87, closed:61, open:23, cannot:3,
   sanction:false,
-  note:'A day left unclosed draws a reminder by mail the next working morning and nothing else — no notice, no debit and no lock.',
+  note:'A day left unclosed draws nothing — no reminder, no notice, no debit and no lock.',
   rows:[] };
 
 /* THE OFFICER ROLL the Admin view reads. Shaped like op=roll's answer, with

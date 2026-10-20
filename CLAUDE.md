@@ -1263,6 +1263,18 @@ back on 28.08.2026 and the schedule mail, **it names no sanction**; the suites
 assert the words are absent. An MSO, whose attendance is voluntary, is never
 chased for it and is not counted as owing one.
 
+**And the reminder itself was withdrawn on 20.10.2026** (*"stop sending
+markout reminders emails in swach and gram palane"*). `OUT_REMINDER` in
+`FeatureOut.gs` is false: the morning round still runs, says in its log that
+the reminder is withdrawn, mails nobody and writes no row. A day left
+unclosed now draws nothing at all; the console's Marked-out tile still
+shows who closed the day. The Gram Palana register never carried the module
+— `feature_out` names the sanitation and HRMS registers — so no mark-out
+reminder was ever sent there and the order needed nothing from it. The
+mailing code stands behind the switch and suite 30 drives it both ways, so
+turning it back on is one constant, and an order. The sentence on the field
+app's card and the console's `outday` note no longer say a reminder follows.
+
 **It computes no hours worked.** Seven and a half hours is the gate on the
 button, not a figure the register publishes about a man. An hours total is a
 payroll claim and this register does not make one — the screen says so in as

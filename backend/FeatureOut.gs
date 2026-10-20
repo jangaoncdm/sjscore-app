@@ -10,13 +10,16 @@
  * WHAT IT DOES NOT DO, and this is the half that matters on a register that
  * issues show-cause notices under the Conduct Rules:
  *
- *   · a missing OUT raises a REMINDER AND NOTHING ELSE (the Collector's
- *     direction). No show-cause notice, no casual-leave debit, no lock on the
- *     app, and no entry anywhere the absence ladder can read. The ladder
+ *   · a missing OUT raises NOTHING AT ALL. From 02.10 to 19.10.2026 it drew a
+ *     reminder by mail and nothing else (the Collector's direction); the
+ *     order of 20.10.2026 withdrew the reminder (OUT_REMINDER, below). No
+ *     show-cause notice, no casual-leave debit, no lock on the app, and no
+ *     entry anywhere the absence ladder can read, at any time. The ladder
  *     counts unmarked ATTENDANCE — that is what a served notice recites under
  *     Rule 3 — and a man who came to work and forgot to close his day has not
- *     been absent. The reminder is kept on this module's OWN tab, never on
- *     `Reminders`, so there is no table through which the two could ever meet;
+ *     been absent. The reminder, while it ran, was kept on this module's OWN
+ *     tab, never on `Reminders`, so there is no table through which the two
+ *     could ever meet;
  *
  *   · it computes no hours worked. Seven and a half hours is the gate on the
  *     button, not a figure the register publishes about a man. An hours total
@@ -59,6 +62,18 @@ var OUT_AFTER_MINUTES = 450;          /* seven and a half hours */
    night, which is the outcome the direction ruled out. Nine in the evening is
    the figure taken, and it is the Collector's to set. */
 var OUT_DAY_ENDS = '21:00';
+
+/* AND THE MORNING-AFTER REMINDER IS WITHDRAWN (the Collector's order of
+   20.10.2026: "stop sending markout reminders emails"). It ran from 02.10 to
+   19.10 on the sanitation register — one mail, naming no sanction, to an
+   officer who had marked in and not marked out — and the Gram Palana
+   register never carried this module at all. A day left unclosed now draws
+   nothing: no mail, no row on OutReminders, and as before no notice, no
+   debit and no lock. The console's Marked-out tile still shows who closed
+   the day. The code that mailed stands behind this switch and suite 30
+   drives it both ways, so turning it back on is one constant — and it is an
+   order, not an edit. */
+var OUT_REMINDER = false;
 
 /* What the OUT adds to the officer's own attendance row. */
 var A_OUT_HEAD = ['outAt','outLat','outLng','outAccuracy','outVerified','outPhoto',
@@ -131,7 +146,7 @@ function feature_out(){
           closed:closed, open:open, cannot:cannot, marked:rows.length,
           voluntary:{ marked:vol.length, closed:volClosed, rows:vol },
           sanction:false,
-          note:'A day left unclosed draws a reminder by mail the next working morning and nothing else — no notice, no debit and no lock.' });
+          note:'A day left unclosed draws nothing — no reminder, no notice, no debit and no lock.' });
       },
 
       out: function(p, u){
@@ -284,6 +299,10 @@ function feature_out(){
        evening is still a mark, and judging the day while it runs is how an
        honest officer gets chased. */
     daily: function(){
+      /* THE REMINDER IS WITHDRAWN (the order of 20.10.2026, OUT_REMINDER
+         above). The round still runs so the morning's log says why nothing
+         went out; it reads nothing, mails nobody and writes nothing. */
+      if(!OUT_REMINDER) return 'the morning-after reminder is withdrawn (order of 20.10.2026): nobody mailed, nothing written';
       const day = prevWorkingDay_(today_());
       if(!day) return 'no previous working day';
       if(!isWorkingDay_(day)) return day + ' was not a working day';

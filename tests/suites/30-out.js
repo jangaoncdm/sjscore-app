@@ -157,9 +157,11 @@ module.exports = {
       t.contains(r.error, 'past the end of today', 'with the same reason');
     }
 
-    /* ---- 6. THE MORNING AFTER: A REMINDER, AND NOTHING ELSE ----
-       The Collector's direction. A man who came to work and forgot to close
-       his day has not been absent, and nothing here may suggest he was. */
+    /* ---- 6. THE MORNING AFTER: NOTHING, SINCE 20.10.2026 ----
+       The Collector's direction of 02.10 was a reminder and nothing else; his
+       order of 20.10.2026 withdrew the reminder ("stop sending markout
+       reminders emails"). A man who came to work and forgot to close his day
+       has not been absent, and nothing here may suggest he was. */
     {
       const e = start(mock.load({ now:at('10:00') }));
       /* the MSO is 9000000010 on the standing roll — 13 is an MPO, and an
@@ -173,8 +175,22 @@ module.exports = {
 
       /* read the NEXT morning, never the running day (rule 2) */
       e.setNow(NEXT);
-      const said = e.ctx.featureDaily();
+      let said = e.ctx.featureDaily();
       t.contains(said, 'out:', 'the feature’s daily round ran');
+      t.contains(said, 'withdrawn', 'and says the morning-after reminder is withdrawn');
+      t.ok(!e.sheets['OutReminders'] || e.sheets['OutReminders'].rows.length <= 1,
+        'NOBODY IS REMINDED — not the Secretary, not the MSO — and no row is written');
+      t.ok(!e.outbox.some(x => /out not marked/i.test(x.subject)), 'and no mail goes out');
+      const quiet = e.outbox.length;
+      e.ctx.featureDaily();
+      t.eq(e.outbox.length, quiet, 'a second run sends nothing either');
+
+      /* THE MAIL STANDS BEHIND THE SWITCH, and is driven here so the day it
+         is ordered back it is one constant and nothing has to be rebuilt:
+         one officer, never the MSO, and not a word of sanction. */
+      e.ctx.OUT_REMINDER = true;
+      said = e.ctx.featureDaily();
+      t.contains(said, 'reminded by mail', 'with the switch on, the reminder of 02.10 runs as it did');
 
       const rem = e.sheets['OutReminders'];
       t.ok(!!rem, 'the module keeps its own record');
@@ -201,6 +217,7 @@ module.exports = {
       e.ctx.featureDaily();
       t.eq(rem.rows.length, before, 'a second run of the morning job writes no second row');
       t.eq(e.outbox.length, mails, 'and sends no second mail');
+      e.ctx.OUT_REMINDER = false;
     }
 
     /* ---- 7. AND A DAY THAT COULD NOT BE SERVED RAISES NOTHING ---- */

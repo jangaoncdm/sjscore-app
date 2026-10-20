@@ -19,8 +19,8 @@
 
      · AND IT ACCUSES NOBODY. Not a word about a show-cause notice, casual
        leave, a debit or a default appears on the card, whatever state it is
-       in. A reminder by mail the next morning is the whole of the
-       consequence, by the Collector's direction, and an officer who reads
+       in. Nothing follows a day left open — the reminder by mail that was
+       the whole of the consequence was withdrawn on 20.10.2026 — and an officer who reads
        "default" on a government register rings the mandal office.
 
    Usage: node tests/render-out.js
