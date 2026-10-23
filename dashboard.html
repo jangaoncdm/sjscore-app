@@ -1743,7 +1743,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = 'aa1419c - 20 Oct 11:02';
+const BUILD_STAMP = '77316a0 - 23 Oct 11:24';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -4547,7 +4547,12 @@ function parsePostings(text){
     const phone = digits(cells[pi]).slice(-10);
     const di = cells.findIndex((c, i) => i > pi && /secretary|officer|\bmpo\b|\bmpdo\b|\bmso\b|\bps\b/i.test(c));
     const role = di >= 0 ? cells[di] : '';
-    const remark = di >= 0 ? cells.slice(di + 1).filter(String).join(' ') : '';
+    /* the list of 23.10.2026 carries Regular / Incharge / Deputation in a
+       column of its own after the designation, and then a latitude and a
+       longitude that belong to the village-points paste and not to the remark */
+    const tail = di >= 0 ? cells.slice(di + 1) : [];
+    const kind = (tail.length && /^(regular|in-?\s?charge|deputation|deputed|fac)$/i.test(tail[0])) ? tail.shift() : '';
+    const remark = tail.filter(c => c && !/^-?\d+(\.\d+)?$/.test(c)).join(' ');
 
     /* what sits before the mobile, with the serial number dropped */
     let head = cells.slice(0, pi).filter((c, i) => !(i === 0 && /^\d+$/.test(c)));
@@ -4559,7 +4564,7 @@ function parsePostings(text){
     else { bad.push(line.trim().slice(0, 60)); return; }
     if(mandalOnly) gp = '';
     if(!mandal || !name){ bad.push(line.trim().slice(0, 60)); return; }
-    rows.push({ mandal, gp, name, phone, role, remark });
+    rows.push({ mandal, gp, name, phone, role, kind, remark });
   });
   return { rows, bad };
 }
@@ -4903,6 +4908,7 @@ function vAdmin(j,A){
       <div style="font-family:var(--mono);font-size:38px;font-weight:700;letter-spacing:.12em;color:var(--pri)">${esc(ROLLPIN.pin)}</div>
       <div style="font-size:13px;color:var(--tx-2);line-height:1.6;flex:1;min-width:240px">
         ${esc(ROLLPIN.phone)}${ROLLPIN.rows>1?' · written to all '+ROLLPIN.rows+' rows carrying this number, so it works whichever row the app reads':''}<br>
+        ${ROLLPIN.was?'The number was '+esc(ROLLPIN.was)+' \u2014 the PIN he had went with it. He signs in on '+esc(ROLLPIN.phone)+' with this one.<br>':''}
         ${ROLLPIN.unlocked?'The '+ROLLPIN.unlocked+' wrong-PIN attempts standing against him were cleared.<br>':''}
         ${ROLLPIN.inactive?'<b style="color:var(--red)">He is off the roll — the PIN is set but the app will not let him in until he is put back.</b><br>':''}
         It is written nowhere else. Give it to him before you close this.
@@ -5135,10 +5141,11 @@ function vAdmin(j,A){
     'paste the mandals\u2019 list · nothing is written until you say so',
     `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
       Paste the list the mandals send — serial, mandal, GP, officer, mobile, designation and the
-      remark. <b>Deputed</b> is read as a transfer and releases the place he came from;
-      <b>in-charge</b> and <b>FAC</b> are read as a place taken on <b>in addition</b>. A release is only
-      ever proposed for somewhere the register already shows against him, and the sentence it was
-      read from is printed beside it. <b>Nothing is written until you press Apply.</b></div>
+      remark, and a <b>Regular / Incharge / Deputation</b> column where the list has one. <b>Deputed</b>
+      and <b>wrong GP mapped</b> are read as a transfer: every other place the register shows against
+      him is proposed for release, each ticked for you to untick; <b>in-charge</b> and <b>FAC</b> are
+      read as a place taken on <b>in addition</b>. A release is only ever proposed for somewhere the
+      register already shows against him, and the reason is printed beside it. <b>Nothing is written until you press Apply.</b></div>
     <div style="margin-bottom:9px">${pparsed?'<span style="font-size:12px;color:var(--tx-3)">'+pparsed.rows.length+' line(s) read'+
       (pparsed.bad.length?' \u00b7 <span style="color:var(--red)">'+pparsed.bad.length+' not understood</span>':'')+'</span>':''}</div>
     <textarea id="pstTbl" rows="${PST_TEXT?4:6}" placeholder="Paste the posting list here"
@@ -5312,6 +5319,7 @@ function vAdmin(j,A){
       <td>${r.active?'<span class="pill ok">on the roll</span>':'<span class="pill mut">off the roll</span>'}${r.hasPin?'':'<span class="pill warn" style="margin-left:6px">no PIN</span>'}</td>
       <td style="white-space:nowrap">
         <button class="fchip" data-rlpin="${esc(r.phone)}" style="min-height:30px">Reset PIN</button>
+        <button class="fchip" data-rlnum="${esc(r.phone)}" style="min-height:30px">Correct number</button>
         ${r.phone===String(ST.user.phone||'').replace(/D/g,'').slice(-10)
           ? '<span class="mut" style="font-size:12px">you</span>'
           : `<button class="fchip" data-rlact="${esc(r.phone)}" data-on="${r.active?'0':'1'}" style="min-height:30px">${r.active?'Take off':'Put back'}</button>`}
@@ -5383,8 +5391,8 @@ function wireAdmin(){
       TBL_PLANS=null;
       TBL_DONE=r.corrected+' row(s) corrected, '+r.registered+' officer(s) registered, '+
         r.retired+' taken off the roll, '+r.offices+' mandal office(s) written.'+
-        ((r.pins&&r.pins.length)?' These still need a PIN \u2014 use Reset PIN on the roll below: '+
-          r.pins.map(x=>x.name+' ('+x.phone+')').join(', ')+'.':'');
+        ((r.pins&&r.pins.length)?' PINs, shown once and written nowhere: '+
+          r.pins.map(x=>x.name+' ('+x.phone+') '+(x.pin?'PIN '+x.pin:'still needs one \u2014 use Reset PIN on the roll below')).join('; ')+'.':'');
       ROLLMSG=''; ROLLBAD=false;
     });
   };
@@ -5627,6 +5635,18 @@ function wireAdmin(){
     const p=b.dataset.rlpin, who=(ROLL.rows.find(r=>r.phone===p)||{}).name||p;
     if(!confirm('Reset the PIN for '+who+'?\n\nThe PIN he is using today stops working at once. The new one is shown once — copy it and give it to him.')) return;
     rollPost({kind:'userPin',phone:p}, r=>{ ROLLPIN=r; ROLLMSG=''; ROLLBAD=false; });
+  });
+
+  /* A NUMBER IS CORRECTED HERE, on every row carrying it and with a new PIN —
+     the roster paste corrects by chair and cannot name one Secretary in
+     twenty, and the PIN is tied to the number (23.10.2026). */
+  document.querySelectorAll('#g [data-rlnum]').forEach(b=>b.onclick=()=>{
+    const p=b.dataset.rlnum, who=(ROLL.rows.find(r=>r.phone===p)||{}).name||p;
+    const n=String(prompt('New mobile number for '+who+' (now '+p+'):')||'').replace(/\D/g,'').slice(-10);
+    if(!n) return;
+    if(n.length!==10){ rollSay('A mobile number is ten digits.',true); return; }
+    if(!confirm('Write '+n+' over '+p+' for '+who+'?\n\nEvery row carrying the old number takes the new one. His PIN is tied to the number, so a new PIN is set and shown once \u2014 give it to him with the news. He signs in again on the new number.')) return;
+    rollPost({kind:'userPhone',phone:p,newPhone:n}, r=>{ ROLLPIN=r; ROLLMSG=''; ROLLBAD=false; });
   });
 
   document.querySelectorAll('#g [data-rlact]').forEach(b=>b.onclick=()=>{
