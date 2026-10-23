@@ -194,5 +194,25 @@ module.exports = {
       t.ok(Array.isArray(w.pins), 'it names who still needs a PIN');
       t.ok(w.pins.every(p => !p.pin), 'and never carries one — a PIN is shown once, by its own call');
     }
+
+    /* ---- A CORRECTED NUMBER IS NOT LEFT WITH A DEAD PIN (23.10.2026) ----
+       The hash is salt:phone:pin. Writing the new number over the old left a
+       hash no PIN could match, and the officer read "wrong PIN" on the day
+       his number was put right. */
+    {
+      const e = mock.load({ now:'2026-09-19T10:00:00+05:30' }); seed(e);
+      const cdm = tokenFor(e, '9000000001');
+      const set = e.post({ kind:'userPin', token:cdm, phone:'9849771797' });
+      t.eq(e.post({ kind:'login', u:'9849771797', p:set.pin }).ok, true, 'Narsingarao signs in on his number');
+      const w = e.post({ kind:'rollUpdate', token:cdm, dry:false, rows:[
+        { mandal:'Jangaon', role:'MPO', name:'K. Narsingarao', phone:'9849771700', email:'eoprd.jangaon@gmail.com' }
+      ]});
+      t.eq(w.corrected, 1, 'the number is corrected in place');
+      t.eq(e.ctx.findByPhone_('9849771700').hash, '', 'THE DEAD HASH IS CLEARED rather than left to refuse every PIN');
+      t.ok(w.pins.some(p => p.phone === '9849771700' && !p.pin), 'and he is named as needing a PIN, with none on the answer');
+      t.eq(e.post({ kind:'login', u:'9849771700', p:set.pin }).ok, false, 'his old PIN does not open the new number');
+      const again = e.post({ kind:'userPin', token:cdm, phone:'9849771700' });
+      t.eq(e.post({ kind:'login', u:'9849771700', p:again.pin }).ok, true, 'Reset PIN on the roll gives him one that does');
+    }
   }
 };

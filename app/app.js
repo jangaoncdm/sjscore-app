@@ -733,6 +733,17 @@ async function refreshDuty(){
     DB.duty = { on:!!r.on, km:Number(r.km) || 0, acc:Number(r.acc) || 1000,
                 which:String(r.which || ''), why:String(r.why || ''),
                 pts:(r.duty || []).filter(p => p && p.lat && p.lng), at:Date.now() };
+    /* AND THE OFFICER AS THE ROLL HAS HIM NOW. The session held whatever the
+       district said at sign-in and nothing ever asked again, so a village
+       added to him on the console, or taken away, stayed off his screen until
+       he happened to sign out — six "add as in-charge GP" lines on the
+       mandals' list of 23.10.2026 had been written on 04.10. The district's
+       answer rides on this read, and the home screen is redrawn when it
+       differs. */
+    if(r.user && DB.session && DB.session.user && JSON.stringify(r.user) !== JSON.stringify(DB.session.user)){
+      DB.session.user = r.user;
+      if(TAB === 'home'){ try{ renderHome(); }catch(e){} }
+    }
     saveNow();
     /* HE MAY BE LOOKING AT THE SCREEN RIGHT NOW, AND THE STEP IS ALREADY
        WRITTEN. The fix is read in under a second and this answer comes over

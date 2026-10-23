@@ -2061,6 +2061,66 @@ and `Domain/` are, and it was ignored **before the workbook was opened** —
 because `Add/` was not, and a `git add -A` published 192 personal mobile
 numbers on 04.10.2026.
 
+## The list of 23.10.2026 — a posting reaches the officer, or it is not a posting
+
+**Thirty-seven Secretaries on one sheet, five kinds of request, and three
+code faults under them.** Six of the seven *add as in-charge GP* lines had been
+written on the register on 04.10; two of the ten *wrong GP mapped* lines were
+already right. The officers were still looking at the old list, because:
+
+**The app never asked again.** `DB.session.user` was written at sign-in and
+nothing refreshed it, and `auth_` cached the officer per token for six hours
+with no way for a write to reach the cache — so a village added on the console
+reached neither his home screen nor his `op=duty` until he happened to sign
+out, or until the cache expired. Now every write to the roll bumps one version
+stamp (`rollTouched_`), a cached officer is believed only while the stamp he
+was cached under is the stamp in force (`rollVer_`), `op=duty` carries the
+officer as the roll has him, and `refreshDuty` replaces the session's officer
+and redraws Home when it differs. One stamp for the whole roll, not one per
+phone, because a token is keyed by token and the write knows only the number.
+A man taken off the roll is off it at once by the same stamp; he used to keep
+a working token for six hours. Suite 31 §15 and suite 22 hold it.
+
+**A deputation that named no old place became an addition.** `postPlan_`
+found a release only where the remark NAMED a place he held, so "Wrong GP
+Mapped, Need to Update Mention GP" — ten lines, naming nothing — came out as a
+move with no row to write, which `postWrite_` fell through to the add branch:
+the proposal read *now holds Meedikonda* and the register went on holding him
+at Mallampalle as well. Now a line that says **deputed** or **wrong GP mapped**
+(and not in-charge) proposes releasing **every other place the register shows
+against him**, each ticked for the Collector to untick — still the register's
+own names, never a place read out of free text. The list's own
+**Regular / Incharge / Deputation column** is read beside the remark
+(`kind`), and a place one line releases is never a place another line of the
+same paste gives him (`postListed_`). **The old test asserted the old fault**
+— "a remark naming a place he does not hold releases nothing" — and was changed
+with the rule, deliberately, in suite 31 §4. Two more faults came out of the
+write path under the new test: releasing one village of a merged cell
+("Ippagudem, Samudrala") cleared both, and when two lines of one paste swapped
+two men's villages the second line's release landed on a row the first had
+already rewritten and cleared the new village with it. A release is of a
+**place**, and a place the row no longer holds is nothing to release. Suite 31
+§13–14 hold all of it.
+
+**A Secretary's number could not be corrected from the console, and a
+corrected number killed the PIN.** The roster paste corrects by chair, which
+for a Secretary is one of twenty; `claimPhone` in Admin.gs is a code edit and
+a deploy. And the hash is `salt:phone:pin`, so the roster branch that wrote a
+new number over the old left a hash no PIN could match. **Correct number** on
+the roll (`kind:'userPhone'`) writes every row carrying the old number,
+refuses a number another officer holds and names him, sets a PIN shown once
+and written nowhere, clears the lock-out, and kills the tokens issued on the
+old number. The roster branch now clears the dead hash and names him as
+needing a PIN, because no PIN rides that answer (suite 27's rule). Suites 22
+and 27 hold it.
+
+**What the list still needs from the Collector** is in `Issue/ACTS-23.10.2026.md`
+(gitignored, it carries numbers): one number corrected, one postings paste,
+one village-points paste, three PIN resets. **Vachya Thanda's new coordinate is
+the Tharigoppula MPDO office to the metre** and was held back: written, it
+would let the mark be made from the mandal headquarters. Restore point:
+`pre-issues-2026-10-23`.
+
 ## House style
 
 The prose in this project is plain, unhurried, and written for an officer

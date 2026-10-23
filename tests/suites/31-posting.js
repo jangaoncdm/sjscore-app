@@ -140,12 +140,19 @@ module.exports = {
       const e = start([
         { Phone:'9000000023', Name:'B Kumar', Role:'PS', Mandal:'Bachannapet', GP:'Mansanpally', Email:'b@x', Active:'TRUE' }
       ]);
-      /* the remark names a village he does NOT hold */
+      /* the remark names a village he does NOT hold. Until 23.10.2026 this
+         released nothing — and a move with nothing to release fell through
+         to an ADDITION, so a deputed man went on holding the old village as
+         well. He is deputed: what the REGISTER shows against him is proposed,
+         ticked, and "Somewhere Else" is still never read out of the remark. */
       const r = post(e, [{ mandal:'Bachannapet', gp:'Salvapur', name:'B Kumar', phone:'9000000023',
         role:'Panchayat Secretary', remark:'Deputed from Somewhere Else to Salvapur' }], true);
-      t.eq(r.plans[0].releases.length, 0,
-        'A REMARK NAMING A PLACE HE DOES NOT HOLD RELEASES NOTHING — the register is the authority');
+      t.eq(r.plans[0].releases.length, 1,
+        'A DEPUTED MAN WHOSE REMARK NAMES NO PLACE HE HOLDS: the place the REGISTER shows is proposed');
+      t.eq(r.plans[0].releases[0].place, 'Mansanpally', 'and it is the register\'s own word, not "Somewhere Else"');
+      t.contains(r.plans[0].releases[0].why, 'untick', 'ticked for the Collector to untick');
       t.eq(r.plans[0].verdict, 'move', 'the posting itself still stands');
+      t.eq(r.plans[0].writeRow, 3, 'and it is written over his own row, not added beside it');
 
       /* and where it DOES name one he holds, the sentence it was read from
          travels with the proposal, so the Collector sees the evidence */
@@ -540,6 +547,139 @@ module.exports = {
       t.eq(r2.released, 0, 'AN ID THE SERVER NEVER PROPOSED RELEASES NOTHING');
       t.eq(JSON.stringify(gpsOf(f, '9000000034')), '["Salvapur"]',
         'the other officer keeps his village — the console can narrow, never widen');
+    }
+
+    /* ---- 13. THE LIST OF 23.10.2026 — "WRONG GP MAPPED", AND A COLUMN FOR THE KIND ----
+       Ten lines said "Wrong GP Mapped, Need to Update Mention GP" and named no
+       old place; the office had written Regular / Incharge / Deputation in a
+       column of its own. Before this, each of the ten would have been ADDED
+       and the wrong village kept. Y. Raju and Banothu Kishore were swapped
+       between two mandals. */
+    {
+      const roll23 = [
+        { Mandal:'Palakurthi', GP:'Mallampalle' }, { Mandal:'Ghanpur (Stn)', GP:'Meedikonda' },
+        { Mandal:'Ghanpur (Stn)', GP:'Ippagudem' }, { Mandal:'Ghanpur (Stn)', GP:'Samudrala' },
+        { Mandal:'Palakurthi', GP:'Bommera' }, { Mandal:'Devaruppula', GP:'Kadavendi' },
+        { Mandal:'Devaruppula', GP:'Pottigutta Thanda' }, { Mandal:'Tharigoppula', GP:'Bonthaghattunagaram' },
+        { Mandal:'Tharigoppula', GP:'Bothala Parre' }, { Mandal:'Bachannapet', GP:'Basireddypalle' }
+      ];
+      const e = start([
+        { Phone:'9000000031', Name:'Y. Raju',         Role:'PS', Mandal:'Palakurthi',    GP:'Mallampalle', Active:'TRUE' },
+        { Phone:'9000000032', Name:'Banothu kishore', Role:'PS', Mandal:'Ghanpur (Stn)', GP:'Meedikonda',  Active:'TRUE' }
+      ], roll23);
+      const line = (gp, mandal, name, phone, kind, remark) => ({ mandal, gp, name, phone, role:'Panchayat Secretary', kind, remark });
+      const d = post(e, [
+        line('Meedikonda', 'Ghanpur(Stn)', 'Y. Raju', '9000000031', 'Deputation', 'Wrong GP Mapped, Need to Update Mention GP'),
+        line('Mallampalle', 'Palakurthy', 'Banothu kishore', '9000000032', 'Deputation', 'Update Location')
+      ], true);
+      t.eq(d.plans[0].verdict, 'move', '"wrong GP mapped" with no old place named is a MOVE');
+      t.eq(d.plans[0].releases.map(x => x.place).sort().join(','), 'Mallampalle,Meedikonda',
+        'his own old village is released (the register named it) and so is the man holding the new one');
+      t.eq(d.plans[1].verdict, 'move', 'and Deputation in the kind column alone reads as a move');
+      t.eq(d.plans[1].releases.map(x => x.place).sort().join(','), 'Mallampalle,Meedikonda',
+        'Kishore gives up Meedikonda, and Raju is named as holding Mallampalle today');
+      t.eq(JSON.stringify(e.sheets['Users'].rows).indexOf('Bommera'), -1, 'the dry run wrote nothing');
+
+      const w = post(e, [
+        line('Meedikonda', 'Ghanpur(Stn)', 'Y. Raju', '9000000031', 'Deputation', 'Wrong GP Mapped, Need to Update Mention GP'),
+        line('Mallampalle', 'Palakurthy', 'Banothu kishore', '9000000032', 'Deputation', 'Update Location')
+      ]);
+      t.eq(w.ok, true, 'it writes');
+      t.eq(JSON.stringify(gpsOf(e, '9000000031')), '["Meedikonda"]', 'RAJU HOLDS MEEDIKONDA AND NOTHING ELSE — not Mallampalle as well');
+      t.eq(e.ctx.findByPhone_('9000000031').mandal, 'Ghanpur (Stn)', 'in the roll\'s spelling of the new mandal');
+      t.eq(JSON.stringify(gpsOf(e, '9000000032')), '["Mallampalle"]', 'and Kishore holds Mallampalle alone');
+      t.eq(e.ctx.findByPhone_('9000000031').rows.length, 1, 'each on his own one row, rewritten rather than doubled');
+      const again = post(e, [
+        line('Meedikonda', 'Ghanpur(Stn)', 'Y. Raju', '9000000031', 'Deputation', 'Wrong GP Mapped, Need to Update Mention GP')
+      ], true);
+      t.eq(again.plans[0].verdict, 'unchanged', 'and a second paste finds its work done (rule 8)');
+
+      /* IN-CHARGE STILL WINS, with the same remark beside it: Saikumar took
+         Keshireddipally in charge and the line said "wrong GP mapped" */
+      const f = start([
+        { Phone:'9000000033', Name:'Chinthakindi Saikumar', Role:'PS', Mandal:'Bachannapet', GP:'Basireddypalle', Active:'TRUE' }
+      ], roll23.concat([{ Mandal:'Bachannapet', GP:'Kesireddipalle' }]));
+      const a = post(f, [line('Kesireddipalle', 'Bachannapet', 'Chinthakindi Saikumar', '9000000033', 'Incharge', 'Wrong GP Mapped, Need to Update Mention GP')], true);
+      t.eq(a.plans[0].verdict, 'add', 'Incharge in the kind column is an ADDITION whatever the remark says');
+      t.eq(a.plans[0].releases.length, 0, 'and releases nothing of his');
+
+      /* REGULAR IS NOT A WORD ABOUT HIS OTHER VILLAGES: Ravinder is Regular
+         at Bonthaghattunagaram and in charge of Bothala Parre, and a line
+         about the first must not propose the second */
+      const g = start([
+        { Phone:'9000000034', Name:'D Ravinder', Role:'PS', Mandal:'Tharigoppula', GP:'Bonthaghattunagaram', Active:'TRUE' },
+        { Phone:'9000000034', Name:'D Ravinder', Role:'PS', Mandal:'Tharigoppula', GP:'Bothala Parre', Active:'TRUE' }
+      ], roll23);
+      const u = post(g, [line('Bonthaghattunagaram', 'Tharigoppula', 'Dharavath Ravinder', '9000000034', 'Regular', 'Update Location')], true);
+      t.eq(u.plans[0].verdict, 'unchanged', 'a Regular line about a village he holds proposes nothing');
+      t.eq((u.plans[0].releases || []).length, 0, 'and Bothala Parre is not touched');
+    }
+
+    /* ---- 14. A PLACE THIS PASTE GIVES HIM ON ANOTHER LINE IS NOT RELEASED,
+                AND A CELL HOLDING TWO VILLAGES LOSES ONE, NOT BOTH ---- */
+    {
+      const roll23 = [
+        { Mandal:'Devaruppula', GP:'Kadavendi' }, { Mandal:'Devaruppula', GP:'Pottigutta Thanda' },
+        { Mandal:'Ghanpur (Stn)', GP:'Ippagudem' }, { Mandal:'Ghanpur (Stn)', GP:'Samudrala' },
+        { Mandal:'Palakurthi', GP:'Bommera' }
+      ];
+      const line = (gp, mandal, name, phone, kind, remark) => ({ mandal, gp, name, phone, role:'Panchayat Secretary', kind, remark });
+      /* Venkatesh: one merged cell, two lines in the paste */
+      const e = start([
+        { Phone:'9000000041', Name:'Dharavath Venkatesh', Role:'PS', Mandal:'Devaruppula', GP:'Kadavendi, Pottigutta Thanda', Active:'TRUE' }
+      ], roll23);
+      const d = post(e, [
+        line('Kadavendi', 'Devaruppula', 'Dharavath Venkatesh', '9000000041', 'Deputation', 'Phone number Updation'),
+        line('Pottigutta Thanda', 'Devaruppula', 'D Venkatesh', '9000000041', 'Incharge', 'Phone number Updation')
+      ], true);
+      t.eq(d.plans[0].verdict, 'unchanged', 'deputed to a village he holds, nothing proposed');
+      t.eq(d.plans[0].releases.length, 0, 'POTTIGUTTA THANDA IS NOT RELEASED — the next line of the same paste gives it to him');
+      t.eq(d.plans[1].verdict, 'unchanged', 'and the in-charge line finds its work done');
+
+      /* Yugender: "Ippagudem, Samudrala" in one cell, deputed to Bommera in
+         another mandal — both proposed; the Collector unticks Samudrala */
+      const f = start([
+        { Phone:'9000000042', Name:'Yugender.M', Role:'PS', Mandal:'Ghanpur (Stn)', GP:'Ippagudem, Samudrala', Active:'TRUE' }
+      ], roll23);
+      const p = post(f, [line('Bommera', 'Palakurthy', 'Mattepally Yugender', '9000000042', 'Deputation', 'Wrong GP Mapped')], true);
+      t.eq(p.plans[0].releases.map(x => x.place).sort().join(','), 'Ippagudem,Samudrala', 'both villages of the cell are proposed');
+      const keepIpp = p.plans[0].releases.filter(x => x.place === 'Ippagudem').map(x => x.id);
+      const w = f.post({ kind:'postingUpdate', token:cdm(f), dry:false, keep:keepIpp,
+        rows:[line('Bommera', 'Palakurthy', 'Mattepally Yugender', '9000000042', 'Deputation', 'Wrong GP Mapped')] });
+      t.eq(w.ok, true, 'written with Samudrala unticked');
+      t.eq(JSON.stringify(gpsOf(f, '9000000042').sort()), '["Bommera","Samudrala"]',
+        'HE KEEPS SAMUDRALA AND GAINS BOMMERA — releasing one village of a merged cell used to clear both');
+      const his = f.ctx.findByPhone_('9000000042');
+      t.eq(his.mandals.sort().join(','), 'Ghanpur (Stn),Palakurthi', 'on two rows, because the two are in two mandals');
+
+      /* and with both ticked, his one row is rewritten to Bommera */
+      const g = start([
+        { Phone:'9000000042', Name:'Yugender.M', Role:'PS', Mandal:'Ghanpur (Stn)', GP:'Ippagudem, Samudrala', Active:'TRUE' }
+      ], roll23);
+      post(g, [line('Bommera', 'Palakurthy', 'Mattepally Yugender', '9000000042', 'Deputation', 'Wrong GP Mapped')]);
+      t.eq(JSON.stringify(gpsOf(g, '9000000042')), '["Bommera"]', 'both ticked: Bommera alone');
+      t.eq(g.ctx.findByPhone_('9000000042').rows.length, 1, 'on his own one row');
+      const aud = g.sheets['Audit'].rows.slice(1).map(r => r.join('|'));
+      t.ok(aud.some(x => /POSTING RELEASED/.test(x) && /Samudrala/.test(x)) && aud.some(x => /POSTING MOVED/.test(x)),
+        'every step is on the Audit tab');
+    }
+
+    /* ---- 15. A POSTING WRITTEN TODAY REACHES HIS APP TODAY ----
+       The officer a token names was cached for six hours and the app kept
+       the session it was handed at sign-in: six "add as in-charge GP" lines
+       of 23.10.2026 had been written on 04.10. */
+    {
+      const e = start([
+        { Phone:'9000000051', Name:'T.Prashanth', Role:'PS', Mandal:'Bachannapet', GP:'Mansanpally', Active:'TRUE' }
+      ]);
+      const tok = e.ctx.issueToken_(e.ctx.findByPhone_('9000000051'));
+      t.eq(JSON.stringify(e.get('duty', { token:tok }).user.gps), '["Mansanpally"]', 'op=duty carries the officer as the roll has him');
+      post(e, [{ mandal:'Bachannapet', gp:'Salvapur', name:'T.Prashanth', phone:'9000000051',
+        role:'Panchayat Secretary', kind:'Incharge', remark:'Add as Incharge GP' }]);
+      const me = e.get('duty', { token:tok });
+      t.eq(JSON.stringify(me.user.gps), '["Mansanpally","Salvapur"]',
+        'AND THE SAME TOKEN READS THE NEW VILLAGE AT ONCE — not when a six-hour cache expires');
+      t.ok(!JSON.stringify(me.user).match(/hash/i), 'nothing of the hash rides with him');
     }
 
     /* ---- 12. IT IS SWACHH JANGAON'S ALONE ---- */

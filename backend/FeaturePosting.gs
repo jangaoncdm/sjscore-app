@@ -88,7 +88,15 @@ function feature_posting(){
         try{
           const t = uidx_(), v = t.sh.getDataRange().getValues();
           const roll = gpRoll_();
-          const plans = rows.map(function(r){ return postPlan_(t, v, roll, r); });
+          /* WHAT THIS PASTE GIVES EACH OFFICER, read before any line is
+             planned: a place one line takes off a deputed man is never a
+             place another line of the same paste gives him in charge. */
+          const dest = {};
+          rows.forEach(function(r){
+            const ph = phone10_(r.phone || ''), g = pkey_(r.gp || '');
+            if(ph.length === 10 && g) (dest[ph] = dest[ph] || []).push(g);
+          });
+          const plans = rows.map(function(r){ return postPlan_(t, v, roll, r, dest); });
 
           /* EVERY RELEASE IS THE COLLECTOR’S OWN TICK. Eight of the forty-eight
              remarks on the district’s list of 02.10.2026 speak of neither a
@@ -177,16 +185,19 @@ function postHolder_(t, v, mandal, gp){
 }
 
 /* ------------------------------------------------------------------ planning */
-function postPlan_(t, v, roll, r){
+function postPlan_(t, v, roll, r, dest){
   const mandal = String(r.mandal || '').trim();
   const gp     = String(r.gp || '').trim();
   const name   = String(r.name || '').trim();
   const phone  = phone10_(r.phone || '');
   const remark = String(r.remark || '').replace(/\s+/g, ' ').trim();
+  /* the mandals' list of 23.10.2026 carries a column of its own for it —
+     Regular, Incharge, Deputation — read beside the remark, never instead */
+  const kind   = String(r.kind || '').replace(/\s+/g, ' ').trim();
   const role   = POST_ROLE[String(r.role || '').trim().toLowerCase()] ||
                  String(r.role || '').trim().toUpperCase();
 
-  const out = { mandal:mandal, gp:gp, name:name, phone:phone, role:role, remark:remark,
+  const out = { mandal:mandal, gp:gp, name:name, phone:phone, role:role, remark:remark, kind:kind,
                 changes:[], releases:[] };
 
   if(phone.length !== 10){ out.verdict = 'refused'; out.why = 'a mobile number is ten digits'; return out; }
@@ -363,8 +374,8 @@ function postPlan_(t, v, roll, r){
 
   /* WHAT THE REMARK ASKS FOR. "incharge" and "FAC" mean he takes this as well;
      anything else that speaks of a deputation means he has moved. */
-  const g = remark.toLowerCase();
-  const saysDeputed = /deput|dupt/.test(g);
+  const g = remark.toLowerCase(), k = kind.toLowerCase();
+  const saysDeputed = /deput|dupt/.test(g) || /deput/.test(k);
   /* “PREVIOUSLY I HAD INCHARGE SALVAPUR GP” IS NOT A CHARGE BEING TAKEN ON.
      It carries the word incharge and means the opposite of it: he HELD that
      village and wants it off him. Issues 4 and 5 of the district’s list of
@@ -380,7 +391,22 @@ function postPlan_(t, v, roll, r){
      propose costs him a glance; not proposing costs the officer his
      complaint. */
   const saysPast    = /previously|no longer|used to|shifted|not working in/.test(g);
-  const saysExtra   = /incharge|in charge|\bfac\b/.test(g) && !saysDeputed && !saysPast;
+  const saysExtra   = (/incharge|in charge|\bfac\b/.test(g) || /incharge|in charge|\bfac\b/.test(k)) &&
+                      !saysDeputed && !saysPast;
+  /* "WRONG GP MAPPED" SAYS THAT WHAT THE REGISTER HAS IS WRONG. Ten lines of
+     the 23.10.2026 list say it in those words and name no old place at all,
+     and a deputation names none either when the office writes only where he
+     is going. Until that list a move with no old place to point at fell
+     through to an ADDITION — the proposal read "now holds Meedikonda" and the
+     register went on holding him at Mallampalle as well, which is the very
+     fault the line was sent to cure. So a man the list says is DEPUTED or
+     WRONGLY MAPPED holds the new place INSTEAD: every other place the
+     register shows against him is proposed for release, each ticked for the
+     Collector to untick, and each still a place the REGISTER names — the
+     remark has only said that what stands is wrong. Nothing is read out of
+     free text and written. In-charge still means in addition, and wins. */
+  const saysWrong   = /wrong(ly)?\s*(gp|village|place|mapp)|mapp\w*\s+wrong/.test(g);
+  const saysSole    = (saysDeputed || saysWrong) && !saysExtra && !saysPast;
 
   /* THE PLACE TO RELEASE IS FOUND IN THE REGISTER AND POINTED AT BY THE
      REMARK, never read out of the remark on its own. Only somewhere he
@@ -395,6 +421,20 @@ function postPlan_(t, v, roll, r){
       if(!postNamed_(remark, place)) return;
       out.releases.push({ row:h.row + 1, place:place, mandal:h.mandal,
                           why:'the remark names it: "' + remark + '"' });
+    });
+  }
+
+  if(saysSole && !out.releases.length){
+    held.forEach(function(h){
+      const place = mandalOnly ? h.mandal : h.gp;
+      if(!place) return;
+      const samePlace = mandalOnly ? pkey_(h.mandal) === pkey_(out.mandal)
+                                   : pkey_(h.gp) === pkey_(out.gp);
+      if(samePlace) return;                       /* that is where he is going */
+      if(postListed_(dest, phone, place)) return; /* this paste gives it to him on another line */
+      out.releases.push({ row:h.row + 1, place:place, mandal:h.mandal,
+                          why:(saysDeputed ? 'he is deputed' : 'the list says the register has him against the wrong place') +
+                              ', and the register still shows him holding ' + place + ' — released unless you untick it' });
     });
   }
 
@@ -533,6 +573,19 @@ function postNear_(roll, gp, mandal){
     .slice(0, 3);
 }
 
+/* IS THIS PLACE GIVEN TO HIM ELSEWHERE IN THE SAME PASTE? Kadavendi on one
+   line as his deputation and Pottigutta Thanda on the next as his charge are
+   one officer's two places, and the first line must not release the second.
+   The same small distance as everywhere else, because both lines are typed
+   by one office in its own spelling. */
+function postListed_(dest, phone, place){
+  const list = (dest && dest[phone]) || [];
+  const p = pkey_(place);
+  if(!p) return false;
+  const lim = Math.max(1, Math.floor(p.length / 5));
+  return list.some(function(g){ return g === p || postDist_(g, p) <= lim; });
+}
+
 /* A RELEASE NAMES ITS ROW, so the console can hand back exactly the ones the
    Collector left ticked and the server can match them without trusting a
    position in a list. */
@@ -570,13 +623,37 @@ function postWrite_(t, plans, u){
          inactive where he has other rows, so his attendance and his notices go
          on pointing at it; and where it is his ONLY row the place is cleared
          instead, because he is still an officer, with no village. */
-      if(others.length && t.ix.active >= 0) sh.getRange(i + 1, t.ix.active + 1).setValue('FALSE');
-      else if(t.ix.gp >= 0) sh.getRange(i + 1, t.ix.gp + 1).setValue('');
+      /* A CELL HOLDING TWO VILLAGES LOSES ONE, NOT BOTH. mergeDuplicateOfficers
+         leaves "Kadavendi, Pottigutta Thanda" in one cell; releasing one of
+         them used to clear the cell, or mark the whole row inactive, and take
+         the other village off him with it. The place named is taken out of
+         the cell and the rest stays his. */
+      const inCell = String(cell_(v2[i], t.ix.gp) || '').split(',').map(function(s){ return s.trim(); }).filter(String);
+      /* THE ROW MAY HAVE MOVED ON SINCE THE PLAN WAS MADE. Two lines of one
+         paste swapping two men's villages each name the OTHER man's row, and
+         the second line finds the first already written there: Raju's row
+         held Mallampalle when the plan was made and holds Meedikonda by the
+         time Kishore's line comes to release Mallampalle from it. A release
+         is of a PLACE, and a place the row no longer holds is nothing to
+         release — clearing the cell regardless took Raju's new village off
+         him in the same paste that gave it. Suite 31 section 13 caught it. */
+      if(x.place && inCell.length && !inCell.some(function(s){ return pkey_(s) === pkey_(x.place); })) return;
+      const rest = inCell.filter(function(s){ return pkey_(s) !== pkey_(x.place); });
+      let how = 'nothing to write';
+      if(inCell.length > 1 && rest.length && t.ix.gp >= 0){
+        sh.getRange(i + 1, t.ix.gp + 1).setValue(rest.join(', '));
+        how = 'taken out of the cell; ' + rest.join(', ') + ' stays';
+      } else if(others.length && t.ix.active >= 0){
+        sh.getRange(i + 1, t.ix.active + 1).setValue('FALSE');
+        how = 'row marked inactive';
+      } else if(t.ix.gp >= 0){
+        sh.getRange(i + 1, t.ix.gp + 1).setValue('');
+        how = 'village cleared, row kept';
+      }
       released++;
       admAudit_('POSTING RELEASED', ph,
         (x.from || cell_(v2[i], t.ix.name)) + ' · ' + (x.place || '(no village)') + ', ' + (x.mandal || '') +
-        ' · ' + (others.length ? 'row marked inactive' : 'village cleared, row kept') +
-        ' · by ' + u.name);
+        ' · ' + how + ' · by ' + u.name);
     });
 
     if(p.verdict === 'release') return;            /* only a release was asked */
@@ -600,13 +677,21 @@ function postWrite_(t, plans, u){
       /* HIS OWN ROW IS WRITTEN TO THE NEW PLACE rather than retired and a new
          one made: it is the same man, and the row carries his PIN. */
       const i = p.writeRow - 1;
-      if(t.ix.gp >= 0) sh.getRange(i + 1, t.ix.gp + 1).setValue(p.gp || '');
-      if(t.ix.mandal >= 0) sh.getRange(i + 1, t.ix.mandal + 1).setValue(p.mandal);
-      if(t.ix.active >= 0) sh.getRange(i + 1, t.ix.active + 1).setValue('TRUE');
-      moved++;
-      admAudit_('POSTING MOVED', p.phone, p.name + ' · now ' +
-        (p.gp ? p.gp + ', ' : '') + p.mandal + ' · by ' + u.name);
-      return;
+      /* what the row still holds after the releases above — a second village
+         the Collector left unticked stays in the cell beside the new one */
+      const left = t.ix.gp >= 0 ? String(sh.getRange(i + 1, t.ix.gp + 1).getValue() || '').trim() : '';
+      const sameM = pkey_(String(t.ix.mandal >= 0 ? sh.getRange(i + 1, t.ix.mandal + 1).getValue() : '')) === pkey_(p.mandal);
+      if(!left || sameM){
+        if(t.ix.gp >= 0) sh.getRange(i + 1, t.ix.gp + 1).setValue(left && p.gp ? left + ', ' + p.gp : (p.gp || ''));
+        if(t.ix.mandal >= 0) sh.getRange(i + 1, t.ix.mandal + 1).setValue(p.mandal);
+        if(t.ix.active >= 0) sh.getRange(i + 1, t.ix.active + 1).setValue('TRUE');
+        moved++;
+        admAudit_('POSTING MOVED', p.phone, p.name + ' · now ' +
+          (p.gp ? p.gp + ', ' : '') + p.mandal + (left ? ' · keeps ' + left : '') + ' · by ' + u.name);
+        return;
+      }
+      /* a village he keeps in ANOTHER mandal cannot share his row with this
+         one, so the new place takes a row of his own below */
     }
 
     /* ADD, and a MOVE with no row of his own to write (a mandal officer whose
@@ -639,5 +724,6 @@ function postWrite_(t, plans, u){
       (p.gp ? p.gp + ', ' : '') + p.mandal + ' · by ' + u.name);
   });
 
+  if(moved || added || released || registered) rollTouched_();   /* and his app learns it at its next opening */
   return { moved:moved, added:added, released:released, registered:registered, pins:pins };
 }

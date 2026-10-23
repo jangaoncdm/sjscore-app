@@ -1061,20 +1061,39 @@ function issueToken_(u){
   const tok = Utilities.getUuid().replace(/-/g,'') + Utilities.getUuid().replace(/-/g,'');
   sheet_('Tokens', ['Token','Name','Phone','Created','Expires'])
     .appendRow([tok, u.name, "'" + u.phone, new Date(), new Date(Date.now() + SESSION_DAYS*24*3600*1000)]);
-  cache_().put('tk_' + tok, JSON.stringify(pub_(u)), 21600);
+  cache_().put('tk_' + tok, JSON.stringify({ v:rollVer_(), u:pub_(u) }), 21600);
   return tok;
 }
+
+/* A POSTING WRITTEN TODAY REACHES THE OFFICER TODAY. The officer a token
+   names is cached for six hours, and until 23.10.2026 nothing a posting, the
+   roll or a Take-off wrote could reach that cache: a village added to a man on
+   the console stayed out of his op=duty, his schedule and his plan until the
+   cache expired — and his own app never asked again at all, because it kept
+   the session it was handed at sign-in. Six of the seven "add as in-charge GP"
+   lines on the mandals' list of 23.10.2026 had been written on 04.10, and the
+   officers were still looking at the old list. So every write to the roll
+   bumps one version stamp, and a cached officer is believed only while the
+   stamp he was cached under is the stamp in force. One stamp for the whole
+   roll and not one per phone, because a token is keyed by token and the write
+   knows only the number. A stamp the cache has lost reads as a change, which
+   costs one re-read and never a stale answer. */
+function rollTouched_(){ try{ cache_().put('rollv', Date.now() + ':' + Math.floor(Math.random() * 1e6), 21600); }catch(err){} }
+function rollVer_(){ try{ return String(cache_().get('rollv') || '0'); }catch(err){ return '0'; } }
 function auth_(token){
   if(!token) return null;
   const c = cache_().get('tk_' + token);
-  if(c) return JSON.parse(c);
+  if(c){
+    const got = JSON.parse(c);
+    if(got && got.u && got.v === rollVer_()) return got.u;   /* nothing on the roll has moved since */
+  }
   const v = sheet_('Tokens', ['Token','Name','Phone','Created','Expires']).getDataRange().getValues();
   for(let i = v.length - 1; i >= 1; i--){
     if(String(v[i][0]) === String(token)){
       if(new Date(v[i][4]) < new Date()) return null;
       const u = findByPhone_(v[i][2]);
       if(!u || !u.active) return null;
-      cache_().put('tk_' + token, JSON.stringify(pub_(u)), 21600);
+      cache_().put('tk_' + token, JSON.stringify({ v:rollVer_(), u:pub_(u) }), 21600);
       return pub_(u);
     }
   }
@@ -4460,6 +4479,10 @@ function doGet(e){
     const pts = districtRole_(u.role) ? [] : dutyPoints_(u);
     return json_({ ok:true, on: !rule.off && pts.length > 0, km:rule.km, acc:rule.acc,
                    duty:pts, which:(pts[0] || {}).which || '',
+                   /* and the officer as the roll has him NOW, so a posting
+                      written on the console reaches his app at its next
+                      opening and not at his next sign-in */
+                   user:u,
                    why: rule.off ? 'the district has stood the fence down'
                       : (!pts.length ? 'the district has not placed your office yet' : '') });
   }
@@ -5822,6 +5845,7 @@ function createUser_(b, u){
     t.sh.appendRow(row);
     admAudit_('OFFICER REGISTERED', p, name + ' · ' + role +
       (b.mandal ? ' · ' + String(b.mandal).trim() : '') + ' · PIN set, not recorded here');
+    rollTouched_();
     return json_({ ok:true, phone:p, name:name, role:role, pin:pin });
   } finally { lock.releaseLock(); }
 }
@@ -5866,6 +5890,53 @@ function resetUserPin_(b, u){
 }
 
 /* take an officer off the roll, or put him back on it */
+/* A NUMBER IS CORRECTED ON EVERY ROW THAT CARRIES IT, AND THE PIN GOES WITH
+   IT. Off the mandals' list of 23.10.2026: a Secretary of Devaruppula changed
+   his mobile and there was nowhere on the console to say so. The roster paste
+   corrects by CHAIR — mandal and role — which names one MPO and twenty
+   Secretaries, and Admin.gs's claimPhone is a code edit and a deploy for one
+   man. And the PIN hash is salt:phone:pin, so a number written over the old
+   one leaves a hash no PIN can ever match: the officer is told his PIN is
+   wrong on the day his number was put right. So the new number and a new PIN
+   are one act. The PIN is shown once and written nowhere, the hash goes to
+   every row carrying the number as a reset does, and a number another officer
+   holds is refused with its holder named (one number, one officer). The
+   tokens he holds were issued on the old number and die with it; he signs in
+   again on the new one, which is what the Collector has just told him to do. */
+function correctUserPhone_(b, u){
+  if(u.role !== 'COLLECTOR') return json_({ ok:false, error:'A number is corrected by the Collector alone.' });
+  const p = phone10_(b.phone || ''), np = phone10_(b.newPhone || '');
+  if(p.length !== 10 || np.length !== 10) return json_({ ok:false, error:'A mobile number is ten digits.' });
+  if(p === np) return json_({ ok:false, error:'That is the number already on the roll. Nothing was written.' });
+  if(p === u.phone) return json_({ ok:false, error:'Your own number is not changed from here — the console is signed in on it.' });
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const t = uidx_(), v = t.sh.getDataRange().getValues();
+    const rows = rollRows_(t, v, p);
+    if(!rows.length) return json_({ ok:false, error:'That number is not on the roll.' });
+    const held = rollRows_(t, v, np);
+    if(held.length)
+      return json_({ ok:false, error:'That number is already on the roll — ' +
+        (cell_(v[held[0]], t.ix.name) || '(unnamed)') + ', ' + cell_(v[held[0]], t.ix.role) +
+        (cell_(v[held[0]], t.ix.mandal) ? ', ' + cell_(v[held[0]], t.ix.mandal) : '') +
+        '. One number is one officer; nothing was written.' });
+
+    const pin = dayPin_(np), h = hash_(np, pin);
+    rows.forEach(i => {
+      t.sh.getRange(i + 1, t.ix.phone + 1).setValue("'" + np);
+      t.sh.getRange(i + 1, t.ix.hash + 1).setValue(h);
+      if(t.ix.initpin >= 0) t.sh.getRange(i + 1, t.ix.initpin + 1).setValue('');
+    });
+    try{ cache_().remove('pl_' + p); cache_().remove('pl_' + np); }catch(err){}
+    rollTouched_();
+    const name = rows.map(i => cell_(v[i], t.ix.name)).filter(String)[0] || '(unnamed)';
+    admAudit_('NUMBER CORRECTED', np, name + ' · was ' + p + ' · ' + rows.length + ' row(s) · PIN set, not recorded here');
+    return json_({ ok:true, phone:np, was:p, name:name, pin:pin, rows:rows.length });
+  } finally { lock.releaseLock(); }
+}
+
 function setUserActive_(b, u){
   if(u.role !== 'COLLECTOR') return json_({ ok:false, error:'The roll is the Collector’s.' });
   const p = phone10_(b.phone || '');
@@ -5891,6 +5962,7 @@ function setUserActive_(b, u){
       wrote++;
     });
     const name = rows.map(i => cell_(v[i], t.ix.name)).filter(String)[0] || '(unnamed)';
+    rollTouched_();                  /* off the roll now, not when a six-hour cache expires */
     admAudit_(on ? 'OFFICER RESTORED TO THE ROLL' : 'OFFICER TAKEN OFF THE ROLL', p,
       name + ' · ' + rows.length + ' row(s) · the row stands, nothing was deleted');
     return json_({ ok:true, phone:p, name:name, active:on, rows:rows.length, written:wrote });
@@ -7044,8 +7116,18 @@ function rollUpdate_(b, u){
       if(p.verdict === 'unchanged' || p.verdict === 'refused' || p.verdict === 'ambiguous') return;
 
       if(p.verdict === 'correct'){
-        const i = p.row - 1;
-        if(p.was.phone !== p.phone) t.sh.getRange(p.row, t.ix.phone + 1).setValue("'" + p.phone);
+        if(p.was.phone !== p.phone){
+          t.sh.getRange(p.row, t.ix.phone + 1).setValue("'" + p.phone);
+          /* THE PIN HASH BINDS THE NUMBER (salt:phone:pin), so a number
+             written over the old one left a hash no PIN could ever match, and
+             the officer was told "wrong PIN" on the day his number was put
+             right. The dead hash is cleared and he is named below as needing
+             a PIN — no PIN rides this answer; Reset PIN on the roll issues it,
+             shown once. */
+          t.sh.getRange(p.row, t.ix.hash + 1).setValue('');
+          if(t.ix.initpin >= 0) t.sh.getRange(p.row, t.ix.initpin + 1).setValue('');
+          pins.push({ phone:p.phone, name:p.name, mandal:p.mandal });
+        }
         if(p.name)  t.sh.getRange(p.row, t.ix.name + 1).setValue(p.name);
         if(p.email && t.ix.email >= 0) t.sh.getRange(p.row, t.ix.email + 1).setValue(p.email);
         admAudit_('ROLL CORRECTED', p.phone, p.role + ' of ' + p.mandal + ' · ' + p.changes.join('; '));
@@ -7078,6 +7160,8 @@ function rollUpdate_(b, u){
       made++;
       pins.push({ phone:p.phone, name:p.name, mandal:p.mandal });
     });
+
+    rollTouched_();
 
     /* the offices. A tab of places, written by mandal, and idempotent. */
     let officeWrote = 0;
@@ -7666,6 +7750,7 @@ function doPost(e){
   if(b.kind === 'userCreate') return createUser_(b, u);
   if(b.kind === 'userPin')    return resetUserPin_(b, u);
   if(b.kind === 'userActive') return setUserActive_(b, u);
+  if(b.kind === 'userPhone')  return correctUserPhone_(b, u);
 
   /* ---- FEATURE MODULES ----
      A feature added since is a file of its own; see backend/Features.gs. It is

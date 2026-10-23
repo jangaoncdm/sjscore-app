@@ -95,7 +95,8 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   });
   const page=await ctx.newPage();
   const errs=[];page.on('pageerror',e=>errs.push(String(e&&e.stack||e)));
-  page.on('dialog',d=>d.accept());
+  /* a prompt is answered with a number, because Correct number asks for one */
+  page.on('dialog',d=>d.accept(d.type()==='prompt' ? '98481 00299' : undefined));
   await page.route('**tile.openstreetmap.org**',r=>r.abort());
   /* THE GRAM PALANA REGISTER, ON ITS OWN ADDRESS. Everything it answers is
      recorded separately, so a call that went to the wrong register cannot
@@ -122,6 +123,7 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
       if(b.kind==='userCreate') return reply({ok:true,phone:b.phone,name:b.name,role:b.role,pin:'4821'});
       if(b.kind==='userPin')    return reply({ok:true,phone:b.phone,name:'Burra Bhanuchander',pin:'7391',rows:2,unlocked:10,inactive:false});
       if(b.kind==='userActive') return reply({ok:true,phone:b.phone,name:'Gone Away',active:b.active,rows:1,written:1});
+      if(b.kind==='userPhone')  return reply({ok:true,phone:b.newPhone,was:b.phone,name:'Burra Bhanuchander',pin:'5162',rows:2});
       if(b.kind==='installJobs') return reply({ok:true,installed:['dailyBackup','dailyCollectorReport','scheduleReminders','villageFilingReminders']});
       /* the postings proposal, shaped as FeaturePosting.gs answers it: a move
          with a release to tick, and an in-charge addition with none */
@@ -197,6 +199,16 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
   ck(t2.indexOf('all 2 rows')>=0,'and it says it went to both rows carrying the number');
   ck(t2.indexOf('wrong-PIN attempts')>=0,'and that the lock-out was cleared');
 
+  /* --- correct a number from a row (23.10.2026) --- */
+  await page.click('#rlPinShut').catch(()=>{}); await page.waitForTimeout(300);
+  await page.click('[data-rlnum="9848100203"]'); await page.waitForTimeout(700);
+  const cn=posts.find(p=>p.kind==='userPhone');
+  ck(!!cn&&cn.phone==='9848100203'&&cn.newPhone==='9848100299',
+     'Correct number reaches the district with the old number and the new one, digits only');
+  const t3=await txt();
+  ck(t3.indexOf('5162')>=0,'the PIN that goes with the new number is shown once');
+  ck(t3.indexOf('The number was 9848100203')>=0,'and the panel says what the number was');
+
   /* --- off the roll, and back --- */
   await page.click('#rlPinShut').catch(()=>{}); await page.waitForTimeout(300);
   await page.click('[data-rlact="9848100207"]'); await page.waitForTimeout(700);
@@ -267,20 +279,26 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
     const TABLE = [
       ['1','Palakurthi','Narsingapuram Thanda','kesoju Radhika','9133783902','Panchayat Secretary','deputed from valmidi to nasingapuram thanda'],
       ['2','Bachannapet','Keshireddypally','Sai kumar','8919632011','Panchayat Secretary','Incharge Gp'],
-      ['3','Bachannapet','','A Krishnakumari','9704250523','Mandal Panchayat Officer','Deputed from Chilpur Mandal to Bachananpet Mandal']
+      ['3','Bachannapet','','A Krishnakumari','9704250523','Mandal Panchayat Officer','Deputed from Chilpur Mandal to Bachananpet Mandal'],
+      /* the shape of 23.10.2026: a Regular/Incharge/Deputation column, then the coordinates */
+      ['30','Ghanpur(Stn)','Meedikonda','Y. Raju','9963460546','Panchayat Secretary','Deputation','17.83101','79.318837','Wrong GP Mapped, Need to Update Mention GP']
     ].map(r => r.join('\t')).join('\n');
     await page.fill('#pstTbl', TABLE);
     await page.evaluate(() => document.getElementById('pstTbl').blur());
     await page.waitForTimeout(500);
     const read = await page.evaluate(() => document.body.innerText);
-    ck(/3 line\(s\) read/.test(read), 'all three lines are read, blank village and all',
+    ck(/4 line\(s\) read/.test(read), 'all four lines are read, blank village and all',
        (read.match(/\d+ line\(s\) read[^\n]*/) || [''])[0]);
     ck(!/not understood/.test(read), 'and none is reported as not understood');
 
     await page.click('#pstRead'); await page.waitForTimeout(700);
     const dry = posts.find(x => x.kind === 'postingUpdate' && x.dry);
     ck(!!dry, 'Compare with the register reaches the district');
-    ck(!!dry && dry.rows.length === 3, 'carrying every line', dry ? dry.rows.length + ' row(s)' : '');
+    ck(!!dry && dry.rows.length === 4, 'carrying every line', dry ? dry.rows.length + ' row(s)' : '');
+    ck(!!dry && dry.rows[3].kind === 'Deputation', 'THE KIND COLUMN TRAVELS ON ITS OWN (23.10.2026)', dry ? JSON.stringify(dry.rows[3]) : '');
+    ck(!!dry && dry.rows[3].remark === 'Wrong GP Mapped, Need to Update Mention GP',
+       'and the coordinates stay out of the remark', dry ? dry.rows[3].remark : '');
+    ck(!!dry && dry.rows[3].gp === 'Meedikonda' && dry.rows[3].name === 'Y. Raju', 'village and officer read from before the mobile');
     ck(!!dry && dry.rows[2].gp === '', 'AND THE MANDAL OFFICER CARRIES NO VILLAGE, which is not missing data');
     ck(!!dry && dry.rows[0].remark.indexOf('valmidi') >= 0, 'with the remark, which is how a release is pointed at');
 

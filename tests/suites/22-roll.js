@@ -163,6 +163,54 @@ module.exports = {
     t.contains(self.error, 'yourself', 'and is told why');
     t.eq(c.findByPhone_('9000000001').active, true, 'he is still on it');
 
+    /* ---- THE NUMBER CORRECTED, on every row and with a PIN (23.10.2026) ----
+       A Secretary of Devaruppula changed his mobile and there was nowhere on
+       the console to say so; and the PIN hash binds the number, so a number
+       written alone would have left him locked out. */
+    {
+      t.eq(env.post({ kind:'userPhone', token: ps, phone:'9000000011', newPhone:'9000000099' }).ok, false,
+        'a Secretary cannot correct a number');
+      const before = c.issueToken_(c.findByPhone_('9000000011'));
+      t.eq(env.get('me', { token: before }).ok, true, 'his old token works before the change');
+      t.eq(env.post({ kind:'userPhone', token: cdm, phone:'9000000011', newPhone:'9000000012' }).ok, false,
+        'a number another officer holds is refused');
+      t.contains(env.post({ kind:'userPhone', token: cdm, phone:'9000000011', newPhone:'9000000012' }).error, 'LateMark',
+        'and the holder is named');
+      t.eq(env.post({ kind:'userPhone', token: cdm, phone:'9000000011', newPhone:'9000000011' }).ok, false,
+        'the same number is refused as nothing to do');
+      t.eq(env.post({ kind:'userPhone', token: cdm, phone:'9111199999', newPhone:'9111199998' }).ok, false,
+        'a number not on the roll is refused');
+      const cp = env.post({ kind:'userPhone', token: cdm, phone:'9000000011', newPhone:'9000000099' });
+      t.eq(cp.ok, true, 'the Collector corrects it');
+      t.eq(cp.rows, 2, 'ON BOTH ROWS CARRYING THE NUMBER');
+      t.eq(rowsFor('9000000011').length, 0, 'the old number is on no row');
+      t.eq(rowsFor('9000000099').length, 2, 'the new one is on both');
+      t.ok(/^\d{4,8}$/.test(String(cp.pin)), 'a PIN comes back with it, shown once');
+      t.eq(env.post({ kind:'login', u:'9000000099', p:cp.pin }).ok, true, 'and he signs in on the new number with it');
+      t.eq(env.post({ kind:'login', u:'9000000011', p:cp.pin }).ok, false, 'the old number no longer opens anything');
+      t.eq(env.get('me', { token: before }).ok, false, 'and the token issued on the old number is dead at once');
+      t.eq(env.post({ kind:'userPhone', token: cdm, phone:'9000000011', newPhone:'9000000099' }).ok, false,
+        'a second press finds the old number gone and writes nothing (rule 8)');
+      const au = env.sheets['Audit'].rows.slice(1).map(r => r.join('|'));
+      t.ok(au.some(x => x.indexOf('NUMBER CORRECTED') >= 0 && x.indexOf('9000000011') >= 0 && x.indexOf('9000000099') >= 0),
+        'the correction is on the Audit tab with both numbers');
+      t.ok(!au.some(x => x.indexOf(cp.pin) >= 0 && x.indexOf('NUMBER CORRECTED') >= 0), 'and the PIN is not');
+      /* put it back for the assertions below, which read 9000000011 */
+      const back = env.post({ kind:'userPhone', token: cdm, phone:'9000000099', newPhone:'9000000011' });
+      t.eq(back.ok, true, 'and back again, the same way');
+      rp.pin = back.pin;   /* the PIN he holds now, for the "no PIN on Audit" check below */
+    }
+
+    /* ---- A MAN TAKEN OFF THE ROLL IS OFF IT NOW, token or no token ---- */
+    {
+      const tok = c.issueToken_(c.findByPhone_('9000000013'));
+      t.eq(env.get('me', { token: tok }).ok, true, 'his token answers while he is on the roll');
+      env.post({ kind:'userActive', token: cdm, phone:'9000000013', active:false });
+      t.eq(env.get('me', { token: tok }).ok, false, 'TAKEN OFF, THE SAME TOKEN IS REFUSED AT ONCE — not when a six-hour cache expires');
+      env.post({ kind:'userActive', token: cdm, phone:'9000000013', active:true });
+      t.eq(env.get('me', { token: tok }).ok, true, 'put back, it answers again');
+    }
+
     /* ---- every action is on the Audit tab, and no PIN is ---- */
     const audit = env.sheets['Audit'].rows.slice(1).map(r => r.join('|'));
     t.ok(audit.some(x => x.indexOf('OFFICER REGISTERED') >= 0 && x.indexOf('9703202002') >= 0),
