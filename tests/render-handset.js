@@ -98,6 +98,10 @@ const BASE = { url:'https://mock.district/exec', cache:[], master:[], leave:[], 
                  phone:x.u, mandal:'Narasapur', gp:'V1', gps:['V1'] } });
         return rep({ ok:true });
       }
+      /* the place of duty, and since 23.10.2026 the officer as the roll has
+         him NOW — which is how a posting reaches a phone without a sign-out */
+      if(/op=duty/.test(q.url()))
+        return rep({ ok:true, on:false, km:5, acc:1000, duty:[], which:'', why:'', user:opts.dutyUser });
       if(/op=gpdp/.test(q.url())){
         /* the Gram Palana register refuses the plan register outright; the
            sanitation one serves it and calls this officer for a plan */
@@ -210,6 +214,17 @@ const BASE = { url:'https://mock.district/exec', cache:[], master:[], leave:[], 
     ck(/development plan/i.test(r.screen), 'the district still calls him for a plan',
       JSON.stringify(String(r.screen).replace(/\s+/g, ' ').slice(0, 150)));
     ck(/GPDP|has not been sent/i.test(r.screen), 'and says plainly that his has not been sent');
+  }
+
+  console.log('9. a posting written on the console reaches the phone at its next opening (23.10.2026)');
+  {
+    const r = await handset({ ...BASE, session:null, att:{}, records:{} }, '6302363194',
+      { sj:true, dutyUser:{ name:'Officer 94', role:'PS', phone:'6302363194', mandal:'Narasapur', gp:'V1', gps:['V1','V2'] } });
+    const gps = (((r.d.session || {}).user || {}).gps) || [];
+    ck(gps.indexOf('V2') >= 0,
+      'THE VILLAGE THE DISTRICT ADDED IS ON THE SESSION with no sign-out — the app used to keep its sign-in answer for ever',
+      JSON.stringify(gps));
+    ck(r.errs.length === 0, 'no script error', r.errs[0] || '');
   }
 
   await br.close(); srvGp.close(); srvSj.close();
