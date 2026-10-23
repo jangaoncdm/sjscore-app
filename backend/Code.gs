@@ -5600,10 +5600,10 @@ function advisoryRegister_(u, idReq){
 
 /* Admin.gs owns the Audit tab, but Code.gs publishes an advisory, so it needs
    its own way in. Same tab, same shape, signed as the console. */
-function admAudit_(action, subject, detail){
+function admAudit_(action, subject, detail, by){
   try{
     const sh = sheet_('Audit', ['at','action','subject','detail','by']);
-    sh.appendRow([new Date().toISOString(), action, subject, detail, 'District Operations Center (console)']);
+    sh.appendRow([new Date().toISOString(), action, subject, detail, by || 'District Operations Center (console)']);
   }catch(err){}
 }
 
@@ -5903,25 +5903,29 @@ function resetUserPin_(b, u){
    holds is refused with its holder named (one number, one officer). The
    tokens he holds were issued on the old number and die with it; he signs in
    again on the new one, which is what the Collector has just told him to do. */
-function correctUserPhone_(b, u){
-  if(u.role !== 'COLLECTOR') return json_({ ok:false, error:'A number is corrected by the Collector alone.' });
-  const p = phone10_(b.phone || ''), np = phone10_(b.newPhone || '');
-  if(p.length !== 10 || np.length !== 10) return json_({ ok:false, error:'A mobile number is ten digits.' });
-  if(p === np) return json_({ ok:false, error:'That is the number already on the roll. Nothing was written.' });
-  if(p === u.phone) return json_({ ok:false, error:'Your own number is not changed from here — the console is signed in on it.' });
+/* ONE CORE, TWO HANDS. The console's Correct number (kind:'userPhone') and
+   the Sheet's menu item for the list of 23.10.2026 (Admin.gs) both come here,
+   so the two doors cannot write different rows or hand out different PINs.
+   The hash is salt:phone:pin, so a new number over the old leaves a hash no
+   PIN can match — the PIN is re-seeded from the NEW number and returned to
+   the caller once, never written. `by` names the hand on Audit. */
+function phoneCorrect_(p, np, by){
+  p = phone10_(p || ''); np = phone10_(np || '');
+  if(p.length !== 10 || np.length !== 10) return { ok:false, error:'A mobile number is ten digits.' };
+  if(p === np) return { ok:false, error:'That is the number already on the roll. Nothing was written.' };
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
     const t = uidx_(), v = t.sh.getDataRange().getValues();
     const rows = rollRows_(t, v, p);
-    if(!rows.length) return json_({ ok:false, error:'That number is not on the roll.' });
+    if(!rows.length) return { ok:false, error:'That number is not on the roll.' };
     const held = rollRows_(t, v, np);
     if(held.length)
-      return json_({ ok:false, error:'That number is already on the roll — ' +
+      return { ok:false, error:'That number is already on the roll — ' +
         (cell_(v[held[0]], t.ix.name) || '(unnamed)') + ', ' + cell_(v[held[0]], t.ix.role) +
         (cell_(v[held[0]], t.ix.mandal) ? ', ' + cell_(v[held[0]], t.ix.mandal) : '') +
-        '. One number is one officer; nothing was written.' });
+        '. One number is one officer; nothing was written.' };
 
     const pin = dayPin_(np), h = hash_(np, pin);
     rows.forEach(i => {
@@ -5932,9 +5936,18 @@ function correctUserPhone_(b, u){
     try{ cache_().remove('pl_' + p); cache_().remove('pl_' + np); }catch(err){}
     rollTouched_();
     const name = rows.map(i => cell_(v[i], t.ix.name)).filter(String)[0] || '(unnamed)';
-    admAudit_('NUMBER CORRECTED', np, name + ' · was ' + p + ' · ' + rows.length + ' row(s) · PIN set, not recorded here');
-    return json_({ ok:true, phone:np, was:p, name:name, pin:pin, rows:rows.length });
+    admAudit_('NUMBER CORRECTED', np, name + ' · was ' + p + ' · ' + rows.length + ' row(s) · PIN set, not recorded here', by);
+    return { ok:true, phone:np, was:p, name:name, pin:pin, rows:rows.length };
   } finally { lock.releaseLock(); }
+}
+
+function correctUserPhone_(b, u){
+  if(u.role !== 'COLLECTOR') return json_({ ok:false, error:'A number is corrected by the Collector alone.' });
+  const p = phone10_(b.phone || ''), np = phone10_(b.newPhone || '');
+  if(p.length !== 10 || np.length !== 10) return json_({ ok:false, error:'A mobile number is ten digits.' });
+  if(p === np) return json_({ ok:false, error:'That is the number already on the roll. Nothing was written.' });
+  if(p === u.phone) return json_({ ok:false, error:'Your own number is not changed from here — the console is signed in on it.' });
+  return json_(phoneCorrect_(p, np));
 }
 
 function setUserActive_(b, u){

@@ -2116,7 +2116,17 @@ and 27 hold it.
 
 **What the list still needs from the Collector** is in `Issue/ACTS-23.10.2026.md`
 (gitignored, it carries numbers): one number corrected, one postings paste,
-one village-points paste, three PIN resets. **Vachya Thanda's new coordinate is
+one village-points paste, three PIN resets. **The number and the three PINs
+were asked for in the Sheet's menu instead** ("create function in appscript
+only, in drop down, I will run from there"): `showIssues2310` /
+`applyIssues2310` in Admin.gs, two items under *District maintenance*, read
+first and then apply. They are the console's own code under another hand —
+`phoneCorrect_` is the one core both `kind:'userPhone'` and the menu run, and
+`resetOnePin` is what the roll's Reset PIN runs — so the two doors cannot
+hand out different PINs. The numbers are in Admin.gs as every dated batch's
+have been. The postings paste and the village points stay on the console,
+because a release is the Collector's tick and a tick is not a menu item.
+Suite 43 holds it. **Vachya Thanda's new coordinate is
 the Tharigoppula MPDO office to the metre** and was held back: written, it
 would let the mark be made from the mandal headquarters. Restore point:
 `pre-issues-2026-10-23`.

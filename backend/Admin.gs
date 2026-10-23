@@ -35,6 +35,9 @@ function onOpen(){
     .addItem('1 · Read the plan (22.08 field register)', 'menuShowFixes3')
     .addItem('2 · Apply the plan (asks first)',          'menuApplyFixes3')
     .addSeparator()
+    .addItem('23.10 list · the number and the three PINs — read first',          'menuShowIssues2310')
+    .addItem('23.10 list · correct the number and reset the PINs (asks first)', 'menuApplyIssues2310')
+    .addSeparator()
     .addSeparator()
     .addItem('Chase the advisory and the plan — read first', 'menuShowChase')
     .addItem('Send the chase mail (asks first)',             'menuSendChase')
@@ -2701,4 +2704,111 @@ function showMockLocations(days){
 function menuShowMockLocations(){
   admShow_('A location that was not measured — nothing has been written',
     showMockLocations());
+}
+
+/* ============================================================================
+ * THE LIST OF 23.10.2026 — two of its four acts, from the menu
+ *
+ * The console does both of these already (Correct number and Reset PIN on the
+ * roll, under Admin); the Collector asked for them in the Sheet's dropdown
+ * instead, for the numbers the list named, so here they are — one reading and
+ * one doing. The doing is THE CONSOLE'S OWN CODE under another hand:
+ * phoneCorrect_ is what kind:'userPhone' runs and resetOnePin is what the
+ * roll's Reset PIN runs, so the menu and the console cannot write different
+ * rows or hand out different PINs for the same man.
+ *
+ * The other two acts of the list — the postings paste and the village
+ * points — stay on the console: every release there is the Collector's own
+ * tick, and a tick is not a menu item.
+ *
+ * Nothing here runs by itself. The number goes to EVERY row carrying the old
+ * one, with a PIN seeded from the new number (the hash is salt:phone:pin, so
+ * the PIN he had died with the old number); a number already held by
+ * somebody else is refused and he is named; a second run the same day writes
+ * nothing. The PINs are printed ONCE, here, and never on Audit.
+ * ------------------------------------------------------------------------- */
+var FIX2310_BATCH = '23.10.2026';
+var FIX2310_NUMBER = { was:'9390698424', now:'9390910209', name:'Dharavath Venkatesh',
+                       where:'Devaruppula · Kadavendi, Pottigutta Thanda' };
+var FIX2310_PINS = [
+  { phone:'9493438111', name:'T Shashi Kumar',      where:'Chilpur · Deshai Thanda' },
+  { phone:'9492114149', name:'Shanigaram Srikanth', where:'Chilpur · Garlagadda Thanda' },
+  { phone:'7675827928', name:'Karnaker Mamidala',   where:'Devaruppula · Dharavath Thanda' }
+];
+
+/* what the roll says about the number today: already done, not there, held, or ready */
+function fix2310NumberState_(){
+  const n = FIX2310_NUMBER;
+  const t = uidx_(), v = t.sh.getDataRange().getValues();
+  const was = rollRows_(t, v, n.was), now = rollRows_(t, v, n.now);
+  const who = i => (cell_(v[i], t.ix.name) || '(unnamed)') + ' · ' + cell_(v[i], t.ix.role) +
+                   ' · ' + cell_(v[i], t.ix.mandal) + ' / ' + cell_(v[i], t.ix.gp);
+  if(!was.length && now.length) return { state:'done',  lines:['  ✓ already corrected — ' + now.length + ' row(s) carry ' + n.now + '. Nothing to write.'] };
+  if(!was.length)                return { state:'none',  lines:['  ✗ neither ' + n.was + ' nor ' + n.now + ' is on the roll. Nothing to write; check the roll.'] };
+  if(now.length)                 return { state:'held',  lines:['  ✗ ' + n.now + ' is already held by ' + who(now[0]) + '. One number is one officer; nothing to write.'] };
+  return { state:'ready', lines: was.map(i => '  row ' + (i + 1) + ': ' + who(i)).concat(
+    '  → ' + n.now + ' and a fresh PIN go to ' + was.length + ' row(s); the tokens issued on ' + n.was + ' die at once.') };
+}
+
+/* READ ONLY. Prints no PIN. */
+function showIssues2310(){
+  const L = ['THE LIST OF ' + FIX2310_BATCH + ' — what the menu item would do', ''];
+  const n = FIX2310_NUMBER;
+  L.push('1 · NUMBER · ' + n.name + ' (' + n.where + ') · ' + n.was + ' → ' + n.now);
+  L.push.apply(L, fix2310NumberState_().lines);
+  L.push('');
+  L.push('4 · PINS · the same reset the roll\'s Reset PIN button does, to every row carrying the number');
+  FIX2310_PINS.forEach(r => {
+    const q = admPinRows_(r.phone);
+    if(!q.rows.length){ L.push('  ✗ ' + r.name + ' · ' + r.phone + ' · NOT ON THE ROLL — nothing to reset'); return; }
+    const hasPin = q.rows.some(i => !!q.v[i][q.t.ix.hash]);
+    const inactive = q.rows.every(i => String(q.v[i][q.t.ix.active]).toUpperCase() === 'FALSE');
+    const tries = Number(cache_().get('pl_' + q.p) || 0);
+    L.push('  · ' + r.name + ' · ' + r.phone + ' (' + r.where + ') · ' + q.rows.length + ' row(s) · ' +
+      (hasPin ? 'PIN set' : 'NO PIN') + (inactive ? ' · EVERY ROW INACTIVE — a PIN will not let him in' : '') +
+      (tries ? ' · ' + tries + ' wrong-PIN attempt(s) within the hour, cleared with the reset' : ''));
+  });
+  L.push('');
+  L.push('This was read only. Nothing was written, and no PIN was generated.');
+  return admSay_(L);
+}
+
+function applyIssues2310(){
+  const L = ['THE LIST OF ' + FIX2310_BATCH + ' — applied', ''];
+  const n = FIX2310_NUMBER;
+  L.push('1 · NUMBER · ' + n.name + ' · ' + n.was + ' → ' + n.now);
+  const st = fix2310NumberState_();
+  if(st.state !== 'ready') L.push.apply(L, st.lines);
+  else {
+    const r = phoneCorrect_(n.was, n.now, ADMIN_BY);
+    if(!r.ok) L.push('  ✗ ' + r.error);
+    else {
+      L.push('  ' + r.name + ' · ' + r.rows + ' row(s) now carry ' + r.phone + ' · was ' + r.was);
+      L.push('');
+      L.push('    NEW PIN:  ' + r.pin);
+      L.push('');
+      L.push('  Send him the number and the PIN together — the PIN he had went with the old number,');
+      L.push('  and the app signed in on the old number is signed out.');
+    }
+  }
+  L.push('');
+  L.push('4 · PINS');
+  FIX2310_PINS.forEach(r => { L.push(''); L.push(resetOnePin(r.phone).replace(/^/gm, '  ')); });
+  L.push('');
+  L.push('Copy the PINs now — they are printed here and nowhere else, and never on Audit.');
+  L.push('A second run today is the same reset and writes nothing.');
+  return admSay_(L);
+}
+
+function menuShowIssues2310(){
+  admShow_('The list of 23.10.2026 — nothing has been written', showIssues2310());
+}
+function menuApplyIssues2310(){
+  if(!admConfirm_('Correct the number and reset the three PINs?',
+    'This writes to the Users tab: ' + FIX2310_NUMBER.name + '\'s number becomes ' + FIX2310_NUMBER.now +
+    ' on every row carrying ' + FIX2310_NUMBER.was + ', with a new PIN, and the PINs of ' +
+    FIX2310_PINS.map(r => r.name).join(', ') + ' are reset. Every change is written to Audit; no PIN is.\n\n' +
+    'Read the item above first if you have not. Running it twice today changes nothing the second time.\n\n' +
+    'Apply it now?', 'applyIssues2310')) return;
+  admShow_('Applied — copy the PINs now, they are shown once', applyIssues2310());
 }
