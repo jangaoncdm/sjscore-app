@@ -68,3 +68,21 @@ separation; many hues and one order is legal so long as L* falls at every step.
     invert on the dark card the way --co does
   ink on cells: dark ink (#1A2437) on steps 1–3 (12.1, 8.6, ~5), white on steps 4–5 (5.2, 9.3)
   scope: density cells only. Bars, lines and ranks stay on --co; nothing else may read --hm.
+  (replaced the same day by soft yellow → green → teal → blue → indigo, #F4E97A #8FD38B #2FB5A0
+   #2E7FBF #3B2F8F, L* 91 > 79 > 67 > 51 > 27 — and that in turn below.)
+
+=== HEAT RAMP, the console's own glass, 25.10.2026 ===
+The Collector: "change heatmap color to something light, not yellow definitely, which matches the
+color accent of the rest of the dashboard". So the ramp is the house gradient (indigo #4A40CE →
+teal #0F766E) read least to most, from a pale mint glass up to the indigo itself. Checked for
+LIGHTNESS MONOTONICITY, as a sequential ramp is; many hues, one order.
+  light  --hm1..5  #E6F3F3 #B6E3DD #6CC6C0 #587CE0 #4A40CE   L* 95 > 87 > 74 > 54 > 37   monotonic
+  dark   --hm1..5  #E3F4F1 #B3E4DB #6FC9BF #6E93EA #8577E0   L* 95 > 87 > 75 > 62 > 56   monotonic
+  contrast vs light card #FFFFFF: 1.14 1.40 2.00 3.91 7.20 — the pale steps rely on relief (the cell
+    grid and the figure printed in the cell), as before
+  contrast vs dark card #171B2D: 15.0 12.2 8.8 5.7 4.6 — every step clears 3:1, so the ramp does NOT
+    invert on the dark card
+  ink on cells, light: dark ink (#1A2437) on steps 1–3 (13.7, 11.1, 7.8), white on steps 4–5 (3.9, 7.2)
+  ink on cells, dark:  dark ink on every step (13.7, 11.1, 8.0, 5.2, 4.2) — white on the dark-card
+    blue is 3.0 and on the dark-card indigo 3.7, so --hm-ink-hi is the dark ink there
+  scope: density cells only. Bars, lines and ranks stay on --co; nothing else may read --hm.

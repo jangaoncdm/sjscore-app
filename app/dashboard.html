@@ -742,13 +742,15 @@ svg.leaflet-image-layer.leaflet-interactive path {
   /* ordinal: ONE hue, least → most. Ordered bands (hours of the morning,
      ten-mark score bands) are one axis, not eight identities. */
   --co1:#a3aaf1; --co2:#8b93ee; --co3:#6f7ae9; --co4:#5462d8; --co5:#3a46c4;
-  /* the HEAT ramp (16.10.2026): the Collector asked for more than one hue on the
-     heat maps. Soft yellow to green to teal to blue to indigo (the first ramp, yellow to
-     magenta, was not liked and went the same day) — many hues, ONE order,
-     because L* falls at every step (91 > 79 > 67 > 51 > 27), so it still
-     reads least-to-most to any eye. It is for density cells only; a bar or a line
-     stays on --co. The record is prompt/palette-validation.txt. */
-  --hm1:#F4E97A; --hm2:#8FD38B; --hm3:#2FB5A0; --hm4:#2E7FBF; --hm5:#3B2F8F;
+  /* the HEAT ramp. 16.10.2026: the Collector asked for more than one hue on the
+     heat maps, and a yellow-to-indigo ramp went in. 25.10.2026: "something
+     light, not yellow, which matches the colour accent of the rest of the
+     dashboard" — so the ramp is now the console's own gradient read least to
+     most: pale mint glass, the teal, the blue, the house indigo. Many hues,
+     ONE order, because L* falls at every step (95 > 87 > 74 > 54 > 37), so it
+     still reads least-to-most to any eye. It is for density cells only; a bar
+     or a line stays on --co. The record is prompt/palette-validation.txt. */
+  --hm1:#E6F3F3; --hm2:#B6E3DD; --hm3:#6CC6C0; --hm4:#587CE0; --hm5:#4A40CE;
   --hm-ink-lo:#1A2437; --hm-ink-hi:#FFFFFF;
   /* reserved. These mean good / warning / bad and are never series 4. */
   --st-ok:#15803D; --st-warn:#B45309; --st-bad:#B91C1C; --st-idle:#8E97AE;
@@ -781,9 +783,11 @@ body.dark{
   --cs5:#d9484c; --cs6:#2f9fce; --cs7:#8a9a20; --cs8:#b8446a;
   --co1:#3a46c4; --co2:#5866e0; --co3:#7b87ec; --co4:#a0a9f3; --co5:#c3c9f9;
   /* the heat ramp does not invert on the dark card: a heat map's least is still its
-     palest, and every step clears 3:1 against #171B2D */
-  --hm1:#F6EB85; --hm2:#97D994; --hm3:#3CC1AC; --hm4:#4A95D1; --hm5:#7A6DD6;
-  --hm-ink-lo:#1A2437; --hm-ink-hi:#FFFFFF;
+     palest, and every step clears 3:1 against #171B2D. The two upper steps are
+     lighter here than in the light theme, so the figure on them is in dark ink
+     as well — white on the dark-card blue measures under 3:1 */
+  --hm1:#E3F4F1; --hm2:#B3E4DB; --hm3:#6FC9BF; --hm4:#6E93EA; --hm5:#8577E0;
+  --hm-ink-lo:#1A2437; --hm-ink-hi:#1A2437;
   --st-ok:#5BD68A; --st-warn:#E9A93C; --st-bad:#F1737A; --st-idle:#8B93AB;
 }
 body.dark .msg.q{color:#0E1120}
@@ -1282,6 +1286,24 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
 .hmwrap .lvcal td.wl{padding-right:6px}
 @media(max-width:1180px){.hmwrap .lvcal td.c{height:clamp(16px,calc((100vw - 240px)/53 - 2px),22px)}}
 @media(max-width:760px){.hmwrap .lvcal{table-layout:auto;width:auto}.hmwrap .lvcal td.c{width:18px;min-width:18px;height:18px}.hmwrap .lvcal th{padding:0 2px}}
+/* THE LAST 30 DAYS, SQUEEZED (asked 25.10.2026). A year of fifty-three weeks
+   is a picture; the last month is what a review actually reads. Days across
+   in one row, the weekday letter above and the date below, the figure printed
+   ON the day where there is room, every cell as tall as it is wide and no
+   wider than 46px — so the strip fills a laptop and does not sprawl across a
+   2K monitor. On a phone the day is 18px, carries no figure, and the strip
+   scrolls inside its own well, never the page. The year is still there, one
+   tab away. */
+.atcstrip{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:3px;max-width:calc(var(--n) * 49px);padding:8px 6px}
+.atcstrip .mo{grid-row:1;font-size:10.5px;font-weight:600;color:var(--tx-3);white-space:nowrap;overflow:visible;height:14px;line-height:14px}
+.atcstrip .dw{grid-row:2;text-align:center;font-size:10px;color:var(--tx-3);line-height:14px}
+.atcstrip .c{grid-row:3;aspect-ratio:1/1;border-radius:6px;background:var(--panel);box-shadow:inset 0 0 0 1px var(--line-2);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:11px;font-weight:650;color:var(--tx-3);overflow:hidden}
+.atcstrip .c.k1{background:var(--hm1);color:var(--hm-ink-lo);box-shadow:none}.atcstrip .c.k2{background:var(--hm2);color:var(--hm-ink-lo);box-shadow:none}.atcstrip .c.k3{background:var(--hm3);color:var(--hm-ink-lo);box-shadow:none}
+.atcstrip .c.k4{background:var(--hm4);color:var(--hm-ink-hi);box-shadow:none}.atcstrip .c.k5{background:var(--hm5);color:var(--hm-ink-hi);box-shadow:none}
+.atcstrip .c.off{background:var(--well);box-shadow:none}
+.atcstrip .c.today{box-shadow:inset 0 0 0 2px var(--st-warn)}
+.atcstrip .dd{grid-row:4;text-align:center;font-size:10px;color:var(--tx-3);line-height:14px;font-variant-numeric:tabular-nums}
+@media(max-width:760px){.atcstrip{grid-template-columns:repeat(var(--n),18px);max-width:none;width:max-content}.atcstrip .c{font-size:0}}
 /* THE OFFICER MAP KEEPS ITS CELLS TOGETHER. min-width:100% made the table
    fill the panel; a 40px cell every 170px is not a heat map. */
 .hm{min-width:0;width:auto}
@@ -4002,6 +4024,40 @@ function lvExport(kind){
    figure. Sundays and holidays are grey and never counted as unmarked.
    ========================================================================== */
 let ATC=null, ATC_BUSY=false, ATC_ERR='', ATC_YEAR=String(new Date().getFullYear()), ATC_MEASURE='marked';
+/* THE WINDOW (25.10.2026): the last 30 days by default, "squeezed" into one
+   row; 21 days where that is what is wanted; the whole year one tab away.
+   Remembered per device, as the theme is. The days are counted back from the
+   DISTRICT'S today, never the browser's (rule 1). */
+let ATC_WINDOW='30'; try{ const w=localStorage.getItem('sjgp-atc-window'); if(w==='21'||w==='30'||w==='year') ATC_WINDOW=w; }catch(e){}
+const ATC_WINDOWS={ '21':'Last 21 days', '30':'Last 30 days', year:'The year' };
+function atcStrip(n){
+  const cal=ATC.cal||{}, off=ATC.off||{}, y=Number(ATC.year);
+  const today=String(ATC.today||new Date().toISOString().slice(0,10));
+  const end=Date.UTC(+today.slice(0,4),+today.slice(5,7)-1,+today.slice(8,10));
+  const word=ATC_MEASURES[ATC_MEASURE].toLowerCase();
+  const days=[]; let total=0, wd=0;
+  for(let i=n-1;i>=0;i--){
+    const dt=new Date(end-i*86400000), key=dt.toISOString().slice(0,10), inYear=dt.getUTCFullYear()===y;
+    const o=inYear?off[key]:'', v=inYear?atcValue(key,cal[key],o):0;
+    days.push({ key, dt, n:v, off:o, inYear }); total+=v; if(inYear&&!o) wd++;
+  }
+  /* a month is named at its first day, and at the left edge unless a first
+     day follows within three cells and the two names would collide */
+  const firstSoon=days.slice(1,4).some(x=>x.dt.getUTCDate()===1);
+  let h='<div class="hmwrap" style="max-height:none"><div class="atcstrip" id="atcCal" style="--n:'+n+'" role="img" aria-label="'+esc(word+', the last '+n+' days')+'">';
+  h+=days.map((x,i)=>'<span class="mo">'+((x.dt.getUTCDate()===1||(i===0&&!firstSoon))?LV_MON[x.dt.getUTCMonth()]:'')+'</span>').join('');
+  h+=days.map(x=>'<span class="dw">'+'MTWTFSS'[(x.dt.getUTCDay()+6)%7]+'</span>').join('');
+  h+=days.map(x=>{
+    const cls='c '+(!x.inYear?'off':x.off?(x.n?atcBin(x.n):'off'):atcBin(x.n))+(x.key===today?' today':'');
+    const tip=!x.inYear?dm(x.key)+' · outside the year read':
+      dm(x.key)+(x.off?' · '+x.off:'')+' · '+(x.n?x.n+' '+word:(x.off&&ATC_MEASURE==='notmarked'?'off day — nobody is due':'none '+word))+
+      (ATC_MEASURE==='marked'&&ATC.due&&!x.off?' of '+ATC.due+' due':'');
+    return '<span class="'+cls+'" title="'+esc(tip)+'">'+(x.inYear&&x.n?x.n:'')+'</span>'; }).join('');
+  h+=days.map(x=>'<span class="dd">'+x.dt.getUTCDate()+'</span>').join('');
+  h+='</div></div>';
+  h+='<p class="mut" style="font-size:12px;margin-top:8px"><b>'+total.toLocaleString('en-IN')+' '+esc(word)+'</b> over '+wd+' working day'+(wd===1?'':'s')+' in the last '+n+' days, to '+esc(dm(today))+'.</p>';
+  return h;
+}
 function atcPull(force){
   const key=TVIEW+'|'+ATC_YEAR;
   if(!force && ATC && ATC._key===key) return;
@@ -4054,9 +4110,12 @@ function atcCalendar(){
   let h='<div class="segbar" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">'+
     '<div class="segtabs" role="tablist" id="atcMeasure" aria-label="Which measure is drawn">'+
       Object.keys(ATC_MEASURES).map(k=>'<button type="button" role="tab" data-atc="'+k+'" aria-selected="'+(ATC_MEASURE===k)+'">'+ATC_MEASURES[k]+'</button>').join('')+'</div>'+
-    '<label style="font-size:12px;color:var(--tx-2)">Year<select class="rsel" id="atcYear" style="margin-left:7px;min-width:90px">'+
-      [y-1,y,y+1].filter(v=>v<=new Date().getFullYear()).map(v=>'<option value="'+v+'"'+(String(v)===String(ATC_YEAR)?' selected':'')+'>'+v+'</option>').join('')+'</select></label>'+
+    '<div class="segtabs" role="tablist" id="atcWindow" aria-label="How far back">'+
+      Object.keys(ATC_WINDOWS).map(k=>'<button type="button" role="tab" data-atcw="'+k+'" aria-selected="'+(ATC_WINDOW===k)+'">'+ATC_WINDOWS[k]+'</button>').join('')+'</div>'+
+    (ATC_WINDOW==='year'?'<label style="font-size:12px;color:var(--tx-2)">Year<select class="rsel" id="atcYear" style="margin-left:7px;min-width:90px">'+
+      [y-1,y,y+1].filter(v=>v<=new Date().getFullYear()).map(v=>'<option value="'+v+'"'+(String(v)===String(ATC_YEAR)?' selected':'')+'>'+v+'</option>').join('')+'</select></label>':'')+
     '<span style="flex:1"></span><button class="tbtn" data-exp="atcweeks">CSV · week by week</button></div>';
+  if(ATC_WINDOW!=='year'){ h+=atcStrip(Number(ATC_WINDOW)); } else {
   h+='<div class="hmwrap" style="max-height:none;padding:8px 6px"><table class="lvcal" id="atcCal"><thead><tr><th class="d"></th>'+weeks.map(w=>'<th>'+monthOf(w)+'</th>').join('')+'</tr></thead><tbody>';
   for(let d=0;d<7;d++){
     h+='<tr><th class="d">'+LV_DOW[d]+'</th>';
@@ -4070,6 +4129,7 @@ function atcCalendar(){
   }
   h+='<tr><td class="wl">Week total</td>'+weeks.map(w=>'<td class="w" title="'+esc('week of '+dm(w.from)+': '+w.total+' '+word+(w.wd?' over '+w.wd+' working day'+(w.wd===1?'':'s'):''))+'">'+(w.total||'')+'</td>').join('')+'</tr>';
   h+='</tbody></table></div>';
+  }
   const leg=ATC_MEASURE==='marked'?[['none'],['under 50%'],['50–69%'],['70–84%'],['85–94%'],['95% and over']]:[['none'],['1'],['2–5'],['6–15'],['16–40'],['41+']];
   h+='<div class="hmleg"><span>'+(ATC_MEASURE==='marked'?'Marked, as a share of the '+ATC.due+' due:':'Officers on the day:')+'</span>'+
     leg.map((l,i)=>'<span><i style="'+(i?'background:var(--hm'+i+')':'background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)')+'"></i>'+l[0]+'</span>').join('')+
@@ -4083,7 +4143,7 @@ function atcCalendar(){
   return h;
 }
 function atcPanel(){
-  return panel('c12','Attendance, week by week · '+ATC_YEAR,(ATC?ATC_MEASURES[ATC_MEASURE]+' · '+ATC.due+' due':'reading'),atcCalendar(),'atc');
+  return panel('c12',ATC_WINDOW==='year'?'Attendance, week by week · '+ATC_YEAR:'Attendance, day by day · the last '+ATC_WINDOW+' days',(ATC?ATC_MEASURES[ATC_MEASURE]+' · '+ATC.due+' due':'reading'),atcCalendar(),'atc');
 }
 function atcExport(){
   if(!ATC) return;
@@ -7062,6 +7122,13 @@ document.addEventListener('click',e=>{
   /* the measure drawn on the year calendar — marked, not marked, late, on leave */
   const atm=e.target.closest('[data-atc]');
   if(atm){ ATC_MEASURE=atm.dataset.atc; if(DATA) render(DATA); return; }
+  /* how far back: the last 21 or 30 days are counted from the district's
+     today, so a day window always reads the year that today is in */
+  const atw=e.target.closest('[data-atcw]');
+  if(atw){ ATC_WINDOW=atw.dataset.atcw; try{ localStorage.setItem('sjgp-atc-window',ATC_WINDOW); }catch(x){}
+    const cy=(ATC&&ATC.today?String(ATC.today).slice(0,4):String(new Date().getFullYear()));
+    if(ATC_WINDOW!=='year'&&ATC_YEAR!==cy){ ATC_YEAR=cy; atcPull(true); }
+    if(DATA) render(DATA); return; }
   const kp=e.target.closest('[data-act]');
   if(kp){ const [kind,arg]=kp.dataset.act.split(':');
     if(kind==='view'){ VIEW=arg; document.querySelectorAll('#nav [data-v]').forEach(x=>x.toggleAttribute('aria-current',x.dataset.v===arg)); if(DATA) render(DATA); }

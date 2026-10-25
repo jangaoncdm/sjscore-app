@@ -213,10 +213,41 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
           const lbl = size.n + '/' + theme + '/' + v + '/calendar';
           await page.waitForTimeout(500);
           const txt = await page.$eval('#g', e => e.innerText);
+          /* THE LAST 30 DAYS BY DEFAULT (25.10.2026), squeezed into one row:
+             thirty days, the planted fortnight tinted, the figure printed on
+             the day on anything wider than a phone, and the day square. */
+          const strip = await page.evaluate(() => {
+            const s = document.querySelector('#atcCal.atcstrip'); if(!s) return null;
+            const cs = [...s.querySelectorAll('.c')], tinted = cs.filter(c => /k[1-5]/.test(c.className));
+            const r = cs[0].getBoundingClientRect();
+            return { n: cs.length, tinted: tinted.length, withNum: tinted.filter(c => /^\d+$/.test(c.textContent.trim())).length,
+                     w: Math.round(r.width), h: Math.round(r.height), dates: s.querySelectorAll('.dd').length,
+                     fontPx: parseFloat(getComputedStyle(cs[0]).fontSize) || 0 };
+          });
+          if(!strip) problems.push(lbl + ': the attendance calendar does not open on the last 30 days');
+          else {
+            if(strip.n !== 30) problems.push(lbl + ': the strip has ' + strip.n + ' days, not 30');
+            if(strip.tinted < 8) problems.push(lbl + ': the strip has ' + strip.tinted + ' filled days, expected the planted fortnight');
+            if(size.w > 760 && strip.withNum !== strip.tinted) problems.push(lbl + ': ' + (strip.tinted - strip.withNum) + ' tinted days carry no figure');
+            if(size.w <= 760 && strip.fontPx > 0) problems.push(lbl + ': a phone day draws a figure it cannot fit (' + strip.fontPx + 'px)');
+            if(Math.abs(strip.w - strip.h) > 3) problems.push(lbl + ': a strip day is ' + strip.w + 'x' + strip.h + 'px — not square');
+            if(strip.w > 50) problems.push(lbl + ': a strip day is ' + strip.w + 'px wide — the strip sprawls');
+            if(strip.dates !== 30) problems.push(lbl + ': ' + strip.dates + ' dates under 30 days');
+          }
+          if(!/Attendance, day by day · the last 30 days/.test(txt)) problems.push(lbl + ': the heading does not name the window');
+          /* the window is a row of tabs, and the year is one tab away with its weeks and totals */
+          const wins = await page.$$eval('#atcWindow [data-atcw]', os => os.map(o => o.dataset.atcw)).catch(() => []);
+          if(!(wins.includes('21') && wins.includes('30') && wins.includes('year'))) problems.push(lbl + ': the windows are not all offered');
+          await page.click('#atcWindow [data-atcw="21"]'); await page.waitForTimeout(350);
+          const n21 = await page.$$eval('#atcCal.atcstrip .c', cs => cs.length).catch(() => 0);
+          if(n21 !== 21) problems.push(lbl + ': the 21-day window drew ' + n21 + ' days');
+          await page.click('#atcWindow [data-atcw="year"]'); await page.waitForTimeout(350);
           const cells = await page.$$eval('#atcCal td.c', cs => cs.filter(c => /k[1-5]/.test(c.className)).length).catch(() => 0);
-          if(cells < 8) problems.push(lbl + ': the attendance calendar has ' + cells + ' filled days, expected the planted fortnight');
+          if(cells < 8) problems.push(lbl + ': the year calendar has ' + cells + ' filled days, expected the planted fortnight');
           const wk = await page.$$eval('#atcCal td.w', ws => ws.filter(w => w.textContent.trim()).length).catch(() => 0);
           if(wk < 2) problems.push(lbl + ': the week totals row is empty');
+          const yearSel = await page.$('#atcYear');
+          if(!yearSel) problems.push(lbl + ': the year has no year select');
           if(!/Due is today/i.test(txt)) problems.push(lbl + ': the screen does not say that due is today’s roll');
           const opts = await page.$$eval('#atcMeasure [data-atc]', os => os.map(o => o.dataset.atc)).catch(() => []);
           if(!(opts.includes('notmarked') && opts.includes('late') && opts.includes('leave'))) problems.push(lbl + ': the measures are not all offered');
@@ -237,6 +268,10 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
           const cell = await page.$eval('#atcCal td.c', e => { const r = e.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; }).catch(() => null);
           if(cell && Math.abs(cell.w - cell.h) > 6) problems.push(lbl + ': a calendar day is ' + cell.w + 'x' + cell.h + 'px — not square');
           if(!/CSV · week by week/.test(txt)) problems.push(lbl + ': no way to download the days');
+          /* back to the default, so the next view and the screenshot show what the Collector opens on */
+          await page.click('#atcWindow [data-atcw="30"]'); await page.waitForTimeout(350);
+          const back = await page.$('#atcCal.atcstrip');
+          if(!back) problems.push(lbl + ': the 30-day window does not come back');
         }
         /* ---- THE FORTNIGHT IS A HEAT MAP WITH THE FIGURES ON IT (16.10.2026):
            tinted tiles under the figures, each column to its own high, the

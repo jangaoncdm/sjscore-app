@@ -2346,15 +2346,36 @@ neither due nor counted; a day not yet reached is blank. It accuses nobody
 (rule 10): nothing reads it but the Collector. Suite 39 holds it.
 
 **The heat maps are multi-hue, by the Collector's choice the same day**, and
-that is a deliberate exception to "an ordered scale is one hue". `--hm1…--hm5`
-is soft yellow → green → teal → blue → indigo (the first cut, yellow to
-magenta, was not liked and went the same day): many hues, **one order**,
-because L* falls at every step (91 > 79 > 67 > 51 > 27 light; 92 > 81 > 71 >
-60 > 52 dark), which is the check a sequential ramp answers to. It does not
-invert on the dark card — a heat map's least is still its palest, and every
-step clears 3:1 on `#171B2D`. Dark ink on steps 1–3, white on 4–5. **Density
-cells only**: bars, lines and ranks stay on `--co`, and nothing else may read
-`--hm`. The record is `prompt/palette-validation.txt`.
+that is a deliberate exception to "an ordered scale is one hue". The first
+cut was yellow to magenta and went the same day; the second, soft yellow to
+indigo, stood until 25.10.2026, when the direction was *"something light, not
+yellow definitely, which matches the colour accent of the rest of the
+dashboard"*. `--hm1…--hm5` is now the console's own gradient read least to
+most — pale mint glass → the teal → the blue → the house indigo — many hues,
+**one order**, because L* falls at every step (95 > 87 > 74 > 54 > 37 light;
+95 > 87 > 75 > 62 > 56 dark), which is the check a sequential ramp answers
+to. It does not invert on the dark card — a heat map's least is still its
+palest, and every step clears 3:1 on `#171B2D`. Dark ink on steps 1–3 and
+white on 4–5 in the light theme; dark ink on every step in the dark theme,
+where the two upper steps are lighter and white on them measures under 3:1.
+**Density cells only**: bars, lines and ranks stay on `--co`, and nothing
+else may read `--hm`. The record is `prompt/palette-validation.txt`.
+
+**And the attendance calendar opens on the last 30 days, squeezed into one
+row** (asked 25.10.2026: *"have last 30 days squeezed, or 21 days"*). A year
+of fifty-three weeks is a picture; the last month is what a review reads.
+`atcStrip` draws the days across — weekday letter above, date below, the
+figure printed on the day where there is room — every cell square and no
+wider than 46px, so the strip fills a laptop and does not sprawl across a 2K
+monitor; on a phone the day is 18px, carries no figure, and scrolls inside
+its own well. *Last 21 days · Last 30 days · The year* is a row of tabs
+(`data-atcw`), remembered per device as the theme is; the year keeps its
+weeks, its totals row and its year select. The days are counted back from the
+**district's** today (rule 1), so a day window always reads the year today is
+in. The leave calendar stays a year, because *who is away this year* is the
+question it answers. `tests/render-console.js` asserts the thirty days, the
+figures on them, the square day, the cap, the 21-day window and the way back
+to the year.
 
 **An Apps Script project holds 200 versions, and every deploy mints one.** On
 16.10.2026 the sanitation project reached the cap: `clasp push` succeeded, the
