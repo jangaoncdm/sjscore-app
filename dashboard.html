@@ -1310,17 +1310,32 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
 /* THE FORTNIGHT HEAT MAP: a table of figures, each on a tile tinted by its
    share of the column's high. Tiles, not borders, so the eye reads the tint;
    the figure stays in the mono column the table always had. */
-.dayhm{border-collapse:separate;border-spacing:3px;width:100%}
-.dayhm th{background:none;border:0;padding:4px 8px 6px}
-.dayhm td{border:0;padding:7px 8px;border-radius:7px;background:var(--panel)}
-.dayhm td.d{text-align:left;white-space:nowrap;color:var(--tx);font-weight:600}
-.dayhm td.d.off{color:var(--tx-3);font-weight:500}
-.dayhm td.c{text-align:center;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:650;color:var(--tx-3);box-shadow:inset 0 0 0 1px var(--line-2)}
+/* TURNED ON ITS SIDE AND STRETCHED TO THE MONTH (asked 25.10.2026: "make it
+   compressed for 30 days, dates on top, the legend and others on the left").
+   Thirty days across, the date over each column and the month named at its
+   first day; the six measures down the left, the label column sticky so a
+   reader scrolled into the month on a laptop still knows which row he is on.
+   The same tiles, the same figures, each ROW now scaled to its own high.
+   Columns are capped at 44px so the month fills a laptop and does not
+   sprawl across a 2K monitor; on a phone the cells are 30px and the table
+   scrolls inside its own well, never the page. */
+.dayhm{border-collapse:separate;border-spacing:3px;width:100%;table-layout:fixed;max-width:calc(var(--n) * 47px + 150px)}
+.dayhm th,.dayhm td{border:0;padding:0;background:none}
+.dayhm th.lbl{width:132px;text-align:left;position:sticky;left:0;z-index:2;background:var(--well);color:var(--tx);font-weight:600;font-size:12px;letter-spacing:0;text-transform:none;padding:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dayhm th.lbl small{display:block;font-weight:500;font-size:10.5px;color:var(--tx-3)}
+.dayhm th.m{height:14px;text-align:left;font-size:10.5px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--tx-3);white-space:nowrap;overflow:visible}
+.dayhm th.dy{text-align:center;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0;text-transform:none;color:var(--tx-2);padding:1px 0 3px;line-height:1.2;cursor:pointer}
+.dayhm th.dy span{display:block;font-size:9.5px;font-weight:600;color:var(--tx-3)}
+.dayhm th.dy.off{color:var(--tx-3)}
+.dayhm th.dy.today{color:var(--pri)}
+.dayhm td.c{height:34px;border-radius:7px;background:var(--panel);text-align:center;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:11px;font-weight:650;color:var(--tx-3);box-shadow:inset 0 0 0 1px var(--line-2);cursor:pointer;overflow:hidden}
 .dayhm td.c.k1{background:var(--hm1);color:var(--hm-ink-lo);box-shadow:none}.dayhm td.c.k2{background:var(--hm2);color:var(--hm-ink-lo);box-shadow:none}
 .dayhm td.c.k3{background:var(--hm3);color:var(--hm-ink-lo);box-shadow:none}.dayhm td.c.k4{background:var(--hm4);color:var(--hm-ink-hi);box-shadow:none}
 .dayhm td.c.k5{background:var(--hm5);color:var(--hm-ink-hi);box-shadow:none}
 .dayhm td.c.off{background:var(--well);box-shadow:none}
-.dayhm tr:hover td{filter:brightness(.97)}
+.dayhm td.c.today{box-shadow:inset 0 0 0 2px var(--st-warn)}
+.dayhm td.c:hover{filter:brightness(.94)}
+@media(max-width:760px){.dayhm{table-layout:auto;width:auto;max-width:none}.dayhm td.c{width:30px;min-width:30px;height:30px;font-size:10px}.dayhm th.lbl{width:auto;min-width:92px;font-size:11px}}
 /* THE TOP BAR ON A 1366 LAPTOP. The greeting column was left ~190px by the
    controls, so the name broke in two and the date line ran to three. Between
    the icon rail and 1500 the date line is one line, cut with an ellipsis —
@@ -1765,7 +1780,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '20b383c - 25 Oct 19:19';
+const BUILD_STAMP = '2706c68 - 25 Oct 19:32';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -2823,7 +2838,7 @@ function vOverview(j,A){
              .map(q=>`<button class="fchip" data-ask="${esc(q)}">${esc(q)}</button>`).join('')}</div>
        <div style="font-size:11.5px;color:var(--tx-3);margin-top:8px">Answers come from the figures on this screen alone. Drafts it writes are drafts — nothing is an order until the Collector passes it.</div>
      </div>`,'brief');
-  h+=panel('c12','Day by day · the last fortnight','tap a day for its villages', dayTable(j),'dayd');
+  h+=panel('c12','Day by day · the last 30 days','tap a day for its villages', dayTable(j),'dayd');
   h+=vTables(j,A,true);
   return h;
 }
@@ -3251,42 +3266,57 @@ async function doExport(kind){
 /* the day book: what each day actually produced */
 function dayRows(j){
   const byDay={};
-  j.month.rows.forEach(r=>{ const d=r.date; byDay[d]=byDay[d]||{filed:[],rf:0,sum:0};
+  /* thirty days of filings whatever month they fell in (25.10.2026); an
+     older register answers only the filing month and the fortnight */
+  (j.recent30||j.month.rows).forEach(r=>{ const d=r.date; byDay[d]=byDay[d]||{filed:[],rf:0,sum:0};
     byDay[d].filed.push(r); byDay[d].sum+=r.score; if(String(r.rf||'').trim())byDay[d].rf++; });
-  return j.att14.map(a=>{ const d=byDay[a.date]||{filed:[],rf:0,sum:0};
+  return (j.att30||j.att14).map(a=>{ const d=byDay[a.date]||{filed:[],rf:0,sum:0};
     return {date:a.date, present:a.present, leave:a.leave,
       absent:Math.max(0,(j.totals.officers-1)-a.present-a.leave),
       filed:d.filed.length, avg:d.filed.length?Math.round(d.sum/d.filed.length):null,
       rf:d.rf, list:d.filed}; }).reverse();
 }
-/* THE FORTNIGHT IS A HEAT MAP WITH THE FIGURES ON IT (asked 16.10.2026).
-   Six columns of figures read one at a time; a tint under each figure lets
-   the eye find the heavy days of a column at once — the morning the missing
-   ran to 29, the day the filings came in — while the figure is still there
-   to be read. EACH COLUMN IS SCALED TO ITS OWN FORTNIGHT HIGH, because 90
-   present and 4 filed are not on one scale, and darker is simply MORE: the
-   map does not say whether more is good, which is the restraint every
-   density map here keeps. A Sunday is off and carries no missing figure; a
-   nought is left blank, as on the year calendar. The row still opens the day. */
+/* THE MONTH IS A HEAT MAP WITH THE FIGURES ON IT (asked 16.10.2026 as a
+   fortnight down the page; turned on its side and stretched to thirty days
+   on 25.10.2026). The days run across, oldest to today, as the attendance
+   strip above them reads; the six measures run down the left. A tint under
+   each figure lets the eye find the heavy days of a measure at once — the
+   morning the missing ran to 29, the day the filings came in — while the
+   figure is still there to be read. EACH ROW IS SCALED TO ITS OWN HIGH,
+   because 90 present and 4 filed are not on one scale, and darker is simply
+   MORE: the map does not say whether more is good, which is the restraint
+   every density map here keeps. A Sunday is off and carries no missing
+   figure; a nought is left blank, as on the year calendar. A tap on a day,
+   header or tile, still opens it. */
 function dayTable(j){
   const rows=dayRows(j); window.__ROWS.dayd=rows;
-  const cols=[['present','Present'],['leave','Leave'],['absent','Missing'],['filed','Filed'],['avg','Day avg'],['rf','Flags']];
+  const days=[...rows].reverse(), n=days.length;
+  /* the three evaluation rows mean nothing on a register that takes no evaluation (the Gram Palana one): blank rows read as a district doing badly */
+  const meas=[['present','Present',''],['leave','On leave',''],['absent','Not marked','']].concat(TVIEW==='GP'?[]:[['filed','Villages filed',''],['avg','Day average','of the villages filed'],['rf','Red flags','']]);
   const sunOf=r=>new Date(r.date+'T00:00:00').getDay()===0;
   const val=(r,k)=>{ const v=k==='rf'?Number(r.rf||0):r[k]; return v==null||v===''?null:Number(v); };
-  const hi={}; cols.forEach(([k])=>{ hi[k]=Math.max(0,...rows.map(r=>(k==='absent'&&sunOf(r))?0:(val(r,k)||0))); });
+  const hi={}; meas.forEach(([k])=>{ hi[k]=Math.max(0,...rows.map(r=>(k==='absent'&&sunOf(r))?0:(val(r,k)||0))); });
   const bin=(v,k)=>{ if(!(v>0)||!(hi[k]>0)) return ''; const q=v/hi[k]; return q<=.2?'k1':q<=.4?'k2':q<=.6?'k3':q<=.8?'k4':'k5'; };
-  return `<div class="twrap"><table class="dayhm"><thead><tr><th>Day</th>`+cols.map(c=>'<th>'+c[1]+'</th>').join('')+`</tr></thead><tbody>`+
-    rows.map((r,i)=>{const sun=sunOf(r);
-      return `<tr data-dd="${i}" style="cursor:pointer">
-      <td class="d${sun?' off':''}">${esc(dm(r.date))}${sun?' <span class="mut">Sun</span>':''}</td>`+
-      cols.map(([k])=>{ const v=val(r,k); const off=sun&&k==='absent';
-        const b=off?'':bin(v,k); const txt=off?'—':(v==null||(v===0&&k!=='avg')?'—':String(v));
-        return '<td class="c '+(off?'off':b)+'"'+(v!=null&&!off?' title="'+esc(k==='present'?v+' present':k==='leave'?v+' on leave':k==='absent'?v+' not marked':k==='filed'?v+' filed':k==='avg'?'day average '+v:v+' red flag'+(v===1?'':'s'))+'"':'')+'>'+txt+'</td>'; }).join('')+
-      '</tr>';}).join('')+
-    `</tbody></table></div>
-    <div class="hmleg"><span>Darker is more, column by column — each is scaled to its own fortnight high:</span>`+
+  const words=(k,v)=>k==='present'?v+' present':k==='leave'?v+' on leave':k==='absent'?v+' not marked':k==='filed'?v+' filed':k==='avg'?'day average '+v:v+' red flag'+(v===1?'':'s');
+  const dOf=r=>new Date(r.date+'T00:00:00');
+  const ix=r=>rows.indexOf(r);
+  /* the month is named over its first day, and at the left edge unless a
+     first day follows within three columns and the two names would collide */
+  const firstSoon=days.slice(1,4).some(r=>dOf(r).getDate()===1);
+  let h='<div class="twrap"><table class="dayhm" style="--n:'+n+'"><thead>';
+  h+='<tr><th class="lbl"></th>'+days.map((r,i)=>{ const d=dOf(r); return '<th class="m">'+((d.getDate()===1||(i===0&&!firstSoon))?LV_MON[d.getMonth()]:'')+'</th>'; }).join('')+'</tr>';
+  h+='<tr><th class="lbl">Day</th>'+days.map((r,i)=>{ const d=dOf(r), sun=sunOf(r);
+    return '<th class="dy'+(sun?' off':'')+(i===n-1?' today':'')+'" data-dd="'+ix(r)+'" title="'+esc(dm(r.date)+(sun?' · Sunday':''))+'"><span>'+'SMTWTFS'[d.getDay()]+'</span>'+d.getDate()+'</th>'; }).join('')+'</tr></thead><tbody>';
+  meas.forEach(([k,label,sub])=>{
+    h+='<tr><th class="lbl">'+label+(sub?'<small>'+sub+'</small>':'')+'</th>'+days.map((r,i)=>{ const sun=sunOf(r), v=val(r,k), off=sun&&k==='absent';
+      const b=off?'':bin(v,k), txt=off?'':(v==null||(v===0&&k!=='avg')?'':String(v));
+      return '<td class="c '+(off?'off':b)+(i===n-1?' today':'')+'" data-dd="'+ix(r)+'" title="'+esc(dm(r.date)+' · '+(off?'Sunday — nobody is due':v!=null?words(k,v):'none'))+'">'+txt+'</td>'; }).join('')+'</tr>';
+  });
+  h+='</tbody></table></div>';
+  h+='<div class="hmleg"><span>Darker is more, row by row — each is scaled to its own high over the '+n+' days:</span>'+
     [1,2,3,4,5].map(i=>'<span><i style="background:var(--hm'+i+')"></i></span>').join('')+
-    `<span><i style="background:var(--well)"></i>Sunday — nobody is due</span><span>A blank is a nought. More is not better on every column; read the heading.</span></div>`;
+    '<span><i style="background:var(--well)"></i>Sunday — nobody is due</span><span><i style="box-shadow:inset 0 0 0 2px var(--st-warn);background:var(--panel)"></i>today</span><span>A blank is a nought. More is not better on every row; read the label.</span></div>';
+  return h;
 }
 function bestWorst(j){
   const rows=j.month.rows;
@@ -7233,7 +7263,7 @@ document.addEventListener('click',e=>{
   if(e.target.closest('#insSort')){ SORTD=!SORTD; if(DATA) render(DATA); return; }
   const md=e.target.closest('tr[data-md]');
   if(md){ const c=(window.__ROWS.mandal||[])[+md.dataset.md]; if(c) openMandal(c); return; }
-  const dd=e.target.closest('tr[data-dd]');
+  const dd=e.target.closest('[data-dd]');
   if(dd){ const d=(window.__ROWS.dayd||[])[+dd.dataset.dd]; if(!d) return;
     window.__ROWS.day=d.list;
     openDrawer(dm(d.date), d.present+' present · '+d.leave+' leave · '+d.absent+' missing',
