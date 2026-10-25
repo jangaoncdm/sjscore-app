@@ -1780,7 +1780,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '2706c68 - 25 Oct 19:32';
+const BUILD_STAMP = '923dcbf - 25 Oct 19:52';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -3255,7 +3255,7 @@ async function doExport(kind){
       XLSX.utils.book_append_sheet(wb,shM,'Officer × day 14d'); }
     const dr=dayRows(j);
     const shD=XLSX.utils.aoa_to_sheet([['Date','Present','Leave','Not marked','Villages filed','Day average','Red flags']]
-      .concat(dr.map(r=>[r.date,r.present,r.leave,r.absent,r.filed,r.avg==null?'':r.avg,r.rf])));
+      .concat(dr.map(r=>[r.date,r.present,r.leave,r.absent==null?'':r.absent,r.filed,r.avg==null?'':r.avg,r.rf])));
     shD['!cols']=[{wch:12},{wch:9},{wch:8},{wch:11},{wch:13},{wch:11},{wch:9}];
     XLSX.utils.book_append_sheet(wb,shD,'Daily counts');
     XLSX.writeFile(wb,'SJGP_Attendance_'+day+'.xlsx');
@@ -3271,8 +3271,17 @@ function dayRows(j){
   (j.recent30||j.month.rows).forEach(r=>{ const d=r.date; byDay[d]=byDay[d]||{filed:[],rf:0,sum:0};
     byDay[d].filed.push(r); byDay[d].sum+=r.score; if(String(r.rf||'').trim())byDay[d].rf++; });
   return (j.att30||j.att14).map(a=>{ const d=byDay[a.date]||{filed:[],rf:0,sum:0};
-    return {date:a.date, present:a.present, leave:a.leave,
-      absent:Math.max(0,(j.totals.officers-1)-a.present-a.leave),
+    /* ONE ROLL, ONE ARITHMETIC (25.10.2026): the line carries the due roll and
+       the off day from the server, so this table, the attendance strip and
+       the Attendance screen cannot disagree about a morning. An older answer
+       carries neither, and falls back to the roll less the Collector and the
+       Sunday. A register with nobody due (the HRMS) shows the voluntary
+       marks, which are the only marks it has. */
+    const off=a.off!=null?a.off:(new Date(a.date+'T00:00:00').getDay()===0?'Sunday':'');
+    const due=a.due!=null?a.due:Math.max(0,j.totals.officers-1);
+    const present=a.present+(a.due===0?(a.voluntary||0):0);
+    return {date:a.date, present, leave:a.leave, off,
+      absent:off?null:Math.max(0,due-present-a.leave),
       filed:d.filed.length, avg:d.filed.length?Math.round(d.sum/d.filed.length):null,
       rf:d.rf, list:d.filed}; }).reverse();
 }
@@ -3293,9 +3302,8 @@ function dayTable(j){
   const days=[...rows].reverse(), n=days.length;
   /* the three evaluation rows mean nothing on a register that takes no evaluation (the Gram Palana one): blank rows read as a district doing badly */
   const meas=[['present','Present',''],['leave','On leave',''],['absent','Not marked','']].concat(TVIEW==='GP'?[]:[['filed','Villages filed',''],['avg','Day average','of the villages filed'],['rf','Red flags','']]);
-  const sunOf=r=>new Date(r.date+'T00:00:00').getDay()===0;
   const val=(r,k)=>{ const v=k==='rf'?Number(r.rf||0):r[k]; return v==null||v===''?null:Number(v); };
-  const hi={}; meas.forEach(([k])=>{ hi[k]=Math.max(0,...rows.map(r=>(k==='absent'&&sunOf(r))?0:(val(r,k)||0))); });
+  const hi={}; meas.forEach(([k])=>{ hi[k]=Math.max(0,...rows.map(r=>val(r,k)||0)); });
   const bin=(v,k)=>{ if(!(v>0)||!(hi[k]>0)) return ''; const q=v/hi[k]; return q<=.2?'k1':q<=.4?'k2':q<=.6?'k3':q<=.8?'k4':'k5'; };
   const words=(k,v)=>k==='present'?v+' present':k==='leave'?v+' on leave':k==='absent'?v+' not marked':k==='filed'?v+' filed':k==='avg'?'day average '+v:v+' red flag'+(v===1?'':'s');
   const dOf=r=>new Date(r.date+'T00:00:00');
@@ -3305,17 +3313,17 @@ function dayTable(j){
   const firstSoon=days.slice(1,4).some(r=>dOf(r).getDate()===1);
   let h='<div class="twrap"><table class="dayhm" style="--n:'+n+'"><thead>';
   h+='<tr><th class="lbl"></th>'+days.map((r,i)=>{ const d=dOf(r); return '<th class="m">'+((d.getDate()===1||(i===0&&!firstSoon))?LV_MON[d.getMonth()]:'')+'</th>'; }).join('')+'</tr>';
-  h+='<tr><th class="lbl">Day</th>'+days.map((r,i)=>{ const d=dOf(r), sun=sunOf(r);
-    return '<th class="dy'+(sun?' off':'')+(i===n-1?' today':'')+'" data-dd="'+ix(r)+'" title="'+esc(dm(r.date)+(sun?' · Sunday':''))+'"><span>'+'SMTWTFS'[d.getDay()]+'</span>'+d.getDate()+'</th>'; }).join('')+'</tr></thead><tbody>';
+  h+='<tr><th class="lbl">Day</th>'+days.map((r,i)=>{ const d=dOf(r);
+    return '<th class="dy'+(r.off?' off':'')+(i===n-1?' today':'')+'" data-dd="'+ix(r)+'" title="'+esc(dm(r.date)+(r.off?' · '+r.off:''))+'"><span>'+'SMTWTFS'[d.getDay()]+'</span>'+d.getDate()+'</th>'; }).join('')+'</tr></thead><tbody>';
   meas.forEach(([k,label,sub])=>{
-    h+='<tr><th class="lbl">'+label+(sub?'<small>'+sub+'</small>':'')+'</th>'+days.map((r,i)=>{ const sun=sunOf(r), v=val(r,k), off=sun&&k==='absent';
+    h+='<tr><th class="lbl">'+label+(sub?'<small>'+sub+'</small>':'')+'</th>'+days.map((r,i)=>{ const v=val(r,k), off=!!r.off&&k==='absent';
       const b=off?'':bin(v,k), txt=off?'':(v==null||(v===0&&k!=='avg')?'':String(v));
-      return '<td class="c '+(off?'off':b)+(i===n-1?' today':'')+'" data-dd="'+ix(r)+'" title="'+esc(dm(r.date)+' · '+(off?'Sunday — nobody is due':v!=null?words(k,v):'none'))+'">'+txt+'</td>'; }).join('')+'</tr>';
+      return '<td class="c '+(off?'off':b)+(i===n-1?' today':'')+'" data-dd="'+ix(r)+'" title="'+esc(dm(r.date)+' · '+(off?r.off+' — nobody is due':v!=null?words(k,v):'none'))+'">'+txt+'</td>'; }).join('')+'</tr>';
   });
   h+='</tbody></table></div>';
   h+='<div class="hmleg"><span>Darker is more, row by row — each is scaled to its own high over the '+n+' days:</span>'+
     [1,2,3,4,5].map(i=>'<span><i style="background:var(--hm'+i+')"></i></span>').join('')+
-    '<span><i style="background:var(--well)"></i>Sunday — nobody is due</span><span><i style="box-shadow:inset 0 0 0 2px var(--st-warn);background:var(--panel)"></i>today</span><span>A blank is a nought. More is not better on every row; read the label.</span></div>';
+    '<span><i style="background:var(--well)"></i>Sunday or holiday — nobody is due</span><span><i style="box-shadow:inset 0 0 0 2px var(--st-warn);background:var(--panel)"></i>today</span><span>A blank is a nought. Present and not marked count the officers due, as the strip above does. More is not better on every row; read the label.</span></div>';
   return h;
 }
 function bestWorst(j){
@@ -7266,7 +7274,7 @@ document.addEventListener('click',e=>{
   const dd=e.target.closest('[data-dd]');
   if(dd){ const d=(window.__ROWS.dayd||[])[+dd.dataset.dd]; if(!d) return;
     window.__ROWS.day=d.list;
-    openDrawer(dm(d.date), d.present+' present · '+d.leave+' leave · '+d.absent+' missing',
+    openDrawer(dm(d.date), d.present+' present · '+d.leave+' leave · '+(d.off?d.off+' — nobody due':d.absent+' not marked'),
       d.list.length?`<b class="dsec">Villages filed that day · tap one</b><table style="margin-top:6px"><tbody>${
         d.list.map((r,i)=>`<tr data-di="day:${i}"><td>${esc(r.gp)}<span class="mut"> · ${esc(r.mandal)}</span></td>
         <td class="num">${r.score}</td><td class="gr gr${esc(r.grade)}">${esc(r.grade)}</td></tr>`).join('')}</tbody></table>`
