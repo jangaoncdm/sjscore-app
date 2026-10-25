@@ -4745,20 +4745,38 @@ function doGet(e){
       d30.forEach(d2 => { if(f <= d2 && d2 <= t) leaveCover[d2 + '|' + p] = String(lv[i][lm.ix.type] || 'CL'); });
     }
 
+    /* ONE ROLL, ONE ARITHMETIC (25.10.2026). These day lines counted every
+       mark as present and left the console to count every officer on the
+       roll as due, so the day table printed the voluntary MSO marks as
+       present and the silent MSOs as not marked — "Not marked 26" under an
+       attendance strip reading 14 for the same morning, the fault the
+       evening mail and the console once had between them. The lines now
+       count the DUE roll — active and not exempt, which is what the
+       attendance calendar and the Attendance screen count — and carry the
+       due figure and the off day with them, so every reader of a day line
+       does the same sum. Marks by the voluntary offices ride beside as
+       `voluntary`: counted, never due, and never read as missing. */
+    const dueSet = {}, volSet = {};
+    officers.forEach(o => { if(attExempt_(o.role)) volSet[o.phone] = true; else dueSet[o.phone] = true; });
+    const dueN = Object.keys(dueSet).length;
     const daily = {};
     Object.keys(dailyPh).forEach(d => {
-      daily[d] = {present:0, leave:0};
-      Object.keys(dailyPh[d]).forEach(ph => daily[d][dailyPh[d][ph]==='LEAVE'?'leave':'present']++);
+      daily[d] = {present:0, leave:0, voluntary:0};
+      Object.keys(dailyPh[d]).forEach(ph => {
+        if(dueSet[ph]) daily[d][dailyPh[d][ph]==='LEAVE'?'leave':'present']++;
+        else if(volSet[ph]) daily[d].voluntary++;
+      });
     });
     /* an officer covered by sanctioned leave who wrote no row still counts
        as on leave that day, not as nothing */
     Object.keys(leaveCover).forEach(k => {
       const d2 = k.slice(0, 10), p = k.slice(11);
-      if((dailyPh[d2] || {})[p]) return;
-      daily[d2] = daily[d2] || {present:0, leave:0};
+      if((dailyPh[d2] || {})[p] || !dueSet[p]) return;
+      daily[d2] = daily[d2] || {present:0, leave:0, voluntary:0};
       daily[d2].leave++;
     });
-    const att30 = d30.map(key => ({date:key, present:(daily[key]||{}).present||0, leave:(daily[key]||{}).leave||0}));
+    const att30 = d30.map(key => { const x = daily[key] || {};
+      return {date:key, present:x.present||0, leave:x.leave||0, voluntary:x.voluntary||0, due:dueN, off:offInfo_(key).why}; });
     const att14 = att30.slice(-14);
     const markedPh = {}; todayRows.forEach(r => markedPh[r.phone] = true);
     officers.forEach(o => {

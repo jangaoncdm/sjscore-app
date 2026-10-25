@@ -2377,6 +2377,24 @@ question it answers. `tests/render-console.js` asserts the thirty days, the
 figures on them, the square day, the cap, the 21-day window and the way back
 to the year.
 
+**And the Day by day table under it is the same month, turned on its side**
+(asked the same day: *"make it compressed for 30 days, dates on top, the
+legend and others on the left"*): thirty dated columns, the six measures down
+a sticky left column, each row tinted against its own high, a tap on a date
+or a tile opening the day. The server counts thirty days back now (`att30`;
+`att14` is the last fourteen of them) and sends the filings of those thirty
+days whatever month they fell in (`recent30`), because the table reaches
+back past the 10th. **It was reported the same evening as "some mismatch in
+data", and the mismatch was the roll**: the day lines counted every mark as
+present and the console counted every officer on the roll as due, so the
+voluntary MSO marks read as present and the silent MSOs as not marked —
+*Not marked 26* under a strip reading 14 for the same morning, and holidays
+were not greyed. The day lines now count the **due roll** (active, not
+exempt), as the attendance calendar does, and carry `due` and the off day
+with them, so the table, the strip and the Attendance screen cannot disagree
+about a morning; voluntary marks ride beside as `voluntary`, counted and
+never due. The Gram Palana register draws only the three attendance rows.
+
 **An Apps Script project holds 200 versions, and every deploy mints one.** On
 16.10.2026 the sanitation project reached the cap: `clasp push` succeeded, the
 deploy step answered *Cannot create more versions*, and the live register went
