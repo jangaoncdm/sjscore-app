@@ -273,26 +273,37 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
           const back = await page.$('#atcCal.atcstrip');
           if(!back) problems.push(lbl + ': the 30-day window does not come back');
         }
-        /* ---- THE FORTNIGHT IS A HEAT MAP WITH THE FIGURES ON IT (16.10.2026):
-           tinted tiles under the figures, each column to its own high, the
-           Sunday off, the figures still there to read. ---- */
+        /* ---- THE MONTH IS A HEAT MAP WITH THE FIGURES ON IT (16.10.2026 as a
+           fortnight; turned on its side and stretched to 30 days 25.10.2026):
+           thirty dated columns, six measures down a sticky left column,
+           tinted tiles under the figures, each row to its own high, the
+           Sunday off, the figures still there to read, no sprawl. ---- */
         if(v === 'overview'){
-          const lbl = size.n + '/' + theme + '/overview/fortnight';
+          const lbl = size.n + '/' + theme + '/overview/month';
           const d = await page.evaluate(() => {
             const t = document.querySelector('.dayhm'); if(!t) return null;
             const tinted = t.querySelectorAll('td.c.k1,td.c.k2,td.c.k3,td.c.k4,td.c.k5');
             const withNum = [...tinted].filter(c => /^\d+$/.test(c.textContent.trim())).length;
+            const r = t.querySelector('td.c').getBoundingClientRect();
             return { tinted: tinted.length, withNum, off: t.querySelectorAll('td.c.off').length,
-                     dark: [...t.querySelectorAll('td.c.k5')].length, rows: t.querySelectorAll('tbody tr').length };
+                     dark: [...t.querySelectorAll('td.c.k5')].length, rows: t.querySelectorAll('tbody tr').length,
+                     days: t.querySelectorAll('thead th.dy').length, w: Math.round(r.width),
+                     sticky: getComputedStyle(t.querySelector('th.lbl')).position, clickable: t.querySelectorAll('[data-dd]').length };
           });
           if(!d) problems.push(lbl + ': the day-by-day table is not a heat map');
           else {
-            if(d.rows < 10) problems.push(lbl + ': only ' + d.rows + ' days');
+            if(d.days !== 30) problems.push(lbl + ': ' + d.days + ' dated columns, not 30');
+            if(d.rows !== 6) problems.push(lbl + ': ' + d.rows + ' measure rows, not 6');
             if(d.tinted < 20) problems.push(lbl + ': only ' + d.tinted + ' tinted cells');
             if(d.withNum !== d.tinted) problems.push(lbl + ': ' + (d.tinted - d.withNum) + ' tinted cells carry no figure');
-            if(d.dark < 1) problems.push(lbl + ': no column reaches its own high');
+            if(d.dark < 1) problems.push(lbl + ': no row reaches its own high');
             if(d.off < 1) problems.push(lbl + ': the Sunday is not drawn off');
+            if(d.w > 50) problems.push(lbl + ': a day column is ' + d.w + 'px wide — the month sprawls');
+            if(d.sticky !== 'sticky') problems.push(lbl + ': the measure labels do not stay put when the month scrolls');
+            if(d.clickable < 30 * 7) problems.push(lbl + ': only ' + d.clickable + ' cells open their day');
           }
+          const hd = await page.$eval('#g', e => e.innerText);
+          if(!/Day by day · the last 30 days/.test(hd)) problems.push(lbl + ': the heading still says fortnight');
         }
         if(v === 'attendance'){
           const lbl = size.n + '/' + theme + '/attendance';

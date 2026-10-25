@@ -4725,18 +4725,24 @@ function doGet(e){
     try{ leaveStandingOrders_(); }catch(err){}          /* orders due under the standing order, first */
     const lsh = sheet_('Leave', L_HEAD), lm = headMap_(lsh, L_HEAD);
     const lv = lsh.getDataRange().getValues();
-    const d14 = [];
-    for(let k = 13; k >= 0; k--){
+    /* THIRTY DAYS, AND THE FORTNIGHT IS THE LAST FOURTEEN OF THEM (25.10.2026).
+       The console's day-by-day table reads a month now; the activity chart,
+       the briefing and suite 13 still read att14, which is unchanged. The
+       tail read above is 9,000 rows — a calendar month at district volume,
+       with the mark out on the same row as the mark in. */
+    const d30 = [];
+    for(let k = 29; k >= 0; k--){
       const d = new Date(); d.setDate(d.getDate() - k);
-      d14.push(Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd'));
+      d30.push(Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd'));
     }
+    const d14 = d30.slice(-14);
     const leaveCover = {};   /* 'date|phone' -> leave type, APPROVED spells only */
     for(let i = 1; i < lv.length; i++){
       if(String(lv[i][lm.ix.status]) !== 'APPROVED') continue;
       const f = dateText_(lv[i][lm.ix.fromDate]), t = dateText_(lv[i][lm.ix.toDate]);
       const p = phone10_(lv[i][lm.ix.phone]);
       if(!f || !t || !p) continue;
-      d14.forEach(d2 => { if(f <= d2 && d2 <= t) leaveCover[d2 + '|' + p] = String(lv[i][lm.ix.type] || 'CL'); });
+      d30.forEach(d2 => { if(f <= d2 && d2 <= t) leaveCover[d2 + '|' + p] = String(lv[i][lm.ix.type] || 'CL'); });
     }
 
     const daily = {};
@@ -4752,7 +4758,8 @@ function doGet(e){
       daily[d2] = daily[d2] || {present:0, leave:0};
       daily[d2].leave++;
     });
-    const att14 = d14.map(key => ({date:key, present:(daily[key]||{}).present||0, leave:(daily[key]||{}).leave||0}));
+    const att30 = d30.map(key => ({date:key, present:(daily[key]||{}).present||0, leave:(daily[key]||{}).leave||0}));
+    const att14 = att30.slice(-14);
     const markedPh = {}; todayRows.forEach(r => markedPh[r.phone] = true);
     officers.forEach(o => {
       if(attExempt_(o.role) || markedPh[o.phone]) return;
@@ -4795,18 +4802,27 @@ function doGet(e){
     /* inspections: this month in full, six months in trend */
     const ish = sheet_('Inspections', HEADERS), im = headMap_(ish, HEADERS);
     const iv = ish.getDataRange().getValues();
-    const monthRows = [], trend = {};
+    /* recent30: the filings of the last thirty days whatever month they
+       were filed against, because the day-by-day table now reaches back
+       past the 10th and the filing month's rows alone would show the days
+       before it as blank (25.10.2026). Same shape as a month row. */
+    const monthRows = [], trend = {}, recent30 = [];
     for(let i = 1; i < iv.length; i++){
       const ym = rowYm_(iv[i], im.ix); if(!ym) continue;
       const sc = Number(iv[i][im.ix.score]) || 0;
       trend[ym] = trend[ym] || {sum:0, n:0};
       trend[ym].sum += sc; trend[ym].n++;
-      if(ym === ymN) monthRows.push({
+      const dt = dateText_(iv[i][im.ix.date]);
+      const in30 = dt && dt >= d30[0] && dt <= d30[d30.length - 1];
+      if(ym !== ymN && !in30) continue;
+      const row = {
         gp:cell_(iv[i], im.ix.gp), mandal:cell_(iv[i], im.ix.mandal), score:sc,
         album:cell_(iv[i], im.ix.album), folder:cell_(iv[i], im.ix.photoFolder),
         photos:Number(iv[i][im.ix.photoCount])||0, lat:Number(iv[i][im.ix.lat])||null, lng:Number(iv[i][im.ix.lng])||null,
         grade:cell_(iv[i], im.ix.grade), rf:cell_(iv[i], im.ix.redFlags),
-        officer:cell_(iv[i], im.ix.officer), date:dateText_(iv[i][im.ix.date])});
+        officer:cell_(iv[i], im.ix.officer), date:dt};
+      if(ym === ymN) monthRows.push(row);
+      if(in30) recent30.push(row);
     }
     const months = Object.keys(trend).sort().slice(-6)
       .map(k => ({ym:k, avg:Math.round(trend[k].sum/trend[k].n), n:trend[k].n}));
@@ -4908,7 +4924,7 @@ function doGet(e){
          screen reads, and the coverage and the fortnight, which the Place of
          duty screen reads. One read of a small tab answers all three. */
       fence:fenceReport_(),
-      att14:att14, month:{rows:monthRows, grades:gradeCount,
+      att14:att14, att30:att30, recent30:recent30, month:{rows:monthRows, grades:gradeCount,
         avg: monthRows.length ? Math.round(monthRows.reduce((s,r)=>s+r.score,0)/monthRows.length) : null,
         rfCount: monthRows.filter(r=>String(r.rf||'').trim()).length},
       trend:months, coverage:coverage,
