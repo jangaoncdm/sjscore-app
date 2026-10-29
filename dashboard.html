@@ -1097,6 +1097,14 @@ a.tbtn{display:inline-flex;align-items:center;justify-content:center;text-decora
 #map{height:372px;border-radius:14px;border:0;box-shadow:var(--nm-in-sm)}
 #map2{height:calc(100vh - 210px);min-height:430px;border-radius:14px;border:0;box-shadow:var(--nm-in-sm)}
 .leaflet-container{font:11px var(--sans)}
+/* THE MAP STAYS IN ITS CARD (reported 29.10.2026: "when I click on Not
+   marked the map comes and the text hides behind"). Leaflet stacks its panes
+   at 400 and its controls at 1000, and with nothing to contain them those
+   figures were compared with the whole page — so the map painted over the
+   drawer (60) that the Not marked tile opens, and over the sticky header
+   (8) on a scroll. Isolating the map keeps every one of its layers inside
+   its own box, where they belong. */
+.leaflet-container{isolation:isolate}
 
 /* charts */
 svg{display:block;width:100%}
@@ -1822,7 +1830,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '39eca9f - 29 Oct 11:29';
+const BUILD_STAMP = '3b88eff - 29 Oct 11:40';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
