@@ -2690,7 +2690,7 @@ const IC={u:'<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M
 /* the tone of a tile is read off what it counts, and a nought is never a fault */
 function kpiTone(title,val){
   const v=String(val==null?'':val).replace(/<[^>]*>/g,'').trim();
-  if(v===''||v==='—'||/^0(.0+)?s*(%|h|days?)?$/.test(v)) return 't-nil';
+  if(v===''||v==='—'||/^0(\.0+)?\s*(%|h|days?)?$/.test(v)) return 't-nil';
   const t=String(title).toLowerCase();
   if(/not marked|unmarked|red flag|overdue|absent|behind|outside|default|failed|exhausted|loss of pay|never signed|not measured|far /.test(t)) return 't-bad';
   if(/await|pending|waiting|oldest|late|reminder|open|queued|not yet|still/.test(t)) return 't-warn';
