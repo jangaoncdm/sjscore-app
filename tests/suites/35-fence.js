@@ -1120,6 +1120,82 @@ module.exports = {
         'so a skeleton under four consonants never reaches on its own');
     }
 
+    /* ---- 22. THE MANDAL OFFICERS' RELAXATION — ordered 29.10.2026.
+            "For MPDOs and MPOs give relaxation of 30 km from the place." An
+            MPDO's morning is a mandal meeting, a village, the ZP office or
+            the IDOC; two mandals asked in the same words to mark from any of
+            them. Thirty kilometres from the mandal office reaches all of it.
+            The Secretary stays at five. The MSO, not named, stays at five.
+            One switch stands the whole thing down. ---- */
+    {
+      const KM20 = { lat:17.800, lng:79.070 };   /* 20 km north of the mandal office */
+      const KM35 = { lat:17.935, lng:79.070 };   /* 35 km */
+      const PS20 = { lat:17.780, lng:79.050 };   /* 20 km north of the village office */
+      const withMpdo = () => {
+        const env = world();
+        env.sheets['Users'].rows.push(['9000000058', 'K. TheMpdo', 'MPDO', 'Devaruppula', '', '', '',
+                                       env.ctx.hash_('9000000058', '1111'), 'TRUE']);
+        env.sheets['Users'].rows.push(['9000000059', 'S. TheMso', 'MSO', 'Devaruppula', '', '', '',
+                                       env.ctx.hash_('9000000059', '1111'), 'TRUE']);
+        return env;
+      };
+      let env = withMpdo();
+      t.eq(mark(env, tok(env, '9000000058'), KM20).ok, true,
+        'AN MPDO TWENTY KILOMETRES FROM THE MANDAL OFFICE IS TAKEN — the order of 29.10.2026');
+      t.eq(mark(env, tok(env, '9000000055'), KM20).ok, true, 'and so is an MPO');
+      const ps = mark(env, tok(env, '9000000051'), PS20);
+      t.eq(ps.ok, false, 'WHILE A SECRETARY TWENTY KILOMETRES OUT IS STILL REFUSED — his place of duty is his village');
+      t.eq(ps.limit, 5, 'at five kilometres');
+      const mso = mark(env, tok(env, '9000000059'), KM20);
+      t.eq(mso.ok, false, 'and the MSO, whom the order does not name, is held to the base radius');
+      t.eq(mso.limit, 5, 'five kilometres');
+
+      env = withMpdo();
+      const r = mark(env, tok(env, '9000000058'), KM35);
+      t.eq(r.ok, false, 'an MPDO thirty-five kilometres out is refused');
+      t.eq(r.limit, 30, 'against thirty');
+      t.ok(/35(\.\d)? km away from MPDO Office/.test(r.error), 'in the district\'s own words, naming the office', r.error);
+      t.eq(outRows(env).length, 1, 'and the refusal is on the Outside tab');
+
+      /* the app is told its officer's OWN radius, so the sentence on the
+         location step and the refusal on the road use the same figure */
+      t.eq(env.get('duty', { token:tok(env, '9000000058') }).km, 30, 'the MPDO\'s app is told thirty');
+      t.eq(env.get('duty', { token:tok(env, '9000000055') }).km, 30, 'the MPO\'s thirty');
+      t.eq(env.get('duty', { token:tok(env, '9000000051') }).km, 5, 'and the Secretary\'s five');
+      t.eq(env.get('duty', { token:tok(env, '9000000059') }).km, 5, 'and the MSO\'s five');
+
+      /* the console reads the base as the rule and the relaxed roles beside it */
+      const rep = env.ctx.fenceReport_();
+      t.eq(rep.km, 5, 'the report\'s rule is still the base radius');
+      t.eq(JSON.stringify(rep.roles), '{"MPDO":30,"MPO":30}', 'with the relaxed roles beside it');
+      const o = env.get('outside', { token:tok(env, '9000000001') });
+      t.eq(o.limit, 5, 'the day\'s refusals carry the base');
+      t.eq(o.roles.MPDO, 30, 'and the relaxed roles, so the screen can say which rule each man was measured against');
+
+      /* THE SWITCHES. FENCE_KM_MANDAL moves the relaxation on its own;
+         FENCE_KM moves the base and leaves the relaxation where the order
+         put it; FENCE_OFF and a base of nought stand everybody down. */
+      env = withMpdo();
+      env.props.FENCE_KM_MANDAL = '12';
+      const r12 = mark(env, tok(env, '9000000058'), KM20);
+      t.eq(r12.ok, false, 'FENCE_KM_MANDAL tightens the relaxation with no deploy');
+      t.eq(r12.limit, 12, 'to twelve');
+      t.eq(env.get('duty', { token:tok(env, '9000000058') }).km, 12, 'and the app is told');
+      t.eq(env.get('duty', { token:tok(env, '9000000051') }).km, 5, 'while the Secretary\'s radius has not moved');
+      delete env.props.FENCE_KM_MANDAL;
+      env.props.FENCE_KM = '2';
+      t.eq(env.get('duty', { token:tok(env, '9000000058') }).km, 30, 'FENCE_KM moves the base and not the relaxation');
+      t.eq(env.get('duty', { token:tok(env, '9000000051') }).km, 2, 'the Secretary is at two');
+      env.props.FENCE_KM = '0';
+      t.eq(mark(env, tok(env, '9000000058'), KM35).ok, true, 'a base of nought is no fence for anybody');
+      delete env.props.FENCE_KM;
+      env = withMpdo();
+      env.props.FENCE_OFF = '1';
+      t.eq(mark(env, tok(env, '9000000058'), KM35).ok, true, 'and FENCE_OFF stands the relaxed roles down with everyone else');
+      t.eq(env.ctx.fenceRule_('MPDO').off, true, 'the rule says so');
+      t.eq(JSON.stringify(env.ctx.fenceReport_().roles), '{}', 'and the report carries no relaxed role while it is down');
+    }
+
     /* ---- 13. AND THE SANITATION REGISTER IS, which is the order ---- */
     {
       const env = world();

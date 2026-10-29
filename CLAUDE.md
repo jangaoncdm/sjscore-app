@@ -2889,6 +2889,23 @@ holds the sheet.
 
 **And the casual-leave figure was the order's.** "I have used only 6 of my
 casual leaves this year, but it is showing only 4 left" — 2026 opened with
-six days (15 × 5/12), two are sanctioned, four remain. Marking from any
-village of the mandal and from the ZP office, asked for twice on the list, is
-a change to the order of 12.10.2026 and was not built.
+six days (15 × 5/12), two are sanctioned, four remain.
+
+**The mandal officers' relaxation — ordered the same day.** Two mandals asked
+in the same words to mark from any village of the mandal, the ZP office and
+the IDOC, and the order of 12.10.2026 had fenced the MPO and the MPDO to the
+mandal office at five kilometres, which refused them at every one of those.
+The Collector's order: *"for MPDOs and MPOs give relaxation of 30 km from the
+place."* `TENANTS.SJGP.fenceRoles` carries it (`{ MPDO:30, MPO:30 }`), and
+`fenceRule_(role)` answers an officer's **own** radius — thirty for those
+two, the base five for the Secretary, whose place of duty is his village,
+and for the MSO and the office staff, whom the order does not name. The
+place of duty did not move: it is still the mandal office, measured as
+before; only the radius did. `op=duty` tells the app its officer's figure,
+so the location step and the refusal on the road use one number; the console
+payload carries `fence.roles` beside `fence.km`, so `dutyLim(role)`
+does not paint a twenty-kilometre mark the register has already taken amber
+against a Secretary's rule, and every sentence that states the rule says
+*5 km · 30 km for MPDOs and MPOs*. `FENCE_KM_MANDAL` moves the relaxation
+with no deploy; `FENCE_KM` moves the base and leaves it; `FENCE_OFF` and
+a base of nought stand everybody down. Suite 35 §22.

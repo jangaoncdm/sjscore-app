@@ -524,6 +524,19 @@ const TENANTS = {
        stands it down, both without a deploy. */
     placeOfDuty:true,
     fence:5,
+    /* THE MANDAL OFFICERS' RELAXATION — ordered 29.10.2026, off the list of
+       that day: "for MPDOs and MPOs give relaxation of 30 km from the place".
+       An MPDO's morning is a mandal meeting, a village he is inspecting, the
+       ZP office or the IDOC, and the order of 12.10 fenced him to the mandal
+       office at five kilometres, which refused him at every one of them —
+       two mandals asked, in the same words, to mark from any village of the
+       mandal and from the district offices. Thirty kilometres from the
+       mandal office reaches all of that. The Secretary stays at five: his
+       place of duty is his village. The MSO and the office staff are not
+       named in the order and keep the base radius. The script property
+       FENCE_KM_MANDAL moves this figure with no deploy, as FENCE_KM moves the
+       base, and FENCE_OFF stands the whole thing down. */
+    fenceRoles:{ MPDO:30, MPO:30 },
     /* LEAVE WITHIN THE RULES IS SANCTIONED BY THE REGISTER ITSELF (ordered
        17.10.2026). An application that passes every check the sanction
        already runs — the year's balance, the optional-holiday cap, the
@@ -2211,8 +2224,25 @@ var FENCE_ACC_M_ = 1000;   /* a fix coarser than this does not place a man at al
 var FENCE_HEAD = ['date','phone','name','role','mandal','which','tries','at',
                   'lat','lng','accuracy','place','km','receivedAt'];
 
-/* the radius and the switch, read at every call so a change needs no deploy */
-function fenceRule_(){
+/* THE ROLES THE ORDER RELAXES, and the radius each gets — the tenant's
+   table, moved by FENCE_KM_MANDAL with no deploy. Empty where no role is
+   relaxed, which is every register but the sanitation one. */
+function fenceRoles_(){
+  var m = tenant_().fenceRoles || {}, out = {}, s = '';
+  try{ s = String(PropertiesService.getScriptProperties().getProperty('FENCE_KM_MANDAL') || '').trim(); }catch(e){}
+  Object.keys(m).forEach(function(r){
+    var k = (s !== '' && isFinite(Number(s))) ? Number(s) : Number(m[r]);
+    if(k > 0) out[String(r).toUpperCase()] = k;
+  });
+  return out;
+}
+/* the radius and the switch, read at every call so a change needs no deploy.
+   Asked WITH A ROLE it answers that officer's own radius — thirty kilometres
+   for an MPDO or an MPO since 29.10.2026 — and without one the base radius,
+   which is what the Secretary is held to and what the reports print as the
+   rule. One switch for all of it: FENCE_OFF, or a base radius of nought,
+   stands the relaxed roles down with everybody else. */
+function fenceRule_(role){
   /* THE REGISTER SAYS WHETHER IT IS FENCED AT ALL, and the same bytes deploy
      to all three (see TENANTS). The sanitation register was fenced by the
      order of 10.10.2026; the Gram Palana register measures and accuses
@@ -2227,7 +2257,10 @@ function fenceRule_(){
     if(String(p.getProperty('FENCE_OFF') || '').trim()) off = true;
   }catch(e){}
   if(!(km > 0)) off = true;          /* a radius of nought is not a fence */
-  return { km:km, off:off, acc:FENCE_ACC_M_ };
+  var roles = off ? {} : fenceRoles_(), base = km;
+  var R = String(role || '').toUpperCase();
+  if(!off && R && roles[R] > 0) km = roles[R];
+  return { km:km, base:base, off:off, acc:FENCE_ACC_M_, roles:roles };
 }
 
 /* WHERE THIS OFFICER IS SUPPOSED TO BE.
@@ -2342,7 +2375,7 @@ function mandalDuty_(m, offs, places){
    by the mark out and by the app, so the three can never disagree.
    `gated:false` means there is nothing to enforce and the mark stands. */
 function fenceCheck_(u, lat, lng, acc){
-  var rule = fenceRule_();
+  var rule = fenceRule_(u && u.role);
   if(rule.off) return { gated:false, ok:true, why:'the fence is stood down' };
   if(districtRole_(u && u.role)) return { gated:false, ok:true, why:'a district officer holds no one place' };
 
@@ -2525,7 +2558,7 @@ function stillCheck_(a){
    whether a man was at a mandal meeting is not a thing a table can know. */
 function fenceReport_(){
   var rule = fenceRule_();
-  var out = { km:rule.off ? 0 : rule.km, on:!rule.off, today:[], days:[], repeat:[],
+  var out = { km:rule.off ? 0 : rule.km, on:!rule.off, roles:rule.roles, today:[], days:[], repeat:[],
               villages:{ total:0, placed:0, unplaced:0 }, byMandal:[], unplaced:[],
               offices:{ total:0, placed:0, fromTab:0, fromHq:0, unplaced:0, officers:0, fenced:0 },
               mandals:[] };
@@ -4489,7 +4522,7 @@ function doGet(e){
      An officer the district has not placed gets `on:false` and is gated by
      nothing, which is the same answer the register itself would give. */
   if(p.op === 'duty'){
-    const rule = fenceRule_();
+    const rule = fenceRule_(u.role);
     const pts = districtRole_(u.role) ? [] : dutyPoints_(u);
     return json_({ ok:true, on: !rule.off && pts.length > 0, km:rule.km, acc:rule.acc,
                    duty:pts, which:(pts[0] || {}).which || '',
@@ -4525,7 +4558,7 @@ function doGet(e){
                   acc:r[m.ix.accuracy] === '' ? null : Number(r[m.ix.accuracy]) });
     });
     rows.sort((x, y) => (y.km || 0) - (x.km || 0));
-    return json_({ ok:true, date:day, rows:rows, limit:fenceRule_().km });
+    return json_({ ok:true, date:day, rows:rows, limit:fenceRule_().km, roles:fenceRule_().roles });
   }
 
   /* the notice register: an officer sees his own SERVED file — a proposal
@@ -5848,6 +5881,7 @@ function rollRegister_(u){
                     the register enforces. 0 where the register is not fenced. */
                  fenceKm:(function(){ try{ var f = fenceRule_(); return f.off ? 0 : f.km; }
                                       catch(e){ return 0; } })(),
+                 fenceRoles:(function(){ try{ return fenceRule_().roles; }catch(e){ return {}; } })(),
                  holidays:{ year:holYear, count:hol, onOrder:hol - holExtra.length,
                             extra:holExtra.slice(0, 60) },
                  mandals:gpRoll_().map(r => r.mandal).filter((m, i, A) => m && A.indexOf(m) === i).sort() });

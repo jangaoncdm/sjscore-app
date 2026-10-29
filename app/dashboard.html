@@ -1583,9 +1583,24 @@ const FAR_DUTY_KM = 3;
    had already passed. Read off the payload being drawn; three where there
    is no fence, which is the Gram Palana register's measure and accuses
    nobody. */
-function dutyLim(){
+/* ASKED WITH A ROLE IT IS THAT OFFICER'S OWN RADIUS: thirty kilometres for an
+   MPDO or an MPO since the order of 29.10.2026, five for a Secretary. The
+   payload carries the relaxed roles beside the base, so a twenty-kilometre
+   mark by an MPDO that the register has already taken is not painted amber
+   against a Secretary's rule. */
+function dutyLim(role){
   const f=(typeof PAY!=='undefined'&&PAY&&PAY.fence)||null;
-  return (f&&f.on&&f.km>0)?f.km:FAR_DUTY_KM;
+  if(!(f&&f.on&&f.km>0)) return FAR_DUTY_KM;
+  const R=String(role||'').toUpperCase();
+  return (f.roles&&f.roles[R]>0)?f.roles[R]:f.km;
+}
+/* the rule in words, base first and the relaxed roles after it */
+function fenceRuleSay(f){
+  f=f||(typeof PAY!=='undefined'&&PAY&&PAY.fence)||null;
+  const base=(f&&f.on&&f.km>0)?f.km:FAR_DUTY_KM;
+  const roles=(f&&f.on&&f.roles)||{};
+  const kms=[...new Set(Object.keys(roles).map(r=>roles[r]).filter(k=>k>0&&k!==base))];
+  return base+' km'+kms.map(k=>' · '+k+' km for '+Object.keys(roles).filter(r=>roles[r]===k).map(r=>r+'s').join(' and ')).join('');
 }
 const TENANCY = {
   /* THE AUDIENCE OF A CIRCULAR IS THE REGISTER'S OWN ROLES. The composer
@@ -2112,11 +2127,11 @@ function analyse(j){
      of duty its roll can measure. */
   const gpNow = (typeof TVIEW !== 'undefined' && TVIEW === 'GP');
   const duty = j.today.present.filter(r=>r.dutyKm!=null);
-  const dutyNear = duty.filter(r=>r.dutyKm<=dutyLim()).length;
+  const dutyNear = duty.filter(r=>r.dutyKm<=dutyLim(r.role)).length;
   const parts = gpNow ? [
     {k:'Attendance',w:45,v:off?null:attPct,why:off?off+' — not counted':accounted+' of '+officersDue+' accounted'},
     {k:'At the place of duty',w:25,v:duty.length?clamp(Math.round(dutyNear*100/duty.length),0,100):null,
-      why:duty.length?dutyNear+' of '+duty.length+' measured within '+dutyLim()+' km':'no located marks yet'},
+      why:duty.length?dutyNear+' of '+duty.length+' measured within '+fenceRuleSay():'no located marks yet'},
     {k:'Leave desk',w:15,v:clamp(Math.round(100-Math.max(0,oldestH-24)*2),0,100),
       why:j.leave.pending.length?'oldest waiting '+Math.round(oldestH)+' h':'nothing waiting'}]
   : [
@@ -2765,10 +2780,10 @@ function vOverview(j,A){
        other has not is the place of duty, so that is what its third tile says.
        It names a distance and it accuses nobody (rule 10). */
     const marks=(j.today.present||[]).filter(r=>r.dutyKm!=null);
-    const far=marks.filter(r=>r.dutyKm>dutyLim()).length;
+    const far=marks.filter(r=>r.dutyKm>dutyLim(r.role)).length;
     const near=marks.length-far;
     h+=kpi('Marked at the village office',IC.h,near,'',
-      marks.length?near+' of '+marks.length+' measured · within '+dutyLim()+' km':'no located marks yet');
+      marks.length?near+' of '+marks.length+' measured · within '+fenceRuleSay():'no located marks yet');
     h+=kpi('Marked away from it',IC.f,far,'',
       far?'a distance, not a default — read on the facts':'none today','view:attendance');
     h+=kpi('Revenue villages',IC.h,(j.totals&&j.totals.gps)||0,'','on the Gram Palana roll');
@@ -3579,7 +3594,7 @@ function vAttendance(j,A){
      the mandal figure was kept for. */
   const farKm = r => r.dutyKm!=null ? r.dutyKm : (r.km!=null ? r.km : 0);
   const farRows = DUTY()
-    ? (j.today.present||[]).filter(r=>r.dutyKm!=null ? r.dutyKm>dutyLim() : !!r.far)
+    ? (j.today.present||[]).filter(r=>r.dutyKm!=null ? r.dutyKm>dutyLim(r.role) : !!r.far)
         .sort((a,b)=>farKm(b)-farKm(a))
     : (j.today.present||[]).filter(r=>r.far).sort((a,b)=>b.km-a.km);
   h+='</div>';
@@ -3594,7 +3609,7 @@ function vAttendance(j,A){
   if(TVIEW!=='HRMS' && ((j.fence||{}).today||[]).length){
     const ou=(j.fence.today||[]);
     h+=panel('c12 w6','Refused — marked away from the place of duty',
-      'today · within '+esc(String((j.fence||{}).km||5))+' km is the rule',
+      'today · within '+esc(fenceRuleSay(j.fence))+' is the rule',
       `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
         These officers tried to mark and the register did not take it, so they stand inside
         <b>Not marked</b> above. <b>A refused mark is not a sanction and this list is not a charge</b> —
@@ -3621,7 +3636,7 @@ function vAttendance(j,A){
      it, and a distant mark is still a mark. An officer may be at a mandal
      meeting, at the Collectorate or on tour; the register cannot know which,
      and a table must not decide it. */
-  const farLim = DUTY() ? dutyLim() : 15;
+  const farLim = DUTY() ? fenceRuleSay() : '15 km';
   /* THE TWO DISTANCES ARE TWO DIFFERENT FACTS AND BOTH ARE PRINTED. The one
      from the place of duty is what the fence decided on; the one from the
      middle of the mandal is what this panel always carried, and read alone
@@ -3630,7 +3645,7 @@ function vAttendance(j,A){
      showing the Collector a figure the order does not use. */
   const fenced = DUTY() && TVIEW!=='GP' && !!(((j.fence||{}).on));
   if(TVIEW!=='HRMS') h+=panel('c12 w6', DUTY()?'Marked away from the place of duty':'Marked away from the mandal',
-    farRows.length?farRows.length+' of '+A.present+' present · over '+farLim+' km':'nothing over '+farLim+' km today',
+    farRows.length?farRows.length+' of '+A.present+' present · over '+farLim:'nothing over '+farLim+' today',
     `<div class="twrap"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th>${DUTY()?'<th>Place of duty</th><th>From place of duty</th><th>From mandal</th>':'<th>Distance</th>'}<th>Marked</th><th>Reading</th><th></th></tr></thead><tbody>`+
     farRows.map(r=>`<tr>
        <td>${esc(r.name||'—')}</td><td class="mut">${esc(r.role||'')}</td>
@@ -3647,7 +3662,7 @@ function vAttendance(j,A){
      <div class="expnote" style="margin-top:8px">${DUTY()
        ? '<b>From place of duty</b> is measured from the office of the village the officer holds — the nearest of them, where he holds more than one, because a man is at his place of duty at any of his own villages — and from the mandal office for the MPO, the MPDO and the MSO. <b>From mandal</b> is measured from the middle of the mandal as the district’s own marks place it, which is a different thing: a village on the edge of its mandal is fifteen kilometres from the middle and nought from its own office.'
        : 'Measured from the middle of the officer’s own mandal, as the district’s own attendance marks place it — the register holds no village coordinates.'} ${fenced
-       ? 'The fence is in force at '+esc(String((j.fence||{}).km||5))+' km from the place of duty, so every mark on this screen was taken inside it or is unplaced; a mark refused is on the <b>Place of duty</b> screen, not here. Nothing else here raises a reminder, a notice or a debit.'
+       ? 'The fence is in force at '+esc(fenceRuleSay(j.fence))+' from the place of duty, so every mark on this screen was taken inside it or is unplaced; a mark refused is on the <b>Place of duty</b> screen, not here. Nothing else here raises a reminder, a notice or a debit.'
        : 'A distance is a fact for you to read, not a default: nothing here raises a reminder, a notice or a debit, and the mark stands.'}</div>`);
   h+=panel('c12','Export the attendance record','opens in Excel · names, gaps and the fortnight compared',
     `<div class="expbar">
@@ -3708,7 +3723,7 @@ function dutyCell(r){
   if(!DUTY()) return '';
   if(r._s!=='P') return '<td class="mut">—</td>';
   if(r.dutyKm==null) return '<td class="mut">'+(r.lat&&r.lng?'not placed':'no fix to measure')+'</td>';
-  const km=r.dutyKm, near=km<=dutyLim();
+  const km=r.dutyKm, near=km<=dutyLim(r.role);
   const txt = km<1 ? Math.round(km*1000)+' m' : km.toFixed(km<10?1:0)+' km';
   return '<td><span class="pill '+(near?'ok':'warn')+'">'+esc(txt)+'</span>'+
     (r.dutyGp?' <span class="mut">'+esc(r.dutyGp)+'</span>':'')+'</td>';
@@ -5297,6 +5312,10 @@ function vAdmin(j,A){
       decimal numbers on each line, so the whole sheet may be pasted as it stands.
       <b>Attendance is then marked within ${esc(String((ROLL&&ROLL.fenceKm)||5))} km of that point and
       nowhere else</b>, in and out, and an officer standing further away is told how far out he is.
+      ${(ROLL&&ROLL.fenceRoles&&Object.keys(ROLL.fenceRoles).length)
+        ? 'The '+esc(Object.keys(ROLL.fenceRoles).map(r=>r+'s').join(' and '))+' are measured from the <b>mandal office</b>, within '
+          +esc([...new Set(Object.keys(ROLL.fenceRoles).map(r=>ROLL.fenceRoles[r]))].join(' / '))+' km of it (ordered 29.10.2026).'
+        : ''}
       <br><br><b>A village with no point is not fenced at all</b> \u2014 its Secretary marks exactly as he
       did before, because a blank cell in the district\u2019s own table must not refuse a man\u2019s
       attendance. A point outside the district is refused rather than believed, and named, so it can
@@ -6521,7 +6540,7 @@ function vDuty(j,A){
          vg.total?pct(vg.placed,vg.total)+'% of '+vg.total+' on the roll':'the roll is empty');
   h+=kpi('Not placed yet',IC.u,vg.unplaced,'',
          vg.unplaced?'their Secretaries are not fenced':'every village has an office');
-  h+=kpi('Refused today',IC.u,today.length,'',f.on?'within '+f.km+' km is the rule':'the fence is down');
+  h+=kpi('Refused today',IC.u,today.length,'',f.on?'within '+fenceRuleSay(f)+' is the rule':'the fence is down');
   h+=kpi('Refused on more than one day',IC.u,rep.length,'','in the last 14 days');
   h+=kpi('Probably a wrong point',IC.u,rep.filter(r=>r.steady).length,'',
          'same distance, every time');
@@ -6619,7 +6638,7 @@ function vDuty(j,A){
 
   /* ---- today, by name ---- */
   if(today.length){
-    h+=panel('c12','Refused today','within '+esc(String(f.km||5))+' km is the rule',
+    h+=panel('c12','Refused today','within '+esc(fenceRuleSay(f))+' is the rule',
       `<div class="twrap"><table>
         <thead><tr><th>Officer</th><th>Mandal</th><th>Place of duty</th><th>How far out</th><th>Tried</th></tr></thead>
         <tbody>${today.map(r=>'<tr><td>'+esc(r.name||'\u2014')+
@@ -6631,7 +6650,7 @@ function vDuty(j,A){
   } else if(f.on){
     h+=panel('c12','Refused today','none',
       '<div style="font-size:13px;color:var(--tx-2);line-height:1.7">Every mark the district took today '
-      +'was made within '+esc(String(f.km||5))+' km of the officer\u2019s own place of duty.</div>');
+      +'was made within '+esc(fenceRuleSay(f))+' of the officer\u2019s own place of duty.</div>');
   }
   return h;
 }

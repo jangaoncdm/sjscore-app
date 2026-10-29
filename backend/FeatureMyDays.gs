@@ -134,7 +134,7 @@ function myDays_(phone, role, today){
     var uo = findByPhone_(phone);
     if(uo && !districtRole_(uo.role)) pts = dutyPoints_(uo) || [];
   }catch(e){ pts = []; }
-  try{ var fr = fenceRule_(); fenceKm = fr.off ? 0 : (Number(fr.km) || 0); }catch(e){}
+  try{ var fr = fenceRule_(uo && uo.role); fenceKm = fr.off ? 0 : (Number(fr.km) || 0); }catch(e){}
 
   /* ---- the fortnight, oldest first ---- */
   var days = [], T = { working:0, marked:0, late:0, leaveDays:0, notMarked:0 };
