@@ -1822,7 +1822,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '7a36b82 - 29 Oct 11:26';
+const BUILD_STAMP = '39eca9f - 29 Oct 11:29';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -2690,7 +2690,7 @@ const IC={u:'<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M
 /* the tone of a tile is read off what it counts, and a nought is never a fault */
 function kpiTone(title,val){
   const v=String(val==null?'':val).replace(/<[^>]*>/g,'').trim();
-  if(v===''||v==='—'||/^0(.0+)?s*(%|h|days?)?$/.test(v)) return 't-nil';
+  if(v===''||v==='—'||/^0(\.0+)?\s*(%|h|days?)?$/.test(v)) return 't-nil';
   const t=String(title).toLowerCase();
   if(/not marked|unmarked|red flag|overdue|absent|behind|outside|default|failed|exhausted|loss of pay|never signed|not measured|far /.test(t)) return 't-bad';
   if(/await|pending|waiting|oldest|late|reminder|open|queued|not yet|still/.test(t)) return 't-warn';
