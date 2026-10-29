@@ -502,6 +502,38 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
           return [...new Set(out)];
         });
         pol.forEach(m => problems.push(size.n + '/' + theme + '/' + v + ': ' + m));
+        /* ---- the drawer is above the map (reported 29.10.2026): open the
+           Not marked list from the Overview and ask what is on top at the
+           middle of the map ---- */
+        if(v === 'overview'){
+          const tile = await page.$('.kpi[data-act="list:absent"]');
+          if(tile){
+            await tile.click(); await page.waitForTimeout(500);
+            /* Leaflet's panes have no size of their own and the test map has
+               no background, so a point on bare map hits nothing of the map's.
+               Probe what the map actually draws: every pin and every control
+               that lies under the sheet must be under the sheet. */
+            const top = await page.evaluate(() => {
+              const d = document.getElementById('drawer');
+              if(!d || d.hidden) return 'no drawer';
+              const sh = d.querySelector('.sheet').getBoundingClientRect();
+              const bits = [...document.querySelectorAll('#map .leaflet-interactive, #map .leaflet-marker-icon, #map .leaflet-control')];
+              let probed = 0;
+              for(const b of bits){
+                const r = b.getBoundingClientRect(); if(!r.width) continue;
+                const x = r.left + r.width / 2, y = r.top + r.height / 2;
+                if(x < sh.left + 2 || x > sh.right - 2 || y < 2 || y > innerHeight - 2) continue;
+                probed++;
+                const el = document.elementFromPoint(x, y);
+                if(!d.contains(el)) return 'covered by ' + (el && (el.className.baseVal || el.className || el.tagName));
+              }
+              return probed ? 'ok' : 'nothing of the map under the sheet';
+            });
+            if(top !== 'ok' && top !== 'no drawer' && !/^nothing/.test(top)) problems.push(size.n + '/' + theme + '/overview: the map paints over the Not marked drawer \u2014 ' + top);
+            if(/^nothing/.test(top)) console.log('  ' + size.n + '/' + theme + '/overview \u2014 drawer check: ' + top);
+            await page.evaluate(() => { const d = document.getElementById('drawer'); if(d) d.hidden = true; });
+          }
+        }
         /* ---- any chart text still wearing a hardcoded hex? ---- */
         const hard = await page.$$eval('.plot [style*="#"], .plot [fill^="#"], .plot [stroke^="#"]',
           els => els.slice(0, 6).map(e => e.tagName + ' ' + (e.getAttribute('style') || '').slice(0, 60)));
