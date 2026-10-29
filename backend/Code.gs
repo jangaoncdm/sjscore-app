@@ -5784,7 +5784,7 @@ function daysBack_(n){
 function rollRegister_(u){
   if(u.role !== 'COLLECTOR') return json_({ ok:false, error:'The roll is the Collector’s.' });
   const t = uidx_(), v = t.sh.getDataRange().getValues();
-  const by = {}, order = [];
+  const by = {}, order = [], pickLive = {};
   for(let i = 1; i < v.length; i++){
     const p = phone10_(v[i][t.ix.phone]);
     const key = p || ('(row ' + (i + 1) + ')');
@@ -5795,16 +5795,28 @@ function rollRegister_(u){
     }
     const r = by[key];
     r.rows++;
-    /* the SENIOR row is the one the app greets him from, so it is the one the
-       console shows — anything else and the roll disagrees with his phone */
+    /* THE ROW THE APP GREETS HIM FROM is the one the console shows, or the
+       roll disagrees with his phone — and that is the senior ACTIVE row, as
+       findByPhone_ picks it, falling back to the inactive ones only when
+       nothing of his is live. This took the senior row of all of them, and
+       where the ranks tied it kept the FIRST, live or not: an MPO with an
+       old set-aside row ahead of his corrected one stood on the console under
+       the old row's chair title and mandal while his app greeted him by name
+       (item 6 of the list of 29.10.2026). The correction looked unmade
+       when it had been made. */
     const role = cell_(v[i], t.ix.role).toUpperCase();
-    if(!r.role || (rank_()[role] || 0) > (rank_()[r.role] || 0)){
+    const a = t.ix.active < 0 ? true : v[i][t.ix.active];
+    const live = !(a === false || String(a).toUpperCase() === 'FALSE' || a === '');
+    const better = !r.role ||
+      (live && !pickLive[key]) ||
+      (live === !!pickLive[key] && (rank_()[role] || 0) > (rank_()[r.role] || 0));
+    if(better){
+      pickLive[key] = live;
       r.role = role; r.name = cell_(v[i], t.ix.name); r.mandal = cell_(v[i], t.ix.mandal);
       r.gp = cell_(v[i], t.ix.gp); r.email = cell_(v[i], t.ix.email);
     }
     if(v[i][t.ix.hash]) r.hasPin = true;
-    const a = t.ix.active < 0 ? true : v[i][t.ix.active];
-    if(!(a === false || String(a).toUpperCase() === 'FALSE' || a === '')) r.active = true;
+    if(live) r.active = true;
   }
   const rows = order.map(k => by[k]);
   rows.sort((a, b) => (a.mandal || '').localeCompare(b.mandal || '') ||

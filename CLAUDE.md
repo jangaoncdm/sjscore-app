@@ -2887,6 +2887,16 @@ refusal, on the server and in the app, now names the setting: Precise
 location, under the app's permissions. `tests/render-fence.js` case 4 still
 holds the sheet.
 
+**The roll on the console named a man by a row he no longer stood on.**
+Read back after the menu batch, one MPO still showed a chair title and the
+mandal he had left: he has three rows, all MPO, and `op=roll` kept the first
+of two equal ranks whether or not it was active — while `findByPhone_`, which
+the app greets him from, had read the live rows first since October. So the
+correction had been made and looked unmade. The roll now picks as the app
+does: the senior **active** row, the inactive ones only when nothing of his is
+live. Suite 22 holds it, including a set-aside senior row that must not
+outrank a live junior one.
+
 **And the casual-leave figure was the order's.** "I have used only 6 of my
 casual leaves this year, but it is showing only 4 left" — 2026 opened with
 six days (15 × 5/12), two are sanctioned, four remain.

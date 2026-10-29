@@ -228,5 +228,41 @@ module.exports = {
     t.eq(made2.active, true, 'and back on it');
     t.eq(roll2.rows.find(r => r.phone === '9000000011').rows, 2,
       'and a number on two rows is shown as two, so the duplication can be seen');
+
+    /* ---- THE ROLL NAMES HIM BY THE ROW HIS APP GREETS HIM FROM ----
+       The list of 29.10.2026: an MPO whose set-aside row stood FIRST on the
+       tab, carrying a chair title and the mandal he had left, and whose
+       corrected row stood after it at the same rank. The roll kept the first
+       of two equal ranks, live or not, so the console showed the correction
+       as unmade while his phone greeted him by name. */
+    {
+      const row = o => U.map(h => (o[h] !== undefined ? o[h] : ''));
+      env.sheets['Users'].rows.splice(1, 0, row({ Phone:'9111100077', Name:'MPO Zaffergadh', Role:'MPO',
+        Mandal:'Zaffergadh', Email:'old@example.org', Active:'FALSE' }));
+      env.addRow('Users', { Phone:'9111100077', Name:'G. Praveen Kumar', Role:'MPO',
+        Mandal:'Raghunathpalle', Email:'praveen@example.org', Active:'TRUE' });
+      const r3 = env.get('roll', { token: cdm }).rows.find(r => r.phone === '9111100077');
+      t.eq(r3.rows, 2, 'both of his rows are counted');
+      t.eq(r3.name, 'G. Praveen Kumar', 'AN INACTIVE ROW STANDING FIRST DOES NOT NAME HIM ON THE ROLL');
+      t.eq(r3.mandal, 'Raghunathpalle', 'nor give him the mandal he left');
+      t.eq(r3.email, 'praveen@example.org', 'nor its address');
+      t.eq(r3.name, c.findByPhone_('9111100077').name, 'the roll and his app name him alike');
+      t.eq(r3.active, true, 'and he is on the roll');
+
+      /* a senior row set aside does not outrank a live junior one either */
+      env.sheets['Users'].rows.splice(1, 0, row({ Phone:'9111100078', Name:'Old Chair', Role:'MPDO',
+        Mandal:'Jangaon', Active:'FALSE' }));
+      env.addRow('Users', { Phone:'9111100078', Name:'K. Live', Role:'PS', Mandal:'Jangaon',
+        GP:'Konne', Active:'TRUE' });
+      const r4 = env.get('roll', { token: cdm }).rows.find(r => r.phone === '9111100078');
+      t.eq(r4.name, 'K. Live', 'a set-aside senior row does not outrank his live one');
+      t.eq(r4.role, c.findByPhone_('9111100078').role, 'and the role on the roll is the role his app has');
+
+      /* and a man with nothing live is still shown, off the roll, by his own row */
+      env.addRow('Users', { Phone:'9111100079', Name:'R. Retired', Role:'MPO', Mandal:'Jangaon', Active:'FALSE' });
+      const r5 = env.get('roll', { token: cdm }).rows.find(r => r.phone === '9111100079');
+      t.eq(r5.name, 'R. Retired', 'with no live row his own inactive row still names him');
+      t.eq(r5.active, false, 'and he is shown as off the roll');
+    }
   }
 };
