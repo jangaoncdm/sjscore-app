@@ -791,10 +791,14 @@ function fenceWords(st, out){
   if(st.nofix) return {title:'No location yet',
     body:what + ' is marked at your place of duty, so the app has to be able to read where you are. '
        + 'Switch location on for this app, step into the open, and read the location again.'};
+  /* A READING THIS COARSE IS ALMOST NEVER THE SKY (29.10.2026): a phone that
+     claims two kilometres on every mark is handing this app an approximate
+     location, and no amount of open sky changes that. The setting is named. */
   if(st.coarse) return {title:'The location is not precise enough',
     body:'The phone has placed you only to about ' + fenceSay(st.acc / 1000) + ', which is not close '
-       + 'enough to tell where you are standing. Step into the open and wait a moment — the app keeps '
-       + 'listening and takes the best reading it gets.'};
+       + 'enough to tell where you are standing. A reading this coarse usually means the phone is giving this app '
+       + 'only an approximate location: in the phone\u2019s Settings, under this app\u2019s permissions (or Chrome\u2019s), '
+       + 'switch on Precise location. Then step into the open and read the location again.'};
   /* THE DISTRICT'S OWN WORDS (10.10.2026), and the same sentence the register
      answers with, so the screen and the order cannot tell him two different
      things. The radius is on the steps behind this sheet, not in it. */
