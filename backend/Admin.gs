@@ -38,6 +38,9 @@ function onOpen(){
     .addItem('23.10 list · the number and the three PINs — read first',          'menuShowIssues2310')
     .addItem('23.10 list · correct the number and reset the PINs (asks first)', 'menuApplyIssues2310')
     .addSeparator()
+    .addItem('29.10 list · the six roll corrections — read first',   'menuShowIssues2910')
+    .addItem('29.10 list · correct the six rows (asks first)',      'menuApplyIssues2910')
+    .addSeparator()
     .addSeparator()
     .addItem('Chase the advisory and the plan — read first', 'menuShowChase')
     .addItem('Send the chase mail (asks first)',             'menuSendChase')
@@ -2811,4 +2814,196 @@ function menuApplyIssues2310(){
     'Read the item above first if you have not. Running it twice today changes nothing the second time.\n\n' +
     'Apply it now?', 'applyIssues2310')) return;
   admShow_('Applied — copy the PINs now, they are shown once', applyIssues2310());
+}
+
+/* ============================================================================
+ * THE LIST OF 29.10.2026 — the roll corrections, from the menu
+ *
+ * Nine lines from the mandal offices. Six of them are cells of the Users tab
+ * that no console button writes: a name that is still the chair title ("MPO
+ * Narmetta" for the man who is now MPO of Lingalaghanpur), a mandal spelt so
+ * the register did not fold it, an MPO who is in fact the Superintendent of
+ * his MPDO office, and an e-mail that belongs to the officer who held the
+ * chair before — she was getting the Narmetta MPDO's notices. The roster paste
+ * could not do them: it reads a changed NAME on a chair as a succession and
+ * would have retired each serving officer and made him a new row with no PIN,
+ * which is the dangerous way to be wrong.
+ *
+ * Every row is found by its NUMBER and its PRESENT state. A row already as the
+ * list asks is reported as done; a row in a state the list did not describe
+ * is left alone and described, because the register may have moved on since
+ * the list was written; two rows in that state is the Collector's to settle.
+ * The inactive rows carrying the same numbers are never touched — they hold
+ * the men's PINs (findByPhone_ reads the hash off any row) and their history.
+ * Every change is on Audit with what it was before; nothing is deleted; a
+ * second run writes nothing. No PIN is made here and none is printed.
+ *
+ * What the list asked that this does NOT do, and why, is printed by the
+ * reading: the Chilpur point is already on the Mandals tab; the Secretary's
+ * transfer and the thanda's new coordinate go through the console, where a
+ * release is the Collector's tick and a point moving four kilometres is his
+ * judgment; and "mark from any village of the mandal, and from the ZP office"
+ * is a change to the order of 12.10.2026, not a repair.
+ * ------------------------------------------------------------------------- */
+var FIX2910_BATCH = '29.10.2026';
+/* the coordinates the list gave for the mandal officers, read against the
+   Mandals tab — every one of them was already the office on that tab */
+var FIX2910_OFFICES = [
+  { n:'1, 2', mandal:'Chilpur',        lat:17.918968, lng:79.31495  },
+  { n:'3',    mandal:'Lingalaghanpur', lat:17.657885, lng:79.197649 },
+  { n:'5, 6', mandal:'Raghunathpally', lat:17.7597,   lng:79.2566   },
+  { n:'7',    mandal:'Zaffergadh',     lat:17.769241, lng:79.488698 }
+];
+/* `find` is the state the list describes (the row must be active and match
+   every key, case-blind); `set` is what it becomes. Keys are the Users
+   tab's own: name, role, mandal, email, designation. */
+var FIX2910_ROLL = [
+  { n:3, phone:'8978774172', who:'U Sampath Kumar · MPO · Lingalaghanpur',
+    find:{ role:'MPO', mandal:'Lingalaghanapur' },
+    set:{ name:'U Sampath Kumar', mandal:'Lingalaghanpur' },
+    why:'transferred in as MPO; the row carried the chair title "MPO Narmetta" and a spelling of the mandal the register did not fold, so he was placed in no mandal' },
+  { n:4, phone:'9441681716', who:'A. Devander Reddy · Superintendent, MPDO office Palakurthi',
+    find:{ role:'MPO', mandal:'Palakurthi' },
+    set:{ name:'A. Devander Reddy', role:'STAFF', designation:'Superintendent' },
+    why:'he is the Superintendent of the MPDO office and not the MPO (A.V. Mallikarjun holds the MPO chair); STAFF marks in and applies for leave and the ladder does not reach him' },
+  { n:5, phone:'9281481689', who:'Kavya Srinivasan · MPDO · Raghunathpalle',
+    find:{ role:'MPDO' },
+    set:{ name:'Kavya Srinivasan', email:'mpdo.rgnp@gmail.com' },
+    why:'the office address asked for on the list, in place of a personal one' },
+  { n:5, phone:'9281481687', who:'MPDO Narmetta · the address on the row is Kavya Srinivasan\u2019s',
+    find:{ role:'MPDO', mandal:'Narmetta', email:'moonwalkerkavya@gmail.com' },
+    set:{ email:'' },
+    why:'she held the Narmetta chair before and the row kept her address, so the Narmetta MPDO\u2019s notices reached her; the Narmetta MPDO\u2019s own address is to be supplied' },
+  { n:6, phone:'9676252726', who:'Gopishetty Praveen Kumar · MPO · Raghunathpalle',
+    find:{ role:'MPO', mandal:'Zaffergadh' },
+    set:{ name:'Gopishetty Praveen Kumar', mandal:'Raghunathpalle', email:'gopishettipraveen@gmail.com' },
+    why:'transferred back to Raghunathpalle; the active row stood against Zaffergadh with no address, and his address is the one on his own earlier (inactive) row' },
+  { n:7, phone:'8106541531', who:'S. Madhusudhan · MPO · Zaffergadh',
+    find:{ role:'MPO', mandal:'Raghunathpally' },
+    set:{ name:'S. Madhusudhan', mandal:'Zaffergadh' },
+    why:'transferred to Zaffergadh; the row carried the chair title and the mandal he left' }
+];
+
+function fix2910Desc_(t, v, i){
+  return (cell_(v[i], t.ix.name) || '(unnamed)') + ' · ' + cell_(v[i], t.ix.role) +
+         ' · ' + (cell_(v[i], t.ix.mandal) || '(no mandal)') +
+         (cell_(v[i], t.ix.gp) ? ' / ' + cell_(v[i], t.ix.gp) : '') +
+         ' · ' + (cell_(v[i], t.ix.email) || '(no e-mail)') +
+         (t.ix.designation >= 0 && cell_(v[i], t.ix.designation) ? ' · ' + cell_(v[i], t.ix.designation) : '');
+}
+/* what the roll says about one line today: done, not there, another state, or ready */
+function fix2910State_(t, v, it){
+  const eq = function(i, k, val){ return cell_(v[i], t.ix[k]).toLowerCase() === String(val == null ? '' : val).trim().toLowerCase(); };
+  const live = rollRows_(t, v, it.phone).filter(function(i){
+    return String(v[i][t.ix.active]).toUpperCase() !== 'FALSE' && v[i][t.ix.active] !== false; });
+  if(!live.length) return { state:'none', lines:['  ✗ ' + it.phone + ' · NOT ON THE ROLL (no active row). Nothing to write.'] };
+  const done = live.filter(function(i){ return Object.keys(it.set).every(function(k){ return eq(i, k, it.set[k]); }); });
+  if(done.length) return { state:'done', lines:['  ✓ already as the list asks (row ' + (done[0] + 1) + '). Nothing to write.'] };
+  const hit = live.filter(function(i){ return Object.keys(it.find).every(function(k){ return eq(i, k, it.find[k]); }); });
+  if(hit.length > 1) return { state:'ambiguous',
+    lines:['  ✗ ' + hit.length + ' active rows are in the state the list describes; which is his is yours to settle. Nothing to write.'] };
+  if(!hit.length) return { state:'other', lines: live.map(function(i){
+    return '  ✗ row ' + (i + 1) + ' is ' + fix2910Desc_(t, v, i) + ' — not the state the list describes. Nothing to write; read the row.'; }) };
+  const i = hit[0];
+  const changes = Object.keys(it.set).filter(function(k){ return !eq(i, k, it.set[k]); }).map(function(k){
+    return k + ': ' + (cell_(v[i], t.ix[k]) || '(blank)') + ' → ' + (it.set[k] || '(blank)'); });
+  const missing = Object.keys(it.set).filter(function(k){ return t.ix[k] < 0; });
+  return { state:'ready', row:i, changes:changes, missing:missing,
+    lines:['  row ' + (i + 1) + ': ' + fix2910Desc_(t, v, i), '  → ' + changes.join('; ') +
+           (missing.length ? ' · NO COLUMN FOR ' + missing.join(', ') + ' — that part cannot be written' : '')] };
+}
+/* the Mandals tab against the coordinates the list gave — read only */
+function fix2910Offices_(){
+  const have = mandalOffices_(), L = [];
+  FIX2910_OFFICES.forEach(function(o){
+    let cur = null;
+    Object.keys(have).forEach(function(k){ if(!cur && mkeyM_(have[k].mandal) === mkeyM_(o.mandal)) cur = have[k]; });
+    if(!cur){ L.push('  ' + o.n + ' · ' + o.mandal + ' · NO OFFICE on the Mandals tab — the roster paste on the console writes it'); return; }
+    const same = Math.abs(cur.lat - o.lat) < 0.00001 && Math.abs(cur.lng - o.lng) < 0.00001;
+    L.push('  ' + o.n + ' · ' + o.mandal + ' · the office on the Mandals tab ' +
+      (same ? 'agrees with the list (' + cur.lat + ', ' + cur.lng + ') — nothing to update'
+            : 'DIFFERS: tab ' + cur.lat + ', ' + cur.lng + ' · list ' + o.lat + ', ' + o.lng + ' — the roster paste on the console moves it'));
+  });
+  return L;
+}
+function fix2910Notes_(){
+  return [
+    'WHAT THIS MENU ITEM DOES NOT DO, AND WHERE IT IS DONE',
+    '  1 · Chilpur MPDO (9281481681): the point on the list is already the office on the Mandals tab. His marks claim',
+    '      2000 m on every day, which is a phone handing the app an approximate location, not a distance — the cure',
+    '      is Precise location in the phone\u2019s settings; the app says so now. Nothing to write here.',
+    '  1, 5 · marking from any village of the mandal, the ZP office and the IDOC: a change to the order of 12.10.2026,',
+    '      which fenced the MPO and the MPDO to the mandal office. The Collector\u2019s to order; not written by a menu.',
+    '  2 · Chilpur MPO (8185985909): the same point, already on the tab. Nothing to write.',
+    '  5 · the Narmetta MPDO row is left with NO address until the Narmetta MPDO\u2019s own address is supplied —',
+    '      better no mail than another officer\u2019s notices in the wrong inbox.',
+    '  5 · casual leave: 2026 opened with six days (15 × 5/12, the register\u2019s opening order); 4 left means two sanctioned.',
+    '      The figure is the order\u2019s, not a defect.',
+    '  8 · P. Shireesha to Valmidi: the postings paste on the console (Admin ▸ Postings) — a release is the Collector\u2019s tick.',
+    '  9 · Vepalagadda Thanda\u2019s new point is 4.0 km from the one surveyed on 09.10: the village-points paste on the console,',
+    '      where the move is shown before it is written.'
+  ];
+}
+
+/* READ ONLY. */
+function showIssues2910(){
+  const L = ['THE LIST OF ' + FIX2910_BATCH + ' — what the menu item would write', ''];
+  const t = uidx_(), v = t.sh.getDataRange().getValues();
+  FIX2910_ROLL.forEach(function(it){
+    L.push(it.n + ' · ' + it.who + ' · ' + it.phone);
+    L.push.apply(L, fix2910State_(t, v, it).lines);
+    L.push('');
+  });
+  L.push('THE MANDAL OFFICES THE LIST GAVE, against the Mandals tab');
+  L.push.apply(L, fix2910Offices_());
+  L.push('');
+  L.push.apply(L, fix2910Notes_());
+  L.push('');
+  L.push('This was read only. Nothing was written.');
+  return admSay_(L);
+}
+
+function applyIssues2910(){
+  const L = ['THE LIST OF ' + FIX2910_BATCH + ' — applied', ''];
+  const t = uidx_();
+  let v = t.sh.getDataRange().getValues(), wrote = 0;
+  FIX2910_ROLL.forEach(function(it){
+    L.push(it.n + ' · ' + it.who + ' · ' + it.phone);
+    const st = fix2910State_(t, v, it);
+    if(st.state !== 'ready'){ L.push.apply(L, st.lines); L.push(''); return; }
+    Object.keys(it.set).forEach(function(k){
+      if(t.ix[k] < 0) return;
+      if(cell_(v[st.row], t.ix[k]).toLowerCase() === String(it.set[k]).toLowerCase()) return;
+      t.sh.getRange(st.row + 1, t.ix[k] + 1).setValue(it.set[k]);
+    });
+    admAudit_('ROLL CORRECTED (' + FIX2910_BATCH + ' list)', it.phone,
+      it.n + ' · ' + it.who + ' · row ' + (st.row + 1) + ' · ' + st.changes.join('; ') + ' · ' + it.why, ADMIN_BY);
+    wrote++;
+    L.push('  ✓ written: ' + st.changes.join('; ') +
+      (st.missing.length ? ' · NOT written, no column: ' + st.missing.join(', ') : ''));
+    L.push('');
+    v = t.sh.getDataRange().getValues();
+  });
+  /* a cached officer is believed only under the roll version he was cached
+     under, so the six read themselves as the roll now has them at once */
+  if(wrote) rollTouched_();
+  L.push(wrote + ' row(s) written. Every change is on Audit with what it was before. No PIN was made or printed.');
+  L.push('');
+  L.push.apply(L, fix2910Notes_());
+  L.push('');
+  L.push('A second run finds the rows already as the list asks and writes nothing.');
+  return admSay_(L);
+}
+
+function menuShowIssues2910(){
+  admShow_('The list of 29.10.2026 — nothing has been written', showIssues2910());
+}
+function menuApplyIssues2910(){
+  if(!admConfirm_('Correct the six rows of the 29.10 list?',
+    'This writes to the Users tab: ' + FIX2910_ROLL.map(function(it){ return it.who.split(' · ')[0]; }).join(', ') +
+    ' — names, mandals, one role and designation, two e-mail addresses. Nothing is deleted, no PIN is made, ' +
+    'and every change is written to Audit with what it was before.\n\n' +
+    'Read the item above first if you have not. Running it twice changes nothing the second time.\n\n' +
+    'Apply it now?', 'applyIssues2910')) return;
+  admShow_('Applied — the list of 29.10.2026', applyIssues2910());
 }

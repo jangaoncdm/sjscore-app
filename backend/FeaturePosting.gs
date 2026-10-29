@@ -297,6 +297,33 @@ function postPlan_(t, v, roll, r, dest){
     }
   }
 
+  /* A MANDAL OFFICER LANDS IN THE ROLL'S SPELLING OF HIS MANDAL. The village
+     path above already does this through the GPs tab; the mandal-only path
+     wrote the paste's own word, so "Raghunathpally" on the list became a
+     thirteenth mandal beside the roll's "Raghunathpalle" (29.10.2026). The
+     roll's spellings are the GPs tab's; the paste's is folded onto one of
+     them by the alias or by the same small distance the village path allows,
+     and only where exactly one answers. Lingala Ghanpur is still not
+     Ghanpur (Stn). */
+  if(mandalOnly){
+    const spell = {};
+    roll.forEach(function(x){ const k = pkey_(x.mandal); if(k && !spell[k]) spell[k] = String(x.mandal).trim(); });
+    const mk = pkey_(mandal);
+    let hit = spell[mk] || null;
+    if(!hit){
+      const same = Object.keys(spell).filter(function(k){ return mkeyM_(k) === mkeyM_(mandal); });
+      if(same.length === 1) hit = spell[same[0]];
+    }
+    if(!hit){
+      const near = Object.keys(spell).filter(function(k){ return postDist_(mk, k) <= Math.max(2, Math.floor(k.length / 5)); });
+      if(near.length === 1) hit = spell[near[0]];
+    }
+    if(hit && hit !== mandal){
+      out.note = 'the roll spells the mandal "' + hit + '", the list says "' + mandal + '"';
+      out.mandal = hit;
+    }
+  }
+
   const held = postHolds_(t, v, phone);
   const mine = phone ? rollRows_(t, v, phone) : [];
 
@@ -369,13 +396,17 @@ function postPlan_(t, v, roll, r, dest){
   /* DOES HE ALREADY HOLD IT? Then there is nothing to do, and a second run of
      the whole paste writes nothing (rule 8). */
   const already = mandalOnly
-    ? held.some(function(h){ return pkey_(h.mandal) === pkey_(out.mandal); })
+    ? held.some(function(h){ return mkeyM_(h.mandal) === mkeyM_(out.mandal); })
     : held.some(function(h){ return pkey_(h.gp) === pkey_(out.gp); });
 
   /* WHAT THE REMARK ASKS FOR. "incharge" and "FAC" mean he takes this as well;
      anything else that speaks of a deputation means he has moved. */
   const g = remark.toLowerCase(), k = kind.toLowerCase();
-  const saysDeputed = /deput|dupt/.test(g) || /deput/.test(k);
+  /* "due to transfer" — three lines of the list of 29.10.2026 said it that
+     way and named no old place; read as neither deputed nor in-charge they
+     fell through to an addition, and a transferred MPO would have held two
+     mandals. A transfer is the Collector's own word for a deputation. */
+  const saysDeputed = /deput|dupt|transfer/.test(g) || /deput|transfer/.test(k);
   /* “PREVIOUSLY I HAD INCHARGE SALVAPUR GP” IS NOT A CHARGE BEING TAKEN ON.
      It carries the word incharge and means the opposite of it: he HELD that
      village and wants it off him. Issues 4 and 5 of the district’s list of
@@ -415,7 +446,7 @@ function postPlan_(t, v, roll, r, dest){
     held.forEach(function(h){
       const place = mandalOnly ? h.mandal : h.gp;
       if(!place) return;
-      const samePlace = mandalOnly ? pkey_(h.mandal) === pkey_(out.mandal)
+      const samePlace = mandalOnly ? mkeyM_(h.mandal) === mkeyM_(out.mandal)
                                    : pkey_(h.gp) === pkey_(out.gp);
       if(samePlace) return;                       /* that is where he is going */
       if(!postNamed_(remark, place)) return;
@@ -428,7 +459,7 @@ function postPlan_(t, v, roll, r, dest){
     held.forEach(function(h){
       const place = mandalOnly ? h.mandal : h.gp;
       if(!place) return;
-      const samePlace = mandalOnly ? pkey_(h.mandal) === pkey_(out.mandal)
+      const samePlace = mandalOnly ? mkeyM_(h.mandal) === mkeyM_(out.mandal)
                                    : pkey_(h.gp) === pkey_(out.gp);
       if(samePlace) return;                       /* that is where he is going */
       if(postListed_(dest, phone, place)) return; /* this paste gives it to him on another line */

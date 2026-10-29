@@ -714,6 +714,9 @@ module.exports = {
       t.eq(env.ctx.mkeyM_('Bachannapet'), env.ctx.mkeyM_('Bachannapeta'), 'the three aliases hold');
       t.eq(env.ctx.mkeyM_('Palakurthy'), env.ctx.mkeyM_('Palakurthi'), 'the second');
       t.eq(env.ctx.mkeyM_('Raghunathapally'), env.ctx.mkeyM_('Raghunathpalle'), 'and the third');
+      t.eq(env.ctx.mkeyM_('Lingalaghanapur'), env.ctx.mkeyM_('Lingalaghanpur'),
+        'LINGALAGHANAPUR IS LINGALAGHANPUR — the spelling on every list the district sends (29.10.2026)');
+      t.eq(env.ctx.mkeyM_('Zafferghad'), env.ctx.mkeyM_('Zaffergadh'), 'and Zafferghad is Zaffergadh');
 
       /* AND THE TWO TABS NEED NOT AGREE EITHER. Users carries the mandal
          against the officer and GPs carries it against the village. Where

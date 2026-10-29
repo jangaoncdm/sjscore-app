@@ -2842,3 +2842,53 @@ reads the whole tab as before; the phone asks only while the answer can
 change. **Still to decide, before December**: at full uptake the HRMS
 Attendance tab reaches Sheets' ten-million-cell limit in about two months,
 so a yearly Attendance tab is an order to take, not a repair.
+
+## The list of 29.10.2026 — six cells, two spellings, and a figure that was not a distance
+
+**Nine lines, seven of them mandal officers, and the roll's fault under six.**
+After the transfers of October the Users tab carried the chair title where the
+man's name belongs ("MPO Narmetta" for the MPO of Lingalaghanpur), the mandal
+he had left against the man who had arrived, an MPO who is in fact the
+**Superintendent** of his MPDO office, and against the Narmetta MPDO the
+personal address of the officer who held that chair before — so she was
+getting his notices. None of it is a console button: the roster paste reads a
+changed name on a chair as a **succession** and would retire the serving
+officer and hand him a new row with no PIN. So, as on 23.10, it is two items
+on the Sheet's menu — `showIssues2910` / `applyIssues2910` in Admin.gs — each
+row found by its **number and its present state**, so a row already corrected
+reads as done and a row that has moved on since the list is left alone and
+described; the inactive rows that hold the men's PINs are never touched;
+every change is on `Audit` with what it was; no PIN is made. Suite 44 holds
+it. The acts that stay on the console (a Secretary's transfer, a thanda's
+point moving four kilometres) and the two the Collector has to order are in
+`Issue/ACTS-29.10.2026.md`.
+
+**"Lingalaghanapur" is Lingalaghanpur.** The district writes the extra letter
+on every list, and one row carried it against a serving MPO — so his mandal
+matched no office on the Mandals tab and the fence placed him nowhere.
+`MANDAL_ALIAS_` folds it now, and Zafferghad with it; the table is still a
+table and not a fuzzy match. **"Due to transfer" is a deputation**: three
+lines said it that way and named no old mandal, and `postPlan_` read them as
+neither deputed nor in-charge, so a transferred MPO would have been given a
+second mandal rather than moved. And a mandal officer moved by paste now
+lands in the **roll's** spelling of the mandal (the village path always did,
+through the GPs tab; the mandal-only path wrote the list's word and made a
+thirteenth mandal). Suite 31 §16.
+
+**A reading of two kilometres is not a distance and is almost never the
+sky.** The Chilpur MPDO wrote that the app "is showing 2 km away and not
+accepting". The Chilpur office on the Mandals tab was already the point he
+sent, to the digit; what he was reading was the fence refusing a fix coarser
+than `FENCE_ACC_M_` — and every mark of his for a month claimed **exactly
+2000 m** on a one-kilometre grid, which is a phone handing the app an
+**approximate** location (Android's coarse permission), not a receiver
+waiting for satellites. "Step into the open" could never cure it. The
+refusal, on the server and in the app, now names the setting: Precise
+location, under the app's permissions. `tests/render-fence.js` case 4 still
+holds the sheet.
+
+**And the casual-leave figure was the order's.** "I have used only 6 of my
+casual leaves this year, but it is showing only 4 left" — 2026 opened with
+six days (15 × 5/12), two are sanctioned, four remain. Marking from any
+village of the mandal and from the ZP office, asked for twice on the list, is
+a change to the order of 12.10.2026 and was not built.

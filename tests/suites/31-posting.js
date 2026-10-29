@@ -682,6 +682,35 @@ module.exports = {
       t.ok(!JSON.stringify(me.user).match(/hash/i), 'nothing of the hash rides with him');
     }
 
+    /* ---- 16. A TRANSFER IS A MOVE, AND A MANDAL OFFICER LANDS IN THE ROLL'S SPELLING ----
+       The list of 29.10.2026: "Need Mandal Mapping to mentioned due to
+       transfer", three MPOs, no old mandal named, and the mandal spelt
+       "Raghunathpally" where the roll says "Raghunathpalle". Read as neither
+       deputed nor in-charge the line was an ADDITION, so a transferred MPO
+       held two mandals; and the mandal-only path wrote the paste's spelling,
+       a thirteenth mandal beside the roll's. */
+    {
+      const e = start([
+        { Phone:'9000000060', Name:'G Praveen kumar', Role:'MPO', Mandal:'Zaffergadh', GP:'', Active:'TRUE' }
+      ], [
+        { Mandal:'Raghunathpalle', GP:'Veldi' }, { Mandal:'Zaffergadh', GP:'Zaffergadh' }
+      ]);
+      const row = { mandal:'Raghunathpally', gp:'', name:'Gopishetty Praveen Kumar', phone:'9000000060',
+                    role:'MPO', remark:'Need Mandal Mapping to mentioned due to transfer' };
+      const d = post(e, [row], true);
+      t.eq(d.plans[0].verdict, 'move', '"DUE TO TRANSFER" IS A MOVE, not an addition');
+      t.eq(d.plans[0].mandal, 'Raghunathpalle', 'into the roll\'s spelling of the mandal, not the list\'s');
+      t.eq(d.plans[0].releases.map(x => x.place).join(','), 'Zaffergadh',
+        'and the mandal the register shows him in is proposed for release');
+      post(e, [row]);
+      const u = e.ctx.findByPhone_('9000000060');
+      t.eq(u.mandal, 'Raghunathpalle', 'he is MPO of Raghunathpalle');
+      t.eq(u.mandals.length, 1, 'and of nothing else');
+      t.eq(u.rows.length, 1, 'on his own one row, rewritten rather than doubled');
+      const again = post(e, [row], true);
+      t.eq(again.plans[0].verdict, 'unchanged', 'and a second paste finds nothing to do, whatever the list\'s spelling');
+    }
+
     /* ---- 12. IT IS SWACHH JANGAON'S ALONE ---- */
     {
       const g = mock.load({ now:NOW });

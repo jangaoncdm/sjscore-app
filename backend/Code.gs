@@ -2362,8 +2362,15 @@ function fenceCheck_(u, lat, lng, acc){
 
   if(acc != null && acc !== '' && Number(acc) > rule.acc) return { gated:true, ok:false, coarse:true,
     limit:rule.km, place:pts[0].name, acc:Math.round(Number(acc)),
+    /* A READING THIS COARSE IS ALMOST NEVER THE SKY. The Chilpur MPDO wrote on
+       29.10.2026 that the app "is showing 2 km away and not accepting": every
+       mark of his for a month claimed exactly 2000 m and sat on a grid a
+       kilometre apart — the shape of a phone handing this app an APPROXIMATE
+       location (Android's coarse permission), not of a receiver waiting for
+       satellites. Telling him to step into the open could never cure it, and
+       he read the figure as a distance. The sentence names the setting. */
     error:'The location is only accurate to about ' + Math.round(Number(acc) / 100) / 10 +
-          ' km, which is not precise enough to say where you are. Step into the open and wait for a better fix.' };
+          ' km, which is not precise enough to say where you are. A reading this coarse usually means the phone is giving this app only an approximate location: in the phone\u2019s settings, under this app\u2019s permissions, switch on Precise location, then step into the open and read the location again.' };
 
   var best = null;
   pts.forEach(function(p){
@@ -3007,7 +3014,14 @@ var MANDAL_ALIAS_ = {
   bachannapet:'bachannapeta',       bachannapeta:'bachannapeta',
   palakurthy:'palakurthi',          palakurthi:'palakurthi',
   raghunathapally:'raghunathpalle', raghunathapalli:'raghunathpalle',
-  raghunathpally:'raghunathpalle',  raghunathpalle:'raghunathpalle'
+  raghunathpally:'raghunathpalle',  raghunathpalle:'raghunathpalle',
+  /* the list of 29.10.2026 wrote "Lingalaghanapur" on every line, and a row
+     of the Users tab carried that spelling against a serving MPO — so his
+     mandal matched no office on the Mandals tab and the fence placed him
+     nowhere. Zafferghad is the district's other habitual spelling (CLAUDE.md
+     has carried it since the list of 02.10.2026). Neither is a fuzzy match. */
+  lingalaghanapur:'lingalaghanpur', lingalaghanpur:'lingalaghanpur',
+  zafferghad:'zaffergadh',          zaffergadh:'zaffergadh'
 };
 function mkeyM_(s){ var k = mkey2_(s); return MANDAL_ALIAS_[k] || k; }
 
