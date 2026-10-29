@@ -479,6 +479,29 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
           document.documentElement.scrollWidth - document.documentElement.clientWidth);
         if(over > 1) problems.push(size.n + '/' + theme + '/' + v + ': page scrolls sideways by ' + over + 'px');
 
+        /* ---- the review of 29.10.2026: ticks that do not collide, a line chart
+           drawn at its card's width, and tiles with no blank slot in a row ---- */
+        const pol = await page.evaluate(() => {
+          const out = [];
+          document.querySelectorAll('svg.c-line').forEach(svg => {
+            /* the date ticks share the foot line; the value ticks stand up the left */
+            const all = [...svg.querySelectorAll('text.c-tick')].filter(e => e.getBoundingClientRect().width);
+            const foot = Math.max(...all.map(e => Math.round(e.getBoundingClientRect().top)));
+            const te = all.filter(e => Math.abs(e.getBoundingClientRect().top - foot) < 3).sort((p, q) => p.getBoundingClientRect().left - q.getBoundingClientRect().left), t = te.map(e => e.getBoundingClientRect());
+            for(let i = 1; i < t.length; i++) if(t[i].left < t[i-1].right - 1) { out.push('two date ticks overlap on a line chart: ' + te[i-1].textContent + ' / ' + te[i].textContent + ' (' + Math.round(t[i-1].right - t[i].left) + 'px)'); break; }
+            const vb = svg.viewBox.baseVal, w = svg.getBoundingClientRect().width;
+            if(vb && w && Math.abs(vb.width - w) > 40) out.push('a line chart is drawn ' + Math.round(vb.width) + ' wide and scaled to ' + Math.round(w));
+          });
+          document.querySelectorAll('.kpirow').forEach(row => {
+            const ks = [...row.children].filter(k => k.classList.contains('kpi'));
+            if(ks.length < 2) return;
+            const rb = row.getBoundingClientRect(), tops = {};
+            ks.forEach(k => { const r = k.getBoundingClientRect(); const y = Math.round(r.top); tops[y] = Math.max(tops[y] || 0, r.right); });
+            Object.values(tops).forEach(right => { if(rb.right - right > 60) out.push('a row of tiles leaves a blank slot of ' + Math.round(rb.right - right) + 'px'); });
+          });
+          return [...new Set(out)];
+        });
+        pol.forEach(m => problems.push(size.n + '/' + theme + '/' + v + ': ' + m));
         /* ---- any chart text still wearing a hardcoded hex? ---- */
         const hard = await page.$$eval('.plot [style*="#"], .plot [fill^="#"], .plot [stroke^="#"]',
           els => els.slice(0, 6).map(e => e.tagName + ' ' + (e.getAttribute('style') || '').slice(0, 60)));

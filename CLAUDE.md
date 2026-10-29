@@ -2457,6 +2457,27 @@ every screenshot, or a view opened after a scrolled one carries the sticky top
 bar mid-page. On a 1366 laptop the top bar also cuts the date line to one
 line and caps the register picker, so the greeting is not left 190px.
 
+**The review of 29.10.2026 — one accent, and colour that means a state.**
+Each view had answered in a colour of its own on the rail and over every
+card, the tile chips were coloured by their position in the row, and seven
+primary buttons a screen wore the gradient. So red meant "the notices
+screen" in one place and "a default" in the next. Now the view is named by
+the rail in indigo; a tile's chip is read off what it counts by `kpiTone`
+— red for a default, amber for a thing waiting, green for a thing done, and
+grey for a nought, which is never a fault; a refused application is an
+order and is not painted as one. Primary buttons are solid indigo and the
+gradient is the header's alone (`.tbtn.pri.hero`). A row of tiles picks
+its count off how many it holds and a short last row grows to the width,
+so seven tiles are four and three, never five and two with three holes.
+A line chart is drawn again at its card's real width once it is on the
+page (`Charts.fitLines`), so a tick is the same size at 390 and at 2560,
+and the tick count follows the width. Text columns read left and figure
+columns right, their headings with them. A month is offered with its
+window everywhere it still was not, and a wait of days says days. The
+render pass now fails on two date ticks touching, a chart scaled away from
+its drawn width, and a tile row with a blank slot. Restore point:
+`pre-console-polish-2026-10-29`.
+
 ## His own last fortnight, on the home screen
 
 **Asked 16.10.2026, after the console's calendars: the same for each officer
