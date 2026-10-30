@@ -1648,10 +1648,12 @@ const TENANCY = {
     aud:[['PS','Panchayat Secretaries'],['MPDO','MPDOs'],['MPO','MPOs'],['MSO','MSOs']] },
   GP:  { key:'GP',   name:'Gram Palana',    full:'Gram Palana Register',       store:'sjgp-gp1',
     cfg:'gp/config.js',
-    /* IT MEASURES AND IT ACCUSES NOBODY (rule 10), so there is no fence to
-       monitor here — a screen of noughts reads as a fence doing nothing
-       rather than as a register that was never fenced. */
-    off:['villages','schedule','gpdp','duty'],
+    /* FENCED SINCE 30.10.2026 — the Gram Palana Officer at five kilometres
+       from the nearest of his own village offices — so the Place of duty
+       screen is on this rail too: a fence that decides something has to be
+       watched, and a village office recorded in the wrong place shows there
+       before the officer is refused a fortnight of mornings. */
+    off:['villages','schedule','gpdp'],
     aud:[['GPO','Gram Palana Officers'],['ARI','Assistant Revenue Inspectors'],['MRI','Mandal Revenue Inspectors']] },
   /* THE THIRD REGISTER TAKES LEAVE AND NOTHING ELSE, and the rail says so.
      Nobody marks in on it, no village is evaluated, no notice is served and no
@@ -1843,7 +1845,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = 'c3730da - 30 Oct 12:25';
+const BUILD_STAMP = '6633ab0 - 30 Oct 12:31';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -3739,7 +3741,7 @@ function vAttendance(j,A){
      it put 17.3 km against a Secretary standing at his own office on the far
      edge of his mandal. A fenced register that showed only the second was
      showing the Collector a figure the order does not use. */
-  const fenced = DUTY() && TVIEW!=='GP' && !!(((j.fence||{}).on));
+  const fenced = DUTY() && !!(((j.fence||{}).on));
   if(TVIEW!=='HRMS') h+=panel('c12 w6', DUTY()?'Marked away from the place of duty':'Marked away from the mandal',
     farRows.length?farRows.length+' of '+A.present+' present · over '+farLim:'nothing over '+farLim+' today',
     `<div class="twrap"><table><thead><tr><th>Officer</th><th>Role</th><th>Mandal</th>${DUTY()?'<th>Place of duty</th><th>From place of duty</th><th>From mandal</th>':'<th>Distance</th>'}<th>Marked</th><th>Reading</th><th></th></tr></thead><tbody>`+
@@ -6634,18 +6636,22 @@ function vGpdp(j,A){
 function vDuty(j,A){
   const f=j.fence||{}, vg=f.villages||{total:0,placed:0,unplaced:0};
   const rep=f.repeat||[], days=f.days||[], today=f.today||[];
+  /* ONE SCREEN, TWO REGISTERS (30.10.2026). On Gram Palana the village is
+     held by the Gram Palana Officer, the order dates from 30.10.2026, no
+     mandal officer is fenced, and no ladder follows a refusal. */
+  const GPR=TVIEW==='GP', WHO=GPR?'Gram Palana Officers':'Secretaries';
   let h='';
 
   if(!f.on) h+=panel('c12','The fence is not in force','nothing is being refused',
     `<div style="font-size:13px;color:var(--tx-2);line-height:1.7">Attendance is being taken wherever it
-     is marked, as it was before 10.10.2026. Either the radius is set to nought or <b>FENCE_OFF</b> is set
+     is marked, as it was before ${GPR?'30.10.2026':'10.10.2026'}. Either the radius is set to nought or <b>FENCE_OFF</b> is set
      in the register's script properties. Nothing below is being enforced.</div>`);
 
   h+='<div class="kpirow">';
   h+=kpi('Villages placed',IC.u,vg.placed,'',
          vg.total?pct(vg.placed,vg.total)+'% of '+vg.total+' on the roll':'the roll is empty');
   h+=kpi('Not placed yet',IC.u,vg.unplaced,'',
-         vg.unplaced?'their Secretaries are not fenced':'every village has an office');
+         vg.unplaced?'their '+WHO+' are not fenced':'every village has an office');
   h+=kpi('Refused today',IC.u,today.length,'',f.on?'within '+fenceRuleSay(f)+' is the rule':'the fence is down');
   h+=kpi('Refused on more than one day',IC.u,rep.length,'','in the last 14 days');
   h+=kpi('Probably a wrong point',IC.u,rep.filter(r=>r.steady).length,'',
@@ -6653,12 +6659,12 @@ function vDuty(j,A){
   /* THE MANDAL OFFICERS, ordered 12.10.2026: the MPO and the MPDO are fenced
      at the mandal office, and this is how much of that order is in force. */
   const of=f.offices||{total:0,placed:0,fromTab:0,fromHq:0,unplaced:0,officers:0,fenced:0};
-  if(of.total) h+=kpi('Mandal offices placed',IC.u,of.placed+'/'+of.total,'',
+  if(of.total&&!GPR) h+=kpi('Mandal offices placed',IC.u,of.placed+'/'+of.total,'',
          of.officers?of.fenced+' of '+of.officers+' mandal officers fenced':'no mandal officer on the roll');
   h+='</div>';
 
   /* ---- the mandal office, mandal by mandal ---- */
-  if((f.mandals||[]).length){
+  if((f.mandals||[]).length&&!GPR){
     const say={mandal:'<span class="pill ok">the mandal office</span>',
                hq:'<span class="pill ok">the headquarters village</span>',
                none:'<span class="pill bad">not placed — not fenced</span>'};
@@ -6686,8 +6692,9 @@ function vDuty(j,A){
       `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
         An officer refused <b>once</b> was somewhere else that morning, and that is not a matter for this
         screen. An officer refused <b>every morning from the same distance</b> is not wandering — his
-        village office is almost certainly recorded in the wrong place, and every day he is refused he
-        walks a day further up a ladder that ends in a show-cause notice. The distance below is the
+        village office is almost certainly recorded in the wrong place, and every day he is refused ${GPR
+        ? 'is a day the register holds as unmarked against him'
+        : 'he walks a day further up a ladder that ends in a show-cause notice'}. The distance below is the
         <b>median</b> of his refusals and the spread is how much they vary; a spread of nearly nothing is
         the tell. <b>Correct the point, not the officer</b> — the panel on the Admin screen does it.
         <br><br>This is not a charge against anybody: the register cannot know whether a man was at a
@@ -6731,7 +6738,7 @@ function vDuty(j,A){
 
   /* ---- and the villages still to survey ---- */
   if((f.unplaced||[]).length){
-    h+=panel('c12','Villages with no office on the roll','their Secretaries are not fenced',
+    h+=panel('c12','Villages with no office on the roll','their '+WHO+' are not fenced',
       `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
         Nothing is being enforced against these officers and nothing is held against them — they mark
         exactly as they did before the order. A village is listed here when its office has no coordinate,
