@@ -856,6 +856,37 @@ function hash_(a, b){
 }
 function phone10_(p){ const d = String(p == null ? '' : p).replace(/\D/g, ''); return d.length > 10 ? d.slice(-10) : d; }
 function cache_(){ return CacheService.getScriptCache(); }
+/* AN ANSWER LARGER THAN ONE CACHE ENTRY IS KEPT IN PIECES (30.10.2026).
+   Google holds at most 100 KB under a key, so the console's answer was kept
+   only while it stayed under 95,000 characters — and once a morning's marks
+   took it to a quarter of a megabyte it was never kept at all. Every poll of
+   every console then rebuilt the whole register, half a minute each, the
+   polls queued behind one another, and the console gave up at 45 seconds
+   and said LINK LOST on both registers at once. The pieces carry a stamp of
+   their own, so a reader can never stitch half of one answer to half of the
+   next; a piece missing is simply a miss. 30,000 characters a piece stays
+   under the limit even when every one is three bytes. */
+const CACHE_PIECE_ = 30000;
+function cacheBigPut_(c, key, body, secs){
+  try{
+    const n = Math.ceil(body.length / CACHE_PIECE_), st = String(Date.now() % 1e9);
+    if(n > 40) return;                                   /* over a megabyte: not worth holding */
+    for(let i = 0; i < n; i++) c.put(key + '~' + st + '~' + i, body.slice(i * CACHE_PIECE_, (i + 1) * CACHE_PIECE_), secs + 5);
+    c.put(key, '\u0000' + st + ':' + n, secs);          /* the index goes last, so it never names a piece not yet written */
+  }catch(err){}
+}
+function cacheBigGet_(c, key){
+  try{
+    const h = c.get(key); if(!h) return null;
+    if(h.charAt(0) !== '\u0000') return h;               /* an answer kept whole */
+    const m = /^\u0000(\d+):(\d+)$/.exec(h); if(!m) return null;
+    const keys = []; for(let i = 0; i < +m[2]; i++) keys.push(key + '~' + m[1] + '~' + i);
+    const got = c.getAll ? c.getAll(keys) : keys.reduce((o, k) => { o[k] = c.get(k); return o; }, {});
+    let out = '';
+    for(const k of keys){ if(got[k] == null) return null; out += got[k]; }
+    return out;
+  }catch(err){ return null; }
+}
 function clean_(s){ return String(s == null ? '' : s).replace(/[^A-Za-z0-9 _.\-]/g, '').trim().slice(0, 60) || 'Unnamed'; }
 
 function uidx_(){
@@ -4634,7 +4665,7 @@ function doGet(e){
     const ymReq = /^\d{4}-\d{2}$/.test(String(p.ym || '')) ? String(p.ym) : '';
     const cache = CacheService.getScriptCache();
     const ck = 'dash_' + today_() + '_' + (ymReq || 'cur');
-    const hit = cache.get(ck);
+    const hit = cacheBigGet_(cache, ck);
     if(hit) return ContentService.createTextOutput(hit).setMimeType(ContentService.MimeType.JSON);
 
     const today = today_();
@@ -5004,7 +5035,7 @@ function doGet(e){
        the cache, so however many consoles are open, the sheets are rebuilt
        at most about once a minute — gentler on the quota when Google's own
        weather is rough, at a freshness cost nobody can perceive */
-    if(body.length < 95000) try{ cache.put(ck, body, 50); }catch(err){}
+    cacheBigPut_(cache, ck, body, 50);
     return ContentService.createTextOutput(body).setMimeType(ContentService.MimeType.JSON);
     }catch(err){
       return json_({ ok:false, error:'console builder failed: ' + String((err && err.message) || err) +

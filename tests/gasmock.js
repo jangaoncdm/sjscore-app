@@ -217,7 +217,10 @@ function load(opts){
     CacheService: {
       getScriptCache: () => ({
         get: k => (env.cacheStore[k] === undefined ? null : env.cacheStore[k]),
-        put: (k, v) => { env.cacheStore[k] = String(v); },
+        /* Google refuses a value over 100 KB under one key; the mock does too,
+           or a guard against it is never exercised (30.10.2026) */
+        put: (k, v) => { if(Buffer.byteLength(String(v)) > 100 * 1024) throw new Error('Argument too large: value'); env.cacheStore[k] = String(v); },
+        getAll: ks => { const o = {}; ks.forEach(k => { if(env.cacheStore[k] !== undefined) o[k] = env.cacheStore[k]; }); return o; },
         remove: k => { delete env.cacheStore[k]; }
       })
     },

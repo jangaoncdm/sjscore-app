@@ -235,6 +235,13 @@ any application with no decision on it for his orders.
 
 Note while debugging the console: **the dashboard payload is cached for 50
 seconds** server-side, so two reads in quick succession are the same read.
+**And it is kept in pieces** (30.10.2026). Google holds 100 KB under a key, and
+the payload was held only below 95,000 characters; a full morning's marks took
+it to 247 KB, so it was never held, every console poll rebuilt the register for
+about 38 seconds, the polls queued, and the console gave up at 45 seconds with
+LINK LOST on both registers at once. `cacheBigPut_` / `cacheBigGet_` keep any
+answer in stamped pieces of 30,000 characters, the console waits 90 seconds,
+and the mock refuses a value over 100 KB as Google does. Suite 45 holds it.
 
 **A PIN reset goes to every row carrying the number.** A reset used to mean a
 line in a `FIELD_FIXES` batch — a code edit and a deploy for one Secretary.
