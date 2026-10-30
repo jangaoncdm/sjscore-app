@@ -683,6 +683,18 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
             if(railGp.indexOf(v) >= 0) problems.push(lbl + ': the GP rail still offers "' + v + '", which that register does not have');
           });
           if(railGp.indexOf('attendance') < 0) problems.push(lbl + ': the GP rail has lost Attendance, which it does have');
+          /* FENCED SINCE 30.10.2026, so the Place of duty screen is on its rail,
+             in its own words: no Secretary, no mandal officer, no ladder */
+          if(railGp.indexOf('duty') < 0) problems.push(lbl + ': the GP rail does not offer Place of duty, though the register is fenced');
+          else {
+            await page.click('#nav [data-v="duty"]'); await page.waitForTimeout(500);
+            const dt = await page.$eval('#g', e => e.innerText);
+            ['Secretar', 'show-cause', 'MPO and the MPDO'].forEach(w => {
+              if(dt.indexOf(w) >= 0) problems.push(lbl + ': the GP Place of duty screen still says "' + w + '"');
+            });
+            await page.screenshot({ path: path.join(OUT, size.n + '-' + theme + '-tenant-gp-duty.png') });
+            await page.click('#nav [data-v="overview"]'); await page.waitForTimeout(400);
+          }
 
           /* THE GP OVERVIEW CARRIES NO EVALUATION. "Villages evaluated 0 of 0",
              "District average —" and an empty grade ring are not a district
