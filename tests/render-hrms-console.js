@@ -424,16 +424,20 @@ const ck=(ok,what,detail)=>{ if(ok){pass++;console.log('  PASS  '+what+(detail?'
 
     const pick=await p2.evaluate(()=>{
       const s=document.querySelector('#tenPick');
-      return s?{hidden:s.hidden,items:[...s.options].map(o=>({t:o.textContent,d:o.disabled}))}:null;
+      return s?{hidden:s.hidden,items:[...s.options].map(o=>({t:o.textContent,d:o.disabled,v:o.value}))}:null;
     });
     const hr=pick&&pick.items.filter(o=>/District HRMS/.test(o.t))[0];
     ck(!!pick&&!pick.hidden,'the register picker is shown');
     ck(!!hr,'DISTRICT HRMS IS NAMED IN THE PICKER, not silently absent');
-    ck(!!hr&&hr.d,'and it is disabled, so it cannot be chosen');
-    ck(!!hr&&/\/hrms\//.test(hr.t),'it says where to sign in to get it',hr&&hr.t);
-    ck(!!pick&&pick.items.filter(o=>!o.d).length===2,
+    /* CHANGED 30.10.2026, deliberately, with the rule: a greyed line could be
+       read and not acted on, and with one register signed in the picker hid
+       it altogether. Choosing it now opens that register's sign-in. It still
+       cannot SWITCH the console to a register with no session. */
+    ck(!!hr&&hr.v==='sign:HRMS','choosing it asks for the sign-in, never switches',hr&&hr.v);
+    ck(!!hr&&/sign in/.test(hr.t),'it says a sign-in is wanted',hr&&hr.t);
+    ck(!!pick&&pick.items.filter(o=>!/^sign:/.test(o.v)).length===2,
        'the two he IS signed in to are still choosable',
-       pick&&String(pick.items.filter(o=>!o.d).length));
+       pick&&String(pick.items.filter(o=>!/^sign:/.test(o.v)).length));
     ck(e2.length===0,'no script error on that console',e2[0]);
     await p2.screenshot({path:path.join(OUT,'picker-hrms-absent.png')});
 

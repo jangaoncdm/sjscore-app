@@ -609,6 +609,17 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
         else {
           const shown = await page.$eval('#tenPick', e => !e.hidden);
           if(!shown) problems.push(lbl + ': the register switch is hidden with two registers signed in');
+          /* SIGNED IN TO ONE REGISTER, THE OTHER IS STILL OFFERED (30.10.2026,
+             "its gram palana console not opening"): the picker used to hide
+             itself, and with it the only line that said why */
+          const one = await page.evaluate(() => {
+            const keep = localStorage.getItem('sjgp-gp1'); localStorage.removeItem('sjgp-gp1'); paintTenant();
+            const s = document.querySelector('#tenPick');
+            const r = { shown: !s.hidden, opts: [...s.options].map(o => o.value + '|' + o.textContent) };
+            localStorage.setItem('sjgp-gp1', keep); paintTenant(); return r;
+          });
+          if(!one.shown) problems.push(lbl + ': signed in to one register only, the switch hides and nothing says how to open Gram Palana');
+          if(!one.opts.some(o => /^sign:GP\|Gram Palana/.test(o))) problems.push(lbl + ': the switch does not offer Gram Palana to sign in to — ' + JSON.stringify(one.opts));
           const before = await page.$eval('#g', e => e.innerText);
           await page.screenshot({ path: path.join(OUT, size.n + '-' + theme + '-tenant-sjgp.png') });
 
