@@ -1751,19 +1751,32 @@ function paintTenant(){
      to read: it was simply absent. It is named now and told what it wants,
      disabled so it cannot be chosen. */
   const absent=Object.keys(TENANCY).filter(k=>!tenantSession(k));
-  /* one register is not a choice */
-  sel.hidden = have.length < 2;
+  /* ONE REGISTER SIGNED IN IS STILL A CHOICE WHEN ANOTHER IS NOT (30.10.2026,
+     "its gram palana console not opening"). The picker hid itself whenever
+     fewer than two registers were signed in, so the one line that said why
+     Gram Palana was missing was on a control nobody could see. It shows now
+     whenever there is anything to say, and choosing a register not yet
+     signed in opens that register's own app to sign in to. */
+  sel.hidden = have.length + absent.length < 2;
   if(!sel.hidden){
     const want=have.map(k=>k+'|'+TVIEW).join(',')+'/'+absent.join(',');
     if(sel.dataset.k!==want){
       sel.dataset.k=want;
       sel.innerHTML=have.map(k=>'<option value="'+k+'"'+(k===TVIEW?' selected':'')+'>'+
         esc(TENANCY[k].name)+'</option>').join('')
-        +absent.map(k=>'<option disabled>'+esc(TENANCY[k].name)+
-          ' — sign in at /'+esc(String(TENANCY[k].cfg||'').replace(/config\.js$/,''))+
-          ' on this device</option>').join('');
+        +absent.map(k=>'<option value="sign:'+k+'">'+esc(TENANCY[k].name)+
+          ' — sign in first</option>').join('');
     }
-    sel.onchange=()=>{ if(!useTenant(sel.value)) sel.value=TVIEW; };
+    sel.onchange=()=>{
+      const v=sel.value;
+      if(v.indexOf('sign:')===0){
+        const k=v.slice(5); sel.value=TVIEW;
+        /* the app's own sign-in, in a tab of its own; this console picks the
+           register up when it is next opened or refreshed */
+        window.open(String(TENANCY[k].cfg||'').replace(/config\.js$/,'')||'./','_blank');
+        return;
+      }
+      if(!useTenant(v)) sel.value=TVIEW; };
   }
   document.body.dataset.tenant = TVIEW.toLowerCase();
   /* THE RAIL SHOWS WHAT THE REGISTER HAS. The Gram Palana register takes no
@@ -1830,7 +1843,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = 'fb51b98 - 30 Oct 12:09';
+const BUILD_STAMP = '8874b5b - 30 Oct 12:20';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
