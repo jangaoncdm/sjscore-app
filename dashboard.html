@@ -1830,7 +1830,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '3b88eff - 29 Oct 11:40';
+const BUILD_STAMP = 'fb51b98 - 30 Oct 12:09';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -1925,8 +1925,12 @@ async function pull(){
   try{
     /* A request Google sits on must not wedge the console: 45 seconds and it
        is abandoned, so the retry clock actually runs. "LINK LOST · showing
-       never" was a fetch that hung for minutes while INFLIGHT stood true. */
-    const ctl=new AbortController(); const tmo=setTimeout(()=>ctl.abort(),45000);
+       never" was a fetch that hung for minutes while INFLIGHT stood true.
+       Ninety and not forty-five (30.10.2026): abandoning a request does not
+       stop the build behind it, so a slow register given up on at 45 seconds
+       was asked again while still answering the first, and the queue only
+       grew — LINK LOST on every console at once. */
+    const ctl=new AbortController(); const tmo=setTimeout(()=>ctl.abort(),90000);
     let res, body;
     try{
       res=await fetch(ST.url+'?op=dashboard&token='+encodeURIComponent(ST.token)+(MONTH?'&ym='+encodeURIComponent(MONTH):''),{signal:ctl.signal});
@@ -1953,7 +1957,7 @@ async function pull(){
     whatsNew(j);
     render(j);
   }catch(e){
-    const msg = (e&&e.name==='AbortError') ? 'no answer within 45 seconds' : ((e&&e.message)||String(e));
+    const msg = (e&&e.name==='AbortError') ? 'no answer within 90 seconds' : ((e&&e.message)||String(e));
     if(/alone/i.test(msg)){ $('#app').hidden=true; $('#gate').style.display='grid'; gate('<span class="rd">'+esc(msg)+'</span>',true); clearInterval(TIMER); }
     else{ DOWN=true; NEXT=Date.now()+Math.min(EVERY,30000)+Math.floor(Math.random()*8000);   /* jitter, so many consoles do not knock together */
       if(!DATA){ $('#gate').style.display='none'; $('#app').hidden=false;
