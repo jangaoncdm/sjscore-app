@@ -1382,11 +1382,18 @@ satellite has had its chance**: a cold GPS needs a minute of open sky, and a
 pop-up saying "no location yet" the instant the screen opens is the app blaming
 the officer for its own wait.
 
-**IT IS THE SANITATION REGISTER'S ALONE.** `TENANTS[k].fence` is the radius;
-the Gram Palana register has carried village offices since 18.09.2026 and
-**measures without deciding** (rule 10), because nobody ordered otherwise, and
-the HRMS register's voluntary mark has no place of duty to be measured from.
-Suite 35 is where that is changed first. **And it stands down in a minute with no deploy**, the way
+**AND SINCE 30.10.2026 THE GRAM PALANA OFFICER TOO.** `TENANTS[k].fence` is
+the radius. The Gram Palana register measured without deciding until the
+console showed 43 of 109 marks one morning made more than three kilometres from
+the officer's own village office; the Collector then ordered five kilometres
+for the **Gram Palana Officer**, to the nearest of his own village offices.
+The Revenue Inspectors are not in the order — they answer for many villages
+and this register carries no office for them — so `fenceOnly:['GPO']` keeps
+them measured and never refused (`fenceRule_` stands the fence down for a
+role outside that list). The ladder is still off there, so a refusal is an
+unmarked day on the record and draws nothing more. The HRMS register's
+voluntary mark has no place of duty to be measured from. Suite 35 section 12
+and suite 26 hold it, and are where it is changed first. **And it stands down in a minute with no deploy**, the way
 `FEATURE_OFF` takes a module out of the road: `FENCE_OFF` stops the whole
 thing, `FENCE_KM` moves the radius, and both reach every handset with a line.
 A gate on attendance that needs a deploy to loosen is a gate that locks a

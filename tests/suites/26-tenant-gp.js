@@ -711,15 +711,17 @@ module.exports = {
       'and an officer whose office cannot be believed is given NO distance rather than a wrong one');
     t.eq(c.dutyDistance_(places, [], 17.79, 79.04), null, 'an officer holding no village is measured against nothing');
 
-    /* AND IT RAISES NOTHING. This is rule 10, on a register that for the first
-       time could break it. */
+    /* AND IT RAISES NOTHING. Since the order of 30.10.2026 a Gram Palana
+       Officer more than five kilometres from his nearest office is REFUSED
+       (suite 35 section 12) — but the ladder is still off on this register,
+       so the refusal is the whole of it: no notice, no reminder, no debit. */
     const nBefore = (env.sheets['Notices'] || { rows:[] }).rows.length;
     const rBefore = (env.sheets['Reminders'] || { rows:[] }).rows.length;
     const lBefore = (env.sheets['Leave'] || { rows:[] }).rows.length;
     const far = env.post({ kind:'attendance', token:tokenFor(env, '9111100003', '4444'), att:{
       id:'A-2', date:'2026-09-21', markedAt:'2026-09-21T09:20:00+05:30',
       lat:17.4733, lng:79.9000, accuracy:11, verified:true } });
-    t.eq(far.ok, true, 'a mark made far from the place of duty is ACCEPTED — the mark stands');
+    t.eq(far.ok, false, 'a mark made far from the place of duty is REFUSED, by the order of 30.10.2026');
     c.issueAbsenceNotices();
     t.eq((env.sheets['Notices'] || { rows:[] }).rows.length, nBefore, 'it raises no notice');
     t.eq((env.sheets['Reminders'] || { rows:[] }).rows.length, rBefore, 'no reminder');
@@ -733,8 +735,7 @@ module.exports = {
     t.ok(!!one, 'his mark is on it');
     t.ok(one.dutyKm != null && one.dutyKm < 0.1, 'carrying the distance from his own office');
     const two = marks.filter(r => c.phone10_(r.phone) === '9111100003')[0];
-    t.ok(two && two.dutyKm > 10, 'and the distant one carries its real distance: ' +
-      (two ? Math.round(two.dutyKm) + ' km' : '—'));
+    t.ok(!two, 'and the refused one is not on it as marked');
     t.eq(env.get('dashboard', { token:gpo1 }).ok, false, 'a GPO cannot open the console');
     t.eq(env.get('dashboard', { token:mri }).ok, false, 'nor can a Revenue Inspector');
 
@@ -772,8 +773,9 @@ module.exports = {
       t.eq(e2.eval('GPS_HEAD()').length, 4, 'its roll carries the same four columns');
       t.eq(Number(e2.ctx.tenant_().fence), 5,
         'AND IT IS THE ONE THAT IS FENCED — five kilometres, by that order');
-      t.eq(Number(env.ctx.tenant_().fence || 0), 0,
-        'while the Gram Palana register measures and accuses nobody (rule 10), as nobody ordered otherwise');
+      t.eq(Number(env.ctx.tenant_().fence || 0), 5,
+        'and the Gram Palana register too, since the order of 30.10.2026');
+      t.eq(String(env.ctx.tenant_().fenceOnly), 'GPO', 'for the Gram Palana Officer alone, not the inspectors');
       t.eq(e2.ctx.tenant_().evaluation, true, 'the evaluation is still the sanitation register’s');
       t.eq(e2.ctx.tenant_().schedule, true, 'and so is the filing schedule');
       t.eq(e2.get('diag', {}).tenant, 'SJGP', 'and its own address still names itself SJGP');

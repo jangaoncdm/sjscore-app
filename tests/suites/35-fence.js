@@ -432,17 +432,18 @@ module.exports = {
       t.eq(good.ok, true, 'and at his own village he marks out as he always could');
     }
 
-    /* ---- 12. THE GRAM PALANA REGISTER IS NOT FENCED ----
-       Its roll has carried village offices since 18.09.2026 and it has always
-       MEASURED them — rule 10, printed and accusing nobody. Fencing it is the
-       Collector's written order and this is where it would be changed first.
-       The same bytes deploy to both registers, so this is the only thing
-       standing between one order and two. */
+    /* ---- 12. THE GRAM PALANA OFFICER IS FENCED AT 5 KM (ordered 30.10.2026) ----
+       Its roll has carried village offices since 18.09.2026 and until the
+       order it only MEASURED them. Changed here first, deliberately: the
+       officer is fenced to the nearest of his own village offices, the
+       Revenue Inspectors are not in the order and are never refused, and the
+       ladder stays off, so a refusal is recorded and nothing more. */
     {
       const env = mock.load({ now:'2026-10-12T10:00:00+05:30', admin:true });
       env.props.TENANT = 'GP';
       env.mkSheet('Users', U, [
-        { Phone:'9000000061', Name:'G. TheGpo', Role:'GPO', Mandal:'Devaruppula', GP:'Devaruppula', Active:'TRUE' }
+        { Phone:'9000000061', Name:'G. TheGpo', Role:'GPO', Mandal:'Devaruppula', GP:'Devaruppula', Active:'TRUE' },
+        { Phone:'9000000062', Name:'R. TheInspector', Role:'MRI', Mandal:'Devaruppula', GP:'Devaruppula', Active:'TRUE' }
       ]);
       env.sheets['Users'].rows.slice(1).forEach(r => {
         const p = env.ctx.phone10_(r[0]); if(p) r[U.indexOf('Hash')] = env.ctx.hash_(p, '1111');
@@ -453,12 +454,19 @@ module.exports = {
       env.mkSheet('Holidays', ['Date', 'Occasion'], []);
       t.eq(env.ctx.tenant_().key, 'GP', 'this is the Gram Palana register');
       t.eq(env.ctx.tenant_().placeOfDuty, true, 'which has a place of duty for every mark');
-      t.eq(Number(env.ctx.tenant_().fence || 0), 0, 'AND IS NOT FENCED');
+      t.eq(Number(env.ctx.tenant_().fence || 0), 5, 'AND IS FENCED AT FIVE KILOMETRES');
       const k = tok(env, '9000000061');
-      t.eq(mark(env, k, FAR).ok, true, 'so a Gram Palana Officer marking far out is still marked');
-      t.eq((env.sheets['Outside'] ? env.sheets['Outside'].rows.length - 1 : 0), 0,
-        'and nothing is recorded against him');
-      t.eq(env.get('duty', { token:k }).on, false, 'and his app is told there is no fence');
+      t.eq(env.get('duty', { token:k }).on, true, 'his app is told the fence is in force');
+      const far = mark(env, k, FAR);
+      t.eq(far.ok, false, 'A GRAM PALANA OFFICER MARKING FAR OUT IS REFUSED');
+      t.contains(String(far.error || ''), 'Devaruppula', 'and told the place of duty he is away from');
+      t.eq((env.sheets['Outside'] ? env.sheets['Outside'].rows.length - 1 : 0), 1,
+        'the refusal is on the Outside tab, so the district can read it');
+      t.eq(mark(env, k, { lat:HOME.lat + 0.01, lng:HOME.lng }).ok, true, 'and a mark a kilometre from his office is taken');
+      t.eq(env.ctx.tenant_().sanction, false, 'THE LADDER STAYS OFF — a refusal draws no notice here');
+      const ri = tok(env, '9000000062');
+      t.eq(env.get('duty', { token:ri }).on, false, 'THE REVENUE INSPECTOR IS NOT IN THE ORDER');
+      t.eq(mark(env, ri, FAR).ok, true, 'and is marked wherever he is');
     }
 
     /* ---- 14. WHERE EACH VILLAGE OFFICE IS: the paste the fence stands on.

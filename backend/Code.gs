@@ -583,13 +583,19 @@ const TENANTS = {
        measured against for the first time. It MEASURES AND IT ACCUSES NOBODY
        (rule 10): the distance is printed and the mark stands. */
     placeOfDuty:true,
-    /* AND IT MEASURES WITHOUT DECIDING, WHICH IS WHERE THIS REGISTER STAYS.
-       The sanitation register was fenced by the order of 10.10.2026 and this
-       one was not. Its distance is printed for the Collector and the mark
-       stands (rule 10) — a Gram Palana Officer refused a mark would be
-       sanctioned by a table under an order nobody gave. Fencing it is the
-       Collector's written order and suite 35 is where it is changed first. */
-    fence:0,
+    /* THE GRAM PALANA OFFICER IS FENCED AT FIVE KILOMETRES — ordered
+       30.10.2026, after the console showed 43 of 109 marks that morning made
+       more than three kilometres from the officer's own village office. Until
+       then this register measured without deciding. The radius is to the
+       NEAREST of his own village offices, because a man holding four villages
+       is at his place of duty at any of them. The Revenue Inspectors are not
+       in the order — they answer for many villages and this register carries
+       no office for them — so they are measured and never refused
+       (`fenceOnly`). The ladder stays off here (`sanction:false`): a refused
+       mark is an unmarked day on the record and draws nothing more. Suite 35
+       section 12 holds it. */
+    fence:5,
+    fenceOnly:['GPO'],
     /* leave within the rules is sanctioned by rule here too (17.10.2026) */
     autoLeave:true,
     /* THE SAME YEARLY FIGURES, PRO-RATED TO WHAT IS LEFT OF THE YEAR. This
@@ -2291,6 +2297,12 @@ function fenceRule_(role){
   var roles = off ? {} : fenceRoles_(), base = km;
   var R = String(role || '').toUpperCase();
   if(!off && R && roles[R] > 0) km = roles[R];
+  /* A REGISTER MAY FENCE SOME OF ITS ROLES AND NOT THE REST (30.10.2026):
+     the Gram Palana order names the officer and not the inspectors. Asked
+     with a role outside the list, the fence is down for that officer alone;
+     asked with none, it answers the register's rule as before. */
+  var only = tenant_().fenceOnly;
+  if(!off && R && only && only.length && only.indexOf(R) < 0) off = true;
   return { km:km, base:base, off:off, acc:FENCE_ACC_M_, roles:roles };
 }
 
