@@ -2954,3 +2954,50 @@ against a Secretary's rule, and every sentence that states the rule says
 *5 km · 30 km for MPDOs and MPOs*. `FENCE_KM_MANDAL` moves the relaxation
 with no deploy; `FENCE_KM` moves the base and leaves it; `FENCE_OFF` and
 a base of nought stand everybody down. Suite 35 §22.
+
+
+## The look of the console, 31.10.2026 — the sky drawn, and a reading on every screen
+
+**Asked 31.10.2026**, off the muz.li dashboard collection: *"make icon for
+weathers rather than just bar, add analytics, make all aspects of the
+dashboard visually appealing, with intelligence on each page."* And after
+the first cut was shown: *"still lot of gap, fix all."*
+
+**The weather is drawn, not barred.** `wxIcon(code)` draws the sky off the
+WMO code the register already carries — sun, cloud, rain, storm, fog — in
+`--wx-*` tokens with a light and a dark value. Every icon carries its size
+inline, because the global `svg{width:100%}` stretches an unsized one across
+its card (the same rule that broke Leaflet once). The Map screen opens on the
+headquarters mandal as a hero — the sky, the figure, humidity, chance of
+rain, rain today, wind, the district's warmest, coolest night, wettest and
+windiest, and the week — then the table the docs pass reads (`data-k="wxT"`,
+its level pills unchanged), every mandal as a card, and the fortnight of
+weather against attendance. The rain is still classed by the IMD scale and
+it still forecasts and does not warn.
+
+**A reading on every screen, and it accuses nobody.** `insightsFor(view)`
+puts a strip of short readings under the tiles — the day against the month's
+average, the mandals with the most unmarked, the weakest location fixes, the
+weekday pattern, wet days against dry ones. Each is worked out from the
+payload on the screen and says what the figures show, never who is at fault
+(rule 10): *a reading, not a finding*. An average leaves out the days before
+the register was running (`present+leave > 0`), or the month's figure is
+dragged down by mornings nobody could have marked.
+
+**No hole under a chart.** A card in a row is stretched to the tallest beside
+it and what it held stayed its own size. `fillCards()` runs after every
+render on a desk and gives each card's spare height to the one thing in it
+that can use it — a line drawn again taller (`Charts.LREG`), bar columns, a
+scrolling list, wider bar rows, table padding once — and a card with nothing
+that can grow is left alone rather than padded. The health score is a ring;
+the bottom five villages have the top five under them; Location quality gains
+a mandal-by-mandal bar; the twelve mandal cards are always a divisor of twelve
+across. On a phone none of it runs.
+
+**The glass is a layer, and the rules under it stand.** Frosted panels and
+tiles, a floating rail above 1180px, pill buttons, tile sparklines on a row of
+their own. Colour still means a state, the validated `--cs`/`--co`/`--hm`
+palettes are untouched, and no webfont. The one-gradient rule is bent by a
+faint ambient aura behind the page and nothing more; the header keeps the
+gradient. `tests/render-console.js` carries a weather fixture dated off the
+payload's own fortnight.

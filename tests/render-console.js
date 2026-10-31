@@ -120,6 +120,29 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const payload = JSON.parse(fs.readFileSync(FIX, 'utf8'));
+  /* THE FORECAST, dated off the fixture's own fortnight so the weather can be
+     read against its attendance (31.10.2026). One mandal severe, one on watch,
+     the rest a spread of skies so every icon is drawn. */
+  const wxDays = (payload.att30 || []).slice(-15).map(r => r.date);
+  const wxToday = wxDays[wxDays.length - 1];
+  const SKIES = [0, 1, 2, 3, 45, 53, 61, 63, 80, 95, 2, 1];
+  const WXFIX = { ok:true, at:new Date().toISOString(), date:wxToday, level:'SEVERE', counts:{ severe:1, watch:1, calm:10 },
+    source:'Open-Meteo · thresholds after the India Meteorological Department',
+    draft:'Heavy rain expected today — up to 88 mm, wind to 46 km/h. Worst in Bachannapeta.',
+    rows: ['Bachannapeta','Chilpur','Devaruppula','Ghanpur (Stn)','Jangaon','Kodakandla','Lingala Ghanpur','Narmetta',
+           'Palakurthy','Raghunathpalle','Tharigoppula','Zaffergadh'].map((m, i) => {
+      const level = i === 0 ? 'SEVERE' : i === 1 ? 'WATCH' : 'CALM', code = i === 0 ? 65 : SKIES[i];
+      const rain = i === 0 ? 88 : i === 1 ? 31 : (code >= 51 ? 4 + i : 0);
+      return { mandal:m, located:true, lat:17.55 + i * .035, lng:79.02 + (i % 5) * .06,
+        temp:27 + (i % 5), humidity:62 + i, code:code, now:'', windNow:9 + i, tmax:30 + (i % 4), tmin:22 + (i % 3),
+        rain:rain, rainChance:level === 'CALM' ? 10 + i * 4 : 85, wind:level === 'SEVERE' ? 46 : 12 + i, dayCode:code,
+        rainClass: rain > 64.4 ? 'heavy rain' : rain > 15.5 ? 'moderate rain' : rain >= 2.5 ? 'light rain' : '',
+        today:i === 0 ? 'Rain' : ['Clear','Mostly clear','Partly cloudy','Overcast','Fog','Drizzle','Rain','Rain','Rain showers','Thunderstorm','Partly cloudy','Mostly clear'][i],
+        level:level,
+        days: wxDays.map((d, k) => { const wet = (k % 5 === 1 || k % 7 === 3); return { date:d, tmax:29 + ((k + i) % 5),
+          tmin:21 + (k % 3), rain: wet ? 6 + ((k * 7 + i) % 22) : (k % 4 === 0 ? 1 : 0), code: wet ? (k % 2 ? 63 : 80) : [0, 1, 2, 3][(k + i) % 4] }; }) };
+    }) };
+  WXFIX.mine = WXFIX.rows[4];
   const srv = await serve();
   const base = 'http://127.0.0.1:' + srv.address().port;
   const browser = await chromium.launch();
@@ -156,6 +179,7 @@ function payloadRaw(){ return JSON.parse(fs.readFileSync(FIX, 'utf8')); }
                              : /op=mockloc/.test(u) ? MOCKFIX
                              : /op=leaveRegister/.test(u) ? LEAVEFIX
                              : /op=attCalendar/.test(u) ? ATTCALFIX
+                             : /op=weather/.test(u) ? WXFIX
                              : /op=outday/.test(u) ? OUTFIX : payload) });
       });
       await page.route('**/gp.district/**', r =>
