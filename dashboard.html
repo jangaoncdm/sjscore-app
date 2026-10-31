@@ -1498,6 +1498,223 @@ tr[data-di]:hover td,tr[data-md]:hover td,tr[data-dd]:hover td{background:var(--
 /* ---- the theme switch ---- */
 .tbtn.thm{min-width:44px;padding:0 12px}
 .tbtn.thm svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;display:inline-block}
+
+/* ============================================================================
+   THE LOOK OF 31.10.2026 — glass, depth and large figures
+   ----------------------------------------------------------------------------
+   Asked for in so many words: "make all aspects of the dashboard visually
+   appealing … for look and feel and UI also", off two analytics dashboards
+   the Collector pointed at (Deuce, Ocean Royale). What was taken from them:
+   frosted surfaces over a quiet lit ground, a floating rail, large light
+   figures, round icon discs, pill controls, a weather card that draws the
+   sky, and a strip that says in words what the figures mean. What was NOT
+   taken: their decorative colour. Colour on this console still means a
+   state (red a default, amber waiting, green done, grey a nought), the
+   validated chart series are untouched, and no webfont is loaded.
+   This block is a LAYER: it sits last and restyles; it removes no rule, so
+   taking it out is deleting one block.
+   ========================================================================== */
+:root{
+  --r:20px;
+  --glass:rgba(255,255,255,.78); --glass-2:rgba(255,255,255,.6); --glass-line:rgba(255,255,255,.9);
+  --lift:0 1px 0 rgba(255,255,255,.9) inset, 0 0 0 1px rgba(30,41,70,.06), 0 10px 30px -12px rgba(30,41,70,.18), 0 2px 6px rgba(30,41,70,.04);
+  --lift-sm:0 0 0 1px rgba(30,41,70,.07), 0 4px 14px -6px rgba(30,41,70,.16);
+  --aura-a:rgba(74,64,206,.10); --aura-b:rgba(15,118,110,.08); --aura-c:rgba(42,167,216,.07);
+  --ins-bg:rgba(240,239,255,.82); --ins-line:rgba(74,64,206,.16);
+  /* the sky. Drawn tokens, so the dark theme recolours every icon. */
+  --wx-sun:#F2A516; --wx-cloud:#EEF1F7; --wx-cloud-d:#C3CAD9; --wx-cloud-edge:#97A1B6; --wx-rain:#2A8FD8; --wx-bolt:#E8A020;
+}
+body.dark{
+  --glass:rgba(23,27,45,.78); --glass-2:rgba(30,35,56,.62); --glass-line:rgba(255,255,255,.06);
+  --lift:0 1px 0 rgba(255,255,255,.04) inset, 0 0 0 1px rgba(255,255,255,.06), 0 14px 34px -14px rgba(0,0,0,.7);
+  --lift-sm:0 0 0 1px rgba(255,255,255,.07), 0 6px 16px -8px rgba(0,0,0,.6);
+  --aura-a:rgba(107,120,234,.16); --aura-b:rgba(23,169,143,.10); --aura-c:rgba(42,167,216,.08);
+  --ins-bg:rgba(35,39,72,.78); --ins-line:rgba(154,160,245,.22);
+  --wx-sun:#F5B83D; --wx-cloud:#5D6684; --wx-cloud-d:#454D69; --wx-cloud-edge:#9AA3BE; --wx-rain:#5CC3EA; --wx-bolt:#F5B83D;
+}
+
+/* ---- the ground: a quiet light from the top, not a pattern ---- */
+html,body{background:var(--bg)}
+body{background:
+  radial-gradient(1100px 520px at 88% -8%, var(--aura-a), transparent 62%),
+  radial-gradient(900px 480px at 12% -6%, var(--aura-b), transparent 60%),
+  radial-gradient(800px 600px at 60% 110%, var(--aura-c), transparent 60%),
+  var(--bg);background-attachment:fixed}
+
+/* ---- the rail floats, frosted, on a desk ---- */
+@media(min-width:1181px){
+  .shell{grid-template-columns:248px 1fr}
+  .rail{margin:12px 0 12px 12px;height:calc(100vh - 24px);top:12px;border:0;border-radius:24px;
+    background:var(--glass);backdrop-filter:blur(18px) saturate(1.4);-webkit-backdrop-filter:blur(18px) saturate(1.4);box-shadow:var(--lift)}
+}
+.rail .brand{border-bottom-color:var(--line-2)}
+.rail .brand img{border-radius:50%;box-shadow:0 0 0 3px var(--panel),0 4px 12px rgba(30,41,70,.15)}
+.rail .brand b{font-size:16.5px;font-weight:800;letter-spacing:-.02em}
+.nav button{border-radius:14px;min-height:44px;margin-bottom:4px;transition:background .15s,color .15s}
+.nav button svg{box-sizing:content-box;width:18px;height:18px;padding:6px;border-radius:50%;background:var(--well);stroke-width:1.8;flex:none}
+.nav button[aria-current]{background:var(--pri);color:#fff;box-shadow:0 8px 18px -8px rgba(74,64,206,.7)}
+.nav button[aria-current] svg{background:rgba(255,255,255,.18);stroke:#fff}
+body.dark .nav button[aria-current]{background:#4A40CE;color:#fff}
+
+/* ---- the header: frosted, so the page passes under it ---- */
+.top{background:transparent;padding:16px 0 14px}
+.main{overflow-x:clip}
+.top::before{content:"";position:absolute;inset:0 -26px;z-index:-1;background:var(--glass-2);
+  backdrop-filter:blur(16px) saturate(1.3);-webkit-backdrop-filter:blur(16px) saturate(1.3);
+  border-bottom:1px solid var(--line-2)}
+.top h1{font-size:24px;font-weight:800;letter-spacing:-.03em}
+.rsel,.tbtn{border-radius:999px;box-shadow:var(--lift-sm);background:var(--glass)}
+.tbtn.pri{background:var(--pri);box-shadow:0 8px 18px -8px rgba(74,64,206,.75)}
+.tbtn.pri.hero{background:linear-gradient(135deg,var(--grad-a),var(--grad-b))}
+.fchip{border-radius:999px;box-shadow:var(--lift-sm)}
+.fchip[aria-pressed=true],.fchip.on{box-shadow:0 0 0 1.5px var(--pri)}
+
+/* ---- cards: frosted, deep, no rule over the top ---- */
+.grid{gap:20px}
+.panel{border-top:0;border-radius:var(--r);background:var(--glass);box-shadow:var(--lift);
+  backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3)}
+.panel .hd{padding:18px 20px 8px;font-size:15px;font-weight:780;letter-spacing:-.015em}
+.panel .hd .r{font-family:var(--sans);font-size:11.5px;font-weight:600;color:var(--tx-3);background:var(--well);
+  padding:4px 10px;border-radius:999px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%}
+.panel .hd .r:empty{display:none}
+.panel .bd{padding:8px 20px 20px}
+
+/* ---- tiles: the figure is the tile ---- */
+.kpirow{--kg:16px}
+@media(min-width:1366px){.kpirow:has(>.kpi:nth-child(6):last-child){--C:6}}
+.kpi{border-radius:var(--r);background:var(--glass);box-shadow:var(--lift);padding:18px 18px 16px;overflow:hidden;
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);transition:transform .15s,box-shadow .15s}
+.kpi::after{content:"";position:absolute;right:-40px;top:-40px;width:140px;height:140px;border-radius:50%;
+  background:radial-gradient(closest-side,var(--pri-2),transparent);opacity:.9;pointer-events:none}
+.kpi.t-bad::after{background:radial-gradient(closest-side,var(--red-2),transparent)}
+.kpi.t-warn::after{background:radial-gradient(closest-side,var(--amber-2),transparent)}
+.kpi.t-good::after{background:radial-gradient(closest-side,var(--green-2),transparent)}
+.kpi.t-nil::after{background:radial-gradient(closest-side,var(--line-2),transparent)}
+.kpi>*{position:relative;z-index:1}
+.kpi .hd{font-size:12.5px;font-weight:700;color:var(--tx-2);letter-spacing:.005em}
+.kpi .ic{width:44px;height:44px;border-radius:50%;background:var(--panel);box-shadow:var(--lift-sm)}
+.kpi .v{font-family:var(--sans);font-size:38px;font-weight:750;letter-spacing:-.045em;line-height:1.05;margin-top:6px;font-variant-numeric:tabular-nums}
+.kpi .foot{gap:8px}
+.kpi .foot{flex-wrap:wrap}
+.kpi .kspark{order:9;flex:1 0 100%;width:100%;height:30px;margin-top:8px;display:block}
+.subhd{font-size:11px;font-weight:750;letter-spacing:.07em;text-transform:uppercase;color:var(--tx-3);margin:16px 0 6px}
+.hring{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:6px 0}
+.hring svg{display:block}
+.hring-v{fill:var(--ch-ink);font-size:44px;font-weight:800;letter-spacing:-.04em;font-family:var(--sans)}
+.hring-k{fill:var(--ch-muted);font-size:11px;font-family:var(--sans)}
+.hring-say{font-size:13px;font-weight:750}
+.wxext{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+@media(min-width:1980px){.wxstats,.wxext{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.wxext>div{display:flex;flex-direction:column;padding:9px 11px;border-radius:14px;box-shadow:inset 0 0 0 1px var(--line-2)}
+.wxext span{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--tx-3);font-weight:700}
+.wxext b{font-size:13px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wxext i{font-style:normal;font-size:15px;font-weight:780;color:var(--tx)}
+.kpi.tapk:hover{transform:translateY(-2px);box-shadow:var(--lift),0 0 0 2px var(--pri-2)}
+.kpi.wxk .wxk-ic{margin-left:auto;margin-top:-8px}
+
+/* ---- tables and pills ---- */
+th{background:transparent;border-bottom:1px solid var(--line)!important;font-size:10.5px;color:var(--tx-3)}
+tbody tr{transition:background .12s}
+tbody tr:hover{background:var(--row-hover)}
+.pill{border-radius:999px;font-family:var(--sans);font-weight:650;font-size:11px;padding:2px 9px;box-shadow:none}
+
+/* ---- the reading of the screen ---- */
+.insight{border-radius:var(--r);padding:16px 18px 14px;background:var(--ins-bg);box-shadow:var(--lift);
+  border:1px solid var(--ins-line);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.ins-hd{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.ins-hd b{font-size:15px;font-weight:780;letter-spacing:-.015em}
+.ins-note{margin-left:auto;font-size:11.5px;color:var(--tx-3)}
+.ins-badge{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--pri);flex:none;
+  box-shadow:0 6px 14px -6px rgba(74,64,206,.8)}
+.ins-badge svg{width:16px;height:16px;fill:#fff;stroke:none}
+.ins-list{display:flex;flex-wrap:wrap;gap:10px}
+.ins-list>.ins{flex:1 1 280px}
+.ins{display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border-radius:14px;background:var(--glass);
+  box-shadow:var(--lift-sm);font-size:13px;line-height:1.55;color:var(--tx-2)}
+.ins b{color:var(--tx);font-weight:720}
+.ins i{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--pri-2)}
+.ins i svg{width:15px;height:15px;fill:none;stroke:var(--pri);stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round}
+.ins.good i{background:var(--green-2)} .ins.good i svg{stroke:var(--green)}
+.ins.warn i{background:var(--amber-2)} .ins.warn i svg{stroke:var(--amber)}
+.ins.bad i{background:var(--red-2)} .ins.bad i svg{stroke:var(--red)}
+@media(max-width:760px){.ins-note{display:none}.ins-list{grid-auto-flow:column;grid-auto-columns:86%;grid-template-columns:none;overflow-x:auto;scroll-snap-type:x mandatory}.ins{scroll-snap-align:start}}
+
+/* ---- the weather ---- */
+.wxi{display:block;flex:none;overflow:visible}
+.wxhero{display:grid;gap:16px}
+.wxnow{display:flex;align-items:center;gap:16px}
+.wxnow .wxi{filter:drop-shadow(0 8px 14px rgba(30,41,70,.18))}
+.wxt{font-size:56px;font-weight:780;letter-spacing:-.05em;line-height:1}
+.wxt sup{font-size:18px;font-weight:650;letter-spacing:0;vertical-align:top;margin-left:2px;color:var(--tx-3)}
+.wxw{font-size:16px;font-weight:700;margin-top:4px}
+.wxhl{font-size:12.5px;color:var(--tx-3);margin-top:2px}
+.wxstats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.wxs{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:14px;background:var(--well)}
+.wxs span{font-size:11px;color:var(--tx-3);line-height:1.3}
+.wxs b{display:block;font-size:15px;color:var(--tx);font-weight:750}
+.wxs-ic{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--panel);flex:none}
+.wxs-ic svg,.wxc-m svg{width:15px;height:15px;fill:none;stroke:var(--wx-rain);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.wxweek{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.wxweek>div{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px;border-radius:14px;background:var(--well);font-size:11px;color:var(--tx-3)}
+.wxweek>div.now{background:var(--pri-2);color:var(--pri)}
+.wxweek b{font-size:13.5px;color:var(--tx)}
+.wxweek i{font-style:normal;font-size:10.5px;color:var(--wx-rain);min-height:13px}
+/* twelve mandals: six across on a desk, four on a laptop, two on a phone —
+   always a divisor of twelve, so the last row is never two cards and a hole */
+.wxgrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+@media(max-width:1799px){.wxgrid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:1180px){.wxgrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){.wxgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.wxc{border-radius:18px;padding:13px 14px 12px;background:var(--panel);box-shadow:var(--lift-sm);display:grid;gap:8px;position:relative;overflow:hidden}
+.wxc.lv-severe{box-shadow:0 0 0 1.5px var(--red),var(--lift-sm)}
+.wxc.lv-watch{box-shadow:0 0 0 1.5px var(--amber),var(--lift-sm)}
+.wxc-hd{display:flex;align-items:center;gap:9px}
+.wxc-nm{min-width:0;flex:1}
+.wxc-nm b{display:block;font-size:13.5px;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wxc-nm span{display:block;font-size:11.5px;color:var(--tx-3)}
+.wxc-t{font-size:30px;font-weight:780;letter-spacing:-.04em;line-height:1}
+.wxc-t small{font-size:12px;font-weight:600;letter-spacing:0;color:var(--tx-3);margin-left:8px}
+.wxc-m{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--tx-2)}
+.wxc-m span{display:inline-flex;align-items:center;gap:4px}
+.wxc-m em{font-style:normal;color:var(--tx-3);margin-left:4px}
+.wxc-cls{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--wx-rain)}
+.wxc-sp{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--tx-3)}
+.wxc-sp .c-spark{width:100%;max-width:150px;height:22px}
+.wxrow{display:inline-flex;align-items:center;gap:6px}
+.wxtrend{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px}
+.wxd-keys{display:grid;grid-template-rows:18px 30px 58px 14px 16px 30px;gap:4px;font-size:10.5px;color:var(--tx-3);text-align:right;flex:none;padding-top:2px}
+.wxd-keys span{display:flex;align-items:center;justify-content:flex-end}
+.wxd-row{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(46px,1fr);gap:6px;flex:1;min-width:max-content}
+.wxd{display:grid;grid-template-rows:18px 30px 58px 14px 16px 30px;gap:4px;justify-items:center;padding:2px 2px 4px;border-radius:14px}
+.wxd.now{background:var(--pri-2)}
+.wxd-t{font-size:12.5px;font-weight:750}
+.wxd-bar{width:14px;height:58px;border-radius:7px;background:var(--well);display:flex;align-items:flex-end;overflow:hidden}
+.wxd-bar i{display:block;width:100%;background:var(--wx-rain);border-radius:7px}
+.wxd-r{font-size:10.5px;color:var(--wx-rain)}
+.wxd-a{font-size:11.5px;font-weight:700;color:var(--tx-2);font-variant-numeric:tabular-nums}
+.wxd-l{display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--tx-3);line-height:1.2}
+.wxd-l b{font-size:10px;font-weight:700}
+@media(max-width:760px){.wxt{font-size:44px}.wxnow .wxi{width:72px;height:72px}.wxweek{grid-template-columns:repeat(7,44px);overflow-x:auto}}
+
+/* the change against yesterday or last month, as a small pill */
+.delta{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;font-family:var(--sans)}
+.delta.up{background:var(--green-2);color:var(--green)}
+.delta.dn{background:var(--red-2);color:var(--red)}
+.delta.fl{background:var(--well);color:var(--tx-3)}
+body.dark{--aura-a:rgba(139,92,246,.16)}
+
+/* THE SQUEEZED MONTH ON A 2K SCREEN (31.10.2026). The thirty days stay
+   capped as ordered on 25.10.2026; on a wide monitor the legend and the
+   notes stand in the band beside them instead of under them, so the strip
+   keeps its size and the card carries no empty band. */
+@media(min-width:1980px){
+  .bd[data-k=atc]:has(.atcstrip){display:grid;grid-template-columns:minmax(0,1480px) minmax(300px,1fr);column-gap:32px;align-items:start}
+  .bd[data-k=atc]:has(.atcstrip)>.segbar{grid-column:1/-1}
+  .bd[data-k=atc]:has(.atcstrip)>.hmwrap{grid-column:1;grid-row:2/span 6}
+  .bd[data-k=atc]:has(.atcstrip)>:not(.segbar):not(.hmwrap){grid-column:2;margin-top:0}
+  .bd[data-k=dayd]{display:grid;grid-template-columns:minmax(0,1560px) minmax(260px,1fr);column-gap:32px;align-items:start}
+  .bd[data-k=dayd]>.hmleg{flex-direction:column;align-items:flex-start;margin-top:0}
+}
 </style>
 </head>
 <body class="dense">
@@ -1845,7 +2062,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '6633ab0 - 30 Oct 12:31';
+const BUILD_STAMP = 'ce134d9 - 31 Oct 15:28';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -2578,7 +2795,7 @@ const Charts = (() => {
       '" fill="none" style="stroke:' + (color || PAL[0]) + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>';
   }
 
-  return {bar, stackRows, meter, stack, donut, line, fitLines, spark, legendRow, empty, fmt, grad, PAL, ORD, ST};
+  return {bar, stackRows, meter, stack, donut, line, fitLines, spark, legendRow, empty, fmt, grad, PAL, ORD, ST, LREG};
 })();
 
 /* ================= THE CHARTS THIS CONSOLE DRAWS =================
@@ -2724,10 +2941,22 @@ function kpiTone(title,val){
   if(/marked|filed|sanction|acknowledg|present|on time|signed in|placed|evaluated|served|done|received/.test(t)) return 't-good';
   return '';
 }
-function kpi(title,ic,val,dlt,foot,act){
+function kpi(title,ic,val,dlt,foot,act,sp){
   const tn=kpiTone(title,val);
   return `<div class="kpi${tn?' '+tn:''}${act?' tapk':''}"${act?' data-act="'+act+'"':''}><div class="hd">${title}<span class="ic">${ic}</span></div>
-    <div class="v">${val}</div><div class="foot">${dlt||''}<span>${foot||''}</span></div></div>`;}
+    <div class="v">${val}</div><div class="foot">${dlt||''}<span>${foot||''}</span>${sp||''}</div></div>`;}
+/* the fortnight under a tile: the last fourteen working days of one measure,
+   a Sunday or a holiday left out rather than drawn as a nought */
+function kpiSpark(j,f,color){
+  const rows=(j.att30||j.att14||[]).filter(r=>!r.off&&r.due>0&&(r.present||0)+(r.leave||0)>0).slice(-14);
+  if(rows.length<4) return '';
+  const v=rows.map(f), mx=Math.max(1,...v), mn=Math.min(...v), W=200, H=30;
+  const x=i=>(i/(v.length-1))*W, y=n=>H-3-((n-mn)/Math.max(1,mx-mn))*(H-6);
+  const d=v.map((n,i)=>(i?'L':'M')+x(i).toFixed(1)+','+y(n).toFixed(1)).join(' ');
+  return '<svg class="kspark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true">'+
+    '<path d="'+d+' L'+W+','+H+' L0,'+H+' Z" style="fill:'+color+';opacity:.12"/>'+
+    '<path d="'+d+'" fill="none" style="stroke:'+color+'" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>';
+}
 function panel(span,title,right,body,k){
   return `<div class="panel ${span}"><div class="hd">${title}<span class="r">${right||''}</span></div><div class="bd"${k?' data-k="'+k+'"':''}>${body}</div></div>`;}
 
@@ -2867,8 +3096,10 @@ function vOverview(j,A){
   </div>`;
   h+='<div class="kpirow">';
   h+=kpi('Attendance today',IC.u,A.accounted,A.off?'':delta(A.accounted,A.attY,true),
-    A.off?esc(A.off)+' — voluntary marks only':'of '+A.officersDue+' · vs yesterday','view:attendance');
-  h+=kpi('Not marked',IC.u,A.off?'—':A.absent,'',A.off?esc(A.off)+' — not tracked today':'tap for names',A.off?null:'list:absent');
+    A.off?esc(A.off)+' — voluntary marks only':'of '+A.officersDue+' · vs yesterday','view:attendance',
+    kpiSpark(j,r=>(r.present||0)+(r.leave||0),'var(--st-ok)'));
+  h+=kpi('Not marked',IC.u,A.off?'—':A.absent,'',A.off?esc(A.off)+' — not tracked today':'tap for names',A.off?null:'list:absent',
+    kpiSpark(j,r=>Math.max(0,r.due-(r.present||0)-(r.leave||0)),'var(--st-bad)'));
   if(TVIEW==='GP'){
     /* THE TILES OF THE REGISTER IN FRONT OF YOU. Villages evaluated, the
        district average and the red flags are the 100-mark evaluation, which
@@ -2890,6 +3121,7 @@ function vOverview(j,A){
     h+=kpi('District average',IC.s,A.avg==null?'—':A.avg,delta(A.avg,A.prevAvg,true),'vs last month','view:villages');
     h+=kpi('Red flags',IC.f,j.month.rfCount,'',A.filed?pct(j.month.rfCount,A.filed)+'% · tap for the list':'nothing filed','list:flags');
   }
+  h+=wxKpi();
   h+='</div>';
 
   const mkList=j.today.present.slice().sort((a,b)=>String(b.at).localeCompare(String(a.at)));
@@ -3473,12 +3705,34 @@ function bestWorst(j){
    same thing plainly, and has room to name what the score is out of. */
 function donutHealth(v){
   const col = v >= 80 ? Charts.ST.ok : v >= 60 ? Charts.ST.warn : Charts.ST.bad;
-  return Charts.meter(clamp(v, 0, 100), 100, {
-    color: col, show: v, unit: '',
-    sub: 'out of 100 · ' + (v >= 80 ? 'sound' : v >= 60 ? 'needs watching' : 'needs orders')
-  });
+  /* a ring and not a bar (31.10.2026): a bar left the column beside the five
+     parts three-quarters empty; the ring fills it, and a score out of 100 is
+     a ratio against a limit, which is what a gauge is for */
+  const R = 70, C = 2 * Math.PI * R, pv = clamp(v, 0, 100);
+  return '<div class="hring fillme"><svg viewBox="0 0 180 180" style="width:180px;height:180px" role="img" aria-label="' + v + ' out of 100">' +
+    '<circle cx="90" cy="90" r="' + R + '" fill="none" style="stroke:var(--ch-grid)" stroke-width="16"/>' +
+    '<circle cx="90" cy="90" r="' + R + '" fill="none" style="stroke:' + col + '" stroke-width="16" stroke-linecap="round" ' +
+    'stroke-dasharray="' + (C * pv / 100).toFixed(1) + ' ' + C.toFixed(1) + '" transform="rotate(-90 90 90)"/>' +
+    '<text x="90" y="92" text-anchor="middle" class="hring-v">' + v + '</text>' +
+    '<text x="90" y="116" text-anchor="middle" class="hring-k">out of 100</text></svg>' +
+    '<div class="hring-say" style="color:' + col + '">' + (v >= 80 ? 'Sound' : v >= 60 ? 'Needs watching' : 'Needs orders') + '</div></div>';
 }
 
+/* WHERE THE FIXES ARE WEAK, mandal by mandal (31.10.2026). The three-part
+   bar says how many; this says where, which is the question a weak fix
+   actually raises — one mandal's handsets, or the whole district's sky. */
+function locByMandal(j){
+  const by={};
+  (j.today.present||[]).forEach(r=>{ const m=String(r.mandal||'').trim()||'District offices';
+    const o=by[m]=by[m]||{ok:0,nofix:0,bad:0};
+    if(suspect(r)) o.bad++; else if(!r.verified) o.nofix++; else o.ok++; });
+  const rows=Object.entries(by).sort((a,b)=>(b[1].bad+b[1].nofix)-(a[1].bad+a[1].nofix)||a[0].localeCompare(b[0]));
+  if(rows.length<2) return '';
+  return '<div class="subhd">By mandal · weakest first</div>'+Charts.stackRows(rows.map(([m,o])=>({
+    label:m.length>16?m.slice(0,15)+'…':m, title:m+' — '+o.ok+' recorded · '+o.nofix+' no fix · '+o.bad+' not trustworthy',
+    parts:[{value:o.ok,color:Charts.ST.ok},{value:o.nofix,color:Charts.ST.warn},{value:o.bad,color:Charts.ST.bad}],
+    right:(o.bad+o.nofix)?String(o.bad+o.nofix)+' weak':'all good', tone:o.bad?'bad':''})),{});
+}
 function vTables(j,A,short){
   const worst=[...j.month.rows].sort((a,b)=>a.score-b.score).slice(0,short?5:1000);
   let h=panel(short?'c5':'c6','Bottom '+(short?'five':'')+' villages','call these out first',
@@ -3486,7 +3740,11 @@ function vTables(j,A,short){
     (worst.length?worst.map((r,i)=>`<tr data-di="worst:${i}"><td>${esc(r.gp)}<span class="mut"> · ${esc(r.mandal)}</span></td>
       <td class="num">${r.score}</td><td class="gr gr${esc(r.grade)}">${esc(r.grade)}</td>
       <td>${String(r.rf||'').trim()?'<span class="pill bad">RF '+esc(r.rf)+'</span>':'<span class="pill mut">—</span>'}</td></tr>`).join('')
-      :'<tr><td colspan="4" class="empty">Nothing filed yet.</td></tr>')+`</tbody></table></div>`,'worst');
+      :'<tr><td colspan="4" class="empty">Nothing filed yet.</td></tr>')+`</tbody></table></div>`+
+    (short&&j.month.rows.length>5?'<div class="subhd">And the top five</div><div class="twrap"><table><thead><tr><th>Village</th><th>Score</th><th>Grade</th><th>Flags</th></tr></thead><tbody>'+
+      [...j.month.rows].sort((a,b)=>b.score-a.score).slice(0,5).map(r=>`<tr><td>${esc(r.gp)}<span class="mut"> · ${esc(r.mandal)}</span></td>
+      <td class="num">${r.score}</td><td class="gr gr${esc(r.grade)}">${esc(r.grade)}</td>
+      <td>${String(r.rf||'').trim()?'<span class="pill bad">RF '+esc(r.rf)+'</span>':'<span class="pill mut">—</span>'}</td></tr>`).join('')+'</tbody></table></div>':''),'worst');
   window.__ROWS.worst=worst;   /* its own registry — it was silently masking the main table's rows */
   const covRows=[...j.coverage].sort((a,b)=>pct(a.done,a.total)-pct(b.done,b.total));
   window.__ROWS.mandal=covRows;
@@ -3786,7 +4044,7 @@ function vAttendance(j,A){
     '<div class="plot">'+Charts.stack([{label:'Location recorded',value:j.today.present.filter(r=>r.verified&&!suspect(r)).length,color:Charts.ST.ok},
       {label:'No fix',value:j.today.present.filter(r=>!r.verified&&!suspect(r)).length,color:Charts.ST.warn},
       {label:'Not trustworthy',value:j.today.present.filter(suspect).length,color:Charts.ST.bad}],
-      {center:A.present,centerLabel:'marks today',emptyMsg:'No officer has marked yet today.'})+'</div>');
+      {center:A.present,centerLabel:'marks today',emptyMsg:'No officer has marked yet today.'})+'</div>'+locByMandal(j));
   const attRows=[].concat(j.today.present.map(r=>({...r,_s:'P'})),j.today.onLeave.map(r=>({...r,_s:'L'})),j.today.absent.map(r=>({...r,_s:'A'})));
   window.__ROWS.att=attRows;
   h+=panel('c12','Officer by officer',A.present+' present · '+A.onLeave+' leave'+(TVIEW==='HRMS'?'':' · '+A.absent+' not marked'),
@@ -6362,10 +6620,13 @@ function vMap(j,A){
  * acknowledgement register.
  * ========================================================================== */
 let WX = null, WXON = true, WXLAYER = null, ADV_DRAFT = null;
+/* the screens that draw the weather — the map's panel, the Overview's tile,
+   and the readings that speak of it. One request an hour is cached server-side. */
+const WX_VIEWS = ['map', 'advisory', 'overview', 'analytics'];
 
 function pullWeather(){
   return fetch(ST.url + '?op=weather&draft=1&token=' + encodeURIComponent(ST.token))
-    .then(r => r.json()).then(j => { WX = j; if((VIEW === 'map' || VIEW === 'advisory') && DATA) render(DATA); })
+    .then(r => r.json()).then(j => { WX = j; if(WX_VIEWS.indexOf(VIEW) >= 0 && DATA) render(DATA); })
     .catch(() => { WX = { ok:false, error:'the forecast could not be read' }; });
 }
 const wxTone = l => l === 'SEVERE' ? 'var(--st-bad)' : l === 'WATCH' ? 'var(--st-warn)' : 'var(--st-ok)';
@@ -6433,6 +6694,405 @@ function drawWeather(map, andFit){
   }catch(e){ WXLAYER = null; }
 }
 
+/* ============================================================================
+ * THE WEATHER, DRAWN AS WEATHER (31.10.2026)
+ * ----------------------------------------------------------------------------
+ * "Make icon for weathers rather than just bar." A row of rainfall bars told
+ * the Collector a number; a drawn sky tells him the day at a glance, the way
+ * every weather card he has ever read does. Each mandal's WMO code (the
+ * forecast service's own) becomes an icon: sun, sun and cloud, cloud, fog,
+ * drizzle, rain, heavy rain, storm. Every colour in it is a token, so the
+ * dark theme recolours it with no re-render. The figures under the icons are
+ * the ones the register always carried, classed after the IMD; nothing here
+ * changes a level or a word of the draft.
+ * ========================================================================== */
+function wxKind(c){
+  const n = Number(c);
+  if(c == null || !isFinite(n)) return 'cloud';
+  if(n <= 1) return 'sun';
+  if(n === 2) return 'part';
+  if(n === 3) return 'cloud';
+  if(n === 45 || n === 48) return 'fog';
+  if(n >= 51 && n <= 57) return 'drizzle';
+  if(n === 65 || n === 82) return 'heavy';
+  if((n >= 61 && n <= 67) || (n >= 80 && n <= 82)) return 'rain';
+  if(n >= 95) return 'storm';
+  return 'cloud';
+}
+/* the client's copy of wxText_ in Code.gs, for a day that carries only a code */
+function wxWord(c){
+  const n = Number(c);
+  if(c == null || !isFinite(n)) return 'Weather';
+  if(n === 0) return 'Clear';
+  if(n === 1) return 'Mostly clear';
+  if(n === 2) return 'Partly cloudy';
+  if(n === 3) return 'Overcast';
+  if(n === 45 || n === 48) return 'Fog';
+  if(n >= 51 && n <= 57) return 'Drizzle';
+  if(n >= 61 && n <= 67) return 'Rain';
+  if(n >= 80 && n <= 82) return 'Rain showers';
+  if(n === 95) return 'Thunderstorm';
+  if(n >= 96) return 'Thunderstorm with hail';
+  return 'Cloudy';
+}
+function wxIcon(c, px){
+  const k = wxKind(c), s = px || 40;
+  const sun = (cx, cy, r) => {
+    let rays = '';
+    for(let i = 0; i < 8; i++){
+      const a = i * Math.PI / 4;
+      rays += '<line x1="' + (cx + Math.cos(a) * (r + 4)).toFixed(1) + '" y1="' + (cy + Math.sin(a) * (r + 4)).toFixed(1) +
+              '" x2="' + (cx + Math.cos(a) * (r + 9)).toFixed(1) + '" y2="' + (cy + Math.sin(a) * (r + 9)).toFixed(1) + '"/>';
+    }
+    return '<g style="stroke:var(--wx-sun);stroke-width:3.2;stroke-linecap:round">' + rays + '</g>' +
+           '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" style="fill:var(--wx-sun)"/>';
+  };
+  const cloud = dark => '<path d="M19 48h28a11 11 0 0 0 1-22 15 15 0 0 0-28-4 12 12 0 0 0-1 26z" style="fill:' +
+    (dark ? 'var(--wx-cloud-d)' : 'var(--wx-cloud)') + ';stroke:var(--wx-cloud-edge);stroke-width:1.6"/>';
+  const drops = (xs, len) => '<g style="stroke:var(--wx-rain);stroke-width:3.2;stroke-linecap:round">' +
+    xs.map((x, i) => '<line x1="' + x + '" y1="' + (53 + (i % 2) * 2) + '" x2="' + (x - 3) + '" y2="' + (53 + (i % 2) * 2 + len) + '"/>').join('') + '</g>';
+  let g;
+  if(k === 'sun') g = sun(32, 32, 11);
+  else if(k === 'part') g = sun(23, 22, 8) + cloud();
+  else if(k === 'cloud') g = cloud();
+  else if(k === 'fog') g = cloud() + '<g style="stroke:var(--wx-cloud-edge);stroke-width:3;stroke-linecap:round"><line x1="14" y1="55" x2="50" y2="55"/><line x1="20" y1="62" x2="44" y2="62"/></g>';
+  else if(k === 'drizzle') g = cloud() + drops([24, 33, 42], 4);
+  else if(k === 'rain') g = cloud(true) + drops([21, 29, 37, 45], 7);
+  else if(k === 'heavy') g = cloud(true) + drops([19, 26, 33, 40, 47], 10);
+  else g = cloud(true) + '<path d="M35 45l-9 12h7l-4 10 12-15h-7l4-7z" style="fill:var(--wx-bolt)"/>';
+  return '<svg class="wxi wx-' + k + '" width="' + s + '" height="' + s + '" style="width:' + s + 'px;height:' + s + 'px" viewBox="0 0 64 68" role="img" aria-label="' +
+         esc(wxWord(c)) + '">' + g + '</svg>';
+}
+const wxR = v => (v == null || !isFinite(Number(v))) ? '—' : Math.round(Number(v));
+const wxLvWord = l => l === 'SEVERE' ? 'Severe' : l === 'WATCH' ? 'Watch' : 'Settled';
+const WXI = {
+  drop:'<svg viewBox="0 0 24 24"><path d="M12 3.5c3 4 6 7.4 6 10.6a6 6 0 0 1-12 0c0-3.2 3-6.6 6-10.6z"/></svg>',
+  wind:'<svg viewBox="0 0 24 24"><path d="M3 9h11a3 3 0 1 0-3-3M3 15h15a3 3 0 1 1-3 3M3 12h8"/></svg>',
+  hum:'<svg viewBox="0 0 24 24"><path d="M12 3.5c3 4 6 7.4 6 10.6a6 6 0 0 1-12 0c0-3.2 3-6.6 6-10.6z"/><path d="M9.5 15.5l5-5M10 11h.01M14 15h.01"/></svg>',
+  umb:'<svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 18 0zM12 12v6.5a2 2 0 0 1-4 0M12 3v1"/></svg>'
+};
+const wxDay = d => { const t = new Date(String(d) + 'T00:00:00'); return isNaN(t) ? { w:'', n:'' }
+  : { w:'SMTWTFS'[t.getDay()], n:t.getDate(), sun:t.getDay() === 0 }; };
+
+/* the headquarters mandal, as the officer's own phone reads it */
+function wxHero(){
+  const m = WX.mine || (WX.rows || [])[0]; if(!m) return '';
+  const code = m.code != null ? m.code : m.dayCode;
+  const days = (m.days || []).slice(-7);
+  const stat = (ic, k, v) => '<div class="wxs"><span class="wxs-ic">' + ic + '</span><span><b>' + v + '</b>' + k + '</span></div>';
+  return '<div class="wxhero">' +
+    '<div class="wxnow">' + wxIcon(code, 96) +
+      '<div><div class="wxt">' + wxR(m.temp) + '<sup>°C</sup></div>' +
+      '<div class="wxw">' + esc(m.now || wxWord(code)) + '</div>' +
+      '<div class="wxhl">' + esc(m.mandal) + ' · H ' + wxR(m.tmax) + '° · L ' + wxR(m.tmin) + '°</div></div></div>' +
+    '<div class="wxstats">' +
+      stat(WXI.hum, 'humidity', m.humidity != null ? wxR(m.humidity) + '%' : '—') +
+      stat(WXI.umb, 'chance of rain', m.rainChance != null ? wxR(m.rainChance) + '%' : '—') +
+      stat(WXI.drop, 'rain today', m.rain != null ? wxR(m.rain) + ' mm' : '—') +
+      stat(WXI.wind, 'wind', m.wind != null ? wxR(m.wind) + ' km/h' : '—') +
+    '</div>' + wxExtremes() +
+    (days.length ? '<div class="wxweek">' + days.map(d => { const w = wxDay(d.date);
+      return '<div' + (d.date === WX.date ? ' class="now"' : '') + '><span>' + w.w + ' ' + w.n + '</span>' + wxIcon(d.code, 30) +
+        '<b>' + wxR(d.tmax) + '°</b><i>' + (Number(d.rain) >= 0.5 ? wxR(d.rain) + ' mm' : '&nbsp;') + '</i></div>'; }).join('') + '</div>' : '') +
+  '</div>';
+}
+
+/* the district's extremes today, named — warmest, coolest, wettest, windiest */
+function wxExtremes(){
+  const rows = (WX.rows || []).filter(r => r.tmax != null);
+  if(rows.length < 2) return '';
+  const by = (k, dir) => rows.slice().sort((a, b) => dir * ((Number(b[k]) || 0) - (Number(a[k]) || 0)))[0];
+  const hot = by('tmax', 1), cool = by('tmin', -1), wet = by('rain', 1), wind = by('wind', 1);
+  const it = (k, r, v) => '<div><span>' + k + '</span><b>' + esc(r.mandal) + '</b><i>' + v + '</i></div>';
+  return '<div class="wxext">' + it('Warmest', hot, wxR(hot.tmax) + '°') + it('Coolest night', cool, wxR(cool.tmin) + '°') +
+    it('Wettest', wet, wxR(wet.rain) + ' mm') + it('Windiest', wind, wxR(wind.wind) + ' km/h') + '</div>';
+}
+/* every mandal as a card: the sky, the temperature, the rain and the wind */
+function wxCards(){
+  const rows = WX.rows || [];
+  if(!rows.length) return '<div class="empty">No mandal is on the roll yet.</div>';
+  return '<div class="wxgrid">' + rows.map(r => {
+    const code = r.dayCode != null ? r.dayCode : r.code;
+    const tm = (r.days || []).slice(-14).map(d => Number(d.tmax) || 0);
+    return '<div class="wxc lv-' + esc(String(r.level || 'CALM').toLowerCase()) + '">' +
+      '<div class="wxc-hd">' + wxIcon(code, 46) +
+        '<div class="wxc-nm"><b>' + esc(r.mandal) + '</b><span>' + esc(r.today || wxWord(code)) + '</span></div>' +
+        '<span class="pill ' + wxPill(r.level) + '">' + wxLvWord(r.level) + '</span></div>' +
+      '<div class="wxc-t">' + wxR(r.temp != null ? r.temp : r.tmax) + '°<small>H ' + wxR(r.tmax) + '° · L ' + wxR(r.tmin) + '°</small></div>' +
+      '<div class="wxc-m">' +
+        '<span title="rain today">' + WXI.drop + (r.rain != null ? wxR(r.rain) + ' mm' : '—') + (r.rainChance != null ? '<em>' + wxR(r.rainChance) + '%</em>' : '') + '</span>' +
+        '<span title="wind">' + WXI.wind + wxR(r.wind) + ' km/h</span></div>' +
+      (r.rainClass ? '<div class="wxc-cls">' + esc(r.rainClass) + '</div>' : '') +
+      (tm.length > 2 ? '<div class="wxc-sp" title="maximum temperature, the last ' + tm.length + ' days">' + Charts.spark(tm.map(v => v - Math.min(...tm) + 1), 'var(--wx-sun)') + '<span>' + tm.length + ' days</span></div>' : '') +
+    '</div>';
+  }).join('') + '</div>';
+}
+
+/* The district's fortnight: each mandal's days folded into one — the mean
+   maximum, the mean rainfall, and the sky most of the district had. */
+function wxDistrictDays(){
+  const by = {};
+  (WX && WX.rows || []).forEach(r => (r.days || []).forEach(d => {
+    if(!d || !d.date) return;
+    const o = by[d.date] = by[d.date] || { date:d.date, t:0, tn:0, rain:0, rn:0, codes:{} };
+    if(d.tmax != null){ o.t += Number(d.tmax) || 0; o.tn++; }
+    if(d.rain != null){ o.rain += Number(d.rain) || 0; o.rn++; }
+    if(d.code != null) o.codes[d.code] = (o.codes[d.code] || 0) + 1;
+  }));
+  return Object.values(by).sort((a, b) => a.date < b.date ? -1 : 1).slice(-15).map(o => {
+    const top = Object.entries(o.codes).sort((a, b) => b[1] - a[1])[0];
+    return { date:o.date, tmax:o.tn ? o.t / o.tn : null, rain:o.rn ? o.rain / o.rn : 0, code:top ? Number(top[0]) : null };
+  });
+}
+/* attendance on wet days against dry ones, over the days both registers hold.
+   It is a reading of two columns side by side, not a cause, and says so. */
+function wxAttLink(j, D){
+  const att = {};
+  (j.att30 || j.att14 || []).forEach(r => { if(!r.off && r.due > 0 && (r.present || 0) + (r.leave || 0) > 0) att[r.date] = ((r.present || 0) + (r.leave || 0)) / r.due; });
+  const wet = [], dry = [];
+  D.forEach(d => { const a = att[d.date]; if(a == null) return; (d.rain >= 2.5 ? wet : dry).push(a); });
+  if(wet.length < 2 || dry.length < 2) return null;
+  const av = a => Math.round(100 * a.reduce((s, x) => s + x, 0) / a.length);
+  return { wet:av(wet), dry:av(dry), nw:wet.length, nd:dry.length, att };
+}
+function wxTrend(j){
+  const D = wxDistrictDays();
+  if(D.length < 3) return '';
+  const maxR = Math.max(10, ...D.map(d => d.rain));
+  const L = wxAttLink(j, D) || { att:{} };
+  if(!L.att || !Object.keys(L.att).length){ (j.att30 || []).forEach(r => { if(!r.off && r.due > 0) L.att[r.date] = (r.present + r.leave) / r.due; }); }
+  const cols = D.map(d => {
+    const w = wxDay(d.date), h = Math.round(56 * Math.min(1, d.rain / maxR)), a = L.att[d.date];
+    return '<div class="wxd' + (d.date === WX.date ? ' now' : '') + '" title="' + esc(dm(d.date) + ' · ' + wxWord(d.code) +
+      ' · max ' + wxR(d.tmax) + '° · ' + d.rain.toFixed(1) + ' mm' + (a != null ? ' · ' + Math.round(a * 100) + '% accounted' : '')) + '">' +
+      '<span class="wxd-t">' + wxR(d.tmax) + '°</span>' + wxIcon(d.code, 30) +
+      '<div class="wxd-bar"><i style="height:' + Math.max(d.rain >= 0.5 ? 3 : 0, h) + 'px"></i></div>' +
+      '<span class="wxd-r">' + (d.rain >= 0.5 ? d.rain.toFixed(0) + ' mm' : '·') + '</span>' +
+      '<span class="wxd-a">' + (a != null ? Math.round(a * 100) + '%' : '—') + '</span>' +
+      '<span class="wxd-l"><b>' + w.w + '</b>' + w.n + '</span></div>';
+  }).join('');
+  return '<div class="wxtrend"><div class="wxd-keys"><span>max</span><span>sky</span><span>rain</span><span></span><span>accounted</span><span>day</span></div>' +
+    '<div class="wxd-row">' + cols + '</div></div>' +
+    '<div class="expnote" style="margin-top:8px">The district\u2019s mean maximum and mean rainfall across every mandal, the sky most of it had, ' +
+    'and the share of officers due who were accounted for that day. A blank is a Sunday, a holiday or a day the register did not hold.</div>';
+}
+
+/* the tile the Overview carries: the sky over the headquarters, tap for the rest */
+function wxKpi(){
+  if(!WX || !WX.ok || !(WX.rows || []).length) return '';
+  const m = WX.mine || WX.rows[0], code = m.code != null ? m.code : m.dayCode, C = WX.counts || {};
+  const tn = WX.level === 'SEVERE' ? ' t-bad' : WX.level === 'WATCH' ? ' t-warn' : '';
+  return '<div class="kpi wxk tapk' + tn + '" data-act="view:map"><div class="hd">Weather · ' + esc(m.mandal) +
+    '<span class="wxk-ic">' + wxIcon(code, 46) + '</span></div>' +
+    '<div class="v">' + wxR(m.temp) + '°</div>' +
+    '<div class="foot"><span>' + esc(m.now || wxWord(code)) + ' · ' +
+    ((C.severe || 0) + (C.watch || 0) ? ((C.severe || 0) + (C.watch || 0)) + ' mandal' + (((C.severe || 0) + (C.watch || 0)) === 1 ? '' : 's') + ' to watch'
+      : 'settled over all ' + WX.rows.length) + '</span></div></div>';
+}
+
+/* ============================================================================
+ * THE READING OF THE SCREEN (31.10.2026)
+ * ----------------------------------------------------------------------------
+ * "Rework with intelligence on each page, each field." Every view now opens
+ * with three to five sentences WORKED OUT from the figures already on it: how
+ * today compares with the month, where the gap is heaviest, what the pace
+ * asks for, what the weather is doing. It is arithmetic, not a model, so it
+ * is instant, needs no network and cannot invent a figure. And it is held to
+ * rule 10 like everything else on this console: it names a place, a count or
+ * a pace, never a verdict on a man — a reading, not a finding.
+ * ========================================================================== */
+const INS_IC = {
+  good:'<svg viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7"/></svg>',
+  warn:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+  bad:'<svg viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4.5M12 17.4v.1"/></svg>',
+  info:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.6v.1"/></svg>',
+  up:'<svg viewBox="0 0 24 24"><path d="M4 17l6-6 4 4 6-7M15 8h5v5"/></svg>',
+  down:'<svg viewBox="0 0 24 24"><path d="M4 7l6 6 4-4 6 7M15 16h5v-5"/></svg>',
+  wx:'<svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .4-8 6 6 0 0 0-11.4 1.6A3.3 3.3 0 0 0 7 18z"/></svg>',
+  spark:'<svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>'
+};
+function insight(items, title){
+  items = (items || []).filter(Boolean);
+  if(!items.length) return '';
+  return '<div class="c12 insight"><div class="ins-hd"><span class="ins-badge">' + INS_IC.spark + '</span><b>' + esc(title || 'Reading of this screen') +
+    '</b><span class="ins-note">worked out from the figures below · a reading, not a finding</span></div>' +
+    '<div class="ins-list">' + items.map(x => '<div class="ins ' + (x.t || 'info') + '"><i>' + (INS_IC[x.ic || x.t] || INS_IC.info) + '</i><span>' + x.h + '</span></div>').join('') +
+    '</div></div>';
+}
+const insN = n => Number(n || 0).toLocaleString('en-IN');
+const insPl = (n, w, ws) => insN(n) + ' ' + (n === 1 ? w : (ws || w + 's'));
+function insAttAvg(j){
+  /* the working days of the last month, today left out, as shares of those due */
+  const rows = (j.att30 || []).filter(r => !r.off && r.due > 0 && (r.present || 0) + (r.leave || 0) > 0);
+  const past = rows.slice(0, -1);
+  if(past.length < 3) return null;
+  return Math.round(100 * past.reduce((s, r) => s + ((r.present || 0) + (r.leave || 0)) / r.due, 0) / past.length);
+}
+function insAttendance(j, A){
+  if(A.off) return { t:'info', h:'<b>' + esc(A.off) + '.</b> Attendance is not due today, so nothing on this screen is counted against anybody.' };
+  const avg = insAttAvg(j), p = A.attPct, d = avg == null ? null : p - avg;
+  return { t: d == null ? 'info' : d >= -1 ? 'good' : d >= -5 ? 'warn' : 'bad', ic: d == null ? 'info' : d >= 0 ? 'up' : 'down',
+    h:'<b>' + insN(A.accounted) + ' of ' + insN(A.officersDue) + '</b> due are accounted for today (' + p + '%)' +
+      (d == null ? '.' : d === 0 ? ', exactly the month\u2019s working-day average.'
+        : ', <b>' + Math.abs(d) + ' point' + (Math.abs(d) === 1 ? '' : 's') + ' ' + (d > 0 ? 'above' : 'below') + '</b> the month\u2019s working-day average of ' + avg + '%.') };
+}
+function insAbsentMandals(j, A){
+  if(A.off || !A.absent) return A.off ? null : { t:'good', h:'Every officer due is accounted for — <b>nobody is unmarked</b> at this hour.' };
+  const by = {};
+  (j.today.absent || []).forEach(r => { const m = String(r.mandal || '').trim(); if(m) by[m] = (by[m] || 0) + 1; });
+  const top = Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  if(!top.length) return null;
+  const allM = (j.coverage || []).map(c => c.mandal), clear = allM.filter(m => !Object.keys(by).some(k => k.toLowerCase() === String(m).toLowerCase())).length;
+  return { t:'warn', h:'Not marked is heaviest in ' + top.map(([m, n]) => '<b>' + esc(m) + '</b> (' + n + ')').join(', ') +
+    (allM.length ? '; ' + insPl(clear, 'mandal') + ' have everyone accounted for.' : '.') };
+}
+function insLate(j){
+  const cut = Number((j.notices || {}).cutoff) || 11;
+  const pr = (j.today && j.today.present) || [];
+  if(pr.length < 3) return null;
+  const mins = pr.map(r => String(r.firstAt || r.at || '').slice(11, 16)).filter(t => /^\d\d:\d\d$/.test(t))
+                 .map(t => +t.slice(0, 2) * 60 + +t.slice(3)).sort((a, b) => a - b);
+  if(mins.length < 3) return null;
+  const med = mins[Math.floor(mins.length / 2)], late = mins.filter(m => m >= cut * 60).length;
+  const hh = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+  return { t: late ? 'warn' : 'good', ic:'warn',
+    h:'Half of today\u2019s marks were in by <b>' + hh(med) + '</b>; the first at ' + hh(mins[0]) + '. ' +
+      (late ? '<b>' + insPl(late, 'mark') + '</b> came after the ' + cut + ':00 cutoff.' : 'None came after the ' + cut + ':00 cutoff.') };
+}
+function insLocation(j){
+  const pr = (j.today && j.today.present) || [];
+  if(!pr.length) return null;
+  const bad = pr.filter(r => suspect(r)).length, far = pr.filter(r => r.far).length;
+  if(!bad && !far) return { t:'good', h:'Every mark today carries a precise fix inside the district.' };
+  return { t:'warn', ic:'info', h:(bad ? '<b>' + insPl(bad, 'mark') + '</b> carr' + (bad === 1 ? 'ies' : 'y') + ' a fix too coarse or too far out to place the officer' : '') +
+    (bad && far ? '; ' : '') + (far ? '<b>' + insN(far) + '</b> ' + (far === 1 ? 'was' : 'were') + ' made well away from the middle of the mandal' : '') +
+    ' — a distance, read on the facts.' };
+}
+function insWeekday(j){
+  const rows = (j.att30 || []).filter(r => !r.off && r.due > 0 && (r.present || 0) + (r.leave || 0) > 0);
+  if(rows.length < 8) return null;
+  const by = {};
+  rows.forEach(r => { const d = new Date(r.date + 'T00:00:00').getDay(); (by[d] = by[d] || []).push((r.present + r.leave) / r.due); });
+  const ws = Object.entries(by).filter(([, a]) => a.length >= 2).map(([d, a]) => [d, Math.round(100 * a.reduce((s, x) => s + x, 0) / a.length)]);
+  if(ws.length < 3) return null;
+  ws.sort((a, b) => b[1] - a[1]);
+  const nm = ['Sundays','Mondays','Tuesdays','Wednesdays','Thursdays','Fridays','Saturdays'];
+  const hi = ws[0], lo = ws[ws.length - 1];
+  if(hi[1] - lo[1] < 2) return { t:'info', h:'Over the month no weekday stands out: every one averages within two points of the others.' };
+  return { t:'info', h:'Over the month <b>' + nm[hi[0]] + '</b> run highest (' + hi[1] + '% accounted) and <b>' + nm[lo[0]] + '</b> lowest (' + lo[1] + '%).' };
+}
+function insCoverage(j, A){
+  if(TVIEW === 'GP' || !A.cov || !A.cov.t) return null;
+  const left = Math.max(0, A.cov.t - A.cov.d), share = A.cov.d / A.cov.t;
+  const cv = (j.coverage || []).filter(c => c.total > 0).map(c => ({ m:c.mandal, d:c.done, t:c.total, s:c.done / c.total }))
+    .sort((a, b) => a.s - b.s);
+  const lo = cv[0], hi = cv[cv.length - 1];
+  return { t: !left ? 'good' : share >= .6 ? 'info' : 'warn', ic: !left ? 'good' : 'warn',
+    h:'<b>' + insN(A.cov.d) + ' of ' + insN(A.cov.t) + '</b> villages evaluated for ' + esc(monName(j.ym)) +
+      (left ? '; finishing asks <b>' + insN(A.needPerDay) + ' a day</b> over the ' + insPl(A.wdLeft, 'working day') + ' left.' : ' — the month is complete.') +
+      (lo && hi && lo !== hi && left ? ' Furthest behind: <b>' + esc(lo.m) + '</b> ' + lo.d + '/' + lo.t + '; furthest ahead: ' + esc(hi.m) + ' ' + hi.d + '/' + hi.t + '.' : '') };
+}
+function insScores(j, A){
+  if(TVIEW === 'GP' || A.avg == null) return null;
+  const by = {};
+  (j.month.rows || []).forEach(r => { const m = String(r.mandal || '').trim().toUpperCase(); if(!m) return; by[m] = by[m] || { s:0, n:0 }; by[m].s += Number(r.score) || 0; by[m].n++; });
+  const ms = Object.entries(by).filter(([, v]) => v.n >= 2).map(([m, v]) => [m, Math.round(v.s / v.n)]).sort((a, b) => b[1] - a[1]);
+  const d = A.prevAvg == null ? null : A.avg - A.prevAvg;
+  return { t: d == null || d >= 0 ? 'good' : 'warn', ic: d == null ? 'info' : d >= 0 ? 'up' : 'down',
+    h:'The district averages <b>' + A.avg + '</b> out of 100' + (d == null ? '' : d === 0 ? ', level with last month' : ', <b>' + Math.abs(d) + ' ' + (d > 0 ? 'up on' : 'down on') + '</b> last month') +
+      (ms.length >= 2 ? '. Best mandal <b>' + esc(titleCase(ms[0][0])) + '</b> (' + ms[0][1] + '), lowest <b>' + esc(titleCase(ms[ms.length - 1][0])) + '</b> (' + ms[ms.length - 1][1] + ').' : '.') };
+}
+function insGrades(j, A){
+  if(TVIEW === 'GP' || !A.filed) return null;
+  const g = j.month.grades || {}, rf = j.month.rfCount || 0;
+  return { t: (g.D || 0) / A.filed > .25 ? 'warn' : 'info', ic:'info',
+    h:'Of ' + insPl(A.filed, 'village') + ' filed, <b>' + (g.A || 0) + ' A</b> · ' + (g.B || 0) + ' B · ' + (g.C || 0) + ' C · <b>' + (g.D || 0) + ' D</b>' +
+      (rf ? '; ' + insPl(rf, 'red flag') + ' raised.' : '; no red flag raised.') };
+}
+function insWeather(){
+  if(!WX || !WX.ok || !(WX.rows || []).length) return null;
+  const rows = WX.rows, sev = rows.filter(r => r.level === 'SEVERE'), wat = rows.filter(r => r.level === 'WATCH');
+  const hot = rows.slice().sort((a, b) => (Number(b.tmax) || 0) - (Number(a.tmax) || 0))[0];
+  const wet = rows.slice().sort((a, b) => (Number(b.rain) || 0) - (Number(a.rain) || 0))[0];
+  if(!sev.length && !wat.length) return { t:'good', ic:'wx', h:'The weather is <b>settled over all ' + rows.length + ' mandals</b>; the warmest is ' + esc(hot.mandal) + ' at ' + wxR(hot.tmax) + '°.' };
+  return { t: sev.length ? 'bad' : 'warn', ic:'wx',
+    h:(sev.length ? '<b>Severe weather</b> over ' + sev.map(r => esc(r.mandal)).join(', ') : '<b>Weather to watch</b> over ' + wat.map(r => esc(r.mandal)).join(', ')) +
+      (wet && Number(wet.rain) >= 2.5 ? ' — up to ' + wxR(wet.rain) + ' mm in ' + esc(wet.mandal) + '.' : '.') +
+      ' A draft advisory is ready on the Map screen.' };
+}
+function insWxLink(j){
+  if(!WX || !WX.ok) return null;
+  const L = wxAttLink(j, wxDistrictDays());
+  if(!L) return null;
+  const d = L.dry - L.wet;
+  return { t: d > 3 ? 'warn' : 'info', ic:'wx',
+    h:'On the ' + insPl(L.nw, 'wet day') + ' of the fortnight <b>' + L.wet + '%</b> were accounted for, against <b>' + L.dry + '%</b> on the ' + insPl(L.nd, 'dry one') + '. ' +
+      (Math.abs(d) <= 2 ? 'Rain has made no visible difference.' : 'Two columns side by side, not a cause.') };
+}
+function insLeave(j, A){
+  const L = j.leave || {}, pend = L.pending || [], out = [];
+  if(pend.length){
+    const old = pend.map(r => Date.parse(r.appliedAt)).filter(isFinite).sort((a, b) => a - b)[0];
+    const days = old ? Math.max(0, Math.floor((Date.now() - old) / 864e5)) : null;
+    const ty = {}; pend.forEach(r => { ty[r.type] = (ty[r.type] || 0) + 1; });
+    const top = Object.entries(ty).sort((a, b) => b[1] - a[1])[0];
+    out.push({ t: days != null && days > 3 ? 'warn' : 'info', ic:'warn',
+      h:'<b>' + insPl(pend.length, 'application') + '</b> await your orders' + (days != null ? ', the oldest ' + insPl(days, 'day') + ' old' : '') +
+        (top ? '; most are <b>' + esc(top[0]) + '</b> (' + top[1] + ').' : '.') });
+  } else out.push({ t:'good', h:'<b>Nothing awaits your orders</b> on the leave desk.' });
+  out.push({ t:'info', h:'<b>' + insPl(A.onLeave, 'officer') + '</b> ' + (A.onLeave === 1 ? 'is' : 'are') + ' on sanctioned leave today — counted as accounted for, never as unmarked.' });
+  const rec = L.recent || [];
+  if(rec.length){
+    const ap = rec.filter(r => r.status === 'APPROVED').length, rj = rec.filter(r => r.status === 'REJECTED').length;
+    out.push({ t:'info', h:'Of the last ' + insPl(rec.length, 'order') + ', ' + ap + ' sanctioned and ' + rj + ' refused.' });
+  }
+  return out;
+}
+function insNotices(j){
+  const N = j.notices || {}, R = N.reminders || {}, out = [];
+  const prop = (N.proposed || []).length;
+  if(TVIEW === 'GP') out.push({ t:'info', h:'The ladder is <b>switched off</b> on this register: an unmarked day is recorded and draws nothing more.' });
+  out.push(prop ? { t:'warn', ic:'warn', h:'<b>' + insPl(prop, 'notice') + '</b> proposed and waiting for you — nothing is served until you press Send.' }
+                : { t:'good', h:'<b>No notice is waiting</b> for your approval.' });
+  out.push({ t:'info', h:'This month: ' + insPl(N.month || 0, 'notice') + ' served, ' + insPl(R.month || 0, 'reminder') + ' sent, ' + insPl(N.debitsMonth || 0, 'day') + ' of casual leave debited.' });
+  if(R.lateToday) out.push({ t:'warn', h:'<b>' + insPl(R.lateToday, 'late mark') + '</b> today drew an advisory reminder — never a miss.' });
+  return out;
+}
+function insDuty(j){
+  const f = j.fence || {}, v = f.villages || {}, out = [];
+  if(!f.on) return [{ t:'info', h:'The fence is <b>not in force</b>: marks are taken wherever they are made.' }];
+  if(v.total) out.push({ t: v.unplaced ? 'warn' : 'good', ic: v.unplaced ? 'info' : 'good',
+    h:'<b>' + insN(v.placed) + ' of ' + insN(v.total) + '</b> villages carry an office point (' + Math.round(100 * v.placed / v.total) + '%)' +
+      (v.unplaced ? '; the ' + insPl(v.unplaced, 'village') + ' without one fence nobody.' : '.') });
+  const td = (f.today || []).length, steady = (f.repeat || []).filter(r => r.steady);
+  out.push({ t: td ? 'warn' : 'good', ic: td ? 'warn' : 'good', h: td ? '<b>' + insPl(td, 'mark') + '</b> refused today for distance.' : 'No mark has been refused today.' });
+  if(steady.length) out.push({ t:'bad', h:'<b>' + insPl(steady.length, 'officer') + '</b> refused from the same distance morning after morning — the recorded point is the likelier fault: ' +
+    steady.slice(0, 3).map(r => esc(r.place || r.mandal || '') + ' (' + wxR(r.km) + ' km)').join(', ') + '.' });
+  const days = f.days || [];
+  if(days.length >= 3){
+    const n = days.reduce((s, d) => s + (Number(d.n != null ? d.n : d.count) || 0), 0);
+    if(isFinite(n)) out.push({ t:'info', h:insPl(n, 'refusal') + ' over the last ' + insPl(days.length, 'day') + '.' });
+  }
+  return out;
+}
+function insightsFor(view, j, A){
+  try{
+    let it = [], title = 'Reading of this screen';
+    if(view === 'overview'){ title = 'The day, read for you';
+      it = [insAttendance(j, A), insAbsentMandals(j, A), insCoverage(j, A), insScores(j, A), insWeather()]; }
+    else if(view === 'attendance') it = [insAttendance(j, A), insLate(j), insAbsentMandals(j, A), insLocation(j), insWeekday(j)];
+    else if(view === 'villages') it = [insCoverage(j, A), insScores(j, A), insGrades(j, A)];
+    else if(view === 'analytics') it = [insWeekday(j), insScores(j, A), insWxLink(j)];
+    else if(view === 'leave') it = insLeave(j, A);
+    else if(view === 'notices') it = insNotices(j);
+    else if(view === 'duty') it = insDuty(j);
+    else if(view === 'map') { title = 'The ground today'; it = [insWeather(), insWxLink(j), insLocation(j)]; }
+    else if(view === 'schedule') it = [insCoverage(j, A)];
+    return insight(it.slice(0, 5), title);
+  }catch(err){ return ''; }   /* a reading that fails costs the reading, never the screen */
+}
+function titleCase(s){ return String(s || '').toLowerCase().replace(/(^|[\s(])([a-z])/g, (m, a, b) => a + b.toUpperCase()); }
+
 function wxPanel(){
   if(!WX) return panel('c12','Weather over the district','reading…',
     '<div class="empty">Asking the forecast service…</div>');
@@ -6441,39 +7101,32 @@ function wxPanel(){
     ' The map and the register are unaffected.</div>');
   const C = WX.counts || {};
   let h = '';
+  /* THE SKY OVER THE HEADQUARTERS, drawn — the card an officer's own phone
+     carries, at the size a district screen deserves (31.10.2026) */
   h += panel('c5','Weather over the district',
     esc(String(WX.source || '').split('·')[0].trim()),
     `<div class="mtools">
        <button class="fchip" id="wxToggle" aria-pressed="${WXON}">${WXON?'Hide from the map':'Show on the map'}</button>
        <span class="msp"></span>
        <span class="pill ${wxPill(WX.level)}">${esc(WX.level)}</span>
-     </div>
-     <div class="plot">` +
-    Charts.stackRows((WX.rows || []).map(r => ({
-      label: r.mandal.length > 16 ? r.mandal.slice(0, 15) + '…' : r.mandal,
-      title: r.mandal + ' — ' + (r.today || '') +
-             (r.rain != null ? ' · ' + Math.round(r.rain) + ' mm' : '') +
-             (r.wind != null ? ' · wind ' + Math.round(r.wind) + ' km/h' : ''),
-      parts: [{ value: Math.max(1, Math.round(Number(r.rain) || 0)), color: wxTone(r.level) },
-              { value: Math.max(0, 80 - Math.round(Number(r.rain) || 0)), color: 'var(--ch-grid)' }],
-      right: (r.tmax != null ? Math.round(r.tmax) + '°' : '—'),
-      tone: r.level === 'SEVERE' ? 'bad' : r.level === 'CALM' ? 'ok' : ''
-    })), { emptyMsg:'No mandal is on the roll yet.' }) +
-    `</div>
-     <div class="expnote" style="margin-top:10px">Bars are the day's rainfall against 80&nbsp;mm.
-       ${C.severe || 0} severe · ${C.watch || 0} watch · ${C.calm || 0} settled.
+     </div>` + wxHero() +
+    `<div class="expnote" style="margin-top:10px">${C.severe || 0} severe · ${C.watch || 0} watch · ${C.calm || 0} settled.
        Rainfall classed after the India Meteorological Department.</div>`);
 
   h += panel('c7','Mandal by mandal', esc(dm(WX.date || '') + ' · read ' + hm(WX.at)),
-    `<div class="twrap"><table><thead><tr><th>Mandal</th><th>Now</th><th>Max</th><th>Rain</th><th>Wind</th><th>Level</th></tr></thead><tbody>` +
+    `<div class="twrap"><table><thead><tr><th>Mandal</th><th>Sky</th><th>Max</th><th>Rain</th><th>Wind</th><th>Level</th></tr></thead><tbody>` +
     (WX.rows || []).map(r => `<tr>
        <td>${esc(r.mandal)}${r.located ? '' : '<span class="mut"> · district town</span>'}</td>
-       <td class="mut">${esc(r.today || '—')}</td>
+       <td class="mut"><span class="wxrow">${wxIcon(r.dayCode != null ? r.dayCode : r.code, 24)}${esc(r.today || '—')}</span></td>
        <td class="num">${r.tmax != null ? Math.round(r.tmax) + '°' : '—'}</td>
        <td class="num">${r.rain != null ? Math.round(r.rain) + ' mm' : '—'}${r.rainClass ? '<span class="mut"> · ' + esc(r.rainClass) + '</span>' : ''}</td>
        <td class="num">${r.wind != null ? Math.round(r.wind) + '' : '—'}</td>
        <td><span class="pill ${wxPill(r.level)}">${esc(r.level)}</span></td></tr>`).join('') +
     `</tbody></table></div>`, 'wxT');
+
+  h += panel('c12','Every mandal, as the sky looks', (WX.rows || []).length + ' mandals · today', wxCards());
+  const tr = wxTrend(DATA || {});
+  if(tr) h += panel('c12','The fortnight · weather against attendance','mean of every mandal', tr);
 
   /* the draft, and the one button that does anything with it */
   h += panel('c12','A weather advisory, drafted from these figures',
@@ -7131,8 +7784,12 @@ function render(j){
     : VIEW==='duty'?vDuty(j,A)
     : VIEW==='mock'?vMock(j,A)
     : VIEW==='admin'?vAdmin(j,A) : vMap(j,A);
+  /* THE READING OF THE SCREEN (31.10.2026) heads every view it has words for */
+  { const ins=insightsFor(VIEW,VIEW==='attendance'?segJ(j):j,VIEW==='attendance'&&ASEG!=='all'?analyse(segJ(j)):A);
+    /* under the tiles where a view has them — the figures first, then what they mean — and at the head otherwise */
+    if(ins){ const kr=$('#g').querySelector(':scope>.kpirow'); if(kr) kr.insertAdjacentHTML('afterend',ins); else $('#g').insertAdjacentHTML('afterbegin',ins); } }
   document.querySelectorAll('#g [data-k]').forEach(el=>{ if(keep[el.dataset.k]) el.scrollTop=keep[el.dataset.k]; });
-  if((VIEW==='map'||VIEW==='advisory') && !WX) pullWeather();
+  if(WX_VIEWS.indexOf(VIEW)>=0 && !WX) pullWeather();
   if(VIEW==='gpdp' && !GPDP) pullGpdp();
   if(VIEW==='advisory' && !ADV) pullAdv(ADV_OPEN);
   if(VIEW==='admin' && !ROLL) pullRoll();
@@ -7176,12 +7833,53 @@ function render(j){
    width, and a figure column's heading over its figures. Views that fill
    themselves in later (the roll, the schedule, the leave register) arrive
    by the observer, so they are settled too. */
+/* NO HOLE UNDER A CHART (31.10.2026). A card in a row is stretched to the
+   tallest card beside it, and what it held stayed at its own size — so a
+   fortnight's line sat on top of 150px of nothing beside the grades, and a
+   list of today's marks stopped short of the map next to it. Reported in
+   two words: "lot of gap". Each card's spare height now goes to the one
+   thing in it that can use it: a line chart is drawn again that much
+   taller, bar columns grow, a scrolling list shows that many more rows.
+   A card with nothing that can grow is left as it is rather than padded.
+   Desk widths only: on a phone every card is its own row and has no slack. */
+function fillCards(){
+  if(window.innerWidth < 761) return;
+  document.querySelectorAll('#g > .panel').forEach(p => {
+    const bd = p.querySelector(':scope > .bd'); if(!bd || !bd.lastElementChild) return;
+    const cs = getComputedStyle(bd);
+    let bottom = 0;
+    for(const c of bd.children){ const r = c.getBoundingClientRect(); if(r.height) bottom = Math.max(bottom, r.bottom + (parseFloat(getComputedStyle(c).marginBottom) || 0)); }
+    const slack = Math.floor(p.getBoundingClientRect().bottom - parseFloat(cs.paddingBottom) - bottom);
+    if(slack < 14) return;
+    const lw = p.querySelector('.c-linewrap[data-lreg]');
+    if(lw && Charts.LREG[lw.dataset.lreg]){
+      const a = Charts.LREG[lw.dataset.lreg], h0 = a[2].h || 232, h = Math.min(560, h0 + slack);
+      if(h - h0 < 14) return;
+      const t = document.createElement('div');
+      t.innerHTML = Charts.line(a[0], a[1], Object.assign({}, a[2], { w: Math.max(300, Math.round(lw.clientWidth)), h: h }));
+      const nu = t.firstElementChild; if(nu){ nu.querySelector('svg').style.maxHeight = h + 'px'; lw.replaceWith(nu); }
+      return;
+    }
+    const cols = p.querySelector('.c-cols');
+    if(cols){ cols.style.height = Math.min(520, cols.getBoundingClientRect().height + slack) + 'px'; return; }
+    const sc = [...p.querySelectorAll('.marks, [data-k] , .twrap')].find(el => el.scrollHeight > el.clientHeight + 2 && /auto|scroll/.test(getComputedStyle(el).overflowY));
+    if(sc){ sc.style.maxHeight = (sc.clientHeight + slack) + 'px'; return; }
+    /* rows of bars open out a little; a plain table's rows take a little more air — never more than reads as a table */
+    const rw = p.querySelector('.c-rows');
+    if(rw && rw.children.length > 1){ const g = parseFloat(getComputedStyle(rw).rowGap) || 5; rw.style.gap = Math.min(22, g + slack / (rw.children.length - 1)).toFixed(1) + 'px'; return; }
+    const tb = p.querySelector('table tbody');
+    if(tb && tb.rows.length > 1 && !tb.dataset.fill){ tb.dataset.fill = '1'; const add = Math.min(8, slack / tb.rows.length / 2); if(add >= 1) tb.querySelectorAll(':scope > tr > td').forEach(td => { const cs2 = getComputedStyle(td); td.style.paddingTop = (parseFloat(cs2.paddingTop) + add) + 'px'; td.style.paddingBottom = (parseFloat(cs2.paddingBottom) + add) + 'px'; }); return; }
+    const grow = p.querySelector('.fillme');
+    if(grow){ grow.style.minHeight = (grow.getBoundingClientRect().height + slack) + 'px'; }
+  });
+}
 let SETTLE = 0;
 function settleGrid(){
   if(SETTLE) return;
   SETTLE = requestAnimationFrame(() => {
     SETTLE = 0;
     try{ Charts.fitLines(); }catch(e){}
+    try{ fillCards(); }catch(e){}
     document.querySelectorAll('#g table').forEach(tb => {
       if(tb.dataset.al) return; tb.dataset.al = '1';
       const hr = tb.tHead && tb.tHead.rows[tb.tHead.rows.length - 1];
