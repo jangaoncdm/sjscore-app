@@ -1624,6 +1624,8 @@ tbody tr:hover{background:var(--row-hover)}
 .ins-hd{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
 .ins-hd b{font-size:15px;font-weight:780;letter-spacing:-.015em}
 .ins-note{margin-left:auto;font-size:11.5px;color:var(--tx-3)}
+.rulesteps{margin:0;padding-left:20px;display:grid;gap:6px;font-size:13px;color:var(--tx-2);line-height:1.45}
+.rulesteps li::marker{color:var(--tx-3);font-weight:700}
 .ins-badge{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--pri);flex:none;
   box-shadow:0 6px 14px -6px rgba(74,64,206,.8)}
 .ins-badge svg{width:16px;height:16px;fill:#fff;stroke:none}
@@ -2447,7 +2449,7 @@ function analyse(j){
     list:dNoFlag.map(r=>r.gp+' · '+r.score+'/100 · '+r.mandal)});
   if(cov.d<cov.t&&needPerDay>0) iss.push({p:needPerDay>3?2:3,
     t:(cov.t-cov.d)+' villages still to evaluate · '+wdLeft+' working day'+(wdLeft>1?'s':'')+' left',
-    d:'The month closes at the present pace only if '+needPerDay+' evaluation'+(needPerDay>1?'s are':' is')+' filed each day.',
+    d:'Needs '+needPerDay+' a day to finish.',
     a:'Set a per-mandal daily quota in the evening review; the league below shows who is behind.'});
   const oldPend=j.leave.pending.filter(l=>Date.now()-new Date(l.appliedAt).getTime()>48*3600e3);
   if(oldPend.length) iss.push({p:2,t:oldPend.length+' leave application'+(oldPend.length>1?'s':'')+' waiting beyond 48 hours',
@@ -2456,7 +2458,7 @@ function analyse(j){
   const badClocks=(j.today.present||[]).filter(r=>Math.abs(Number(r.skew)||0)>SKEW_TOL);
   if(badClocks.length) iss.push({p:3,
     t:badClocks.length+' phone'+(badClocks.length>1?'s have clocks':' has a clock')+' set wrong',
-    d:'Their marks were recorded against the district\u2019s clock, so nothing is lost \u2014 but the officer sees the wrong time on his own screen, and a phone running fast can look late when it is not.',
+    d:'Marks are timed by the district; only his screen is wrong.',
     a:'Ask them to set date and time to automatic on the handset.',
     list:badClocks.map(r=>r.name+' · '+(r.mandal||'—')+' · '+Math.round(Math.abs(r.skew)/60)+' min '+(r.skew>0?'fast':'slow'))});
   if(j.notices&&(j.notices.proposed||[]).length) iss.push({p:1,
@@ -2466,7 +2468,7 @@ function analyse(j){
     list:j.notices.proposed.slice(0,40).map(n=>n.name+' · '+(n.mandal||'—')+' · '+dm(n.date))});
   if(j.notices&&j.notices.pending) iss.push({p:2,
     t:j.notices.pending+' served notice'+(j.notices.pending>1?'s':'')+' awaiting acknowledgement',
-    d:'Each locks that officer\u2019s app until acknowledged; persistence means the app is not being opened at all.',
+    d:'Each locks that officer\u2019s app until acknowledged.',
     a:'Have the MPDO put the officer on the phone; the Notices view carries the register.',
     list:(j.notices.rows||[]).filter(n=>n.status==='PENDING').slice(0,40).map(n=>(n.no||'—')+' · '+n.name+' · '+(n.mandal||'—')+' · '+dm(n.date))});
   /* A mark is implausible if the fix is coarse enough to cover a mandal, if
@@ -3158,30 +3160,30 @@ function vOverview(j,A){
         <b style="width:96px;color:var(--tx)">${p.k}</b>
         <div class="bar" style="flex:1"><i style="width:${na?0:clamp(p.v,0,100)}%;background:${col}"></i></div>
         <span style="font-family:var(--mono);width:34px;text-align:right;color:var(--tx)">${na?'n/a':p.v}</span></div>
-        <div style="font-size:11px;color:var(--tx-3);margin:-4px 0 5px 105px">${esc(p.why)}</div>`;}).join('')+
+        `;}).join('')+
     `</div></div>`);
   h+=panel('c6','Needs your attention',A.iss.length+' item'+(A.iss.length===1?'':'s'),
     A.iss.length?`<div style="max-height:262px;overflow:auto" data-k="iss">`+A.iss.map((x,i)=>
       `<div class="iss" data-ii="${i}"><span class="sev p${x.p}">P${x.p}</span><div><b>${esc(x.t)}</b>
-       <span>${esc(x.d)}</span><span class="act">${esc(x.a)}</span></div></div>`).join('')+`</div>`
+       <span>${esc(x.d)}</span></div></div>`).join('')+`</div>`
     :'<div class="allclear">All clear — nothing needs orders right now.</div>','issP');
 
   h+=panel('c12','Collector\u2019s briefing desk','written from today\u2019s figures · and it answers questions',
     `<div class="briefbar"><button class="tbtn pri" id="briefGo">${BRIEFING?'Writing\u2026':(BRIEF?'Write it again':'Write today\u2019s briefing')}</button>
-      <span style="font-size:12px;color:var(--tx-3)">${BRIEF?('written '+hm(BRIEF.at)):'Drawn only from the figures on this screen. Read it as a draft, not as orders.'}</span></div>
+      <span style="font-size:12px;color:var(--tx-3)">${BRIEF?('written '+hm(BRIEF.at)):'A draft, not orders.'}</span></div>
      <div class="brief" id="briefBody">${BRIEF?briefHTML(BRIEF.text):'<span style="color:var(--tx-3);font-size:13px">Not written yet.</span>'}</div>
      <div class="chat">
        <b style="display:block;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--tx-3);margin-bottom:8px">Ask the figures</b>
        <div class="chatlog" id="chatLog" data-k="chatlog">${chatHTML()}</div>
        <div class="askrow">
-         <input id="askIn" placeholder="Ask anything the figures can answer — who, where, how many\u2026" autocomplete="off" enterkeyhint="send"${ASKING?' disabled':''}>
+         <input id="askIn" placeholder="Ask a question\u2026" autocomplete="off" enterkeyhint="send"${ASKING?' disabled':''}>
          <button class="tbtn pri" id="askGo"${ASKING?' disabled':''}>${ASKING?'Asking\u2026':'Ask'}</button>
        </div>
        <div class="chips">${CHAT.length
          ? '<button class="fchip" id="askClear">Clear the thread</button>'
          : ['Who has not marked today?','Which mandal is furthest behind on coverage?','List the red-flag villages with scores','Draft a memo to the MPDOs on today\u2019s absentees']
              .map(q=>`<button class="fchip" data-ask="${esc(q)}">${esc(q)}</button>`).join('')}</div>
-       <div style="font-size:11.5px;color:var(--tx-3);margin-top:8px">Answers come from the figures on this screen alone. Drafts it writes are drafts — nothing is an order until the Collector passes it.</div>
+       
      </div>`,'brief');
   h+=panel('c12','Day by day · the last 30 days','tap a day for its villages', dayTable(j),'dayd');
   h+=vTables(j,A,true);
@@ -3281,7 +3283,7 @@ function askFacts(j,A){
 }
 function chatHTML(){
   if(!CHAT.length&&!ASKING)
-    return '<div class="msg a" style="color:var(--tx-2)">Ask a question — the desk answers from the live figures on this screen alone, and says so where the record is silent.</div>';
+    return '<div class="msg a" style="color:var(--tx-2)">Ask about today’s figures.</div>';
   let h=CHAT.map(m=>`<div class="msg ${m.role==='user'?'q':(m.err?'err':'a')}">${esc(m.content)}</div>`).join('');
   if(ASKING) h+='<div class="msg wait">Reading the figures\u2026</div>';
   return h;
@@ -3666,9 +3668,9 @@ function dayTable(j){
       return '<td class="c '+(off?'off':b)+(i===n-1?' today':'')+'" data-dd="'+ix(r)+'" title="'+esc(dm(r.date)+' · '+(off?r.off+' — nobody is due':v!=null?words(k,v):'none'))+'">'+txt+'</td>'; }).join('')+'</tr>';
   });
   h+='</tbody></table></div>';
-  h+='<div class="hmleg"><span>Darker is more, row by row — each is scaled to its own high over the '+n+' days:</span>'+
+  h+='<div class="hmleg"><span>Darker = more</span>'+
     [1,2,3,4,5].map(i=>'<span><i style="background:var(--hm'+i+')"></i></span>').join('')+
-    '<span><i style="background:var(--well)"></i>Sunday or holiday — nobody is due</span><span><i style="box-shadow:inset 0 0 0 2px var(--st-warn);background:var(--panel)"></i>today</span><span>A blank is a nought. Present and not marked count the officers due, as the strip above does. More is not better on every row; read the label.</span></div>';
+    '<span><i style="background:var(--well)"></i>Sunday or holiday</span><span><i style="box-shadow:inset 0 0 0 2px var(--st-warn);background:var(--panel)"></i>today</span></div>';
   return h;
 }
 function bestWorst(j){
@@ -3777,7 +3779,7 @@ function segSwitch(){
     (ASEG === 'staff'
       ? 'The office staff mark in and apply for leave. No show-cause notice, no casual-leave debit and no lock on the app arises from this screen.'
       : ASEG === 'field'
-        ? 'Panchayat Secretaries, MPOs, MSOs and MPDOs — the roll the notice ladder reads.'
+        ? 'PS · MPO · MSO · MPDO'
         : 'Both rolls together. They answer to different rules, so read the parts rather than the total.') +
     '</span></div>';
 }
@@ -3966,13 +3968,7 @@ function vAttendance(j,A){
     const ou=(j.fence.today||[]);
     h+=panel('c12 w6','Refused — marked away from the place of duty',
       'today · within '+esc(fenceRuleSay(j.fence))+' is the rule',
-      `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
-        These officers tried to mark and the register did not take it, so they stand inside
-        <b>Not marked</b> above. <b>A refused mark is not a sanction and this list is not a charge</b> —
-        an officer may have been at a mandal meeting, at the Collectorate or on tour, and the register
-        cannot know which. What it does know is that he was holding the phone. Read it before any
-        notice is proposed, and <b>if the village office is recorded in the wrong place, correct the
-        point rather than the officer</b> — the panel on the Admin screen does it.</div>
+      `<div class="expnote" style="margin-bottom:10px">Counted in <b>Not marked</b>. Not a charge. If the office point is wrong, fix the point on Admin.</div>
       <div class="twrap"><table>
         <thead><tr><th>Officer</th><th>Mandal</th><th>Place of duty</th><th>How far out</th><th>Tried</th></tr></thead>
         <tbody>${ou.map(r=>'<tr><td>'+esc(r.name||'—')+
@@ -4015,18 +4011,14 @@ function vAttendance(j,A){
        <td>${r.lat!=null?`<a href="https://maps.google.com/?q=${r.lat},${r.lng}" target="_blank" rel="noopener">Open in Maps</a>`:''}</td></tr>`).join('')+
     (farRows.length?'':`<tr><td colspan="${DUTY()?9:7}" class="empty">${DUTY()?'Every trustworthy mark today was made at the officer’s own place of duty.':'Every trustworthy mark today was made inside the officer’s own mandal.'}</td></tr>`)+
     `</tbody></table></div>
-     <div class="expnote" style="margin-top:8px">${DUTY()
-       ? '<b>From place of duty</b> is measured from the office of the village the officer holds — the nearest of them, where he holds more than one, because a man is at his place of duty at any of his own villages — and from the mandal office for the MPO, the MPDO and the MSO. <b>From mandal</b> is measured from the middle of the mandal as the district’s own marks place it, which is a different thing: a village on the edge of its mandal is fifteen kilometres from the middle and nought from its own office.'
-       : 'Measured from the middle of the officer’s own mandal, as the district’s own attendance marks place it — the register holds no village coordinates.'} ${fenced
-       ? 'The fence is in force at '+esc(fenceRuleSay(j.fence))+' from the place of duty, so every mark on this screen was taken inside it or is unplaced; a mark refused is on the <b>Place of duty</b> screen, not here. Nothing else here raises a reminder, a notice or a debit.'
-       : 'A distance is a fact for you to read, not a default: nothing here raises a reminder, a notice or a debit, and the mark stands.'}</div>`);
+     <div class="expnote" style="margin-top:8px">${DUTY()?'<b>From place of duty</b>: to his own office. <b>From mandal</b>: to the mandal’s middle.':'Measured from the middle of his mandal.'} ${fenced?'Fence: '+esc(fenceRuleSay(j.fence))+'. Refused marks are on <b>Place of duty</b>.':'A distance, not a default.'}</div>`);
   h+=panel('c12','Export the attendance record','opens in Excel · names, gaps and the fortnight compared',
     `<div class="expbar">
       <button class="tbtn pri" data-exp="xlsx">Excel workbook (.xlsx)</button>
       <button class="tbtn" data-exp="today">CSV · today, officer by officer</button>
       ${TVIEW==='HRMS'?'':'<button class="tbtn" data-exp="absent">CSV · not marked today</button>'}
       <button class="tbtn" data-exp="matrix">CSV · 14-day comparative matrix</button>
-      <span class="expnote" id="expNote">The workbook carries every sheet: today, the gaps, officer × day, mandal comparison, daily counts.</span>
+      <span class="expnote" id="expNote"></span>
     </div>`);
   /* THE ONE FIGURE ON THIS SCREEN THAT IS NOT THE SEGMENT'S. att14 is worked
      out by the register over everybody and cannot be re-cut here, so it says
@@ -4176,7 +4168,7 @@ function vVillages(j,A){
       <button class="tbtn" data-exp="vdone">CSV · villages completed (${j.month.rows.length})</button>
       <button class="tbtn" data-exp="vpend">CSV · villages pending (${pendAll.length})</button>
       <button class="tbtn" data-exp="vprog">CSV · mandal progress &amp; forecast</button>
-      <span class="expnote" id="expNote">The workbook carries the summary, the month’s Gantt with the forecast at each mandal’s rate, completed and pending village by village.</span>
+      <span class="expnote" id="expNote"></span>
     </div>`);
   h+=panel('c12','Day by day · filings and attendance','tap a day', dayTable(j),'dayd2');
   h+=panel('c6','Score distribution','villages by ten-mark band','<div class="plot">'+scoreDist(j.month.rows)+'</div>');
@@ -4329,9 +4321,8 @@ function lvCalendar(){
   h+='<tr><td class="wl">Week total</td>'+weeks.map(w=>'<td class="w'+(w.total&&w===peak?' hi':'')+'" title="'+esc('week of '+dm(w.from)+': '+w.total+' officer-day'+(w.total===1?'':'s'))+'">'+(w.total||'')+'</td>').join('')+'</tr>';
   h+='</tbody></table></div>';
   h+='<div class="hmleg"><span>Officers away on the day:</span><span><i style="background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)"></i>none</span><span><i style="background:var(--hm1)"></i>1</span><span><i style="background:var(--hm2)"></i>2–3</span><span><i style="background:var(--hm3)"></i>4–6</span><span><i style="background:var(--hm4)"></i>7–12</span><span><i style="background:var(--hm5)"></i>13+</span><span><i style="box-shadow:inset 0 0 0 2px var(--st-warn);background:var(--panel)"></i>today</span></div>';
-  h+='<p class="mut" style="font-size:12px;margin-top:10px"><b>'+total.toLocaleString('en-IN')+' officer-days</b> of sanctioned leave in '+LVR.year+(LVR_MANDAL?' in '+esc(LVR_MANDAL):'')+(LVR_KIND==='all'?'':' under '+LV_KINDS[LVR_KIND].toLowerCase())+'. '+
-    'The busiest week began on <b>'+esc(dm(peak.from))+'</b> with '+peak.total+' officer-day'+(peak.total===1?'':'s')+(peakDay.n?'; the busiest day was <b>'+esc(dm(peakDay.key))+'</b> with '+peakDay.n+' officer'+(peakDay.n===1?'':'s')+' away':'')+'. '+
-    'A cell counts the officers whose sanctioned leave covers that day, whatever the kind; Sundays and holidays inside a spell are counted as the spell covers them. Nothing awaiting orders is on this map.</p>';
+  h+='<p class="mut" style="font-size:12px;margin-top:10px"><b>'+total.toLocaleString('en-IN')+' officer-days</b> of sanctioned leave'+(LVR_MANDAL?' · '+esc(LVR_MANDAL):'')+'. '+
+    'Busiest week: <b>'+esc(dm(peak.from))+'</b> ('+peak.total+')'+(peakDay.n?' · busiest day: <b>'+esc(dm(peakDay.key))+'</b> ('+peakDay.n+')':'')+'.</p>';
   return h;
 }
 function lvTable(rows){
@@ -4380,13 +4371,10 @@ function lvRegister(){
   h+=panel('c12','The district, week by week · '+LVR.year,(LVR_MANDAL||'whole district')+' · '+kindWord,lvCalendar(),'lvc');
   h+=panel('c12','When the leave fell · '+LVR.year,rows.length+' officer'+(rows.length===1?'':'s')+' · '+kindWord,
     lvHeat(rows)+
-    '<p class="mut" style="font-size:12px;margin-top:10px">A cell is the days taken in that month, a spell split across the months it falls in, so a row adds up to the officer’s year. '+
-    'An outlined cell is an application awaiting your orders: it is not debited until you pass them. The figures are the ones the sanction refuses on — '+
-    'the allowance is the register’s own (casual leave '+ent.CL+', earned '+ent.EL+', optional holidays '+ent.OH+' for '+LVR.year+'), and an application is counted once however many rows carry it.</p>','lvh');
+    '<p class="mut" style="font-size:12px;margin-top:10px">Days per month. Outlined: awaiting orders, not debited. Allowance: CL '+ent.CL+' · EL '+ent.EL+' · OH '+ent.OH+'.</p>','lvh');
   h+=panel('c12','The register · every officer’s account for '+LVR.year,rows.length+' line'+(rows.length===1?'':'s')+(LVR.truncated?' · the register holds more than this screen carries':''),
     lvTable(rows)+
-    '<p class="mut" style="font-size:12px;margin-top:10px">Taken / allowed, with what is left. Medical leave answers to no yearly figure — the Collector’s order caps a spell at '+LVR.mlSpell+' days — and the headquarters permission is not leave and is counted as occasions. '+
-    'This is a record of what was sanctioned; whether anything on it is a default is yours to read, under the leave rules.</p>','lvt');
+    '<p class="mut" style="font-size:12px;margin-top:10px">Taken / allowed · left. Medical leave: no yearly figure, '+LVR.mlSpell+'-day spell cap. HQ permission: occasions.</p>','lvt');
   return h;
 }
 function lvExport(kind){
@@ -4545,10 +4533,8 @@ function atcCalendar(){
     '<span><i style="background:var(--well)"></i>Sunday, holiday or not yet</span><span><i style="box-shadow:inset 0 0 0 2px var(--st-warn);background:var(--panel)"></i>today</span></div>';
   const T=ATC.totals||{};
   const avg=T.workingDaysPast?Math.round(T.marks/T.workingDaysPast):0;
-  h+='<p class="mut" style="font-size:12px;margin-top:10px"><b>'+(T.marks||0).toLocaleString('en-IN')+' marks</b> over '+T.workingDaysPast+' working day'+(T.workingDaysPast===1?'':'s')+' of '+ATC.year+' so far — about '+avg+' a day against '+ATC.due+' due today'+
-    (T.late?'; '+T.late.toLocaleString('en-IN')+' of them late, after '+ATC.cutoff+':00':'')+(T.leaveDays?'; '+T.leaveDays.toLocaleString('en-IN')+' officer-days of sanctioned leave':'')+'. '+
-    'One officer counts once a day however many times he marked. <b>Due is today’s roll</b>, so on a day months ago "not marked" is an upper figure: an officer who joined since was not due then. Sundays and holidays are never counted as unmarked. '+
-    'This is a picture of the year and not a charge: what any day on it means is read on the facts.</p>';
+  h+='<p class="mut" style="font-size:12px;margin-top:10px"><b>'+(T.marks||0).toLocaleString('en-IN')+' marks</b> · '+T.workingDaysPast+' working days · about '+avg+' a day'+
+    (T.late?' · '+T.late.toLocaleString('en-IN')+' late':'')+(T.leaveDays?' · '+T.leaveDays.toLocaleString('en-IN')+' leave-days':'')+' · <b>Due is today’s roll</b></p>';
   return h;
 }
 function atcPanel(){
@@ -5455,14 +5441,9 @@ function vAdmin(j,A){
       </div>`:''}
       ${(HL.backup && !HL.backup.ok) ? `<div style="margin-top:11px">
         <button class="tbtn" id="rlBackup"${ROLLBUSY?' disabled':''}>Run the backup now</button>
-        <span class="expnote" style="margin-left:9px">installing the trigger and knowing it works are two
-          different things — this runs the same job the trigger runs at 01:00, and hands back whatever it
-          says. It takes a minute or two. Running it twice is safe: each step asks whether its own output is
-          already there.</span>
+        <span class="expnote" style="margin-left:9px">runs the 01:00 job now · takes a minute or two · twice is safe</span>
       </div>`:''}
-      <div class="expnote" style="margin-top:9px">Read from this register, not from the page. A trigger that was never
-      installed looks exactly like one that is working: nothing arrives, and nothing says why. The same is true of a
-      backup, which is why the days with none are counted off the calendar rather than off the folder.</div>`
+      `
       : '<div class="empty">Reading the register’s own state…</div>', 'rl');
 
   /* ---- HAS THE APP REACHED THE OFFICER? ----
@@ -5541,9 +5522,9 @@ function vAdmin(j,A){
       <div style="font-family:var(--mono);font-size:38px;font-weight:700;color:${holShort?'var(--red)':'var(--tx)'}">${HOL.count}</div>
       <div style="font-size:13px;color:var(--tx-2);line-height:1.6;flex:1;min-width:260px">
         ${holShort
-          ? '<b style="color:var(--red)">This register has no holiday calendar.</b> Until it does it counts Dasara, Diwali and every second Saturday as working days, and every leave figure and working-day count on it is wrong.'
-          : 'The 27 General Holidays and every second Saturday are on the register for '+HOL.year+'. Loading them again changes nothing.'}
-        <br>The optional holidays of Annexure&nbsp;II are an officer’s own choice and are deliberately not loaded.
+          ? '<b style="color:var(--red)">This register has no holiday calendar.</b> Holidays count as working days until it is loaded.'
+          : 'Holidays for '+HOL.year+' are loaded.'}
+        
       </div>
       <button class="tbtn${holShort?' pri':''}" id="rlHol"${ROLLBUSY?' disabled':''}>${holShort?'Load the year':'Load them again'}</button>
     </div>` +
@@ -5574,11 +5555,7 @@ function vAdmin(j,A){
   if(TVIEW!=='HRMS'){
   h+=panel('c12','Correct the roll from your roster',
     'paste the table \u00b7 nothing is written until you say so',
-    `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
-      Paste the office's own table \u2014 serial, mandal, name, mobile, official email, and the office
-      with its latitude and longitude. It is read here, compared against the register, and
-      <b>nothing is written until you press Apply</b>. The table is sent to your own register and
-      is never stored anywhere else.</div>
+    `<div class="expnote" style="margin-bottom:10px">Paste the office table: mandal, name, mobile, email, office, lat, long. <b>Nothing is written until you press Apply.</b></div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:9px">
       <label style="font-size:12px;color:var(--tx-2)">These officers are
         <select class="rsel" id="rlTblRole" style="margin-left:6px">${
@@ -5618,13 +5595,7 @@ function vAdmin(j,A){
   const pparsed = PST_TEXT.trim() ? parsePostings(PST_TEXT) : null;
   h+=panel('c12','Postings — who holds which place',
     'paste the mandals\u2019 list · nothing is written until you say so',
-    `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
-      Paste the list the mandals send — serial, mandal, GP, officer, mobile, designation and the
-      remark, and a <b>Regular / Incharge / Deputation</b> column where the list has one. <b>Deputed</b>
-      and <b>wrong GP mapped</b> are read as a transfer: every other place the register shows against
-      him is proposed for release, each ticked for you to untick; <b>in-charge</b> and <b>FAC</b> are
-      read as a place taken on <b>in addition</b>. A release is only ever proposed for somewhere the
-      register already shows against him, and the reason is printed beside it. <b>Nothing is written until you press Apply.</b></div>
+    `<div class="expnote" style="margin-bottom:10px"><b>Deputed</b> / <b>wrong GP mapped</b> = transfer (releases ticked for you) · <b>in-charge</b> / <b>FAC</b> = added. <b>Nothing is written until you press Apply.</b></div>
     <div style="margin-bottom:9px">${pparsed?'<span style="font-size:12px;color:var(--tx-3)">'+pparsed.rows.length+' line(s) read'+
       (pparsed.bad.length?' \u00b7 <span style="color:var(--red)">'+pparsed.bad.length+' not understood</span>':'')+'</span>':''}</div>
     <textarea id="pstTbl" rows="${PST_TEXT?4:6}" placeholder="Paste the posting list here"
@@ -5672,20 +5643,7 @@ function vAdmin(j,A){
   const lparsed = LOC_TEXT.trim() ? parseVillagePoints(LOC_TEXT) : null;
   h+=panel('c12','Village offices \u2014 where attendance may be marked',
     'paste the district\u2019s latitude and longitude list \u00b7 nothing is written until you say so',
-    `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
-      Paste the district\u2019s table \u2014 mandal, village, the Secretary and his number, and the
-      <b>latitude and longitude of the village office</b>. The coordinates are read as the last two
-      decimal numbers on each line, so the whole sheet may be pasted as it stands.
-      <b>Attendance is then marked within ${esc(String((ROLL&&ROLL.fenceKm)||5))} km of that point and
-      nowhere else</b>, in and out, and an officer standing further away is told how far out he is.
-      ${(ROLL&&ROLL.fenceRoles&&Object.keys(ROLL.fenceRoles).length)
-        ? 'The '+esc(Object.keys(ROLL.fenceRoles).map(r=>r+'s').join(' and '))+' are measured from the <b>mandal office</b>, within '
-          +esc([...new Set(Object.keys(ROLL.fenceRoles).map(r=>ROLL.fenceRoles[r]))].join(' / '))+' km of it (ordered 29.10.2026).'
-        : ''}
-      <br><br><b>A village with no point is not fenced at all</b> \u2014 its Secretary marks exactly as he
-      did before, because a blank cell in the district\u2019s own table must not refuse a man\u2019s
-      attendance. A point outside the district is refused rather than believed, and named, so it can
-      be corrected rather than quietly dropped. <b>Nothing is written until you press Apply.</b></div>
+    `<div class="expnote" style="margin-bottom:10px">Paste mandal, village, Secretary, lat, long. Marks are taken within ${esc(String((ROLL&&ROLL.fenceKm)||5))} km${(ROLL&&ROLL.fenceRoles&&Object.keys(ROLL.fenceRoles).length)?' · '+esc(Object.keys(ROLL.fenceRoles).map(r=>r+'s').join(', '))+' '+esc([...new Set(Object.values(ROLL.fenceRoles))].join(' / '))+' km from the mandal office':''}. No point, no fence. <b>Nothing is written until you press Apply.</b></div>
     <div style="margin-bottom:9px">${lparsed?'<span style="font-size:12px;color:var(--tx-3)">'+lparsed.rows.length+' line(s) with a point'+
       (lparsed.nopoint.length?' \u00b7 <span style="color:var(--amber,var(--tx-3))">'+lparsed.nopoint.length+' with none</span>':'')+
       (lparsed.bad.length?' \u00b7 <span style="color:var(--red)">'+lparsed.bad.length+' not understood</span>':'')+'</span>':''}</div>
@@ -5734,12 +5692,7 @@ function vAdmin(j,A){
   h+=panel('c12','MPDO office staff — attendance and leave, and nothing else',
     'paste the office list · nothing is written until you say so',
     "<div style=\"font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px\">"+
-    "Paste the MPDO offices’ staff list — serial, mandal, name, designation, employee id, mobile, "+
-    "latitude, longitude. They are added for <b>attendance and leave</b> and for nothing else: "+
-    "<b>no show-cause notice, no casual-leave debit and no lock on the app</b>, and they are not "+
-    "called for a development plan or a village evaluation. The office coordinates are written to "+
-    "the Mandals tab, so a mark can be shown against the office — which measures and accuses "+
-    "nobody. <b>Nothing is written until you press Apply.</b></div>"+
+    "Paste the MPDO office staff list. Attendance and leave only — no notice, no debit, no lock. <b>Nothing is written until you press Apply.</b></div>"+
     (sparsed?'<div style=\"margin-bottom:9px;font-size:12px;color:var(--tx-3)\">'+sparsed.rows.length+' line(s) read'+
       (sparsed.bad.length?' \u00b7 <span style=\"color:var(--red)\">'+sparsed.bad.length+' not understood</span>':'')+
       (sdup.length?' \u00b7 <span style=\"color:var(--amb)\">'+sdup.length+' mobile(s) used twice in the list: '+esc(sdup.join(', '))+'</span>':'')+
@@ -5809,8 +5762,8 @@ function vAdmin(j,A){
       </td></tr>`).join('')
       :'<tr><td colspan="7" class="empty">Nobody on the roll matches that.</td></tr>')+
     `</tbody></table></div>
-    ${aside.length?'<div class="expnote" style="margin-top:10px">'+aside.length+' row(s) set aside under the Collector\u2019s hand are kept on the sheet and are not shown here: they were written by a misread paste and named nobody.</div>':''}
-    <p style="font-size:12px;color:var(--tx-3);margin-top:10px;line-height:1.6"><b>Taking an officer off the roll deletes nothing.</b> His row stays, marked inactive, and so does his attendance, his leave, his notices and his plan — a file can still be produced. He stops counting for attendance and no notice can arise against him. Put him back and his own PIN works again.</p>`,'rl');
+    ${aside.length?'<div class="expnote" style="margin-top:10px">'+aside.length+' row(s) set aside · hidden.</div>':''}
+    <p style="font-size:12px;color:var(--tx-3);margin-top:10px;line-height:1.6"><b>Off the roll deletes nothing.</b> Put him back and his PIN works.</p>`,'rl');
   return h;
 }
 
@@ -6253,7 +6206,7 @@ function vSchedule(j,A){
     '<div class="plot">'+Charts.meter(d.filed, Math.max(1,d.dueByToday),
       {color:d.filed>=d.dueByToday?'var(--st-ok)':d.filed>=d.dueByToday*0.8?'var(--st-warn)':'var(--st-bad)',
        sub:d.filed+' filed of '+d.dueByToday+' due by '+dm(today),
-       foot:d.behind? '<b>'+d.behind+'</b> village'+(d.behind===1?'':'s')+' past the day set for them. A reminder is the whole of what this raises — no notice, no debit, no lock.'
+       foot:d.behind? '<b>'+d.behind+'</b> village'+(d.behind===1?'':'s')+' past their day. Reminder only.'
                     : 'The district is level with its own plan.'})+'</div>');
 
   /* the days that remain, as magnitudes. One series, one colour: these are
@@ -6278,13 +6231,7 @@ function vSchedule(j,A){
       <button class="tbtn pri" data-sc="remind"${behindOff.length?'':' disabled'}>Remind the ${behindOff.length} officer${behindOff.length===1?'':'s'} behind</button>
       <button class="tbtn" data-sc="share">Send the schedule to all ${offs.length}</button>
       <button class="tbtn" data-sc="compose">Send a message</button>
-      <span class="expnote">Taking in newly pending villages never moves an assignment or a date already given —
-        an officer told on Tuesday that a village is his for Thursday keeps Thursday. Re-spreading moves the
-        dates of everything still unfiled onto the days that are left, and is the only thing that does.
-        <b>Begin on</b> sets the day the work is planned from; it can only move the start later, never into a
-        day already gone, and it is read by <b>Re-spread</b> as well as by a first publish.
-        A message goes by mail at once and opens in the officer&rsquo;s app the next time he opens it;
-        there is no push sender behind this register, and the column below prints when he actually saw it.</span>
+      <span class="expnote">Re-spread moves unfiled dates. <b>Begin on</b> sets the start day.</span>
     </div>` +
     (SCHEDCOMPOSE ? `<div style="display:grid;gap:12px;max-width:760px;margin-top:14px">
       <label style="font-size:12px;color:var(--tx-2)">Who it goes to
@@ -6320,9 +6267,7 @@ function vSchedule(j,A){
       <td>${o.ackAt?'<span class="pill ok">'+esc(dm(String(o.ackAt).slice(0,10)))+'</span>':'<span class="pill warn">not yet</span>'}</td>
       <td><button class="fchip" data-scone="${esc(o.phone)}">Remind</button></td></tr>`).join('') +
     `</tbody></table></div>
-     <div class="expnote" style="margin-top:10px">An officer behind his days may be at a mandal meeting, at the
-       Collectorate or on tour. Nothing here raises a notice, debits a day of leave or locks an app — whether a
-       figure on this table is a default is yours to read, on the facts.</div>`,'scoff');
+     <div class="expnote" style="margin-top:10px">A plan of work, not a charge.</div>`,'scoff');
 
   /* ---- mandal by mandal ---- */
   h+=panel('c7','Mandal by mandal','filed against scheduled',
@@ -6381,10 +6326,7 @@ function vSchedule(j,A){
       `<tr class="pivfoot"><td class="pivh">All officers</td><td class="pivh2"></td>` +
       pDays.map(dt=>`<td class="num">${colTot(dt)||''}</td>`).join('') +
       `<td class="pivtot num">${d.rows}</td></tr></tbody></table></div>
-       <div class="expnote" style="margin-top:10px">A cell is the villages set for that officer on that day, and
-       reads <b>filed / set</b> once any of them is filed. Hover a cell for the village names. These are
-       <b>lines, not villages</b> &mdash; a mandal village is set against its MPO and its MPDO both &mdash; so the
-       corner total is ${d.rows} lines over ${d.villages} villages.</div>`,'scpiv');
+       <div class="expnote" style="margin-top:10px">Cell: <b>filed / set</b>. Lines, not villages: ${d.rows} lines, ${d.villages} villages.</div>`,'scpiv');
   }
 
   /* ---- the register, downloadable ----
@@ -6398,10 +6340,7 @@ function vSchedule(j,A){
       <button class="tbtn" data-exp="scvil">CSV &middot; every line, village by village (${d.rows})</button>
       <button class="tbtn" data-exp="scday">CSV &middot; the month, day by day (${plan.length})</button>
       <button class="tbtn" data-exp="scpiv">CSV &middot; pivot &mdash; officer &times; day</button>
-      <span class="expnote" id="expNote">The officer ledger carries what each man holds, what he has filed and
-        whether he has acknowledged the schedule. The village file carries one row per officer named against a
-        village, so a mandal village appears twice — once for the MPO and once for the MPDO. Counts of
-        VILLAGES are on the tiles above; these are the lines behind them.</span>
+      <span class="expnote" id="expNote">CSVs count lines, not villages.</span>
     </div>`);
 
   /* ---- what has been sent, and whether it landed ---- */
@@ -6572,7 +6511,7 @@ function vNotices(j,A){
       <div class="mut" style="font-size:12px;margin-top:8px">Sending assigns the /SJSP-SCN/ running number, serves the notice in the officer\u2019s app (which locks until acknowledged) and emails it where an address is on the roll. A dropped proposal takes no number and is never seen by the officer. Unticked rows simply wait.</div>`);
   } else {
     h+=panel('c12','Proposed notices','the morning pass proposes; you decide',
-      '<div class="empty">Nothing awaits approval. The ~11:15 trigger proposes a notice for every unmarked officer on a working day; the proposals appear here for your word before anything is served.</div>');
+      '<div class="empty">Nothing awaits approval.</div>');
   }
   if((N.reminders&&N.reminders.rows||[]).length){
     h+=panel('c12','Reminders \u2014 already sent, nothing on the register',
@@ -6586,7 +6525,7 @@ function vNotices(j,A){
   }
   window.__ROWS.ntc=N.rows;
   h+=panel('c12','Notice register · latest first',
-    'served notices only carry numbers · first '+N.grace+' served in a month warn · debits settle at day-close · tap a row',
+    'first '+N.grace+' a month warn · tap a row',
     `<div class="twrap" style="max-height:520px"><table><thead><tr><th>No.</th><th>Date</th><th>Officer</th><th>Mandal</th><th>Of month</th><th>Status</th><th>Acknowledged</th><th>CL</th></tr></thead><tbody>`+
     (N.rows.length?N.rows.map((n,i)=>`<tr data-di="ntc:${i}"><td class="num mut">${esc(n.no||'—')}</td><td class="num">${esc(dm(n.date))}</td>
       <td>${esc(n.name)}<span class="mut"> · ${esc(n.role)}</span></td><td class="mut">${esc(n.mandal||'—')}</td>
@@ -6596,7 +6535,8 @@ function vNotices(j,A){
       <td>${n.clDebited?'<span class="pill bad">1 day</span>':'—'}</td></tr>`).join('')
      :'<tr><td colspan="8" class="empty">No notices on the register.</td></tr>')+`</tbody></table></div>`,'ntc');
   h+=panel('c12','How the rule runs','the register is the record',
-    '<div style="font-size:13px;color:var(--tx-2);line-height:1.75">Attendance is due by '+(N.cutoff||11)+':00 from the place of duty. A pass at 18:00 \u2014 after duty hours, so a phone on weak signal has the whole day to reach the district \u2014 sorts every officer: a mark in time draws nothing; a late mark or a mark received late draws an advisory reminder; the 1st and 2nd unmarked days of the month draw a reminder, sent at once and never entered on the register; the '+(N.scnFrom||3)+'rd unmarked day PROPOSES a show-cause notice — nothing is served, numbered or emailed until you press Send here. A served notice locks the officer\u2019s app until acknowledged. The first '+N.grace+' served notices in a calendar month are warnings; from the next one on, if attendance is still unmarked when the NEXT morning\u2019s settlement re-reads the closed day, one day of CL is debited on the Leave register — loss of pay once the year\u2019s CL is exhausted. Acknowledgement is receipt, not excuse: marking attendance is the only cure. Attendance is read three times before a rupee moves — at 18:00, again when you approve, and again at settlement — so a mark held up on a weak line withdraws the notice by itself and shows as <b>cured</b>.</div>');
+    '<ol class="rulesteps"><li>Due by '+(N.cutoff||11)+':00 · read at 18:00</li><li>Late mark → advisory, never a miss</li><li>1st and 2nd miss → reminder</li>'+
+    '<li>'+(N.scnFrom||3)+'rd miss → notice proposed; you send it</li><li>After '+N.grace+' notices a month → 1 day CL debited</li><li>Only a mark cures it</li></ol>');
   return h;
 }
 function vMap(j,A){
@@ -6873,8 +6813,7 @@ function wxTrend(j){
   }).join('');
   return '<div class="wxtrend"><div class="wxd-keys"><span>max</span><span>sky</span><span>rain</span><span></span><span>accounted</span><span>day</span></div>' +
     '<div class="wxd-row">' + cols + '</div></div>' +
-    '<div class="expnote" style="margin-top:8px">The district\u2019s mean maximum and mean rainfall across every mandal, the sky most of it had, ' +
-    'and the share of officers due who were accounted for that day. A blank is a Sunday, a holiday or a day the register did not hold.</div>';
+    '<div class="expnote" style="margin-top:8px">District average · blank: off day</div>';
 }
 
 /* the tile the Overview carries: the sky over the headquarters, tap for the rest */
@@ -6915,7 +6854,7 @@ function insight(items, title){
   items = (items || []).filter(Boolean);
   if(!items.length) return '';
   return '<div class="c12 insight"><div class="ins-hd"><span class="ins-badge">' + INS_IC.spark + '</span><b>' + esc(title || 'Reading of this screen') +
-    '</b><span class="ins-note">worked out from the figures below · a reading, not a finding</span></div>' +
+    '</b><span class="ins-note">a reading, not a finding</span></div>' +
     '<div class="ins-list">' + items.map(x => '<div class="ins ' + (x.t || 'info') + '"><i>' + (INS_IC[x.ic || x.t] || INS_IC.info) + '</i><span>' + x.h + '</span></div>').join('') +
     '</div></div>';
 }
@@ -6966,7 +6905,7 @@ function insLocation(j){
   if(!bad && !far) return { t:'good', h:'Every mark today carries a precise fix inside the district.' };
   return { t:'warn', ic:'info', h:(bad ? '<b>' + insPl(bad, 'mark') + '</b> carr' + (bad === 1 ? 'ies' : 'y') + ' a fix too coarse or too far out to place the officer' : '') +
     (bad && far ? '; ' : '') + (far ? '<b>' + insN(far) + '</b> ' + (far === 1 ? 'was' : 'were') + ' made well away from the middle of the mandal' : '') +
-    ' — a distance, read on the facts.' };
+    '.' };
 }
 function insWeekday(j){
   const rows = (j.att30 || []).filter(r => !r.off && r.due > 0 && (r.present || 0) + (r.leave || 0) > 0);
@@ -7017,8 +6956,7 @@ function insWeather(){
   if(!sev.length && !wat.length) return { t:'good', ic:'wx', h:'The weather is <b>settled over all ' + rows.length + ' mandals</b>; the warmest is ' + esc(hot.mandal) + ' at ' + wxR(hot.tmax) + '°.' };
   return { t: sev.length ? 'bad' : 'warn', ic:'wx',
     h:(sev.length ? '<b>Severe weather</b> over ' + sev.map(r => esc(r.mandal)).join(', ') : '<b>Weather to watch</b> over ' + wat.map(r => esc(r.mandal)).join(', ')) +
-      (wet && Number(wet.rain) >= 2.5 ? ' — up to ' + wxR(wet.rain) + ' mm in ' + esc(wet.mandal) + '.' : '.') +
-      ' A draft advisory is ready on the Map screen.' };
+      (wet && Number(wet.rain) >= 2.5 ? ' — up to ' + wxR(wet.rain) + ' mm in ' + esc(wet.mandal) + '.' : '.') };
 }
 function insWxLink(j){
   if(!WX || !WX.ok) return null;
@@ -7027,7 +6965,7 @@ function insWxLink(j){
   const d = L.dry - L.wet;
   return { t: d > 3 ? 'warn' : 'info', ic:'wx',
     h:'On the ' + insPl(L.nw, 'wet day') + ' of the fortnight <b>' + L.wet + '%</b> were accounted for, against <b>' + L.dry + '%</b> on the ' + insPl(L.nd, 'dry one') + '. ' +
-      (Math.abs(d) <= 2 ? 'Rain has made no visible difference.' : 'Two columns side by side, not a cause.') };
+      (Math.abs(d) <= 2 ? 'Rain has made no visible difference.' : 'Not a cause.') };
 }
 function insLeave(j, A){
   const L = j.leave || {}, pend = L.pending || [], out = [];
@@ -7040,7 +6978,7 @@ function insLeave(j, A){
       h:'<b>' + insPl(pend.length, 'application') + '</b> await your orders' + (days != null ? ', the oldest ' + insPl(days, 'day') + ' old' : '') +
         (top ? '; most are <b>' + esc(top[0]) + '</b> (' + top[1] + ').' : '.') });
   } else out.push({ t:'good', h:'<b>Nothing awaits your orders</b> on the leave desk.' });
-  out.push({ t:'info', h:'<b>' + insPl(A.onLeave, 'officer') + '</b> ' + (A.onLeave === 1 ? 'is' : 'are') + ' on sanctioned leave today — counted as accounted for, never as unmarked.' });
+  out.push({ t:'info', h:'<b>' + insPl(A.onLeave, 'officer') + '</b> ' + (A.onLeave === 1 ? 'is' : 'are') + ' on sanctioned leave today.' });
   const rec = L.recent || [];
   if(rec.length){
     const ap = rec.filter(r => r.status === 'APPROVED').length, rj = rec.filter(r => r.status === 'REJECTED').length;
@@ -7066,7 +7004,7 @@ function insDuty(j){
       (v.unplaced ? '; the ' + insPl(v.unplaced, 'village') + ' without one fence nobody.' : '.') });
   const td = (f.today || []).length, steady = (f.repeat || []).filter(r => r.steady);
   out.push({ t: td ? 'warn' : 'good', ic: td ? 'warn' : 'good', h: td ? '<b>' + insPl(td, 'mark') + '</b> refused today for distance.' : 'No mark has been refused today.' });
-  if(steady.length) out.push({ t:'bad', h:'<b>' + insPl(steady.length, 'officer') + '</b> refused from the same distance morning after morning — the recorded point is the likelier fault: ' +
+  if(steady.length) out.push({ t:'bad', h:'<b>' + insPl(steady.length, 'officer') + '</b> refused from the same distance each morning (point likely wrong): ' +
     steady.slice(0, 3).map(r => esc(r.place || r.mandal || '') + ' (' + wxR(r.km) + ' km)').join(', ') + '.' });
   const days = f.days || [];
   if(days.length >= 3){
@@ -7110,8 +7048,7 @@ function wxPanel(){
        <span class="msp"></span>
        <span class="pill ${wxPill(WX.level)}">${esc(WX.level)}</span>
      </div>` + wxHero() +
-    `<div class="expnote" style="margin-top:10px">${C.severe || 0} severe · ${C.watch || 0} watch · ${C.calm || 0} settled.
-       Rainfall classed after the India Meteorological Department.</div>`);
+    `<div class="expnote" style="margin-top:10px">${C.severe || 0} severe · ${C.watch || 0} watch · ${C.calm || 0} settled · IMD rain classes</div>`);
 
   h += panel('c7','Mandal by mandal', esc(dm(WX.date || '') + ' · read ' + hm(WX.at)),
     `<div class="twrap"><table><thead><tr><th>Mandal</th><th>Sky</th><th>Max</th><th>Rain</th><th>Wind</th><th>Level</th></tr></thead><tbody>` +
@@ -7136,8 +7073,7 @@ function wxPanel(){
          ${esc(WX.draft || 'No draft — the forecast could not be read.')}</div>
        <div class="expbar">
          <button class="tbtn pri" id="wxDraft">Take this to the advisory composer</button>
-         <span class="expnote">It opens on every officer's home screen and stays there until acknowledged.
-           You can edit every word before publishing.</span>
+         <span class="expnote">Opens on every home screen. Editable.</span>
        </div>
      </div>`);
   return h;
@@ -7322,14 +7258,7 @@ function vDuty(j,A){
                hq:'<span class="pill ok">the headquarters village</span>',
                none:'<span class="pill bad">not placed — not fenced</span>'};
     h+=panel('c12','Where the MPO and the MPDO are fenced','the mandal office, or the headquarters village standing in for it',
-      `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
-        A mandal officer holds no village, so he is fenced at the <b>mandal office</b> — the point the
-        roster paste writes. Where the office has never been written down, the <b>headquarters
-        village</b> stands in for it: the village on the roll that carries the mandal's own name, placed
-        by the same survey as every other. That is a derivation and it is named as one, here and in the
-        sentence the officer reads. A mandal with neither — a headquarters that is a municipality and
-        not a Gram Panchayat — <b>fences nobody</b>, and is named below rather than quietly left out.
-        Writing the office itself on the Admin screen takes precedence the moment it is there.</div>
+      `<div class="expnote" style="margin-bottom:10px">Fenced at <b>the mandal office</b>; else at <b>the headquarters village</b>; with neither, not fenced.</div>
       <div class="twrap" data-k="dmo"><table>
         <thead><tr><th>Mandal</th><th>Fenced at</th><th>The point</th><th>Officers</th></tr></thead>
         <tbody>${f.mandals.map(m=>'<tr><td>'+esc(m.mandal)+'</td><td>'+(say[m.source]||say.none)+'</td>'+
@@ -7342,16 +7271,7 @@ function vDuty(j,A){
   if(rep.length){
     h+=panel('c12','Refused more than once — and which of them is the register\u2019s fault',
       'the last 14 days',
-      `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
-        An officer refused <b>once</b> was somewhere else that morning, and that is not a matter for this
-        screen. An officer refused <b>every morning from the same distance</b> is not wandering — his
-        village office is almost certainly recorded in the wrong place, and every day he is refused ${GPR
-        ? 'is a day the register holds as unmarked against him'
-        : 'he walks a day further up a ladder that ends in a show-cause notice'}. The distance below is the
-        <b>median</b> of his refusals and the spread is how much they vary; a spread of nearly nothing is
-        the tell. <b>Correct the point, not the officer</b> — the panel on the Admin screen does it.
-        <br><br>This is not a charge against anybody: the register cannot know whether a man was at a
-        mandal meeting, at the Collectorate or on tour, and a table must not decide it.</div>
+      `<div class="expnote" style="margin-bottom:10px">Same distance every morning: the office point is likely wrong. <b>Correct the point, not the officer.</b> Not a charge.</div>
       <div class="twrap"><table>
         <thead><tr><th>Officer</th><th>Mandal</th><th>Place of duty</th><th>Days</th>
           <th>Usually</th><th>Varies by</th><th>What it looks like</th></tr></thead>
@@ -7392,12 +7312,7 @@ function vDuty(j,A){
   /* ---- and the villages still to survey ---- */
   if((f.unplaced||[]).length){
     h+=panel('c12','Villages with no office on the roll','their '+WHO+' are not fenced',
-      `<div style="font-size:13px;color:var(--tx-2);line-height:1.7;margin-bottom:10px">
-        Nothing is being enforced against these officers and nothing is held against them — they mark
-        exactly as they did before the order. A village is listed here when its office has no coordinate,
-        or one that is not in this district: <b>a point that cannot be believed is not a point</b>, and
-        placing a village wrongly is worse than leaving it unplaced, because a wrong point refuses an
-        honest officer every morning. Paste the figures on the Admin screen as the offices send them.</div>
+      `<div class="expnote" style="margin-bottom:10px">Not fenced. Paste their points on Admin.</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px">${(f.unplaced||[]).map(u=>
         '<span class="fchip" style="cursor:default">'+esc(u.gp)+' <span class="mut">\u00b7 '+esc(u.mandal)+'</span></span>').join('')}</div>`);
   }
@@ -7500,14 +7415,7 @@ function vMock(j,A){
   h+='</div>';
 
   h+=panel('c12','What this screen reads, and what it does not','evidence, not a charge',
-    `<div style="font-size:13px;color:var(--tx-2);line-height:1.75">
-      A satellite fix is a measurement with noise in it: the district’s honest officers scatter by about <b>${MOCK.baselineM==null?'—':MOCK.baselineM} m</b> from one morning to the next, and the last decimal of a latitude is as good as random.
-      A mock-location app returns the point it was given, <b>byte for byte, every morning</b>, and claims one metre for it because that is its default. So the screen asks three things of every officer over the window:
-      <b>the same coordinate to six decimals on two different mornings</b>, from a fix that claimed ±${MOCK.fine} m or better — nothing a handset measures repeats to eleven centimetres across days;
-      <b>a claimed accuracy of 0 or 1 m</b> — a lead and not a verdict, because a new dual-band handset under open sky claims a metre honestly and its points move from day to day, while a metre at a point that never moves is an app;
-      and <b>one fine coordinate under two officers on one morning</b>.
-      <br><br>What is <b>not</b> counted: Google’s network positioning hands every phone in the same building the same point, claiming twenty metres from wifi or two kilometres from a cell tower, and the MPDO offices produce identical coordinates for half their staff every morning. Only a fix claiming ±${MOCK.fine} m or better is read at all. A mark that reached the district days after its date is printed and not weighed.
-      <br><br><b>Nothing here refuses a mark, raises a reminder or walks the ladder.</b> The cure is the phone: ask the mandal to open Developer options on the handset, where the mock-location setting settles it in a minute. The one rule that would have caught the apps automatically — refusing any fix better than two metres — would have refused honest officers for owning a good phone, and is not applied.</div>`);
+    `<ul class="rulesteps"><li><b>Same point, two mornings</b> (±${MOCK.fine} m or better) — a typed point</li><li><b>0–1 m claimed</b> — a lead, not a verdict</li><li><b>One point, two officers</b> on one morning</li><li>Honest phones move about <b>${MOCK.baselineM==null?'—':MOCK.baselineM} m</b> a day</li><li><b>Nothing here refuses a mark.</b> Evidence, not a charge.</li></ul>`);
 
   h+=panel('c12','Marks that were never measured — '+F.length+' officer'+(F.length===1?'':'s'),
     'a typed point, or a metre that never moves · open a name for every morning',
@@ -7658,8 +7566,7 @@ function vAdvisory(j,A){
     h+=kpi('Mandals',IC.h,(ADV&&ADV.coverage||[]).length,'', 'covered by the roll','');
     h+='</div>';
     h+=panel('c12','No advisory is standing',issued?(issued+' circular'+(issued===1?'':'s')+' on the record, every one retired'):'nothing has been issued to the district yet',
-      '<div class="empty">Publish one below. It opens on every officer’s home screen the next time the app is opened, '+
-      'and this section then names who has read it and who has not.'+(issued?' The circulars already issued are kept in the history below, receipts and all.':'')+'</div>');
+      '<div class="empty">Publish one below.'+(issued?' Past circulars are in the history.':'')+'</div>');
     if((ADV&&ADV.coverage||[]).length){
       /* one series, so one colour — and the rows are scaled against the
          largest mandal, or every bar fills its track and the lengths say
@@ -7737,7 +7644,7 @@ function vAdvisory(j,A){
        </div>
        <div>
          <input type="file" id="advFile" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="font-size:13px">
-         <div class="expnote" style="margin-top:6px">PDF, Word or an image of the signed page, up to 12 MB. The file is stored in Drive and every officer gets a link to it.</div>
+         <div class="expnote" style="margin-top:6px">PDF, Word or image · up to 12 MB</div>
        </div>
        <div class="expbar">
          <button class="tbtn pri" id="advGo"${ADVBUSY?' disabled':''}>${ADVBUSY?'Publishing…':'Publish to every officer'}</button>
