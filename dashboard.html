@@ -2064,7 +2064,7 @@ function initDensity(){
    answered without fetching the page myself and comparing it. The deploy
    writes the commit and the hour into this line, so the console says what
    it is and a stale copy is visible rather than deduced. */
-const BUILD_STAMP = '63f40e2 - 31 Oct 16:03';
+const BUILD_STAMP = '32fb4f7 - 01 Nov 11:00';
 function paintBuild(){
   const el = document.getElementById('buildTag'); if(!el) return;
   el.textContent = /^__/.test(BUILD_STAMP) ? 'working copy' : BUILD_STAMP;
@@ -2193,6 +2193,17 @@ async function pull(){
   }catch(e){
     const msg = (e&&e.name==='AbortError') ? 'no answer within 90 seconds' : ((e&&e.message)||String(e));
     if(/alone/i.test(msg)){ $('#app').hidden=true; $('#gate').style.display='grid'; gate('<span class="rd">'+esc(msg)+'</span>',true); clearInterval(TIMER); }
+    /* A SIGN-IN THE REGISTER NO LONGER HONOURS IS NOT A LOST LINE (01.11.2026).
+       The register answers "auth" to a token that has expired or was ended by
+       a change on the roll; the console read that as a network fault, showed
+       LINK LOST and asked again every thirty seconds for ever. Reported as
+       "link lost in Firefox but okay in Chrome": the network was the same,
+       the sign-in kept in that browser was older. Say so, and send him to
+       the register's own app to sign in again. */
+    else if(msg==='auth'){ const t=TENANCY[(ST&&ST.tenant)||'SJGP']||TENANCY.SJGP, app=t.cfg.replace(/config\.js$/,'')||'./';
+      $('#app').hidden=true; $('#gate').style.display='grid'; clearInterval(TIMER);
+      $('#gateMsg').innerHTML='<span class="rd">The sign-in kept in this browser for '+esc(t.name)+' has expired.</span> Sign in again in the app on this browser, then open this page again.'+
+        '<br><a class="tbtn" href="'+(app||'./')+'">Open the '+esc(t.name)+' app</a>'; }
     else{ DOWN=true; NEXT=Date.now()+Math.min(EVERY,30000)+Math.floor(Math.random()*8000);   /* jitter, so many consoles do not knock together */
       if(!DATA){ $('#gate').style.display='none'; $('#app').hidden=false;
         $('#g').innerHTML='<div class="panel bigerr"><div style="font-size:40px">\u26a0</div>'+
