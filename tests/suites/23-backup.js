@@ -15,6 +15,13 @@ function seed(env){
   ]);
   env.props.SALT = 'the-districts-own-salt';
   env.props.WEATHER_KEY = '';
+  /* the other two registers, reachable by id as Drive files — the sanitation
+     project takes them alongside its own (05.11.2026) */
+  env.otherFiles = {};
+  env.eval('BACKUP_ALSO').forEach(r => {
+    env.otherFiles[r.sheetId] = new mock.MockFile(r.tag + ' register',
+      mock.mockBlob('register', 'application/vnd.google-apps.spreadsheet', r.tag + ' register'), 'root');
+  });
 }
 /* the backup folder as a plain tree, so a suite can look at it the way a
    person looks at Drive */
@@ -52,6 +59,27 @@ module.exports = {
     t.eq(b.folders['code'].folders['2026-08-29'].files.length, 3, 'Code.gs, Admin.gs and the manifest of the server');
     t.eq(b.folders['app'].folders['2026-08-29'].files.length, 7, 'every published file of the app and the console');
     t.ok(b.files.indexOf('MANIFEST-2026-08-29.json') >= 0, 'and a manifest saying what the day’s backup actually got');
+
+    /* ---------------- the other two registers ride the same job ---------------- */
+    ['GP', 'HRMS'].forEach(tag => {
+      t.ok(reg.indexOf(tag + '-register-2026-08-29') >= 0, 'the ' + tag + ' register is copied as a Sheet, under its own tag');
+      t.ok(reg.indexOf(tag + '-register-2026-08-29.xlsx') >= 0, 'and as a workbook');
+    });
+    const envG = mock.load({ now: '2026-08-29T01:05:00+05:30' });
+    seed(envG); envG.props.TENANT = 'GP'; envG.fetchReply = 'x';
+    envG.ctx.dailyBackup();
+    const regG = tree(envG).folders['register'].folders['2026-08'].files;
+    t.ok(regG.indexOf('SJGP-register-2026-08-29') >= 0, 'another project still takes its own register under the SJGP name it always had');
+    t.ok(!regG.some(n => /^(GP|HRMS)-register/.test(n)), 'and does NOT reach for the others — only the sanitation project does, or the three copy each other in circles');
+    const envM = mock.load({ now: '2026-08-29T01:05:00+05:30' });
+    seed(envM); envM.fetchReply = 'x';
+    delete envM.otherFiles[envM.eval('BACKUP_ALSO')[1].sheetId];     /* the HRMS Sheet cannot be reached */
+    const sumM = envM.ctx.dailyBackup();
+    t.eq(sumM.failed.length, 1, 'a register that cannot be reached fails one step');
+    t.contains(sumM.failed[0].what, 'HRMS', 'and is named');
+    const regM = tree(envM).folders['register'].folders['2026-08'].files;
+    t.ok(regM.indexOf('GP-register-2026-08-29') >= 0 && regM.indexOf('SJGP-register-2026-08-29') >= 0,
+      'the other two registers were still taken — one Sheet down never costs the rest');
 
     /* ---------------- the salt is never in the backup ---------------- */
     const mf = env.driveRoot.getFoldersByName('SJ-SCORE Backups').next()

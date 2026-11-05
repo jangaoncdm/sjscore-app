@@ -258,8 +258,10 @@ function load(opts){
       getFoldersByName: name => env.driveRoot.getFoldersByName(name),
       /* the live register itself is a Drive file: the backup copies it by id */
       getFileById: id => {
-        if(id !== env.ssId) throw new Error('no such file: ' + id);
-        return env.ssFile;
+        if(id === env.ssId) return env.ssFile;
+        /* the other registers' Sheets, planted by id (suite 23) */
+        if(env.otherFiles && env.otherFiles[id]) return env.otherFiles[id];
+        throw new Error('no such file: ' + id);
       },
       Access: { ANYONE_WITH_LINK: 'ANYONE_WITH_LINK' },
       Permission: { VIEW: 'VIEW' }
@@ -370,4 +372,4 @@ function load(opts){
   return env;
 }
 
-module.exports = { load: load, fmtInTz: fmtInTz };
+module.exports = { load: load, fmtInTz: fmtInTz, MockFile: MockFile, mockBlob: mockBlob };

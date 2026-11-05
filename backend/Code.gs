@@ -4205,6 +4205,21 @@ const APP_FILES    = ['index.html','app.js','dashboard.html','sw.js','config.js'
 const CODE_BASE_URL = 'https://raw.githubusercontent.com/jangaoncdm/sjscore-app/main/backend/';
 const CODE_FILES    = ['Code.gs','Admin.gs','appsscript.json'];
 
+/* THE OTHER TWO REGISTERS, taken by the sanitation project (05.11.2026).
+   dailyBackup copies "the active spreadsheet", so it only ever took the
+   register of the project it ran in — and the backup trigger was installed
+   on the sanitation project alone. Found on 05.11.2026 by looking for the
+   Gram Palana and HRMS registers in SJ-SCORE Backups and finding none: two
+   registers taking attendance and sanctioning leave had never once been
+   backed up. The three projects run as the same account, so this one reaches
+   the other two Sheets by id and takes them alongside its own, under their
+   own tag. Only the SJGP tenant does it, or the three projects would copy
+   each other in circles. A sheet id is not a credential (access is governed
+   by Drive, and hrms/project.json already carries one in the open). */
+const BACKUP_ALSO = [
+  { tag:'GP',   sheetId:'1DjV-JxyyVfXWgxZJk6Vo2gzQQM0ZGipJQIaKewLAgnE' },
+  { tag:'HRMS', sheetId:'1zR38CT4Oub_3SUHnkJuimijnMIUmcYx5CwHpYx-PehY' }
+];
 function backupRoot_(){ return getFolder_(DriveApp.getRootFolder(), BACKUP_FOLDER); }
 function fileIn_(folder, name){
   const it = folder.getFilesByName(name);
@@ -4227,19 +4242,19 @@ function collectorEmail_(){
 }
 
 /* ---- the register: the copy that restores, and the copy that travels ---- */
-function backupRegister_(root, today){
+function backupRegister_(root, today, tag, sheetId){
   const dir = getFolder_(getFolder_(root, 'register'), today.slice(0, 7));
-  const name = 'SJGP-register-' + today;
+  const name = (tag || 'SJGP') + '-register-' + today;
   if(fileIn_(dir, name)) return 'already taken today';
-  const copy = DriveApp.getFileById(SpreadsheetApp.getActiveSpreadsheet().getId()).makeCopy(name, dir);
+  const copy = DriveApp.getFileById(sheetId || SpreadsheetApp.getActiveSpreadsheet().getId()).makeCopy(name, dir);
   try{ copy.setDescription(BACKUP_MARK + ' ' + today); }catch(err){}
   return 'Sheets copy taken';
 }
-function backupRegisterXlsx_(root, today){
+function backupRegisterXlsx_(root, today, tag, sheetId){
   const dir = getFolder_(getFolder_(root, 'register'), today.slice(0, 7));
-  const name = 'SJGP-register-' + today + '.xlsx';
+  const name = (tag || 'SJGP') + '-register-' + today + '.xlsx';
   if(fileIn_(dir, name)) return 'already taken today';
-  const id = SpreadsheetApp.getActiveSpreadsheet().getId();
+  const id = sheetId || SpreadsheetApp.getActiveSpreadsheet().getId();
   const res = UrlFetchApp.fetch('https://docs.google.com/spreadsheets/d/' + id + '/export?format=xlsx',
     { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
   if(res.getResponseCode() !== 200) throw new Error('the export answered ' + res.getResponseCode());
@@ -4407,6 +4422,12 @@ function dailyBackup(){
      cost nothing but itself. */
   step('The register · Sheets copy', () => backupRegister_(root, today));
   step('The register · workbook',    () => backupRegisterXlsx_(root, today));
+  /* the other two registers ride this job, each step on its own so a Sheet
+     that cannot be reached costs nothing but its own line in the mail */
+  if(tenant_().key === 'SJGP') BACKUP_ALSO.forEach(r => {
+    step('The ' + r.tag + ' register · Sheets copy', () => backupRegister_(root, today, r.tag, r.sheetId));
+    step('The ' + r.tag + ' register · workbook',    () => backupRegisterXlsx_(root, today, r.tag, r.sheetId));
+  });
   step('The server code',            () => backupCode_(root, today));
   step('The app and the console',    () => backupApp_(root, today));
   step('Script properties',          () => backupProps_(root, today));

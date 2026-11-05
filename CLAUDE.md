@@ -747,6 +747,23 @@ and names the days that are **missing**, walking the calendar rather than the
 folder. A job that has been failing for three weeks looks exactly like one
 that is working.
 
+**The other two registers ride the same job** (05.11.2026). `dailyBackup`
+copies *the active spreadsheet*, and the trigger was installed on the
+sanitation project alone — so the Gram Palana and HRMS registers had never
+been backed up once, found by looking for them in `SJ-SCORE Backups`. The
+three projects run as one account, so the SJGP tenant takes the other two
+Sheets by id (`BACKUP_ALSO`), as `GP-register-…` and `HRMS-register-…` beside
+its own, each a step of its own so an unreachable Sheet costs one line in the
+mail. Only SJGP does it, or the three would copy each other in circles. A
+sheet id is not a credential. Suite 23 holds it.
+
+**And it reaches the Collector's own disk.** Drive for desktop on his PC
+mounts the account, and a Windows task at 02:00 (`SJGP nightly backup to One
+Touch`, script at `C:\Users\jhama\SJGP-Backup-Job\`) copies the project, its
+gitignored data folders, a git bundle, and mirrors `SJ-SCORE Backups` and the
+document areas to the One Touch drive under `D:\SJGP-Backup\`. Project copies
+rotate at 30 days; the Drive mirror holds what Drive holds.
+
 Restoring is deliberately not a menu item. Putting a backup back over a live
 government register is the Collector's own act, done by hand.
 
